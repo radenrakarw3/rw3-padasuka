@@ -23,25 +23,71 @@ import AdminProfilEdit from "@/pages/admin/profil-edit";
 import AdminWaBlast from "@/pages/admin/wa-blast";
 import AdminArsipSurat from "@/pages/admin/arsip-surat";
 import { X } from "lucide-react";
-import welcomeImg from "@assets/Wilujeng_Sumping_Wargi_RW03!_1772993003046.png";
+import goldLogo from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
+import radenRakaImg from "@assets/raden_raka_nobg.png";
 
 function WelcomePopup({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={onClose} data-testid="welcome-overlay">
-      <div className="relative w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="relative w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"
+        style={{ backgroundColor: "hsl(163,55%,22%)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <button
           onClick={onClose}
-          className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-black/40 text-white flex items-center justify-center hover:bg-black/60 transition-colors"
+          className="absolute top-3 right-3 z-20 w-8 h-8 rounded-full bg-black/30 text-white flex items-center justify-center hover:bg-black/50 transition-colors"
           data-testid="button-close-welcome"
         >
           <X className="w-5 h-5" />
         </button>
-        <img
-          src={welcomeImg}
-          alt="Wilujeng Sumping Wargi RW03!"
-          className="w-full h-auto"
-          data-testid="img-welcome"
-        />
+
+        <div className="relative min-h-[420px]">
+          <img
+            src={goldLogo}
+            alt=""
+            className="absolute bottom-4 left-4 w-24 h-24 opacity-30"
+          />
+
+          <img
+            src={goldLogo}
+            alt="RW03 Logo"
+            className="absolute top-4 right-4 w-10 h-10"
+          />
+
+          <div className="absolute top-8 left-5 right-24 z-10">
+            <h1
+              className="text-[2.2rem] leading-[1.1] font-bold italic"
+              style={{ color: "hsl(40,45%,55%)", fontFamily: "Georgia, 'Times New Roman', serif" }}
+              data-testid="text-welcome-title"
+            >
+              Wilujeng Sumping Wargi RW03!
+            </h1>
+          </div>
+
+          <img
+            src={radenRakaImg}
+            alt="Raden Raka - Ketua RW03"
+            className="absolute bottom-0 right-0 w-[75%] h-auto object-contain"
+            style={{ maxHeight: "85%" }}
+            data-testid="img-welcome"
+          />
+
+          <div className="absolute bottom-16 left-5 z-10">
+            <p
+              className="text-sm italic font-medium"
+              style={{ color: "hsl(40,45%,65%)" }}
+            >
+              Raden Raka
+            </p>
+            <p
+              className="text-xs italic"
+              style={{ color: "hsl(40,45%,65%)" }}
+            >
+              Ketua RW03
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );
