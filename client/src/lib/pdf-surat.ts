@@ -39,6 +39,14 @@ function isBiodataLine(line: string): boolean {
   return labels.some(r => r.test(label));
 }
 
+function isTitleLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (trimmed.length > 60) return false;
+  if (/^(SURAT KETERANGAN|SURAT PENGANTAR|SURAT UNDANGAN|SURAT PERNYATAAN|SURAT TUGAS)/.test(trimmed)) return true;
+  if (/^(Surat Keterangan|Surat Pengantar|Surat Undangan|Surat Pernyataan|Surat Tugas)/i.test(trimmed) && trimmed === trimmed.toUpperCase()) return true;
+  return false;
+}
+
 function splitTwoColumns(line: string): { left: string; right: string } | null {
   if (line.includes("|")) {
     const parts = line.split("|");
@@ -130,7 +138,7 @@ export async function generateSuratPDF(options: {
 
   let hasTitle = false;
   for (let i = 0; i < Math.min(bodyLines.length, 8); i++) {
-    if (/^(SURAT KETERANGAN|SURAT PENGANTAR|SURAT UNDANGAN|SURAT PERNYATAAN|SURAT TUGAS)/i.test(bodyLines[i].trim())) {
+    if (isTitleLine(bodyLines[i])) {
       hasTitle = true;
       break;
     }
@@ -142,7 +150,7 @@ export async function generateSuratPDF(options: {
   for (const l of bodyLines) {
     const t = l.trim();
     if (!t) { totalBodyLines += 0.4; continue; }
-    if (/^(SURAT KETERANGAN|SURAT PENGANTAR|SURAT UNDANGAN|SURAT PERNYATAAN|SURAT TUGAS)/i.test(t)) {
+    if (isTitleLine(t)) {
       totalBodyLines += 2.5;
       continue;
     }
@@ -262,7 +270,7 @@ export async function generateSuratPDF(options: {
       continue;
     }
 
-    if (/^(SURAT KETERANGAN|SURAT PENGANTAR|SURAT UNDANGAN|SURAT PERNYATAAN|SURAT TUGAS)/i.test(trimmed)) {
+    if (isTitleLine(trimmed)) {
       prevWasBiodata = false;
       y += lh * 0.3;
       const spaced = trimmed.split("").join(" ").replace(/\s{3,}/g, "   ");
