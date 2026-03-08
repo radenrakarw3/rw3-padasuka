@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Home, Users, ChevronLeft, ChevronRight, Download, Upload, X, FileText } from "lucide-react";
+import { Plus, Search, Home, Users, ChevronLeft, ChevronRight, Download, Upload, X, FileText, ChevronDown, User, MessageCircle } from "lucide-react";
 import { statusRumahOptions, listrikOptions, rtOptions } from "@/lib/constants";
 import type { KartuKeluarga, Warga } from "@shared/schema";
 
@@ -30,6 +30,7 @@ export default function AdminKelolaKK() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [expandedKk, setExpandedKk] = useState<number | null>(null);
 
   const { data: kkList, isLoading } = useQuery<KartuKeluarga[]>({ queryKey: ["/api/kk"] });
   const { data: wargaList } = useQuery<Warga[]>({ queryKey: ["/api/warga"] });
@@ -40,6 +41,15 @@ export default function AdminKelolaKK() {
       if (w.kedudukanKeluarga === "Kepala Keluarga") {
         map[w.kkId] = w;
       }
+    });
+    return map;
+  }, [wargaList]);
+
+  const membersByKkId = useMemo(() => {
+    const map: Record<number, Warga[]> = {};
+    wargaList?.forEach(w => {
+      if (!map[w.kkId]) map[w.kkId] = [];
+      map[w.kkId].push(w);
     });
     return map;
   }, [wargaList]);
@@ -257,6 +267,8 @@ export default function AdminKelolaKK() {
         <div className="space-y-2">
           {paginated.map(k => {
             const kepala = kepalaByKkId[k.id];
+            const members = membersByKkId[k.id] || [];
+            const isExpanded = expandedKk === k.id;
             return (
               <Card key={k.id} data-testid={`card-kk-${k.id}`}>
                 <CardContent className="p-3">
@@ -295,6 +307,48 @@ export default function AdminKelolaKK() {
                       )}
                     </div>
                   </div>
+                  <button
+                    onClick={() => setExpandedKk(isExpanded ? null : k.id)}
+                    className="flex items-center gap-1 mt-2 pt-2 border-t w-full text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    data-testid={`button-toggle-anggota-${k.id}`}
+                  >
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                    <Users className="w-3 h-3" />
+                    Lihat Anggota ({members.length})
+                  </button>
+                  {isExpanded && (
+                    <div className="mt-2 space-y-1.5" data-testid={`list-anggota-${k.id}`}>
+                      {members.map(m => (
+                        <div key={m.id} className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 p-2" data-testid={`anggota-${m.id}`}>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-7 h-7 rounded-full bg-[hsl(163,55%,22%)]/10 flex items-center justify-center flex-shrink-0">
+                              <User className="w-3.5 h-3.5 text-[hsl(163,55%,22%)]" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-medium truncate">{m.namaLengkap}</p>
+                              <p className="text-[10px] text-muted-foreground">{m.kedudukanKeluarga} · {m.jenisKelamin === "Laki-laki" ? "L" : "P"} · {m.pekerjaan || "-"}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {m.fotoKtp && (
+                              <Button size="icon" variant="ghost" className="w-6 h-6" asChild data-testid={`button-download-ktp-anggota-${m.id}`}>
+                                <a href={m.fotoKtp} download target="_blank" rel="noopener noreferrer" title="Download KTP">
+                                  <Download className="w-3 h-3" />
+                                </a>
+                              </Button>
+                            )}
+                            {m.nomorWhatsapp && (
+                              <Button size="icon" variant="ghost" className="w-6 h-6 text-green-700" asChild data-testid={`button-wa-anggota-${m.id}`}>
+                                <a href={`https://wa.me/${m.nomorWhatsapp.replace(/^0/, "62").replace(/[^0-9]/g, "")}`} target="_blank" rel="noopener noreferrer" title="WhatsApp">
+                                  <MessageCircle className="w-3 h-3" />
+                                </a>
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );
