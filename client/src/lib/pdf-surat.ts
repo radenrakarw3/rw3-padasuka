@@ -25,14 +25,15 @@ function isBiodataLine(line: string): boolean {
   if (!/\s*:/.test(trimmed)) return false;
   const colonIdx = trimmed.indexOf(":");
   const label = trimmed.substring(0, colonIdx).trim();
-  if (label.length < 2 || label.length > 30) return false;
+  if (label.length < 2 || label.length > 35) return false;
   const biodataLabels = [
     /^nama/i, /^nik/i, /^tempat/i, /^tanggal\s*lahir/i, /^alamat/i,
     /^rt/i, /^rw/i, /^kelurahan/i, /^kecamatan/i, /^kota/i, /^kabupaten/i,
     /^agama/i, /^pekerjaan/i, /^jenis\s*kelamin/i, /^status/i, /^no\.?\s*(kk|telp|hp)/i,
     /^kewarganegaraan/i, /^golongan\s*darah/i, /^pendidikan/i, /^hubungan/i,
     /^jabatan/i, /^nomor/i, /^perihal/i, /^lampiran/i, /^sifat/i, /^hal\b/i,
-    /^hari/i, /^waktu/i, /^acara/i, /^tempat/i,
+    /^hari/i, /^waktu/i, /^acara/i, /^tempat/i, /^rt\s*\/\s*rw/i,
+    /^no\.\s*kk\s*\/\s*nik/i,
   ];
   return biodataLabels.some(r => r.test(label));
 }
@@ -53,7 +54,7 @@ function isSignatureSection(lines: string[], startIdx: number): boolean {
   const triggers = [
     /^(hormat\s+kami|mengetahui|yang\s+bertanda\s+tangan|tertanda|di\s*ketahui|yang\s+membuat)/i,
     /^ketua\s+(rt|rw)/i,
-    /^(cimahi|bandung|jakarta),?\s+\d/i,
+    /^(kota\s+)?(cimahi|bandung|jakarta),?\s+\d/i,
   ];
   const line = lines[startIdx].trim();
   if (triggers.some(r => r.test(line))) return true;
@@ -66,7 +67,7 @@ function isSignatureSection(lines: string[], startIdx: number): boolean {
     const t = l.trim();
     if (/^\(.*\)$/.test(t)) return true;
     const s = splitTwoColumns(l);
-    if (s && /^\(.*\)$/.test(s.left) && /^\(.*\)$/.test(s.right)) return true;
+    if (s && (/^\(.*\)$/.test(s.left) || /^\(.*\)$/.test(s.right))) return true;
     return false;
   });
   const hasKetuaRef = remaining.some(l => {
@@ -96,8 +97,7 @@ interface ParsedContent {
   bodyLines: string[];
   sigLines: string[];
   hasTitle: boolean;
-  dateLineInSig: string | null;
-  dateLineIdxInSig: number;
+  dateLine: string | null;
   isTwoColSig: boolean;
 }
 
@@ -124,14 +124,24 @@ function parseContent(isiSurat: string): ParsedContent {
     }
   }
 
-  const dateLineIdx = sigLines.findIndex(l => /^(cimahi|bandung|jakarta),?\s+\d/i.test(l.trim()));
-  const dateLineInSig = dateLineIdx >= 0 ? sigLines[dateLineIdx].trim() : null;
+  let dateLine: string | null = null;
+  const dateIdx = sigLines.findIndex(l => /^(kota\s+)?(cimahi|bandung|jakarta),?\s+\d/i.test(l.trim()));
+  if (dateIdx >= 0) {
+    dateLine = sigLines[dateIdx].trim();
+    sigLines.splice(dateIdx, 1);
+  } else {
+    for (let i = bodyLines.length - 1; i >= Math.max(0, bodyLines.length - 5); i--) {
+      if (/^(kota\s+)?(cimahi|bandung|jakarta),?\s+\d/i.test(bodyLines[i].trim())) {
+        dateLine = bodyLines[i].trim();
+        bodyLines.splice(i, 1);
+        break;
+      }
+    }
+  }
 
-  const sigLinesForType = [...sigLines];
-  if (dateLineIdx >= 0) sigLinesForType.splice(dateLineIdx, 1);
-  const isTwoColSig = hasTwoColumnSignature(sigLinesForType);
+  const isTwoColSig = hasTwoColumnSignature(sigLines);
 
-  return { bodyLines, sigLines, hasTitle, dateLineInSig, dateLineIdxInSig: dateLineIdx, isTwoColSig };
+  return { bodyLines, sigLines, hasTitle, dateLine, isTwoColSig };
 }
 
 function estimateHeight(doc: jsPDF, parsed: ParsedContent, nomorSurat: string | null | undefined, lh: number, fs: number, contentWidth: number, colonPos: number): number {
@@ -156,10 +166,10 @@ function estimateHeight(doc: jsPDF, parsed: ParsedContent, nomorSurat: string | 
     const isTitleLine = /^(SURAT KETERANGAN|SURAT PENGANTAR|SURAT UNDANGAN|SURAT PERNYATAAN|SURAT TUGAS)/i.test(trimmed);
     if (isTitleLine) {
       prevWasBiodata = false;
-      h += lh * 0.2;
+      h += lh * 0.3;
       h += lh;
       if (nomorSurat) h += lh;
-      h += lh * 0.2;
+      h += lh * 0.3;
       continue;
     }
 
@@ -188,25 +198,17 @@ function estimateHeight(doc: jsPDF, parsed: ParsedContent, nomorSurat: string | 
     h += wrapped.length * lh;
   }
 
+  if (parsed.dateLine) {
+    h += lh * 1.5;
+  }
+
   if (parsed.sigLines.length > 0) {
-    h += lh * 0.5;
-
-    if (parsed.dateLineInSig) {
-      h += lh * 1;
-    }
-
-    const filteredSig = [...parsed.sigLines];
-    if (parsed.dateLineIdxInSig >= 0) filteredSig.splice(parsed.dateLineIdxInSig, 1);
-
     if (parsed.isTwoColSig) {
       let nameLineCount = 0;
       let otherLineCount = 0;
-      for (const l of filteredSig) {
+      for (const l of parsed.sigLines) {
         const trimmed = l.trim();
-        if (!trimmed) {
-          otherLineCount++;
-          continue;
-        }
+        if (!trimmed) { otherLineCount++; continue; }
         const split = splitTwoColumns(l);
         const left = split ? split.left : trimmed;
         if (/^\(.*\)$/.test(left)) {
@@ -216,16 +218,13 @@ function estimateHeight(doc: jsPDF, parsed: ParsedContent, nomorSurat: string | 
         }
       }
       h += otherLineCount * lh;
-      h += nameLineCount * (lh + lh * 2);
+      h += nameLineCount * (lh + lh * 2.5);
     } else {
-      for (const l of filteredSig) {
+      for (const l of parsed.sigLines) {
         const trimmed = l.trim();
-        if (!trimmed) {
-          h += lh * 0.3;
-          continue;
-        }
+        if (!trimmed) { h += lh * 0.3; continue; }
         if (/^\(.*\)$/.test(trimmed)) {
-          h += lh * 3 + lh * 1.2;
+          h += lh * 3 + lh;
         } else {
           h += lh;
         }
@@ -246,10 +245,9 @@ export async function generateSuratPDF(options: {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = 210;
   const marginLeft = 25;
-  const marginRight = 25;
+  const marginRight = 20;
   const contentWidth = pageWidth - marginLeft - marginRight;
   const pageHeight = 297;
-  const kopHeight = 35;
   const startY = 42;
   const bottomMargin = 15;
   const availableHeight = pageHeight - startY - bottomMargin;
@@ -261,20 +259,20 @@ export async function generateSuratPDF(options: {
 
   const parsed = parseContent(isiSurat);
 
-  const baseFontSize = 11;
-  const baseLineHeight = 5;
-  const colonPos = 45;
+  const baseFontSize = 10;
+  const baseLineHeight = 4.8;
+  const colonPos = 42;
 
   let estHeight = estimateHeight(doc, parsed, nomorSurat, baseLineHeight, baseFontSize, contentWidth, colonPos);
   let scale = 1;
   if (estHeight > availableHeight) {
     scale = availableHeight / estHeight;
-    if (scale < 0.65) scale = 0.65;
+    if (scale < 0.6) scale = 0.6;
   }
 
   const fontSize = Math.round(baseFontSize * scale * 10) / 10;
   const lineHeight = baseLineHeight * scale;
-  const titleFontSize = Math.round(13 * scale * 10) / 10;
+  const titleFontSize = Math.round(12 * scale * 10) / 10;
 
   const drawKop = () => {
     if (img) {
@@ -290,7 +288,7 @@ export async function generateSuratPDF(options: {
     doc.setFontSize(9);
     doc.text("KECAMATAN CIMAHI TENGAH - KOTA CIMAHI", pageWidth / 2, 27, { align: "center" });
     doc.setFontSize(7.5);
-    doc.text("Jln. K.H. Usman Dhomiri, Kel. Padasuka, Kec. Cimahi Tengah, Kota Cimahi 40526", pageWidth / 2, 31, { align: "center" });
+    doc.text("Sekretariat: Jln. K.H. Usman Dhomiri, Padasuka, Kota Cimahi, 40526", pageWidth / 2, 31, { align: "center" });
     doc.setLineWidth(0.8);
     doc.line(marginLeft, 34, pageWidth - marginRight, 34);
     doc.setLineWidth(0.3);
@@ -300,7 +298,7 @@ export async function generateSuratPDF(options: {
   drawKop();
   let y = startY;
 
-  const printText = (text: string, opts?: { bold?: boolean; center?: boolean; fs?: number; underline?: boolean }) => {
+  const printText = (text: string, opts?: { bold?: boolean; center?: boolean; fs?: number; underline?: boolean; indent?: number }) => {
     const fs2 = opts?.fs || fontSize;
     doc.setFontSize(fs2);
     doc.setFont("helvetica", opts?.bold ? "bold" : "normal");
@@ -314,9 +312,11 @@ export async function generateSuratPDF(options: {
       }
       y += lineHeight;
     } else {
-      const wrapped = doc.splitTextToSize(text, contentWidth);
+      const xPos = marginLeft + (opts?.indent || 0);
+      const maxW = contentWidth - (opts?.indent || 0);
+      const wrapped = doc.splitTextToSize(text, maxW);
       for (const wl of wrapped) {
-        doc.text(wl, marginLeft, y);
+        doc.text(wl, xPos, y);
         y += lineHeight;
       }
     }
@@ -324,7 +324,7 @@ export async function generateSuratPDF(options: {
     doc.setFontSize(fontSize);
   };
 
-  const printBiodataLine = (line: string) => {
+  const printBiodataLine = (line: string, indent: number = 0) => {
     const colonIdx = line.indexOf(":");
     const label = line.substring(0, colonIdx).trim();
     const value = line.substring(colonIdx + 1).trim();
@@ -332,12 +332,13 @@ export async function generateSuratPDF(options: {
     doc.setFontSize(fontSize);
     doc.setFont("helvetica", "normal");
 
-    const colonX = marginLeft + colonPos;
-    doc.text(label, marginLeft, y);
+    const baseX = marginLeft + indent;
+    const colonX = baseX + colonPos;
+    doc.text(label, baseX, y);
     doc.text(":", colonX, y);
 
     const valueX = colonX + 3;
-    const valueMaxW = contentWidth - (valueX - marginLeft);
+    const valueMaxW = contentWidth - indent - colonPos - 3;
     const wrapped = doc.splitTextToSize(value, valueMaxW);
     for (let j = 0; j < wrapped.length; j++) {
       doc.text(wrapped[j], valueX, y);
@@ -346,72 +347,47 @@ export async function generateSuratPDF(options: {
   };
 
   const printTwoColumnSignature = (sigLinesInput: string[]) => {
-    const leftLines: string[] = [];
-    const rightLines: string[] = [];
+    const leftColCenter = marginLeft + contentWidth * 0.25;
+    const rightColCenter = marginLeft + contentWidth * 0.75;
+    const colWidth = contentWidth * 0.45;
 
-    for (const rawLine of sigLinesInput) {
+    for (let i = 0; i < sigLinesInput.length; i++) {
+      const rawLine = sigLinesInput[i];
       const trimmed = rawLine.trim();
       if (!trimmed) {
-        leftLines.push("");
-        rightLines.push("");
-        continue;
-      }
-      const split = splitTwoColumns(rawLine);
-      if (split && split.left && split.right) {
-        leftLines.push(split.left);
-        rightLines.push(split.right);
-      } else if (split && split.left && !split.right) {
-        leftLines.push(split.left);
-        rightLines.push("");
-      } else {
-        leftLines.push(trimmed);
-        rightLines.push("");
-      }
-    }
-
-    const colWidth = contentWidth / 2;
-    const leftX = marginLeft;
-    const rightX = marginLeft + colWidth;
-    const maxLines = Math.max(leftLines.length, rightLines.length);
-
-    for (let i = 0; i < maxLines; i++) {
-      const left = leftLines[i] || "";
-      const right = rightLines[i] || "";
-
-      if (!left && !right) {
         y += lineHeight;
         continue;
       }
+
+      const split = splitTwoColumns(rawLine);
+      const left = split ? split.left : trimmed;
+      const right = split ? split.right : "";
 
       const leftIsName = /^\(.*\)$/.test(left);
       const rightIsName = /^\(.*\)$/.test(right);
 
       if (leftIsName || rightIsName) {
-        const prevLeft = i > 0 ? leftLines[i - 1] : "";
-        const prevRight = i > 0 ? rightLines[i - 1] : "";
-        if (!prevLeft && !prevRight) {
-          y += lineHeight * 2;
-        }
+        y += lineHeight * 2.5;
       }
 
       doc.setFontSize(fontSize);
 
       if (left) {
         doc.setFont("helvetica", leftIsName ? "bold" : "normal");
-        doc.text(left, leftX, y);
+        const lw = doc.getTextWidth(left);
+        doc.text(left, leftColCenter - lw / 2, y);
         if (leftIsName) {
-          const w = doc.getTextWidth(left);
           doc.setLineWidth(0.3);
-          doc.line(leftX, y + 1, leftX + w, y + 1);
+          doc.line(leftColCenter - lw / 2, y + 1, leftColCenter + lw / 2, y + 1);
         }
       }
       if (right) {
         doc.setFont("helvetica", rightIsName ? "bold" : "normal");
-        doc.text(right, rightX, y);
+        const rw = doc.getTextWidth(right);
+        doc.text(right, rightColCenter - rw / 2, y);
         if (rightIsName) {
-          const w = doc.getTextWidth(right);
           doc.setLineWidth(0.3);
-          doc.line(rightX, y + 1, rightX + w, y + 1);
+          doc.line(rightColCenter - rw / 2, y + 1, rightColCenter + rw / 2, y + 1);
         }
       }
 
@@ -421,8 +397,8 @@ export async function generateSuratPDF(options: {
   };
 
   const printVerticalSignature = (sigLinesInput: string[]) => {
-    const sigX = pageWidth / 2 + 5;
-    const sigWidth = pageWidth - marginRight - sigX;
+    const sigCenterX = marginLeft + contentWidth * 0.75;
+    const sigWidth = contentWidth * 0.45;
 
     for (let i = 0; i < sigLinesInput.length; i++) {
       const line = sigLinesInput[i].trim();
@@ -432,36 +408,34 @@ export async function generateSuratPDF(options: {
       }
 
       const isName = /^\(.*\)$/.test(line);
-      const isDate = /^(cimahi|bandung|jakarta),?\s+\d/i.test(line);
-
-      if (isDate) {
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(fontSize);
-        doc.text(line, sigX, y);
-        y += lineHeight * 1.2;
-        continue;
-      }
 
       if (isName) {
-        y += lineHeight * 3;
+        y += lineHeight * 2.5;
         doc.setFont("helvetica", "bold");
         doc.setFontSize(fontSize);
-        doc.text(line, sigX, y);
-        const nameWidth = doc.getTextWidth(line);
+        const nw = doc.getTextWidth(line);
+        doc.text(line, sigCenterX - nw / 2, y);
         doc.setLineWidth(0.3);
-        doc.line(sigX, y + 1, sigX + nameWidth, y + 1);
+        doc.line(sigCenterX - nw / 2, y + 1, sigCenterX + nw / 2, y + 1);
         doc.setFont("helvetica", "normal");
-        y += lineHeight * 1.2;
+        y += lineHeight;
         continue;
       }
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(fontSize);
-      const wrapped = doc.splitTextToSize(line, sigWidth);
-      for (const wl of wrapped) {
-        doc.text(wl, sigX, y);
-        y += lineHeight;
+      const tw = doc.getTextWidth(line);
+      if (tw < sigWidth) {
+        doc.text(line, sigCenterX - tw / 2, y);
+      } else {
+        const wrapped = doc.splitTextToSize(line, sigWidth);
+        for (const wl of wrapped) {
+          doc.text(wl, sigCenterX - sigWidth / 2, y);
+          y += lineHeight;
+        }
+        continue;
       }
+      y += lineHeight;
     }
   };
 
@@ -472,6 +446,7 @@ export async function generateSuratPDF(options: {
   let nomorPrintedUnderTitle = false;
   let inBiodataBlock = false;
   let prevWasBiodata = false;
+  const bioIndent = 5;
 
   for (let i = 0; i < parsed.bodyLines.length; i++) {
     const rawLine = parsed.bodyLines[i];
@@ -488,19 +463,20 @@ export async function generateSuratPDF(options: {
     if (isTitleLine) {
       inBiodataBlock = false;
       prevWasBiodata = false;
-      y += lineHeight * 0.2;
-      printText(trimmed, { bold: true, center: true, fs: titleFontSize, underline: true });
+      y += lineHeight * 0.3;
+      const spaced = trimmed.split("").join(" ").replace(/\s{3,}/g, "   ");
+      printText(spaced, { bold: true, center: true, fs: titleFontSize });
       if (nomorSurat && !nomorPrintedUnderTitle) {
         printText(`Nomor: ${nomorSurat}`, { center: true, fs: fontSize });
         nomorPrintedUnderTitle = true;
       }
-      y += lineHeight * 0.2;
+      y += lineHeight * 0.3;
       continue;
     }
 
     if (prevWasBiodata && /^\s{5,}/.test(rawLine) && !isBiodataLine(rawLine)) {
-      const contX = marginLeft + colonPos + 3;
-      const contMaxW = contentWidth - (contX - marginLeft);
+      const contX = marginLeft + bioIndent + colonPos + 3;
+      const contMaxW = contentWidth - bioIndent - colonPos - 3;
       doc.setFontSize(fontSize);
       doc.setFont("helvetica", "normal");
       const wrapped = doc.splitTextToSize(trimmed, contMaxW);
@@ -514,7 +490,7 @@ export async function generateSuratPDF(options: {
     if (isBiodataLine(rawLine)) {
       inBiodataBlock = true;
       prevWasBiodata = true;
-      printBiodataLine(rawLine);
+      printBiodataLine(rawLine, bioIndent);
       continue;
     }
 
@@ -526,24 +502,22 @@ export async function generateSuratPDF(options: {
     printText(trimmed);
   }
 
-  if (parsed.sigLines.length > 0) {
+  if (parsed.dateLine || parsed.sigLines.length > 0) {
     y += lineHeight * 0.5;
+  }
 
-    const sigLinesCopy = [...parsed.sigLines];
-    const dateLineIdx = sigLinesCopy.findIndex(l => /^(cimahi|bandung|jakarta),?\s+\d/i.test(l.trim()));
-    if (dateLineIdx >= 0) {
-      const dateLine = sigLinesCopy[dateLineIdx].trim();
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(fontSize);
-      doc.text(dateLine, pageWidth - marginRight, y, { align: "right" });
-      y += lineHeight * 1;
-      sigLinesCopy.splice(dateLineIdx, 1);
-    }
+  if (parsed.dateLine) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(fontSize);
+    doc.text(parsed.dateLine, pageWidth - marginRight, y, { align: "right" });
+    y += lineHeight * 1.2;
+  }
 
+  if (parsed.sigLines.length > 0) {
     if (parsed.isTwoColSig) {
-      printTwoColumnSignature(sigLinesCopy);
+      printTwoColumnSignature(parsed.sigLines);
     } else {
-      printVerticalSignature(sigLinesCopy);
+      printVerticalSignature(parsed.sigLines);
     }
   }
 
