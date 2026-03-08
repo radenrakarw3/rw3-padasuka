@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
-import { Clock, CheckCircle, AlertCircle, MessageSquare } from "lucide-react";
+import { Clock, CheckCircle, AlertCircle, XCircle, MessageSquare } from "lucide-react";
 import type { Laporan, Warga } from "@shared/schema";
 
 export default function AdminKelolaLaporan() {
@@ -34,6 +34,11 @@ export default function AdminKelolaLaporan() {
     pending: { label: "Menunggu", color: "bg-yellow-100 text-yellow-800", icon: Clock },
     diproses: { label: "Diproses", color: "bg-blue-100 text-blue-800", icon: AlertCircle },
     selesai: { label: "Selesai", color: "bg-green-100 text-green-800", icon: CheckCircle },
+    ditolak: { label: "Ditolak", color: "bg-red-100 text-red-800", icon: XCircle },
+  };
+
+  const handleUpdate = (id: number, status: string) => {
+    updateMutation.mutate({ id, status, tanggapanText: tanggapan[id] });
   };
 
   return (
@@ -53,6 +58,14 @@ export default function AdminKelolaLaporan() {
         laporanList?.map(lap => {
           const sc = statusConfig[lap.status] || statusConfig.pending;
           const StatusIcon = sc.icon;
+          const canUpdate = lap.status !== "selesai" && lap.status !== "ditolak";
+
+          const nextStatuses = lap.status === "pending"
+            ? [{ value: "diproses", label: "Proses", color: "bg-blue-600 hover:bg-blue-700" }, { value: "selesai", label: "Selesai", color: "bg-green-700 hover:bg-green-800" }, { value: "ditolak", label: "Tolak", color: "" }]
+            : lap.status === "diproses"
+            ? [{ value: "selesai", label: "Selesai", color: "bg-green-700 hover:bg-green-800" }, { value: "ditolak", label: "Tolak", color: "" }]
+            : [];
+
           return (
             <Card key={lap.id} data-testid={`card-laporan-admin-${lap.id}`}>
               <CardContent className="p-4 space-y-3">
@@ -68,7 +81,8 @@ export default function AdminKelolaLaporan() {
                   </Badge>
                 </div>
                 <p className="text-xs">{lap.isi}</p>
-                {lap.status === "pending" && (
+
+                {canUpdate && (
                   <div className="space-y-2 pt-2 border-t">
                     <Textarea
                       placeholder="Tulis tanggapan (opsional)..."
@@ -77,16 +91,37 @@ export default function AdminKelolaLaporan() {
                       rows={2}
                       data-testid={`input-tanggapan-${lap.id}`}
                     />
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={() => updateMutation.mutate({ id: lap.id, status: "diproses", tanggapanText: tanggapan[lap.id] })} disabled={updateMutation.isPending} data-testid={`button-proses-${lap.id}`}>
-                        Proses
-                      </Button>
-                      <Button size="sm" variant="default" className="bg-green-700" onClick={() => updateMutation.mutate({ id: lap.id, status: "selesai", tanggapanText: tanggapan[lap.id] })} disabled={updateMutation.isPending} data-testid={`button-selesai-${lap.id}`}>
-                        Selesai
-                      </Button>
+                    <div className="flex gap-2 flex-wrap">
+                      {nextStatuses.map(ns => (
+                        ns.value === "ditolak" ? (
+                          <Button
+                            key={ns.value}
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleUpdate(lap.id, ns.value)}
+                            disabled={updateMutation.isPending}
+                            data-testid={`button-${ns.value}-${lap.id}`}
+                          >
+                            <XCircle className="w-3 h-3 mr-1" />{ns.label}
+                          </Button>
+                        ) : (
+                          <Button
+                            key={ns.value}
+                            size="sm"
+                            className={ns.color}
+                            onClick={() => handleUpdate(lap.id, ns.value)}
+                            disabled={updateMutation.isPending}
+                            data-testid={`button-${ns.value}-${lap.id}`}
+                          >
+                            {ns.value === "selesai" ? <CheckCircle className="w-3 h-3 mr-1" /> : <AlertCircle className="w-3 h-3 mr-1" />}
+                            {ns.label}
+                          </Button>
+                        )
+                      ))}
                     </div>
                   </div>
                 )}
+
                 {lap.tanggapanAdmin && (
                   <div className="p-2 bg-muted rounded-md">
                     <p className="text-xs font-medium">Tanggapan:</p>

@@ -72,6 +72,36 @@ async function sendWhatsApp(phoneNumber: string, message: string): Promise<boole
   }
 }
 
+const jenisSuratLabels: Record<string, string> = {
+  surat_keterangan_domisili: "Surat Keterangan Domisili",
+  surat_keterangan_tidak_mampu: "Surat Keterangan Tidak Mampu",
+  surat_keterangan_usaha: "Surat Keterangan Usaha",
+  surat_keterangan_belum_menikah: "Surat Keterangan Belum Menikah",
+  surat_keterangan_berkelakuan_baik: "Surat Keterangan Berkelakuan Baik",
+  surat_pengantar_rt: "Surat Pengantar RT",
+  surat_keterangan_pindah: "Surat Keterangan Pindah",
+  surat_keterangan_kematian: "Surat Keterangan Kematian",
+  surat_keterangan_lainnya: "Surat Keterangan Lainnya",
+};
+
+const jenisLaporanLabels: Record<string, string> = {
+  keamanan: "Keamanan",
+  kebersihan: "Kebersihan",
+  infrastruktur: "Infrastruktur",
+  sosial: "Sosial",
+  lainnya: "Lainnya",
+};
+
+async function notifyWarga(wargaId: number, template: string) {
+  try {
+    const w = await storage.getWargaById(wargaId);
+    if (!w?.nomorWhatsapp) return;
+    await sendWhatsApp(w.nomorWhatsapp, template);
+  } catch (err) {
+    console.error("Notif WA gagal:", err);
+  }
+}
+
 const otpStore = new Map<string, { otp: string; kkId: number; nomorKk: string; phone: string; expiresAt: number; attempts: number; lastRequestAt: number }>();
 
 export async function registerRoutes(
@@ -381,6 +411,10 @@ export async function registerRoutes(
         }
       }
       const data = await storage.createLaporan(parsed);
+
+      const jenisLabel = jenisLaporanLabels[parsed.jenisLaporan] || parsed.jenisLaporan;
+      notifyWarga(parsed.wargaId, `[RW 03 Padasuka]\n\nLaporan Anda telah *berhasil dikirim*.\n\nJudul: *${parsed.judul}*\nKategori: ${jenisLabel}\n\nLaporan Anda akan segera ditinjau oleh pengurus RW. Terima kasih atas partisipasi Anda.`);
+
       res.json(data);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
@@ -391,6 +425,18 @@ export async function registerRoutes(
     const { status, tanggapan } = req.body;
     const data = await storage.updateLaporanStatus(parseInt(req.params.id), status, tanggapan);
     if (!data) return res.status(404).json({ message: "Laporan tidak ditemukan" });
+
+    const statusLabels: Record<string, string> = {
+      diproses: "sedang diproses",
+      selesai: "telah selesai ditangani",
+      ditolak: "ditolak",
+    };
+    const statusText = statusLabels[status] || status;
+    let waMsg = `[RW 03 Padasuka]\n\nUpdate Laporan Anda:\n\nJudul: *${data.judul}*\nStatus: *${statusText.charAt(0).toUpperCase() + statusText.slice(1)}*`;
+    if (tanggapan) waMsg += `\n\nTanggapan Admin:\n${tanggapan}`;
+    if (status === "selesai") waMsg += `\n\nTerima kasih atas laporan Anda. Semoga lingkungan kita semakin baik.`;
+    notifyWarga(data.wargaId, waMsg);
+
     res.json(data);
   });
 
@@ -417,6 +463,10 @@ export async function registerRoutes(
       }
 
       const data = await storage.createSuratWarga(parsed);
+
+      const jenisLabel = jenisSuratLabels[parsed.jenisSurat] || parsed.jenisSurat;
+      notifyWarga(parsed.wargaId, `[RW 03 Padasuka]\n\nPermohonan surat Anda telah *berhasil dikirim*.\n\nJenis: *${jenisLabel}*\nPerihal: ${parsed.perihal}\n\nPermohonan Anda akan segera diproses oleh pengurus RW. Mohon tunggu notifikasi selanjutnya.`);
+
       res.json(data);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
@@ -484,6 +534,10 @@ Kelurahan Padasuka | Kelurahan Padasuka
 
       const isiSurat = await generateWithGemini(prompt);
       const updated = await storage.updateSuratWargaStatus(surat.id, surat.status, isiSurat);
+
+      const jenisLabel = jenisSuratLabels[surat.jenisSurat] || surat.jenisSurat;
+      notifyWarga(surat.wargaId, `[RW 03 Padasuka]\n\nSurat Anda sedang *diproses*.\n\nJenis: *${jenisLabel}*\nPerihal: ${surat.perihal}\n\nDokumen surat telah dibuat dan sedang menunggu persetujuan admin. Mohon tunggu notifikasi selanjutnya.`);
+
       res.json(updated);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -501,17 +555,28 @@ Kelurahan Padasuka | Kelurahan Padasuka
       const data = await storage.updateSuratWargaStatus(surat.id, status);
       if (!data) return res.status(404).json({ message: "Surat tidak ditemukan" });
 
+      let finalNomor = surat.nomorSurat;
       if (status === "disetujui" && !surat.nomorSurat) {
         const currentCount = await storage.countSuratWargaThisYear();
         const seq = String(currentCount + 1).padStart(3, "0");
         const year = new Date().getFullYear();
         const month = String(new Date().getMonth() + 1).padStart(2, "0");
-        const nomorSurat = `${seq}/SK-W/RW-03/${month}/${year}`;
+        finalNomor = `${seq}/SK-W/RW-03/${month}/${year}`;
         if (surat.isiSurat && /XXX\//.test(surat.isiSurat)) {
-          const fixedIsi = surat.isiSurat.replace(/XXX\/[^\n\r]*/g, nomorSurat);
+          const fixedIsi = surat.isiSurat.replace(/XXX\/[^\n\r]*/g, finalNomor);
           await storage.updateSuratWargaStatus(surat.id, status, fixedIsi);
         }
-        await storage.updateSuratWargaNomor(surat.id, nomorSurat);
+        await storage.updateSuratWargaNomor(surat.id, finalNomor);
+      }
+
+      const jenisLabel = jenisSuratLabels[surat.jenisSurat] || surat.jenisSurat;
+      if (status === "disetujui") {
+        notifyWarga(surat.wargaId, `[RW 03 Padasuka]\n\nSurat Anda telah *DISETUJUI* ✅\n\nJenis: *${jenisLabel}*\nPerihal: ${surat.perihal}${finalNomor ? `\nNomor Surat: ${finalNomor}` : ""}\n\nSilakan login ke aplikasi RW 03 untuk mengunduh surat Anda dalam format PDF.\n\nTerima kasih.`);
+      } else if (status === "ditolak") {
+        notifyWarga(surat.wargaId, `[RW 03 Padasuka]\n\nMohon maaf, permohonan surat Anda *ditolak*.\n\nJenis: *${jenisLabel}*\nPerihal: ${surat.perihal}\n\nSilakan hubungi pengurus RW untuk informasi lebih lanjut atau ajukan permohonan ulang.`);
+      }
+
+      if (status === "disetujui" && !surat.nomorSurat) {
         const updated = await storage.getSuratWargaById(surat.id);
         return res.json(updated);
       }
@@ -624,6 +689,10 @@ Buat surat dalam format teks biasa yang rapi dan profesional.`;
     if (status === "disetujui") {
       const changes = edit.fieldChanges as Record<string, any>;
       await storage.updateWarga(edit.wargaId, changes);
+      const fieldList = Object.entries(changes).map(([k, v]) => `- ${k}: ${v}`).join("\n");
+      notifyWarga(edit.wargaId, `[RW 03 Padasuka]\n\nPerubahan data profil Anda telah *DISETUJUI* ✅\n\nData yang diperbarui:\n${fieldList}\n\nTerima kasih.`);
+    } else if (status === "ditolak") {
+      notifyWarga(edit.wargaId, `[RW 03 Padasuka]\n\nMohon maaf, pengajuan perubahan data profil Anda *ditolak*.\n\nSilakan hubungi pengurus RW untuk informasi lebih lanjut.`);
     }
 
     res.json(edit);
