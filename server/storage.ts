@@ -2,7 +2,7 @@ import { eq, and, desc } from "drizzle-orm";
 import { db } from "./db";
 import {
   kartuKeluarga, warga, rtData, laporan, suratWarga, suratRw,
-  profileEditRequest, waBlast,
+  profileEditRequest, adminUser, waBlast,
   type KartuKeluarga, type InsertKartuKeluarga,
   type Warga, type InsertWarga,
   type RtData, type InsertRtData,
@@ -10,6 +10,7 @@ import {
   type SuratWarga, type InsertSuratWarga,
   type SuratRw, type InsertSuratRw,
   type ProfileEditRequest, type InsertProfileEditRequest,
+  type AdminUser, type InsertAdminUser,
   type WaBlast, type InsertWaBlast,
 } from "@shared/schema";
 
@@ -59,6 +60,10 @@ export interface IStorage {
 
   getWargaByRt(rt: number): Promise<(Warga & { nomorKk: string; rt: number })[]>;
   getAllWargaWithKk(): Promise<(Warga & { nomorKk: string; rt: number; alamat: string })[]>;
+
+  getAdminByUsername(username: string): Promise<AdminUser | undefined>;
+  getAllAdmins(): Promise<AdminUser[]>;
+  createAdmin(data: InsertAdminUser): Promise<AdminUser>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -272,6 +277,20 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(kartuKeluarga, eq(warga.kkId, kartuKeluarga.id))
       .orderBy(warga.namaLengkap);
     return results;
+  }
+
+  async getAdminByUsername(username: string): Promise<AdminUser | undefined> {
+    const [result] = await db.select().from(adminUser).where(eq(adminUser.username, username));
+    return result;
+  }
+
+  async getAllAdmins(): Promise<AdminUser[]> {
+    return db.select().from(adminUser).orderBy(adminUser.id);
+  }
+
+  async createAdmin(data: InsertAdminUser): Promise<AdminUser> {
+    const [result] = await db.insert(adminUser).values(data).returning();
+    return result;
   }
 }
 

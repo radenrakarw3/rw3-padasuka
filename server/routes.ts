@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import session from "express-session";
+import bcrypt from "bcrypt";
 import { storage } from "./storage";
 import { insertKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertProfileEditSchema, insertWaBlastSchema } from "@shared/schema";
 
@@ -218,10 +219,14 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Username dan password harus diisi" });
       }
 
-      if (username === "admin" && password === "admin2026") {
-        req.session.isAdmin = true;
-        req.session.kkId = undefined;
-        return res.json({ type: "admin", message: "Login admin berhasil" });
+      const adminAccount = await storage.getAdminByUsername(username);
+      if (adminAccount && adminAccount.isActive) {
+        const passwordMatch = await bcrypt.compare(password, adminAccount.passwordHash);
+        if (passwordMatch) {
+          req.session.isAdmin = true;
+          req.session.kkId = undefined;
+          return res.json({ type: "admin", message: "Login admin berhasil" });
+        }
       }
 
       return res.status(401).json({ message: "Login tidak valid" });

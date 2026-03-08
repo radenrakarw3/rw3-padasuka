@@ -88,6 +88,15 @@ export const profileEditRequest = pgTable("profile_edit_request", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const adminUser = pgTable("admin_user", {
+  id: serial("id").primaryKey(),
+  username: text("username").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  namaLengkap: text("nama_lengkap").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const waBlast = pgTable("wa_blast", {
   id: serial("id").primaryKey(),
   pesan: text("pesan").notNull(),
@@ -105,6 +114,7 @@ export const insertLaporanSchema = createInsertSchema(laporan).omit({ id: true, 
 export const insertSuratWargaSchema = createInsertSchema(suratWarga).omit({ id: true, createdAt: true, status: true, isiSurat: true });
 export const insertSuratRwSchema = createInsertSchema(suratRw).omit({ id: true, createdAt: true });
 export const insertProfileEditSchema = createInsertSchema(profileEditRequest).omit({ id: true, createdAt: true, status: true });
+export const insertAdminSchema = createInsertSchema(adminUser).omit({ id: true, createdAt: true });
 export const insertWaBlastSchema = createInsertSchema(waBlast).omit({ id: true, createdAt: true, jumlahPenerima: true, status: true });
 
 export type KartuKeluarga = typeof kartuKeluarga.$inferSelect;
@@ -121,5 +131,7 @@ export type SuratRw = typeof suratRw.$inferSelect;
 export type InsertSuratRw = z.infer<typeof insertSuratRwSchema>;
 export type ProfileEditRequest = typeof profileEditRequest.$inferSelect;
 export type InsertProfileEditRequest = z.infer<typeof insertProfileEditSchema>;
+export type AdminUser = typeof adminUser.$inferSelect;
+export type InsertAdminUser = z.infer<typeof insertAdminSchema>;
 export type WaBlast = typeof waBlast.$inferSelect;
 export type InsertWaBlast = z.infer<typeof insertWaBlastSchema>;

@@ -16,12 +16,15 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
 - Supporting: White, Black, Dark Red, Dark Blue
 
 ## Auth System
-- **Warga Login**: 2-step OTP via WhatsApp (Star Sender)
-  1. Warga enters nomor KK → system sends 2-digit OTP to kepala keluarga's WhatsApp
-  2. Warga enters OTP code → verified and logged in
-  - OTP expires after 5 minutes, 60-second resend cooldown
+- **Warga Login**: 3-step OTP via WhatsApp (Star Sender)
+  1. Warga enters nomor KK → picks WA contact from family members
+  2. System sends 2-digit OTP to selected WhatsApp number
+  3. Warga enters OTP code → verified and logged in
+  - OTP expires after 5 minutes, 60-second resend cooldown, max 5 attempts
   - In-memory OTP store (Map) on server
-- **Admin Login**: Username = "admin", Password = "admin2026"
+- **Admin Login**: Multi-admin from `admin_user` table with bcrypt-hashed passwords
+  - Admins: arnia23, emulawarman, radenraka, rezel123
+  - Loaded from CSV (attached_assets/admin_1772993517793.csv)
 - Session-based auth with express-session
 - Access control: warga can only access their own KK data, admin sees all
 
@@ -39,15 +42,19 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
 - `surat_warga`: Letter requests (AI-generated)
 - `surat_rw`: Official RW letters (Surat Sakti)
 - `profile_edit_request`: Profile edit approval workflow
+- `admin_user`: Admin accounts with bcrypt password hashes
 - `wa_blast`: WA blast message history
 
 ## RT Data
-7 RT units (RT 01 - RT 07), names configurable via admin
+7 RT units with real ketua names from CSV:
+- RT 01: Dadan Setiawan, RT 02: Jajang Kusmana, RT 03: Iyep Supriatna
+- RT 04: Eem Sulaeman, RT 05: Dadan Sobandi, RT 06: Dicky Irawan, RT 07: Abdul Muin
 
 ## Seeded Data
 - 291 KK records from CSV
 - 927 warga records from CSV
-- 7 RT data records
+- 7 RT data records (real names)
+- 4 admin users from CSV (bcrypt-hashed passwords)
 
 ## Environment Variables
 - DATABASE_URL: PostgreSQL connection

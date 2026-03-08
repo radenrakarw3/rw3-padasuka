@@ -1,6 +1,6 @@
 import { storage } from "./storage";
 import { db } from "./db";
-import { kartuKeluarga, warga, rtData } from "@shared/schema";
+import { kartuKeluarga, warga, rtData, adminUser } from "@shared/schema";
 import fs from "fs";
 import path from "path";
 
@@ -41,33 +41,75 @@ function cleanDateStr(val: string): string | null {
   }
 }
 
+async function seedAdminsAndRt() {
+  const adminCsvPath = path.join(process.cwd(), "attached_assets", "admin_1772993517793.csv");
+  if (fs.existsSync(adminCsvPath)) {
+    const existingAdmins = await storage.getAllAdmins();
+    if (existingAdmins.length === 0) {
+      const content = fs.readFileSync(adminCsvPath, "utf-8");
+      const lines = content.split("\n").filter(l => l.trim());
+      const header = parseCSVLine(lines[0]);
+      const usernameIdx = header.indexOf("username");
+      const passwordIdx = header.indexOf("password_hash");
+      const namaIdx = header.indexOf("nama_lengkap");
+      const activeIdx = header.indexOf("is_active");
+
+      for (let i = 1; i < lines.length; i++) {
+        const fields = parseCSVLine(lines[i]);
+        if (fields.length < 4) continue;
+        const username = fields[usernameIdx]?.replace(/"/g, "").trim();
+        const passwordHash = fields[passwordIdx]?.replace(/"/g, "").trim();
+        const namaLengkap = fields[namaIdx]?.replace(/"/g, "").trim();
+        const isActive = fields[activeIdx]?.replace(/"/g, "").trim() === "true";
+        if (!username || !passwordHash) continue;
+        try {
+          await storage.createAdmin({ username, passwordHash, namaLengkap, isActive });
+        } catch (err: any) {
+          if (!err.message.includes("duplicate")) {
+            console.error(`Error seeding admin ${username}:`, err.message);
+          }
+        }
+      }
+      console.log("Admin users seeded from CSV");
+    }
+  }
+
+  const rtCsvPath = path.join(process.cwd(), "attached_assets", "data_rt_(1)_1772993522045.csv");
+  if (fs.existsSync(rtCsvPath)) {
+    const content = fs.readFileSync(rtCsvPath, "utf-8");
+    const lines = content.split("\n").filter(l => l.trim());
+    const header = parseCSVLine(lines[0]);
+    const rtIdx = header.indexOf("nomor_rt");
+    const ketuaIdx = header.indexOf("nama_ketua_rt");
+
+    for (let i = 1; i < lines.length; i++) {
+      const fields = parseCSVLine(lines[i]);
+      if (fields.length < 3) continue;
+      const nomorRt = parseInt(fields[rtIdx]?.replace(/"/g, "").trim());
+      const namaKetua = fields[ketuaIdx]?.replace(/"/g, "").trim();
+      if (!nomorRt || !namaKetua) continue;
+      const existing = await storage.getRtByNomor(nomorRt);
+      if (!existing) {
+        await storage.createRt({ nomorRt, namaKetua });
+      } else {
+        await storage.updateRt(existing.id, { namaKetua });
+      }
+    }
+    console.log("RT data seeded from CSV");
+  }
+}
+
 export async function seedDatabase() {
   try {
+    await seedAdminsAndRt();
+
     const existingKk = await storage.getAllKk();
     if (existingKk.length > 0) {
-      console.log("Database already seeded, skipping...");
+      console.log("KK data already seeded, skipping CSV import...");
       return;
     }
 
-    console.log("Seeding database...");
-
-    const rtNames = [
-      { nomorRt: 1, namaKetua: "Bapak RT 01", nomorWhatsapp: "" },
-      { nomorRt: 2, namaKetua: "Bapak RT 02", nomorWhatsapp: "" },
-      { nomorRt: 3, namaKetua: "Bapak RT 03", nomorWhatsapp: "" },
-      { nomorRt: 4, namaKetua: "Bapak RT 04", nomorWhatsapp: "" },
-      { nomorRt: 5, namaKetua: "Bapak RT 05", nomorWhatsapp: "" },
-      { nomorRt: 6, namaKetua: "Bapak RT 06", nomorWhatsapp: "" },
-      { nomorRt: 7, namaKetua: "Bapak RT 07", nomorWhatsapp: "" },
-    ];
-
-    for (const rt of rtNames) {
-      const existing = await storage.getRtByNomor(rt.nomorRt);
-      if (!existing) {
-        await storage.createRt(rt);
-      }
-    }
-    console.log("RT data seeded");
+    console.log("Seeding KK/warga data from CSV...");
 
     const kkCsvPath = path.join(process.cwd(), "attached_assets", "kartu_keluarga_1772991097594.csv");
     if (fs.existsSync(kkCsvPath)) {
