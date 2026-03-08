@@ -749,6 +749,46 @@ Buat surat dalam format teks biasa yang rapi dan profesional.`;
     res.json(data);
   });
 
+  app.get("/api/wa-blast/preview", requireAdmin, async (req, res) => {
+    try {
+      const kategori = (req.query.kategori as string) || "semua";
+      const validKategori = ["semua", "per_rt", "kepala_keluarga", "penerima_bansos"];
+      if (!validKategori.includes(kategori)) {
+        return res.status(400).json({ message: "Kategori tidak valid" });
+      }
+      const rt = req.query.rt ? parseInt(req.query.rt as string) : undefined;
+      if (kategori === "per_rt" && (!rt || rt < 1 || rt > 7 || isNaN(rt))) {
+        return res.status(400).json({ message: "Nomor RT tidak valid" });
+      }
+
+      let wargaList: any[] = [];
+      if (kategori === "semua") {
+        wargaList = await storage.getAllWargaWithKk();
+      } else if (kategori === "per_rt" && rt) {
+        wargaList = await storage.getWargaByRt(rt);
+      } else if (kategori === "kepala_keluarga") {
+        const all = await storage.getAllWargaWithKk();
+        wargaList = all.filter(w => w.kedudukanKeluarga === "Kepala Keluarga");
+      } else if (kategori === "penerima_bansos") {
+        const allKk = await storage.getAllKk();
+        const bansosKkIds = allKk.filter(k => k.penerimaBansos).map(k => k.id);
+        const all = await storage.getAllWargaWithKk();
+        wargaList = all.filter(w => bansosKkIds.includes(w.kkId) && w.kedudukanKeluarga === "Kepala Keluarga");
+      } else {
+        wargaList = await storage.getAllWargaWithKk();
+      }
+
+      const uniquePhones = new Set<string>();
+      for (const w of wargaList) {
+        if (w.nomorWhatsapp) uniquePhones.add(w.nomorWhatsapp);
+      }
+
+      res.json({ total: uniquePhones.size });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.post("/api/wa-blast", requireAdmin, async (req, res) => {
     try {
       const parsed = insertWaBlastSchema.parse(req.body);
@@ -788,7 +828,7 @@ Buat surat dalam format teks biasa yang rapi dan profesional.`;
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
-      await storage.updateWaBlastStatus(blast.id, "terkirim", successCount);
+      await storage.updateWaBlastStatus(blast.id, "terkirim", recipients.length, successCount);
       const updated = await storage.getAllWaBlast();
       res.json({ sent: successCount, total: recipients.length, blast: updated[0] });
     } catch (error: any) {

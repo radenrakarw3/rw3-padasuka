@@ -107,6 +107,7 @@ export const waBlast = pgTable("wa_blast", {
   kategoriFilter: text("kategori_filter").notNull().default("semua"),
   filterRt: integer("filter_rt"),
   jumlahPenerima: integer("jumlah_penerima").notNull().default(0),
+  jumlahBerhasil: integer("jumlah_berhasil").notNull().default(0),
   status: text("status").notNull().default("pending"),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -119,7 +120,7 @@ export const insertSuratWargaSchema = createInsertSchema(suratWarga).omit({ id: 
 export const insertSuratRwSchema = createInsertSchema(suratRw).omit({ id: true, createdAt: true });
 export const insertProfileEditSchema = createInsertSchema(profileEditRequest).omit({ id: true, createdAt: true, status: true });
 export const insertAdminSchema = createInsertSchema(adminUser).omit({ id: true, createdAt: true });
-export const insertWaBlastSchema = createInsertSchema(waBlast).omit({ id: true, createdAt: true, jumlahPenerima: true, status: true });
+export const insertWaBlastSchema = createInsertSchema(waBlast).omit({ id: true, createdAt: true, jumlahPenerima: true, jumlahBerhasil: true, status: true });
 
 export type KartuKeluarga = typeof kartuKeluarga.$inferSelect;
 export type InsertKartuKeluarga = z.infer<typeof insertKkSchema>;

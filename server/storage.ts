@@ -56,7 +56,7 @@ export interface IStorage {
 
   getAllWaBlast(): Promise<WaBlast[]>;
   createWaBlast(data: InsertWaBlast): Promise<WaBlast>;
-  updateWaBlastStatus(id: number, status: string, jumlah: number): Promise<WaBlast | undefined>;
+  updateWaBlastStatus(id: number, status: string, jumlahPenerima: number, jumlahBerhasil: number): Promise<WaBlast | undefined>;
 
   getWargaByRt(rt: number): Promise<(Warga & { nomorKk: string; rt: number })[]>;
   getAllWargaWithKk(): Promise<(Warga & { nomorKk: string; rt: number; alamat: string })[]>;
@@ -259,8 +259,8 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async updateWaBlastStatus(id: number, status: string, jumlah: number): Promise<WaBlast | undefined> {
-    const [result] = await db.update(waBlast).set({ status, jumlahPenerima: jumlah }).where(eq(waBlast.id, id)).returning();
+  async updateWaBlastStatus(id: number, status: string, jumlahPenerima: number, jumlahBerhasil: number): Promise<WaBlast | undefined> {
+    const [result] = await db.update(waBlast).set({ status, jumlahPenerima, jumlahBerhasil }).where(eq(waBlast.id, id)).returning();
     return result;
   }
 
