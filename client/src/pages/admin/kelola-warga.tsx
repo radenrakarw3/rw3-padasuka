@@ -40,6 +40,11 @@ export default function AdminKelolaWarga() {
   const [editFilePreview, setEditFilePreview] = useState<string | null>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
 
+  const [kkSearch, setKkSearch] = useState("");
+  const [kkDropdownOpen, setKkDropdownOpen] = useState(false);
+  const [editKkSearch, setEditKkSearch] = useState("");
+  const [editKkDropdownOpen, setEditKkDropdownOpen] = useState(false);
+
   const { data: kkList } = useQuery<KartuKeluarga[]>({ queryKey: ["/api/kk"] });
 
   const { data: wargaList, isLoading } = useQuery<any[]>({ queryKey: ["/api/warga-with-kk"] });
@@ -216,16 +221,61 @@ export default function AdminKelolaWarga() {
     onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void,
     onClearFile: () => void,
     testIdPrefix: string,
-  ) => (
+    searchVal: string,
+    setSearchVal: (v: string) => void,
+    dropdownOpen: boolean,
+    setDropdownOpen: (v: boolean) => void,
+  ) => {
+    const selectedKk = kkList?.find(k => k.id.toString() === formData.kkId);
+    const filteredKkList = kkList?.filter(k => {
+      if (!searchVal) return true;
+      const q = searchVal.toLowerCase();
+      return k.nomorKk.toLowerCase().includes(q) || k.alamat.toLowerCase().includes(q) || `rt ${k.rt}`.includes(q);
+    }) || [];
+    return (
     <div className="space-y-3">
-      <div className="space-y-1">
+      <div className="space-y-1 relative">
         <Label className="text-sm">Kartu Keluarga</Label>
-        <Select value={formData.kkId} onValueChange={v => setFormData({...formData, kkId: v})}>
-          <SelectTrigger className="h-10" data-testid={`select-kk-${testIdPrefix}`}><SelectValue placeholder="Pilih KK" /></SelectTrigger>
-          <SelectContent>
-            {kkList?.map(k => <SelectItem key={k.id} value={k.id.toString()}>{k.nomorKk} - RT {k.rt}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        {selectedKk ? (
+          <div className="flex items-center gap-2 rounded-md border p-2 h-10">
+            <span className="text-sm flex-1 truncate">{selectedKk.nomorKk} - RT {selectedKk.rt}</span>
+            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => { setFormData({...formData, kkId: ""}); setSearchVal(""); }} data-testid={`button-clear-kk-${testIdPrefix}`}>
+              <X className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+        ) : (
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <Input
+              value={searchVal}
+              onChange={e => { setSearchVal(e.target.value); setDropdownOpen(true); }}
+              onFocus={() => setDropdownOpen(true)}
+              placeholder="Cari nomor KK, alamat, atau RT..."
+              className="h-10 pl-9"
+              data-testid={`input-search-kk-${testIdPrefix}`}
+            />
+          </div>
+        )}
+        {dropdownOpen && !selectedKk && (
+          <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-48 overflow-y-auto">
+            {filteredKkList.length === 0 ? (
+              <p className="text-sm text-muted-foreground p-3">Tidak ditemukan</p>
+            ) : (
+              filteredKkList.slice(0, 20).map(k => (
+                <button
+                  key={k.id}
+                  type="button"
+                  className="w-full text-left px-3 py-2 hover:bg-accent text-sm border-b last:border-b-0"
+                  onClick={() => { setFormData({...formData, kkId: k.id.toString()}); setDropdownOpen(false); setSearchVal(""); }}
+                  data-testid={`option-kk-${k.id}-${testIdPrefix}`}
+                >
+                  <div className="font-medium">{k.nomorKk}</div>
+                  <div className="text-xs text-muted-foreground">RT {k.rt} - {k.alamat}</div>
+                </button>
+              ))
+            )}
+          </div>
+        )}
       </div>
       <div className="space-y-1">
         <Label className="text-sm">Nama Lengkap</Label>
@@ -345,12 +395,13 @@ export default function AdminKelolaWarga() {
       </div>
     </div>
   );
+  };
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-bold" data-testid="text-warga-title">Data Warga</h2>
-        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { clearFile(); setForm({ ...defaultForm }); } }}>
+        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { clearFile(); setForm({ ...defaultForm }); setKkSearch(""); setKkDropdownOpen(false); } }}>
           <DialogTrigger asChild>
             <Button className="gap-1.5" data-testid="button-tambah-warga">
               <Plus className="w-4 h-4" /> Tambah Warga
@@ -360,7 +411,7 @@ export default function AdminKelolaWarga() {
             <DialogHeader>
               <DialogTitle>Tambah Warga</DialogTitle>
             </DialogHeader>
-            {renderFormFields(form, setForm, fileInputRef, selectedFile, filePreview, handleFileSelect, clearFile, "warga")}
+            {renderFormFields(form, setForm, fileInputRef, selectedFile, filePreview, handleFileSelect, clearFile, "warga", kkSearch, setKkSearch, kkDropdownOpen, setKkDropdownOpen)}
             <Button className="w-full h-10" onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !form.kkId || !form.namaLengkap || !form.nik} data-testid="button-simpan-warga">
               {createMutation.isPending ? "Menyimpan..." : "Simpan Warga"}
             </Button>
@@ -368,12 +419,12 @@ export default function AdminKelolaWarga() {
         </Dialog>
       </div>
 
-      <Dialog open={editDialogOpen} onOpenChange={(open) => { setEditDialogOpen(open); if (!open) { clearEditFile(); setEditingWargaId(null); } }}>
+      <Dialog open={editDialogOpen} onOpenChange={(open) => { setEditDialogOpen(open); if (!open) { clearEditFile(); setEditingWargaId(null); setEditKkSearch(""); setEditKkDropdownOpen(false); } }}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Warga</DialogTitle>
           </DialogHeader>
-          {renderFormFields(editForm, setEditForm, editFileInputRef, editSelectedFile, editFilePreview, handleEditFileSelect, clearEditFile, "edit-warga")}
+          {renderFormFields(editForm, setEditForm, editFileInputRef, editSelectedFile, editFilePreview, handleEditFileSelect, clearEditFile, "edit-warga", editKkSearch, setEditKkSearch, editKkDropdownOpen, setEditKkDropdownOpen)}
           <Button className="w-full h-10" onClick={() => editMutation.mutate()} disabled={editMutation.isPending || !editForm.kkId || !editForm.namaLengkap || !editForm.nik} data-testid="button-simpan-edit-warga">
             {editMutation.isPending ? "Menyimpan..." : "Simpan Perubahan"}
           </Button>
