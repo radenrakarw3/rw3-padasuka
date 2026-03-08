@@ -468,21 +468,17 @@ PENTING:
 1. JANGAN sertakan kop surat/header karena kop surat akan ditambahkan secara otomatis oleh sistem.
 2. JANGAN sertakan nomor surat karena nomor surat akan di-assign otomatis oleh sistem.
 3. Langsung mulai dari "Perihal:" atau judul surat.
-4. Bagian tanda tangan di bagian akhir surat HARUS menggunakan format VERTIKAL (atas-bawah), BUKAN sejajar kiri-kanan. Format tanda tangan yang benar:
+4. Bagian tanda tangan di bagian akhir surat HARUS menggunakan format DUA KOLOM sejajar kiri-kanan. Tulis PERSIS seperti ini (gunakan tanda | sebagai pemisah kolom):
 
-Mengetahui,
-Ketua RT ${String(kk.rt).padStart(2, "0")}
+Mengetahui, | Hormat kami,
+Ketua RT ${String(kk.rt).padStart(2, "0")} | Ketua RW 03
+Kelurahan Padasuka | Kelurahan Padasuka
+|
+|
+(${rt?.namaKetua || "___________"}) | (Raden Raka)
 
-
-(${rt?.namaKetua || "___________"})
-
-
-Ketua RW 03
-
-
-(Raden Raka)
-
-5. Buat dalam format teks biasa yang rapi, bukan markdown. Jangan gunakan tanda bintang (*) atau formatting markdown apapun.`;
+5. Buat dalam format teks biasa yang rapi, bukan markdown. Jangan gunakan tanda bintang (*) atau formatting markdown apapun.
+6. Untuk bagian biodata/data pemohon, gunakan format yang konsisten dengan tanda titik dua (:) yang sejajar.`;
 
       const isiSurat = await generateWithGemini(prompt);
       const updated = await storage.updateSuratWargaStatus(surat.id, surat.status, isiSurat);
