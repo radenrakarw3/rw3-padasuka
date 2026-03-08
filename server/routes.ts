@@ -100,7 +100,7 @@ export async function registerRoutes(
     next();
   }
 
-  app.post("/api/auth/request-otp", async (req, res) => {
+  app.post("/api/auth/check-kk", async (req, res) => {
     try {
       const { nomorKk } = req.body;
       if (!nomorKk) {
@@ -113,21 +113,49 @@ export async function registerRoutes(
       }
 
       const members = await storage.getWargaByKkId(kk.id);
-      const kepala = members.find(w => w.kedudukanKeluarga === "Kepala Keluarga");
-      const memberWithWa = members.find(w => w.nomorWhatsapp);
-      const target = kepala?.nomorWhatsapp ? kepala : memberWithWa;
+      const contacts = members
+        .filter(w => w.nomorWhatsapp)
+        .map(w => ({
+          id: w.id,
+          nama: w.namaLengkap,
+          phone: w.nomorWhatsapp!.replace(/(\d{4})(\d+)(\d{3})/, "$1****$3"),
+          kedudukan: w.kedudukanKeluarga,
+        }));
 
-      if (!target || !target.nomorWhatsapp) {
+      if (contacts.length === 0) {
         return res.status(400).json({ message: "Tidak ada nomor WhatsApp terdaftar di KK ini. Hubungi admin RW." });
       }
 
-      const otp = String(Math.floor(Math.random() * 90) + 10);
-      const expiresAt = Date.now() + 5 * 60 * 1000;
+      return res.json({ contacts });
+    } catch (error: any) {
+      return res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/auth/request-otp", async (req, res) => {
+    try {
+      const { nomorKk, wargaId } = req.body;
+      if (!nomorKk || !wargaId) {
+        return res.status(400).json({ message: "Nomor KK dan penerima OTP harus diisi" });
+      }
+
+      const kk = await storage.getKkByNomor(nomorKk);
+      if (!kk) {
+        return res.status(404).json({ message: "Nomor KK tidak ditemukan" });
+      }
+
+      const target = await storage.getWargaById(wargaId);
+      if (!target || target.kkId !== kk.id || !target.nomorWhatsapp) {
+        return res.status(400).json({ message: "Nomor WhatsApp tidak valid untuk KK ini" });
+      }
 
       const existing = otpStore.get(nomorKk);
       if (existing && (Date.now() - existing.lastRequestAt) < 60000) {
         return res.status(429).json({ message: "Tunggu 60 detik sebelum meminta OTP lagi" });
       }
+
+      const otp = String(Math.floor(Math.random() * 90) + 10);
+      const expiresAt = Date.now() + 5 * 60 * 1000;
 
       otpStore.set(nomorKk, { otp, kkId: kk.id, nomorKk: kk.nomorKk, phone: target.nomorWhatsapp, expiresAt, attempts: 0, lastRequestAt: Date.now() });
 
@@ -139,7 +167,7 @@ export async function registerRoutes(
       }
 
       const maskedPhone = target.nomorWhatsapp.replace(/(\d{4})(\d+)(\d{3})/, "$1****$3");
-      return res.json({ message: "OTP terkirim", phone: maskedPhone });
+      return res.json({ message: "OTP terkirim", phone: maskedPhone, nama: target.namaLengkap });
     } catch (error: any) {
       return res.status(500).json({ message: error.message });
     }

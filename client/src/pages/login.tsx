@@ -5,11 +5,25 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { LogIn, Shield, MessageCircle, ArrowLeft, Loader2 } from "lucide-react";
+import { LogIn, Shield, MessageCircle, ArrowLeft, Loader2, User } from "lucide-react";
 import logoImg from "@assets/2f80aef4-6f16-4fd8-8801-982a3e49dd03_1772991075891.JPG";
 
+interface WaContact {
+  id: number;
+  nama: string;
+  phone: string;
+  kedudukan: string;
+}
+
+function parseErrorMsg(error: any): string {
+  const msg = error.message.includes(":")
+    ? error.message.split(":").slice(1).join(":").trim()
+    : error.message;
+  try { return JSON.parse(msg).message; } catch { return msg; }
+}
+
 export default function LoginPage() {
-  const { login, requestOtp, verifyOtp } = useAuth();
+  const { login, checkKk, requestOtp, verifyOtp } = useAuth();
   const { toast } = useToast();
   const [nomorKk, setNomorKk] = useState("");
   const [otp, setOtp] = useState("");
@@ -17,7 +31,9 @@ export default function LoginPage() {
   const [adminPassword, setAdminPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [step, setStep] = useState<"kk" | "otp">("kk");
+  const [step, setStep] = useState<"kk" | "pick" | "otp">("kk");
+  const [contacts, setContacts] = useState<WaContact[]>([]);
+  const [selectedContact, setSelectedContact] = useState<WaContact | null>(null);
   const [maskedPhone, setMaskedPhone] = useState("");
   const [countdown, setCountdown] = useState(0);
   const otpInputRef = useRef<HTMLInputElement>(null);
@@ -34,7 +50,7 @@ export default function LoginPage() {
     }
   }, [step]);
 
-  const handleRequestOtp = async (e: React.FormEvent) => {
+  const handleCheckKk = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nomorKk) {
       toast({ title: "Masukkan nomor KK", variant: "destructive" });
@@ -42,19 +58,32 @@ export default function LoginPage() {
     }
     setLoading(true);
     try {
-      const result = await requestOtp(nomorKk);
+      const result = await checkKk(nomorKk);
+      setContacts(result.contacts);
+      if (result.contacts.length === 1) {
+        await handleSendOtp(result.contacts[0]);
+      } else {
+        setStep("pick");
+      }
+    } catch (error: any) {
+      toast({ title: "Gagal", description: parseErrorMsg(error), variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendOtp = async (contact: WaContact) => {
+    setSelectedContact(contact);
+    setLoading(true);
+    try {
+      const result = await requestOtp(nomorKk, contact.id);
       setMaskedPhone(result.phone);
       setStep("otp");
       setCountdown(60);
       setOtp("");
-      toast({ title: "Kode OTP terkirim ke WhatsApp" });
+      toast({ title: `Kode OTP terkirim ke ${contact.nama}` });
     } catch (error: any) {
-      const msg = error.message.includes(":")
-        ? error.message.split(":").slice(1).join(":").trim()
-        : error.message;
-      let parsed = msg;
-      try { parsed = JSON.parse(msg).message; } catch {}
-      toast({ title: "Gagal", description: parsed, variant: "destructive" });
+      toast({ title: "Gagal", description: parseErrorMsg(error), variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -71,12 +100,7 @@ export default function LoginPage() {
       await verifyOtp(nomorKk, otp);
       toast({ title: "Login berhasil!" });
     } catch (error: any) {
-      const msg = error.message.includes(":")
-        ? error.message.split(":").slice(1).join(":").trim()
-        : error.message;
-      let parsed = msg;
-      try { parsed = JSON.parse(msg).message; } catch {}
-      toast({ title: "OTP Gagal", description: parsed, variant: "destructive" });
+      toast({ title: "OTP Gagal", description: parseErrorMsg(error), variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -93,36 +117,22 @@ export default function LoginPage() {
       await login(adminUsername, adminPassword);
       toast({ title: "Login berhasil!" });
     } catch (error: any) {
-      const msg = error.message.includes(":")
-        ? error.message.split(":").slice(1).join(":").trim()
-        : error.message;
-      let parsed = msg;
-      try { parsed = JSON.parse(msg).message; } catch {}
-      toast({ title: "Login Gagal", description: parsed, variant: "destructive" });
+      toast({ title: "Login Gagal", description: parseErrorMsg(error), variant: "destructive" });
     } finally {
       setLoading(false);
     }
   };
 
   const handleResendOtp = async () => {
-    if (countdown > 0) return;
-    setLoading(true);
-    try {
-      const result = await requestOtp(nomorKk);
-      setMaskedPhone(result.phone);
-      setCountdown(60);
-      setOtp("");
-      toast({ title: "Kode OTP baru terkirim" });
-    } catch (error: any) {
-      const msg = error.message.includes(":")
-        ? error.message.split(":").slice(1).join(":").trim()
-        : error.message;
-      let parsed = msg;
-      try { parsed = JSON.parse(msg).message; } catch {}
-      toast({ title: "Gagal kirim ulang", description: parsed, variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
+    if (countdown > 0 || !selectedContact) return;
+    await handleSendOtp(selectedContact);
+  };
+
+  const resetToKk = () => {
+    setStep("kk");
+    setOtp("");
+    setContacts([]);
+    setSelectedContact(null);
   };
 
   return (
@@ -155,7 +165,7 @@ export default function LoginPage() {
             <div className="flex items-center gap-2 justify-center">
               <button
                 type="button"
-                onClick={() => { setIsAdmin(false); setStep("kk"); }}
+                onClick={() => { setIsAdmin(false); resetToKk(); }}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                   !isAdmin
                     ? "bg-primary text-primary-foreground"
@@ -167,7 +177,7 @@ export default function LoginPage() {
               </button>
               <button
                 type="button"
-                onClick={() => { setIsAdmin(true); setStep("kk"); }}
+                onClick={() => { setIsAdmin(true); resetToKk(); }}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
                   isAdmin
                     ? "bg-primary text-primary-foreground"
@@ -227,7 +237,7 @@ export default function LoginPage() {
                 </Button>
               </form>
             ) : step === "kk" ? (
-              <form onSubmit={handleRequestOtp} className="space-y-4">
+              <form onSubmit={handleCheckKk} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="nomor-kk" className="text-base font-medium">
                     Nomor Kartu Keluarga
@@ -249,29 +259,29 @@ export default function LoginPage() {
                   type="submit"
                   className="w-full h-12 text-base font-semibold"
                   disabled={loading}
-                  data-testid="button-request-otp"
+                  data-testid="button-check-kk"
                 >
                   {loading ? (
                     <span className="flex items-center gap-2">
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Mengirim OTP...
+                      Mencari...
                     </span>
                   ) : (
                     <span className="flex items-center gap-2">
                       <MessageCircle className="w-5 h-5" />
-                      Kirim Kode OTP via WhatsApp
+                      Lanjutkan
                     </span>
                   )}
                 </Button>
                 <p className="text-xs text-center text-muted-foreground">
-                  Kode OTP akan dikirim ke nomor WhatsApp kepala keluarga
+                  Kode OTP akan dikirim ke nomor WhatsApp anggota keluarga
                 </p>
               </form>
-            ) : (
-              <form onSubmit={handleVerifyOtp} className="space-y-4">
+            ) : step === "pick" ? (
+              <div className="space-y-4">
                 <button
                   type="button"
-                  onClick={() => { setStep("kk"); setOtp(""); }}
+                  onClick={resetToKk}
                   className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
                   data-testid="button-back-to-kk"
                 >
@@ -279,9 +289,60 @@ export default function LoginPage() {
                   Ganti nomor KK
                 </button>
 
+                <div>
+                  <p className="text-sm font-medium mb-3">Kirim OTP ke nomor WhatsApp:</p>
+                  <div className="space-y-2">
+                    {contacts.map((contact) => (
+                      <button
+                        key={contact.id}
+                        type="button"
+                        onClick={() => handleSendOtp(contact)}
+                        disabled={loading}
+                        className="w-full flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors text-left disabled:opacity-50"
+                        data-testid={`button-contact-${contact.id}`}
+                      >
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                          <User className="w-5 h-5 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate" data-testid={`text-contact-name-${contact.id}`}>
+                            {contact.nama}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {contact.kedudukan} &middot; {contact.phone}
+                          </p>
+                        </div>
+                        <MessageCircle className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {loading && (
+                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Mengirim OTP...
+                  </div>
+                )}
+              </div>
+            ) : (
+              <form onSubmit={handleVerifyOtp} className="space-y-4">
+                <button
+                  type="button"
+                  onClick={() => { setStep("pick"); setOtp(""); }}
+                  className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  data-testid="button-back-to-pick"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Ganti penerima OTP
+                </button>
+
                 <div className="bg-muted/50 rounded-lg p-3 text-center space-y-1">
                   <p className="text-sm text-muted-foreground">Kode OTP dikirim ke</p>
-                  <p className="font-semibold text-base" data-testid="text-masked-phone">
+                  <p className="font-semibold text-base" data-testid="text-otp-recipient">
+                    {selectedContact?.nama}
+                  </p>
+                  <p className="text-sm text-muted-foreground" data-testid="text-masked-phone">
                     {maskedPhone}
                   </p>
                 </div>

@@ -8,11 +8,19 @@ interface AuthUser {
   isAdmin?: boolean;
 }
 
+interface WaContact {
+  id: number;
+  nama: string;
+  phone: string;
+  kedudukan: string;
+}
+
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
   login: (username: string, password: string) => Promise<AuthUser>;
-  requestOtp: (nomorKk: string) => Promise<{ phone: string }>;
+  checkKk: (nomorKk: string) => Promise<{ contacts: WaContact[] }>;
+  requestOtp: (nomorKk: string, wargaId: number) => Promise<{ phone: string; nama: string }>;
   verifyOtp: (nomorKk: string, otp: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
 }
@@ -43,10 +51,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return data;
   }, []);
 
-  const requestOtp = useCallback(async (nomorKk: string) => {
-    const res = await apiRequest("POST", "/api/auth/request-otp", { nomorKk });
-    const data = await res.json();
-    return data;
+  const checkKk = useCallback(async (nomorKk: string) => {
+    const res = await apiRequest("POST", "/api/auth/check-kk", { nomorKk });
+    return await res.json();
+  }, []);
+
+  const requestOtp = useCallback(async (nomorKk: string, wargaId: number) => {
+    const res = await apiRequest("POST", "/api/auth/request-otp", { nomorKk, wargaId });
+    return await res.json();
   }, []);
 
   const verifyOtp = useCallback(async (nomorKk: string, otp: string) => {
@@ -62,7 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, requestOtp, verifyOtp, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, checkKk, requestOtp, verifyOtp, logout }}>
       {children}
     </AuthContext.Provider>
   );
