@@ -87,6 +87,16 @@ export interface DashboardStats {
   totalWarga: number;
   pendingLaporan: number;
   pendingSurat: number;
+  pendingEditProfil: number;
+  pendingPengajuanBansos: number;
+  totalLaporan: number;
+  statusLaporan: Record<string, number>;
+  totalSuratWarga: number;
+  statusSuratWarga: Record<string, number>;
+  totalSuratRw: number;
+  totalPengajuanBansos: number;
+  statusPengajuanBansos: Record<string, number>;
+  jenisBansos: Record<string, number>;
   jenisKelamin: Record<string, number>;
   agama: Record<string, number>;
   statusPerkawinan: Record<string, number>;
@@ -428,13 +438,51 @@ export class DatabaseStorage implements IStorage {
   async getDashboardStats(): Promise<DashboardStats> {
     const allKk = await db.select().from(kartuKeluarga);
     const allWarga = await db.select().from(warga);
-    const pendingLaporanResult = await db.select({ c: count() }).from(laporan).where(eq(laporan.status, "pending"));
-    const pendingSuratResult = await db.select({ c: count() }).from(suratWarga).where(eq(suratWarga.status, "pending"));
+    const allLaporan = await db.select().from(laporan);
+    const allSuratWarga = await db.select().from(suratWarga);
+    const allSuratRw = await db.select().from(suratRw);
+    const allProfileEdits = await db.select().from(profileEditRequest);
+    const allPengajuanBansos = await db.select().from(pengajuanBansos);
 
     const totalKk = allKk.length;
     const totalWarga = allWarga.length;
-    const pendingLaporan = pendingLaporanResult[0]?.c || 0;
-    const pendingSurat = pendingSuratResult[0]?.c || 0;
+    const pendingLaporan = allLaporan.filter(l => l.status === "pending").length;
+    const pendingSurat = allSuratWarga.filter(s => s.status === "pending").length;
+    const pendingEditProfil = allProfileEdits.filter(p => p.status === "pending").length;
+    const pendingPengajuanBansos = allPengajuanBansos.filter(p => p.status === "pending").length;
+
+    const totalLaporan = allLaporan.length;
+    const statusLaporan: Record<string, number> = {};
+    for (const l of allLaporan) {
+      const s = l.status || "pending";
+      statusLaporan[s] = (statusLaporan[s] || 0) + 1;
+    }
+
+    const totalSuratWarga = allSuratWarga.length;
+    const statusSuratWarga: Record<string, number> = {};
+    for (const s of allSuratWarga) {
+      const st = s.status || "pending";
+      statusSuratWarga[st] = (statusSuratWarga[st] || 0) + 1;
+    }
+
+    const totalSuratRw = allSuratRw.length;
+
+    const totalPengajuanBansosCount = allPengajuanBansos.length;
+    const statusPengajuanBansos: Record<string, number> = {};
+    for (const p of allPengajuanBansos) {
+      const s = p.status || "pending";
+      statusPengajuanBansos[s] = (statusPengajuanBansos[s] || 0) + 1;
+    }
+
+    const jenisBansos: Record<string, number> = {};
+    for (const k of allKk) {
+      if (k.penerimaBansos && k.jenisBansos) {
+        const types = k.jenisBansos.split(",").map(t => t.trim()).filter(t => t);
+        for (const t of types) {
+          jenisBansos[t] = (jenisBansos[t] || 0) + 1;
+        }
+      }
+    }
 
     const countByField = (items: any[], field: string): Record<string, number> => {
       const map: Record<string, number> = {};
@@ -527,6 +575,12 @@ export class DatabaseStorage implements IStorage {
 
     return {
       totalKk, totalWarga, pendingLaporan, pendingSurat,
+      pendingEditProfil, pendingPengajuanBansos,
+      totalLaporan, statusLaporan,
+      totalSuratWarga, statusSuratWarga,
+      totalSuratRw,
+      totalPengajuanBansos: totalPengajuanBansosCount, statusPengajuanBansos,
+      jenisBansos,
       jenisKelamin, agama, statusPerkawinan, kedudukanKeluarga,
       pekerjaan, statusKependudukan, kelompokUsia,
       waOwnership, ktpOwnership,

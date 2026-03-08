@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getQueryFn } from "@/lib/queryClient";
 import {
   Users, Home, ClipboardList, FileText, UserCheck, UserX, UserMinus,
-  Phone, PhoneOff, CreditCard, ImageOff, Heart, Building2, Droplets,
-  Zap, ShowerHead, HandCoins
+  Phone, PhoneOff, CreditCard, ImageOff, HandCoins, UserCog, ScrollText
 } from "lucide-react";
 
 interface DashboardStats {
@@ -12,6 +12,16 @@ interface DashboardStats {
   totalWarga: number;
   pendingLaporan: number;
   pendingSurat: number;
+  pendingEditProfil: number;
+  pendingPengajuanBansos: number;
+  totalLaporan: number;
+  statusLaporan: Record<string, number>;
+  totalSuratWarga: number;
+  statusSuratWarga: Record<string, number>;
+  totalSuratRw: number;
+  totalPengajuanBansos: number;
+  statusPengajuanBansos: Record<string, number>;
+  jenisBansos: Record<string, number>;
   jenisKelamin: Record<string, number>;
   agama: Record<string, number>;
   statusPerkawinan: Record<string, number>;
@@ -44,6 +54,28 @@ const COLORS = [
   "hsl(100,35%,40%)",
   "hsl(50,50%,45%)",
 ];
+
+const STATUS_COLORS: Record<string, string> = {
+  "pending": "hsl(40,45%,50%)",
+  "diproses": "hsl(220,55%,35%)",
+  "selesai": "hsl(163,55%,22%)",
+  "ditolak": "hsl(348,55%,38%)",
+  "disetujui": "hsl(163,55%,22%)",
+  "approved": "hsl(163,55%,22%)",
+  "rejected": "hsl(348,55%,38%)",
+  "generated": "hsl(220,55%,35%)",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  "pending": "Pending",
+  "diproses": "Diproses",
+  "selesai": "Selesai",
+  "ditolak": "Ditolak",
+  "disetujui": "Disetujui",
+  "approved": "Disetujui",
+  "rejected": "Ditolak",
+  "generated": "Digenerate",
+};
 
 function DonutChart({ data, size = 120 }: { data: Record<string, number>; size?: number }) {
   const entries = Object.entries(data).filter(([, v]) => v > 0);
@@ -123,6 +155,42 @@ function HorizontalBar({ data, maxVal }: { data: Record<string, number>; maxVal?
   );
 }
 
+function StatusBar({ data, colorMap }: { data: Record<string, number>; colorMap?: Record<string, string> }) {
+  const entries = Object.entries(data).filter(([, v]) => v > 0);
+  const total = entries.reduce((s, [, v]) => s + v, 0);
+  if (total === 0) return <p className="text-xs text-muted-foreground">Belum ada data</p>;
+
+  return (
+    <div className="space-y-2">
+      <div className="h-3 bg-muted rounded-full overflow-hidden flex">
+        {entries.map(([label, value]) => {
+          const pct = (value / total) * 100;
+          const color = colorMap?.[label] || STATUS_COLORS[label] || "hsl(0,0%,60%)";
+          return (
+            <div
+              key={label}
+              className="h-full transition-all"
+              style={{ width: `${pct}%`, backgroundColor: color }}
+              title={`${STATUS_LABELS[label] || label}: ${value}`}
+            />
+          );
+        })}
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-1">
+        {entries.map(([label, value]) => {
+          const color = colorMap?.[label] || STATUS_COLORS[label] || "hsl(0,0%,60%)";
+          return (
+            <div key={label} className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+              <span className="text-[10px] text-muted-foreground">{STATUS_LABELS[label] || label} ({value})</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function PairStat({ label1, val1, label2, val2, icon1, icon2, color1, color2 }: {
   label1: string; val1: number; label2: string; val2: number;
   icon1: React.ReactNode; icon2: React.ReactNode;
@@ -171,7 +239,13 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 }
 
 export default function AdminDashboard() {
-  const { data: stats, isLoading } = useQuery<DashboardStats>({ queryKey: ["/api/stats/dashboard"] });
+  const { data: stats, isLoading } = useQuery<DashboardStats>({
+    queryKey: ["/api/stats/dashboard"],
+    queryFn: getQueryFn({ on401: "throw" }),
+    staleTime: 30000,
+    refetchOnWindowFocus: true,
+    refetchInterval: 60000,
+  });
 
   if (isLoading || !stats) {
     return (
@@ -190,6 +264,8 @@ export default function AdminDashboard() {
     { label: "Total Warga", value: stats.totalWarga, icon: Users, color: "bg-[hsl(40,45%,50%)]" },
     { label: "Laporan Pending", value: stats.pendingLaporan, icon: ClipboardList, color: "bg-[hsl(348,55%,38%)]" },
     { label: "Surat Pending", value: stats.pendingSurat, icon: FileText, color: "bg-[hsl(220,55%,35%)]" },
+    { label: "Edit Profil Pending", value: stats.pendingEditProfil || 0, icon: UserCog, color: "bg-[hsl(280,40%,45%)]" },
+    { label: "Pengajuan Bansos", value: stats.pendingPengajuanBansos || 0, icon: HandCoins, color: "bg-[hsl(20,60%,50%)]" },
   ];
 
   const statusKepColors: Record<string, { color: string; icon: typeof UserCheck }> = {
@@ -209,7 +285,7 @@ export default function AdminDashboard() {
     <div className="space-y-4">
       <h2 className="text-xl font-bold" data-testid="text-dashboard-title">Dashboard</h2>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         {summaryCards.map((s) => (
           <Card key={s.label} data-testid={`card-stat-${s.label.toLowerCase().replace(/\s/g, '-')}`}>
             <CardContent className="p-3">
@@ -226,6 +302,51 @@ export default function AdminDashboard() {
           </Card>
         ))}
       </div>
+
+      <Card>
+        <CardContent className="p-3">
+          <SectionTitle>Ringkasan Layanan</SectionTitle>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-medium text-muted-foreground">Laporan Warga</p>
+                <span className="text-xs font-bold">{stats.totalLaporan || 0} total</span>
+              </div>
+              <StatusBar data={stats.statusLaporan || {}} />
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-medium text-muted-foreground">Surat Warga</p>
+                <span className="text-xs font-bold">{stats.totalSuratWarga || 0} total</span>
+              </div>
+              <StatusBar data={stats.statusSuratWarga || {}} />
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-medium text-muted-foreground">Surat RW</p>
+                <span className="text-xs font-bold">{stats.totalSuratRw || 0} total</span>
+              </div>
+              {(stats.totalSuratRw || 0) > 0 ? (
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 bg-[hsl(163,55%,22%)]">
+                    <ScrollText className="w-3.5 h-3.5 text-white" />
+                  </div>
+                  <span className="text-sm font-medium">{stats.totalSuratRw} surat diterbitkan</span>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">Belum ada surat RW</p>
+              )}
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-medium text-muted-foreground">Pengajuan Bansos</p>
+                <span className="text-xs font-bold">{stats.totalPengajuanBansos || 0} total</span>
+              </div>
+              <StatusBar data={stats.statusPengajuanBansos || {}} />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent className="p-3">
@@ -345,6 +466,12 @@ export default function AdminDashboard() {
                 color1="hsl(40,45%,50%)" color2="hsl(0,0%,60%)"
               />
             </div>
+            {stats.jenisBansos && Object.keys(stats.jenisBansos).length > 0 && (
+              <div>
+                <p className="text-xs font-medium mb-2 text-muted-foreground">Jenis Bansos</p>
+                <HorizontalBar data={stats.jenisBansos} />
+              </div>
+            )}
             <div>
               <p className="text-xs font-medium mb-2 text-muted-foreground">Kepemilikan Foto KK</p>
               <PairStat
