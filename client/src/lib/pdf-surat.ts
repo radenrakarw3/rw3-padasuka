@@ -405,3 +405,165 @@ export async function generateSuratPDF(options: {
   const safeName = fileName || `${jenisSurat.replace(/\s+/g, "_")}${nomorSurat ? "_" + nomorSurat.replace(/\//g, "-") : ""}`;
   doc.save(`${safeName}.pdf`);
 }
+
+export async function generateSuratRekomendasiBansosPDF(options: {
+  jenisPengajuan: string;
+  jenisBansos: string;
+  kepalaKeluarga: string;
+  nomorKk: string;
+  alamat: string;
+  rt: number;
+  alasan: string;
+  ketuaRt: string;
+}) {
+  const { jenisPengajuan, jenisBansos, kepalaKeluarga, nomorKk, alamat, rt, alasan, ketuaRt } = options;
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pageWidth = 210;
+  const marginLeft = 20;
+  const marginRight = 20;
+  const contentWidth = pageWidth - marginLeft - marginRight;
+  const colonMM = 45;
+  const fixedFs = 10;
+  const fixedLh = 5.5;
+
+  let img: HTMLImageElement | null = null;
+  try { img = await loadImage(logoGreen); } catch {}
+
+  function drawKop(page: number) {
+    if (img) {
+      doc.addImage(img, "PNG", marginLeft, 5, 18, 18);
+    }
+    const kopX = marginLeft + 22;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.text("RUKUN WARGA 03", kopX, 12);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text("KELURAHAN PADASUKA, KEC. CIMAHI TENGAH, KOTA CIMAHI", kopX, 17);
+    doc.setFontSize(8);
+    doc.text("Jln. K.H. Usman Dhomiri, Padasuka, Kota Cimahi, 40526", kopX, 21.5);
+    doc.setLineWidth(0.5);
+    doc.line(marginLeft, 25, pageWidth - marginRight, 25);
+    doc.setLineWidth(0.2);
+    doc.line(marginLeft, 26, pageWidth - marginRight, 26);
+  }
+
+  drawKop(1);
+
+  let y = 35;
+
+  const isCoret = jenisPengajuan === "rekomendasi_coret";
+  const title = isCoret ? "SURAT REKOMENDASI PENCORETAN PENERIMA BANSOS" : "SURAT REKOMENDASI CALON PENERIMA BANSOS";
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  const titleW = doc.getTextWidth(title);
+  doc.text(title, (pageWidth - titleW) / 2, y);
+  y += fixedLh;
+  doc.setLineWidth(0.3);
+  doc.line((pageWidth - titleW) / 2, y, (pageWidth + titleW) / 2, y);
+  y += fixedLh * 2;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(fixedFs);
+
+  const now = new Date();
+  const bulanNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+  const dateStr = `${now.getDate()} ${bulanNames[now.getMonth()]} ${now.getFullYear()}`;
+
+  doc.text("Kepada Yth.", marginLeft, y);
+  y += fixedLh;
+  doc.setFont("helvetica", "bold");
+  doc.text("Lurah Padasuka", marginLeft, y);
+  doc.setFont("helvetica", "normal");
+  y += fixedLh;
+  doc.text("di tempat", marginLeft, y);
+  y += fixedLh * 2;
+
+  doc.text("Dengan hormat,", marginLeft, y);
+  y += fixedLh * 1.5;
+
+  const intro = `Yang bertanda tangan di bawah ini, Ketua RW 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menyampaikan surat rekomendasi ${isCoret ? "pencoretan" : "calon penerima"} bantuan sosial sebagai berikut:`;
+  const introLines = doc.splitTextToSize(intro, contentWidth);
+  for (const line of introLines) {
+    doc.text(line, marginLeft, y);
+    y += fixedLh;
+  }
+  y += fixedLh * 0.5;
+
+  function drawBioLine(label: string, value: string) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(fixedFs);
+    doc.text(label, marginLeft, y);
+    doc.text(":", marginLeft + colonMM, y);
+    const valLines = doc.splitTextToSize(value, contentWidth - colonMM - 5);
+    for (let i = 0; i < valLines.length; i++) {
+      doc.text(valLines[i], marginLeft + colonMM + 3, y);
+      if (i < valLines.length - 1) y += fixedLh;
+    }
+    y += fixedLh;
+  }
+
+  drawBioLine("Nama Kepala Keluarga", kepalaKeluarga);
+  drawBioLine("Nomor Kartu Keluarga", nomorKk);
+  drawBioLine("Alamat", `${alamat}, RT ${rt.toString().padStart(2, "0")} / RW 03`);
+  drawBioLine("Kelurahan", "Padasuka");
+  drawBioLine("Kecamatan", "Cimahi Tengah");
+  drawBioLine("Kota", "Cimahi");
+  drawBioLine("Jenis Bansos", jenisBansos);
+  drawBioLine("Jenis Pengajuan", isCoret ? "Rekomendasi Pencoretan" : "Rekomendasi Penerima Baru");
+  y += fixedLh * 0.3;
+
+  doc.setFont("helvetica", "bold");
+  doc.text("Alasan:", marginLeft, y);
+  y += fixedLh;
+  doc.setFont("helvetica", "normal");
+  const alasanLines = doc.splitTextToSize(alasan, contentWidth);
+  for (const line of alasanLines) {
+    doc.text(line, marginLeft, y);
+    y += fixedLh;
+  }
+  y += fixedLh;
+
+  const closing = `Demikian surat rekomendasi ini kami buat dengan sebenarnya untuk dapat ditindaklanjuti sebagaimana mestinya. Atas perhatian dan kerjasamanya, kami ucapkan terima kasih.`;
+  const closingLines = doc.splitTextToSize(closing, contentWidth);
+  for (const line of closingLines) {
+    doc.text(line, marginLeft, y);
+    y += fixedLh;
+  }
+  y += fixedLh * 2;
+
+  const sigColW = contentWidth / 2;
+  const leftSigX = marginLeft + sigColW / 2;
+  const rightSigX = marginLeft + sigColW + sigColW / 2;
+
+  doc.text(`Cimahi, ${dateStr}`, marginLeft + sigColW, y);
+  y += fixedLh * 1.5;
+
+  doc.text("Mengetahui,", leftSigX - doc.getTextWidth("Mengetahui,") / 2, y);
+  doc.text("Hormat kami,", rightSigX - doc.getTextWidth("Hormat kami,") / 2, y);
+  y += fixedLh;
+
+  const rtLabel = `Ketua RT ${rt.toString().padStart(2, "0")}`;
+  doc.text(rtLabel, leftSigX - doc.getTextWidth(rtLabel) / 2, y);
+  doc.text("Ketua RW 03", rightSigX - doc.getTextWidth("Ketua RW 03") / 2, y);
+  y += fixedLh;
+
+  doc.text("Kelurahan Padasuka", leftSigX - doc.getTextWidth("Kelurahan Padasuka") / 2, y);
+  doc.text("Kelurahan Padasuka", rightSigX - doc.getTextWidth("Kelurahan Padasuka") / 2, y);
+  y += fixedLh * 5;
+
+  doc.setFont("helvetica", "bold");
+  const rtName = `(${ketuaRt})`;
+  const rwName = "(Raden Raka)";
+  doc.text(rtName, leftSigX - doc.getTextWidth(rtName) / 2, y);
+  doc.text(rwName, rightSigX - doc.getTextWidth(rwName) / 2, y);
+  doc.setLineWidth(0.3);
+  const rtNameW = doc.getTextWidth(rtName);
+  const rwNameW = doc.getTextWidth(rwName);
+  doc.line(leftSigX - rtNameW / 2, y + 1, leftSigX + rtNameW / 2, y + 1);
+  doc.line(rightSigX - rwNameW / 2, y + 1, rightSigX + rwNameW / 2, y + 1);
+
+  const safeName = `Surat_Rekomendasi_Bansos_${kepalaKeluarga.replace(/\s+/g, "_")}`;
+  doc.save(`${safeName}.pdf`);
+}

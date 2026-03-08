@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,17 +10,127 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { HandCoins, Search, Users, Plus, CheckCircle, XCircle, Clock, ChevronLeft, ChevronRight, FileText, UserMinus, UserPlus } from "lucide-react";
+import { HandCoins, Search, Plus, CheckCircle, XCircle, Clock, ChevronLeft, ChevronRight, FileText, UserMinus, UserPlus, Download } from "lucide-react";
 import { jenisBansosOptions, rtOptions } from "@/lib/constants";
-import type { KartuKeluarga, PengajuanBansos } from "@shared/schema";
+import { generateSuratRekomendasiBansosPDF } from "@/lib/pdf-surat";
+import type { KartuKeluarga, PengajuanBansos, Warga, RtData } from "@shared/schema";
 
 type Tab = "penerima" | "pengajuan";
 
 const PER_PAGE = 10;
 
 type BansosRecipient = KartuKeluarga & { kepalaKeluarga: string | null };
-type PengajuanWithKk = PengajuanBansos & { nomorKk: string; rt: number; kepalaKeluarga: string | null };
+type PengajuanWithKk = PengajuanBansos & { nomorKk: string; rt: number; kepalaKeluarga: string | null; alamat: string };
+
+function KkSearchPicker({ kkOptions, allWarga, value, onChange, placeholder }: {
+  kkOptions: KartuKeluarga[];
+  allWarga: Warga[];
+  value: string;
+  onChange: (val: string) => void;
+  placeholder?: string;
+}) {
+  const [searchKk, setSearchKk] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const kepalaMap = useMemo(() => {
+    const map: Record<number, string> = {};
+    allWarga?.forEach(w => {
+      if (w.kedudukanKeluarga === "Kepala Keluarga") map[w.kkId] = w.namaLengkap;
+    });
+    return map;
+  }, [allWarga]);
+
+  const filtered = useMemo(() => {
+    if (!searchKk.trim()) return kkOptions.slice(0, 20);
+    const q = searchKk.toLowerCase();
+    return kkOptions.filter(k =>
+      k.nomorKk.includes(q) ||
+      (kepalaMap[k.id] || "").toLowerCase().includes(q) ||
+      k.alamat.toLowerCase().includes(q)
+    ).slice(0, 20);
+  }, [kkOptions, searchKk, kepalaMap]);
+
+  const selected = kkOptions.find(k => k.id.toString() === value);
+
+  return (
+    <div ref={ref} className="relative">
+      {value && selected ? (
+        <div className="flex items-center gap-2 border rounded-lg p-2.5 bg-muted/30">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-mono truncate">{selected.nomorKk}</p>
+            <p className="text-[11px] text-muted-foreground truncate">{kepalaMap[selected.id] || "-"} · RT {selected.rt.toString().padStart(2, "0")}</p>
+          </div>
+          <button onClick={() => { onChange(""); setSearchKk(""); }} className="text-muted-foreground hover:text-foreground">
+            <XCircle className="w-4 h-4" />
+          </button>
+        </div>
+      ) : (
+        <div>
+          <Input
+            value={searchKk}
+            onChange={e => { setSearchKk(e.target.value); setOpen(true); }}
+            onFocus={() => setOpen(true)}
+            placeholder={placeholder || "Ketik no KK, nama kepala, atau alamat..."}
+            className="h-10"
+            data-testid="input-search-kk"
+          />
+          {open && filtered.length > 0 && (
+            <div className="absolute z-50 w-full mt-1 bg-popover border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+              {filtered.map(k => (
+                <button
+                  key={k.id}
+                  className="w-full text-left px-3 py-2 hover:bg-muted/50 border-b last:border-0 transition-colors"
+                  onClick={() => { onChange(k.id.toString()); setOpen(false); setSearchKk(""); }}
+                  data-testid={`option-kk-${k.id}`}
+                >
+                  <p className="text-xs font-mono">{k.nomorKk}</p>
+                  <p className="text-[10px] text-muted-foreground">{kepalaMap[k.id] || "-"} · RT {k.rt.toString().padStart(2, "0")} · {k.alamat}</p>
+                </button>
+              ))}
+            </div>
+          )}
+          {open && filtered.length === 0 && searchKk.trim() && (
+            <div className="absolute z-50 w-full mt-1 bg-popover border rounded-lg shadow-lg p-3 text-center text-xs text-muted-foreground">
+              Tidak ditemukan
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MultiJenisBansosSelect({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+  const toggle = (opt: string) => {
+    if (value.includes(opt)) onChange(value.filter(v => v !== opt));
+    else onChange([...value, opt]);
+  };
+  return (
+    <div className="space-y-1.5">
+      {jenisBansosOptions.map(opt => (
+        <label key={opt} className="flex items-center gap-2 cursor-pointer">
+          <Checkbox
+            checked={value.includes(opt)}
+            onCheckedChange={() => toggle(opt)}
+            data-testid={`checkbox-bansos-${opt}`}
+          />
+          <span className="text-sm">{opt}</span>
+        </label>
+      ))}
+    </div>
+  );
+}
 
 export default function AdminBansos() {
   const { toast } = useToast();
@@ -30,11 +140,11 @@ export default function AdminBansos() {
   const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editJenisKkId, setEditJenisKkId] = useState<number | null>(null);
-  const [editJenisValue, setEditJenisValue] = useState("");
+  const [editJenisValue, setEditJenisValue] = useState<string[]>([]);
 
   const [formKkId, setFormKkId] = useState("");
   const [formJenisPengajuan, setFormJenisPengajuan] = useState("rekomendasi_penerima");
-  const [formJenisBansos, setFormJenisBansos] = useState("PKH");
+  const [formJenisBansos, setFormJenisBansos] = useState<string[]>(["PKH"]);
   const [formAlasan, setFormAlasan] = useState("");
 
   const { data: penerima, isLoading: loadingPenerima } = useQuery<BansosRecipient[]>({
@@ -46,6 +156,8 @@ export default function AdminBansos() {
   });
 
   const { data: allKk } = useQuery<KartuKeluarga[]>({ queryKey: ["/api/kk"] });
+  const { data: allWarga } = useQuery<Warga[]>({ queryKey: ["/api/warga"] });
+  const { data: rtDataList } = useQuery<RtData[]>({ queryKey: ["/api/rt"] });
 
   const kkOptions = useMemo(() => {
     if (!allKk) return [];
@@ -86,7 +198,7 @@ export default function AdminBansos() {
       const res = await apiRequest("POST", "/api/bansos/pengajuan", {
         kkId: parseInt(formKkId),
         jenisPengajuan: formJenisPengajuan,
-        jenisBansos: formJenisBansos,
+        jenisBansos: formJenisBansos.join(", "),
         alasan: formAlasan,
       });
       return res.json();
@@ -96,6 +208,7 @@ export default function AdminBansos() {
       setDialogOpen(false);
       setFormKkId("");
       setFormAlasan("");
+      setFormJenisBansos(["PKH"]);
       queryClient.invalidateQueries({ queryKey: ["/api/bansos/pengajuan"] });
       queryClient.invalidateQueries({ queryKey: ["/api/bansos/penerima"] });
     },
@@ -129,6 +242,20 @@ export default function AdminBansos() {
     },
     onError: (err: any) => toast({ title: "Gagal", description: err.message, variant: "destructive" }),
   });
+
+  const handleDownloadSurat = async (p: PengajuanWithKk) => {
+    const ketuaRt = rtDataList?.find(r => r.nomorRt === p.rt);
+    await generateSuratRekomendasiBansosPDF({
+      jenisPengajuan: p.jenisPengajuan,
+      jenisBansos: p.jenisBansos,
+      kepalaKeluarga: p.kepalaKeluarga || "-",
+      nomorKk: p.nomorKk,
+      alamat: p.alamat,
+      rt: p.rt,
+      alasan: p.alasan,
+      ketuaRt: ketuaRt?.namaKetua || "-",
+    });
+  };
 
   const switchTab = (t: Tab) => {
     setTab(t);
@@ -214,7 +341,7 @@ export default function AdminBansos() {
               {paginatedPenerima.map(k => (
                 <Card key={k.id} className="border-green-200" data-testid={`card-penerima-${k.id}`}>
                   <CardContent className="p-3">
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="w-9 h-9 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
                           <HandCoins className="w-4 h-4 text-green-700" />
@@ -227,40 +354,46 @@ export default function AdminBansos() {
                       </div>
                       <div className="flex flex-col items-end gap-1 flex-shrink-0">
                         <Badge variant="secondary" className="text-[10px]">RT {k.rt.toString().padStart(2, "0")}</Badge>
-                        {editJenisKkId === k.id ? (
-                          <div className="flex items-center gap-1">
-                            <Select value={editJenisValue} onValueChange={setEditJenisValue}>
-                              <SelectTrigger className="h-7 text-[10px] w-28">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {jenisBansosOptions.map(j => <SelectItem key={j} value={j}>{j}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
+                      </div>
+                    </div>
+                    <div className="mt-2 pt-2 border-t">
+                      {editJenisKkId === k.id ? (
+                        <div className="space-y-2">
+                          <MultiJenisBansosSelect value={editJenisValue} onChange={setEditJenisValue} />
+                          <div className="flex gap-1">
                             <Button
-                              size="icon"
-                              variant="ghost"
-                              className="w-6 h-6"
-                              onClick={() => updateJenisMutation.mutate({ kkId: k.id, jenisBansos: editJenisValue })}
-                              disabled={updateJenisMutation.isPending}
+                              size="sm"
+                              className="h-7 text-xs gap-1"
+                              onClick={() => updateJenisMutation.mutate({ kkId: k.id, jenisBansos: editJenisValue.join(", ") })}
+                              disabled={updateJenisMutation.isPending || editJenisValue.length === 0}
                               data-testid={`button-save-jenis-${k.id}`}
                             >
-                              <CheckCircle className="w-3.5 h-3.5 text-green-600" />
+                              <CheckCircle className="w-3 h-3" /> Simpan
                             </Button>
-                            <Button size="icon" variant="ghost" className="w-6 h-6" onClick={() => setEditJenisKkId(null)}>
-                              <XCircle className="w-3.5 h-3.5 text-red-500" />
+                            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditJenisKkId(null)}>
+                              Batal
                             </Button>
                           </div>
-                        ) : (
-                          <button
-                            onClick={() => { setEditJenisKkId(k.id); setEditJenisValue(k.jenisBansos || "PKH"); }}
-                            className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-800 font-medium hover:bg-green-200 transition-colors"
-                            data-testid={`button-edit-jenis-${k.id}`}
-                          >
-                            {k.jenisBansos || "Belum diisi"} ✎
-                          </button>
-                        )}
-                      </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setEditJenisKkId(k.id);
+                            setEditJenisValue(k.jenisBansos ? k.jenisBansos.split(", ").filter(Boolean) : []);
+                          }}
+                          className="w-full text-left"
+                          data-testid={`button-edit-jenis-${k.id}`}
+                        >
+                          <div className="flex flex-wrap gap-1">
+                            {(k.jenisBansos || "Belum diisi").split(", ").map((j, i) => (
+                              <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-800 font-medium">
+                                {j}
+                              </span>
+                            ))}
+                            <span className="text-[10px] text-muted-foreground ml-1">✎</span>
+                          </div>
+                        </button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -302,10 +435,15 @@ export default function AdminBansos() {
                         </div>
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
                           <Badge className={`text-[10px] gap-0.5 ${isCoret ? "bg-red-100 text-red-800" : "bg-blue-100 text-blue-800"}`}>
-                            {isCoret ? "Rekomendasi Coret" : "Rekomendasi Penerima"}
+                            {isCoret ? "Rek. Coret" : "Rek. Penerima"}
                           </Badge>
-                          <Badge variant="secondary" className="text-[10px]">{p.jenisBansos}</Badge>
                         </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-1">
+                        {p.jenisBansos.split(", ").map((j, i) => (
+                          <Badge key={i} variant="secondary" className="text-[10px]">{j}</Badge>
+                        ))}
                       </div>
 
                       <div className="bg-muted/50 rounded-lg p-2">
@@ -348,6 +486,18 @@ export default function AdminBansos() {
                               <span className="text-[11px]">Tolak</span>
                             </Button>
                           </div>
+                        )}
+                        {p.status === "disetujui" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2 gap-1"
+                            onClick={() => handleDownloadSurat(p)}
+                            data-testid={`button-download-surat-${p.id}`}
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span className="text-[11px]">Surat Rekomendasi</span>
+                          </Button>
                         )}
                       </div>
                     </CardContent>
@@ -402,19 +552,12 @@ export default function AdminBansos() {
 
             <div className="space-y-1">
               <Label className="text-sm">Pilih KK</Label>
-              <Select value={formKkId} onValueChange={setFormKkId}>
-                <SelectTrigger className="h-10" data-testid="select-kk-pengajuan">
-                  <SelectValue placeholder="Pilih Kartu Keluarga..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {kkOptions.map(k => (
-                    <SelectItem key={k.id} value={k.id.toString()}>
-                      <span className="font-mono text-[11px]">{k.nomorKk}</span>
-                      <span className="text-[11px] text-muted-foreground ml-1">· RT {k.rt.toString().padStart(2, "0")}</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <KkSearchPicker
+                kkOptions={kkOptions}
+                allWarga={allWarga || []}
+                value={formKkId}
+                onChange={setFormKkId}
+              />
               {kkOptions.length === 0 && (
                 <p className="text-[10px] text-amber-600">
                   {formJenisPengajuan === "rekomendasi_coret" ? "Tidak ada penerima bansos yang bisa dicoret" : "Semua KK sudah penerima bansos"}
@@ -423,15 +566,8 @@ export default function AdminBansos() {
             </div>
 
             <div className="space-y-1">
-              <Label className="text-sm">Jenis Bansos</Label>
-              <Select value={formJenisBansos} onValueChange={setFormJenisBansos}>
-                <SelectTrigger className="h-10" data-testid="select-jenis-bansos">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {jenisBansosOptions.map(j => <SelectItem key={j} value={j}>{j}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Label className="text-sm">Jenis Bansos (bisa pilih lebih dari 1)</Label>
+              <MultiJenisBansosSelect value={formJenisBansos} onChange={setFormJenisBansos} />
             </div>
 
             <div className="space-y-1">
@@ -447,14 +583,14 @@ export default function AdminBansos() {
 
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5">
               <p className="text-[10px] text-blue-700">
-                Pengajuan ini bersifat rekomendasi dari RW. Keputusan akhir penerimaan/pencoretan bansos ditentukan oleh pemerintah pusat.
+                Pengajuan ini bersifat rekomendasi dari RW kepada Kelurahan. Keputusan akhir ditentukan oleh pemerintah.
               </p>
             </div>
 
             <Button
               className="w-full h-10"
               onClick={() => createMutation.mutate()}
-              disabled={createMutation.isPending || !formKkId || !formAlasan.trim()}
+              disabled={createMutation.isPending || !formKkId || !formAlasan.trim() || formJenisBansos.length === 0}
               data-testid="button-simpan-pengajuan"
             >
               {createMutation.isPending ? "Menyimpan..." : "Simpan Pengajuan"}

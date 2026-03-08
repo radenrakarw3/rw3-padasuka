@@ -73,7 +73,7 @@ export interface IStorage {
   updateSuratRwIsi(id: number, isiSurat: string): Promise<SuratRw | undefined>;
 
   getBansosRecipients(): Promise<(KartuKeluarga & { kepalaKeluarga: string | null })[]>;
-  getAllPengajuanBansos(): Promise<(PengajuanBansos & { nomorKk: string; rt: number; kepalaKeluarga: string | null })[]>;
+  getAllPengajuanBansos(): Promise<(PengajuanBansos & { nomorKk: string; rt: number; kepalaKeluarga: string | null; alamat: string })[]>;
   createPengajuanBansos(data: InsertPengajuanBansos): Promise<PengajuanBansos>;
   updatePengajuanBansosStatus(id: number, status: string): Promise<PengajuanBansos | undefined>;
   getPengajuanBansosById(id: number): Promise<PengajuanBansos | undefined>;
@@ -385,7 +385,7 @@ export class DatabaseStorage implements IStorage {
     return allKk.map(kk => ({ ...kk, kepalaKeluarga: kepalaMap[kk.id] || null }));
   }
 
-  async getAllPengajuanBansos(): Promise<(PengajuanBansos & { nomorKk: string; rt: number; kepalaKeluarga: string | null })[]> {
+  async getAllPengajuanBansos(): Promise<(PengajuanBansos & { nomorKk: string; rt: number; kepalaKeluarga: string | null; alamat: string })[]> {
     const allPengajuan = await db.select().from(pengajuanBansos).orderBy(desc(pengajuanBansos.createdAt));
     const kkIds = [...new Set(allPengajuan.map(p => p.kkId))];
     const allKk = await db.select().from(kartuKeluarga);
@@ -401,6 +401,7 @@ export class DatabaseStorage implements IStorage {
       nomorKk: kkMap[p.kkId]?.nomorKk || "-",
       rt: kkMap[p.kkId]?.rt || 0,
       kepalaKeluarga: kepalaMap[p.kkId] || null,
+      alamat: kkMap[p.kkId]?.alamat || "-",
     }));
   }
 
