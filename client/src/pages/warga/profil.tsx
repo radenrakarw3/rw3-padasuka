@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Edit2, Check, X, User, MapPin, Clock } from "lucide-react";
 import type { KartuKeluarga, Warga, ProfileEditRequest } from "@shared/schema";
+import { pekerjaanOptions, agamaOptions, jenisKelaminOptions, statusPerkawinanOptions, kedudukanKeluargaOptions, statusKependudukanOptions } from "@/lib/constants";
 
 const fieldLabels: Record<string, string> = {
   namaLengkap: "Nama Lengkap",
@@ -250,8 +251,7 @@ export default function WargaProfil() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Laki-laki">Laki-laki</SelectItem>
-                          <SelectItem value="Perempuan">Perempuan</SelectItem>
+                          {jenisKelaminOptions.map(j => <SelectItem key={j} value={j}>{j}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
@@ -262,12 +262,7 @@ export default function WargaProfil() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Islam">Islam</SelectItem>
-                          <SelectItem value="Kristen">Kristen</SelectItem>
-                          <SelectItem value="Katolik">Katolik</SelectItem>
-                          <SelectItem value="Hindu">Hindu</SelectItem>
-                          <SelectItem value="Buddha">Buddha</SelectItem>
-                          <SelectItem value="Konghucu">Konghucu</SelectItem>
+                          {agamaOptions.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
@@ -280,10 +275,7 @@ export default function WargaProfil() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Belum Kawin">Belum Kawin</SelectItem>
-                          <SelectItem value="Kawin">Kawin</SelectItem>
-                          <SelectItem value="Cerai Hidup">Cerai Hidup</SelectItem>
-                          <SelectItem value="Cerai Mati">Cerai Mati</SelectItem>
+                          {statusPerkawinanOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
@@ -294,13 +286,7 @@ export default function WargaProfil() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Kepala Keluarga">Kepala Keluarga</SelectItem>
-                          <SelectItem value="Istri">Istri</SelectItem>
-                          <SelectItem value="Anak">Anak</SelectItem>
-                          <SelectItem value="Menantu">Menantu</SelectItem>
-                          <SelectItem value="Cucu">Cucu</SelectItem>
-                          <SelectItem value="Orang Tua">Orang Tua</SelectItem>
-                          <SelectItem value="Famili Lain">Famili Lain</SelectItem>
+                          {kedudukanKeluargaOptions.map(k => <SelectItem key={k} value={k}>{k}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
@@ -323,22 +309,21 @@ export default function WargaProfil() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Aktif">Aktif</SelectItem>
-                          <SelectItem value="Pindah">Pindah</SelectItem>
-                          <SelectItem value="Meninggal">Meninggal</SelectItem>
+                          {statusKependudukanOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium">Pekerjaan</Label>
-                    <Input
-                      value={editData.pekerjaan}
-                      onChange={(e) => setField("pekerjaan", e.target.value)}
-                      placeholder="Masukkan pekerjaan"
-                      className="h-10 text-sm"
-                      data-testid={`input-pekerjaan-${w.id}`}
-                    />
+                    <Select value={editData.pekerjaan} onValueChange={(v) => setField("pekerjaan", v)}>
+                      <SelectTrigger className="h-10 text-sm" data-testid={`select-pekerjaan-${w.id}`}>
+                        <SelectValue placeholder="Pilih pekerjaan" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {pekerjaanOptions.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               ) : (

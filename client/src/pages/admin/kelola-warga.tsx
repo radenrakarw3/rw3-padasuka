@@ -12,89 +12,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Search, User, ChevronLeft, ChevronRight } from "lucide-react";
 import type { KartuKeluarga } from "@shared/schema";
+import { pekerjaanOptions, agamaOptions, jenisKelaminOptions, statusPerkawinanOptions, kedudukanKeluargaOptions } from "@/lib/constants";
 
 const PER_PAGE = 10;
-
-const pekerjaanOptions = [
-  "Belum/Tidak Bekerja",
-  "Mengurus Rumah Tangga",
-  "Ibu Rumah Tangga",
-  "Pelajar/Mahasiswa",
-  "Pensiunan",
-  "Pegawai Negeri Sipil (PNS)",
-  "Tentara Nasional Indonesia (TNI)",
-  "Kepolisian RI (POLRI)",
-  "Perdagangan",
-  "Petani/Pekebun",
-  "Peternak",
-  "Nelayan/Perikanan",
-  "Industri",
-  "Konstruksi",
-  "Transportasi",
-  "Karyawan Swasta",
-  "Karyawan BUMN",
-  "Karyawan BUMD",
-  "Karyawan Honorer",
-  "Buruh Harian Lepas",
-  "Buruh Tani/Perkebunan",
-  "Buruh Nelayan/Perikanan",
-  "Buruh Peternakan",
-  "Pembantu Rumah Tangga",
-  "Tukang Cukur",
-  "Tukang Listrik",
-  "Tukang Batu",
-  "Tukang Kayu",
-  "Tukang Sol Sepatu",
-  "Tukang Las/Pandai Besi",
-  "Tukang Jahit",
-  "Tukang Gigi",
-  "Penata Rias",
-  "Penata Busana",
-  "Penata Rambut",
-  "Mekanik",
-  "Seniman",
-  "Tabib",
-  "Paraji",
-  "Perancang Busana",
-  "Penerjemah",
-  "Imam Masjid",
-  "Pendeta",
-  "Pastor",
-  "Wartawan",
-  "Ustadz/Mubaligh",
-  "Juru Masak",
-  "Promotor Acara",
-  "Anggota DPR-RI",
-  "Anggota DPD",
-  "Anggota DPRD Provinsi",
-  "Anggota DPRD Kabupaten/Kota",
-  "Dosen",
-  "Guru",
-  "Pilot",
-  "Pengacara",
-  "Notaris",
-  "Arsitek",
-  "Akuntan",
-  "Konsultan",
-  "Dokter",
-  "Bidan",
-  "Perawat",
-  "Apoteker",
-  "Psikiater/Psikolog",
-  "Penyiar Televisi",
-  "Penyiar Radio",
-  "Pelaut",
-  "Peneliti",
-  "Sopir",
-  "Pialang",
-  "Paranormal",
-  "Pedagang",
-  "Perangkat Desa",
-  "Kepala Desa",
-  "Biarawati",
-  "Wiraswasta",
-  "Lainnya",
-];
 
 export default function AdminKelolaWarga() {
   const { toast } = useToast();
@@ -188,8 +108,7 @@ export default function AdminKelolaWarga() {
                   <Select value={form.jenisKelamin} onValueChange={v => setForm({...form, jenisKelamin: v})}>
                     <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Laki-laki">Laki-laki</SelectItem>
-                      <SelectItem value="Perempuan">Perempuan</SelectItem>
+                      {jenisKelaminOptions.map(j => <SelectItem key={j} value={j}>{j}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -198,10 +117,7 @@ export default function AdminKelolaWarga() {
                   <Select value={form.kedudukanKeluarga} onValueChange={v => setForm({...form, kedudukanKeluarga: v})}>
                     <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Kepala Keluarga">Kepala Keluarga</SelectItem>
-                      <SelectItem value="Istri">Istri</SelectItem>
-                      <SelectItem value="Anak">Anak</SelectItem>
-                      <SelectItem value="Famili Lain">Famili Lain</SelectItem>
+                      {kedudukanKeluargaOptions.map(k => <SelectItem key={k} value={k}>{k}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -212,12 +128,7 @@ export default function AdminKelolaWarga() {
                   <Select value={form.agama} onValueChange={v => setForm({...form, agama: v})}>
                     <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Islam">Islam</SelectItem>
-                      <SelectItem value="Kristen">Kristen</SelectItem>
-                      <SelectItem value="Katolik">Katolik</SelectItem>
-                      <SelectItem value="Hindu">Hindu</SelectItem>
-                      <SelectItem value="Buddha">Buddha</SelectItem>
-                      <SelectItem value="Konghucu">Konghucu</SelectItem>
+                      {agamaOptions.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -226,10 +137,7 @@ export default function AdminKelolaWarga() {
                   <Select value={form.statusPerkawinan} onValueChange={v => setForm({...form, statusPerkawinan: v})}>
                     <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Belum Kawin">Belum Kawin</SelectItem>
-                      <SelectItem value="Kawin">Kawin</SelectItem>
-                      <SelectItem value="Cerai Hidup">Cerai Hidup</SelectItem>
-                      <SelectItem value="Cerai Mati">Cerai Mati</SelectItem>
+                      {statusPerkawinanOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>

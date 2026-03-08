@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Search, Home, Users, ChevronLeft, ChevronRight } from "lucide-react";
+import { statusRumahOptions, listrikOptions, rtOptions } from "@/lib/constants";
 import type { KartuKeluarga } from "@shared/schema";
 
 const PER_PAGE = 10;
@@ -91,7 +92,7 @@ export default function AdminKelolaKK() {
                   <Select value={form.rt} onValueChange={v => setForm({...form, rt: v})}>
                     <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {[1,2,3,4,5,6,7].map(i => <SelectItem key={i} value={i.toString()}>RT {i.toString().padStart(2,"0")}</SelectItem>)}
+                      {rtOptions.map(i => <SelectItem key={i} value={i.toString()}>RT {i.toString().padStart(2,"0")}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -110,9 +111,7 @@ export default function AdminKelolaKK() {
                   <Select value={form.statusRumah} onValueChange={v => setForm({...form, statusRumah: v})}>
                     <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Milik Sendiri">Milik Sendiri</SelectItem>
-                      <SelectItem value="Kontrak/Sewa">Kontrak/Sewa</SelectItem>
-                      <SelectItem value="Menumpang">Menumpang</SelectItem>
+                      {statusRumahOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -121,10 +120,7 @@ export default function AdminKelolaKK() {
                   <Select value={form.listrik} onValueChange={v => setForm({...form, listrik: v})}>
                     <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="PLN 450 VA">PLN 450 VA</SelectItem>
-                      <SelectItem value="PLN 900 VA">PLN 900 VA</SelectItem>
-                      <SelectItem value="PLN 1300 VA">PLN 1300 VA</SelectItem>
-                      <SelectItem value="PLN > 2200 VA">PLN &gt; 2200 VA</SelectItem>
+                      {listrikOptions.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -148,7 +144,7 @@ export default function AdminKelolaKK() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="semua">Semua RT</SelectItem>
-            {[1,2,3,4,5,6,7].map(i => <SelectItem key={i} value={i.toString()}>RT {i.toString().padStart(2,"0")}</SelectItem>)}
+            {rtOptions.map(i => <SelectItem key={i} value={i.toString()}>RT {i.toString().padStart(2,"0")}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
