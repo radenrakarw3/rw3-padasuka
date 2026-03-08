@@ -15,6 +15,7 @@ export const kartuKeluarga = pgTable("kartu_keluarga", {
   sanitasiWc: text("sanitasi_wc").notNull().default("Jamban Sendiri"),
   listrik: text("listrik").notNull().default("PLN 900 VA"),
   penerimaBansos: boolean("penerima_bansos").notNull().default(false),
+  jenisBansos: text("jenis_bansos"),
   linkGmaps: text("link_gmaps"),
   latitude: text("latitude"),
   longitude: text("longitude"),
@@ -112,6 +113,16 @@ export const waBlast = pgTable("wa_blast", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const pengajuanBansos = pgTable("pengajuan_bansos", {
+  id: serial("id").primaryKey(),
+  kkId: integer("kk_id").notNull().references(() => kartuKeluarga.id),
+  jenisPengajuan: text("jenis_pengajuan").notNull(),
+  jenisBansos: text("jenis_bansos").notNull(),
+  alasan: text("alasan").notNull(),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const insertKkSchema = createInsertSchema(kartuKeluarga).omit({ id: true, createdAt: true });
 export const insertWargaSchema = createInsertSchema(warga).omit({ id: true, createdAt: true });
 export const insertRtSchema = createInsertSchema(rtData).omit({ id: true });
@@ -121,6 +132,7 @@ export const insertSuratRwSchema = createInsertSchema(suratRw).omit({ id: true, 
 export const insertProfileEditSchema = createInsertSchema(profileEditRequest).omit({ id: true, createdAt: true, status: true });
 export const insertAdminSchema = createInsertSchema(adminUser).omit({ id: true, createdAt: true });
 export const insertWaBlastSchema = createInsertSchema(waBlast).omit({ id: true, createdAt: true, jumlahPenerima: true, jumlahBerhasil: true, status: true });
+export const insertPengajuanBansosSchema = createInsertSchema(pengajuanBansos).omit({ id: true, createdAt: true, status: true });
 
 export type KartuKeluarga = typeof kartuKeluarga.$inferSelect;
 export type InsertKartuKeluarga = z.infer<typeof insertKkSchema>;
@@ -140,3 +152,5 @@ export type AdminUser = typeof adminUser.$inferSelect;
 export type InsertAdminUser = z.infer<typeof insertAdminSchema>;
 export type WaBlast = typeof waBlast.$inferSelect;
 export type InsertWaBlast = z.infer<typeof insertWaBlastSchema>;
+export type PengajuanBansos = typeof pengajuanBansos.$inferSelect;
+export type InsertPengajuanBansos = z.infer<typeof insertPengajuanBansosSchema>;

@@ -133,3 +133,14 @@ export const listrikOptions = [
 ];
 
 export const rtOptions = [1, 2, 3, 4, 5, 6, 7];
+
+export const jenisBansosOptions = [
+  "PKH",
+  "BPNT/Sembako",
+  "BLT Dana Desa",
+  "BST",
+  "PBI-JKN",
+  "PIP",
+  "RUTILAHU",
+  "Lainnya",
+];

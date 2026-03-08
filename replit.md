@@ -30,7 +30,7 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
 
 ## Key Features
 1. **Warga Pages**: Beranda, Profil (view/edit request), Laporan, Pelayanan Surat
-2. **Admin Pages**: Dashboard (comprehensive statistics), Kelola KK, Kelola Warga, Kelola Laporan, Kelola Surat, Surat RW (Surat Sakti), Arsip Surat, Edit Profil approval, WA Blast
+2. **Admin Pages**: Dashboard (comprehensive statistics), Kelola KK, Kelola Warga, Kelola Laporan, Kelola Surat, Surat RW (Surat Sakti), Arsip Surat, Edit Profil approval, Bansos Management, WA Blast
 3. **Gemini AI**: Auto-generates surat keterangan and official RW letters
 4. **Star Sender**: WA Blast with category filters (semua, per RT, kepala keluarga, penerima bansos), preview recipient count, confirmation dialog, message templates, AI message generation, expandable history with sent/failed counts
    - **AI Message Generation**: Admin inputs a topic → Gemini generates personalized message as Ketua RW (Raden Raka, 23yo, friendly tone)
@@ -83,6 +83,7 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
 - `profile_edit_request`: Profile edit approval workflow
 - `admin_user`: Admin accounts with bcrypt password hashes
 - `wa_blast`: WA blast message history
+- `pengajuan_bansos`: Bansos recommendation requests (rekomendasi penerima / rekomendasi coret)
 
 ## RT Data
 7 RT units with real ketua names from CSV:

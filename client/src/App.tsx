@@ -22,6 +22,7 @@ import AdminSuratRw from "@/pages/admin/surat-rw";
 import AdminProfilEdit from "@/pages/admin/profil-edit";
 import AdminWaBlast from "@/pages/admin/wa-blast";
 import AdminArsipSurat from "@/pages/admin/arsip-surat";
+import AdminBansos from "@/pages/admin/bansos";
 import { X } from "lucide-react";
 import goldLogo from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
 import radenRakaImg from "@assets/raden_raka_nobg.png";
@@ -123,6 +124,7 @@ function AdminRoutes() {
         <Route path="/admin/profil-edit" component={AdminProfilEdit} />
         <Route path="/admin/wa-blast" component={AdminWaBlast} />
         <Route path="/admin/arsip-surat" component={AdminArsipSurat} />
+        <Route path="/admin/bansos" component={AdminBansos} />
         <Route>{() => <Redirect to="/admin" />}</Route>
       </Switch>
     </AdminLayout>

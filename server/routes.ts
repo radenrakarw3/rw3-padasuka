@@ -7,7 +7,7 @@ import path from "path";
 import fs from "fs";
 import express from "express";
 import { storage } from "./storage";
-import { insertKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertProfileEditSchema, insertWaBlastSchema } from "@shared/schema";
+import { insertKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertProfileEditSchema, insertWaBlastSchema, insertPengajuanBansosSchema } from "@shared/schema";
 
 declare module "express-session" {
   interface SessionData {
@@ -743,6 +743,79 @@ Buat surat dalam format teks biasa yang rapi dan profesional.`;
     }
 
     res.json(edit);
+  });
+
+  app.get("/api/bansos/penerima", requireAdmin, async (_req, res) => {
+    const data = await storage.getBansosRecipients();
+    res.json(data);
+  });
+
+  app.patch("/api/bansos/penerima/:kkId/jenis", requireAdmin, async (req, res) => {
+    try {
+      const kkId = parseInt(req.params.kkId);
+      const { jenisBansos } = req.body;
+      if (!jenisBansos || typeof jenisBansos !== "string") return res.status(400).json({ message: "Jenis bansos harus diisi" });
+      const kk = await storage.getKkById(kkId);
+      if (!kk) return res.status(404).json({ message: "KK tidak ditemukan" });
+      if (!kk.penerimaBansos) return res.status(400).json({ message: "KK ini bukan penerima bansos" });
+      const updated = await storage.updateKkBansos(kkId, true, jenisBansos);
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/bansos/pengajuan", requireAdmin, async (_req, res) => {
+    const data = await storage.getAllPengajuanBansos();
+    res.json(data);
+  });
+
+  app.post("/api/bansos/pengajuan", requireAdmin, async (req, res) => {
+    try {
+      const parsed = insertPengajuanBansosSchema.parse(req.body);
+      const kk = await storage.getKkById(parsed.kkId);
+      if (!kk) return res.status(404).json({ message: "KK tidak ditemukan" });
+
+      if (parsed.jenisPengajuan === "rekomendasi_coret" && !kk.penerimaBansos) {
+        return res.status(400).json({ message: "KK ini bukan penerima bansos" });
+      }
+      if (parsed.jenisPengajuan === "rekomendasi_penerima" && kk.penerimaBansos) {
+        return res.status(400).json({ message: "KK ini sudah penerima bansos" });
+      }
+
+      const data = await storage.createPengajuanBansos(parsed);
+      res.json(data);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/bansos/pengajuan/:id/status", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { status } = req.body;
+      if (!["disetujui", "ditolak"].includes(status)) {
+        return res.status(400).json({ message: "Status tidak valid" });
+      }
+
+      const pengajuan = await storage.getPengajuanBansosById(id);
+      if (!pengajuan) return res.status(404).json({ message: "Pengajuan tidak ditemukan" });
+      if (pengajuan.status !== "pending") return res.status(400).json({ message: "Pengajuan sudah diproses" });
+
+      const updated = await storage.updatePengajuanBansosStatus(id, status);
+
+      if (status === "disetujui") {
+        if (pengajuan.jenisPengajuan === "rekomendasi_coret") {
+          await storage.updateKkBansos(pengajuan.kkId, false, null);
+        } else if (pengajuan.jenisPengajuan === "rekomendasi_penerima") {
+          await storage.updateKkBansos(pengajuan.kkId, true, pengajuan.jenisBansos);
+        }
+      }
+
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
   });
 
   app.get("/api/wa-blast", requireAdmin, async (_req, res) => {

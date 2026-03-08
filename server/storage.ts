@@ -2,7 +2,7 @@ import { eq, and, desc, sql, count } from "drizzle-orm";
 import { db } from "./db";
 import {
   kartuKeluarga, warga, rtData, laporan, suratWarga, suratRw,
-  profileEditRequest, adminUser, waBlast,
+  profileEditRequest, adminUser, waBlast, pengajuanBansos,
   type KartuKeluarga, type InsertKartuKeluarga,
   type Warga, type InsertWarga,
   type RtData, type InsertRtData,
@@ -12,6 +12,7 @@ import {
   type ProfileEditRequest, type InsertProfileEditRequest,
   type AdminUser, type InsertAdminUser,
   type WaBlast, type InsertWaBlast,
+  type PengajuanBansos, type InsertPengajuanBansos,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -70,6 +71,13 @@ export interface IStorage {
   updateSuratWargaNomor(id: number, nomorSurat: string): Promise<SuratWarga | undefined>;
   updateSuratRwNomor(id: number, nomorSurat: string): Promise<SuratRw | undefined>;
   updateSuratRwIsi(id: number, isiSurat: string): Promise<SuratRw | undefined>;
+
+  getBansosRecipients(): Promise<(KartuKeluarga & { kepalaKeluarga: string | null })[]>;
+  getAllPengajuanBansos(): Promise<(PengajuanBansos & { nomorKk: string; rt: number; kepalaKeluarga: string | null })[]>;
+  createPengajuanBansos(data: InsertPengajuanBansos): Promise<PengajuanBansos>;
+  updatePengajuanBansosStatus(id: number, status: string): Promise<PengajuanBansos | undefined>;
+  getPengajuanBansosById(id: number): Promise<PengajuanBansos | undefined>;
+  updateKkBansos(kkId: number, penerimaBansos: boolean, jenisBansos: string | null): Promise<KartuKeluarga | undefined>;
 
   getDashboardStats(): Promise<DashboardStats>;
 }
@@ -364,6 +372,55 @@ export class DatabaseStorage implements IStorage {
 
   async updateSuratRwIsi(id: number, isiSurat: string): Promise<SuratRw | undefined> {
     const [result] = await db.update(suratRw).set({ isiSurat }).where(eq(suratRw.id, id)).returning();
+    return result;
+  }
+
+  async getBansosRecipients(): Promise<(KartuKeluarga & { kepalaKeluarga: string | null })[]> {
+    const allKk = await db.select().from(kartuKeluarga).where(eq(kartuKeluarga.penerimaBansos, true));
+    const allWarga = await db.select().from(warga);
+    const kepalaMap: Record<number, string> = {};
+    allWarga.forEach(w => {
+      if (w.kedudukanKeluarga === "Kepala Keluarga") kepalaMap[w.kkId] = w.namaLengkap;
+    });
+    return allKk.map(kk => ({ ...kk, kepalaKeluarga: kepalaMap[kk.id] || null }));
+  }
+
+  async getAllPengajuanBansos(): Promise<(PengajuanBansos & { nomorKk: string; rt: number; kepalaKeluarga: string | null })[]> {
+    const allPengajuan = await db.select().from(pengajuanBansos).orderBy(desc(pengajuanBansos.createdAt));
+    const kkIds = [...new Set(allPengajuan.map(p => p.kkId))];
+    const allKk = await db.select().from(kartuKeluarga);
+    const allWarga = await db.select().from(warga);
+    const kkMap: Record<number, KartuKeluarga> = {};
+    allKk.forEach(k => { kkMap[k.id] = k; });
+    const kepalaMap: Record<number, string> = {};
+    allWarga.forEach(w => {
+      if (w.kedudukanKeluarga === "Kepala Keluarga") kepalaMap[w.kkId] = w.namaLengkap;
+    });
+    return allPengajuan.map(p => ({
+      ...p,
+      nomorKk: kkMap[p.kkId]?.nomorKk || "-",
+      rt: kkMap[p.kkId]?.rt || 0,
+      kepalaKeluarga: kepalaMap[p.kkId] || null,
+    }));
+  }
+
+  async createPengajuanBansos(data: InsertPengajuanBansos): Promise<PengajuanBansos> {
+    const [result] = await db.insert(pengajuanBansos).values(data).returning();
+    return result;
+  }
+
+  async updatePengajuanBansosStatus(id: number, status: string): Promise<PengajuanBansos | undefined> {
+    const [result] = await db.update(pengajuanBansos).set({ status }).where(eq(pengajuanBansos.id, id)).returning();
+    return result;
+  }
+
+  async getPengajuanBansosById(id: number): Promise<PengajuanBansos | undefined> {
+    const [result] = await db.select().from(pengajuanBansos).where(eq(pengajuanBansos.id, id));
+    return result;
+  }
+
+  async updateKkBansos(kkId: number, penerimaBansos: boolean, jenisBansos: string | null): Promise<KartuKeluarga | undefined> {
+    const [result] = await db.update(kartuKeluarga).set({ penerimaBansos, jenisBansos }).where(eq(kartuKeluarga.id, kkId)).returning();
     return result;
   }
 
