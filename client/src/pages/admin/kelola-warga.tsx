@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, User, ChevronLeft, ChevronRight, Upload, X, FileText } from "lucide-react";
+import { Plus, Search, User, ChevronLeft, ChevronRight, Upload, X, FileText, Download, MessageCircle } from "lucide-react";
 import type { KartuKeluarga } from "@shared/schema";
 import { pekerjaanOptions, agamaOptions, jenisKelaminOptions, statusPerkawinanOptions, kedudukanKeluargaOptions } from "@/lib/constants";
 
@@ -276,6 +276,30 @@ export default function AdminKelolaWarga() {
                     <Badge variant="secondary" className="text-[10px]">RT {w.rt?.toString().padStart(2,"0")}</Badge>
                     <Badge variant="outline" className="text-[10px]">{w.kedudukanKeluarga}</Badge>
                   </div>
+                </div>
+                <div className="flex items-center gap-1.5 mt-2 pt-2 border-t">
+                  {w.fotoKtp ? (
+                    <Button size="sm" variant="outline" className="text-xs gap-1 h-7" asChild data-testid={`button-download-ktp-${w.id}`}>
+                      <a href={w.fotoKtp} download target="_blank" rel="noopener noreferrer">
+                        <Download className="w-3 h-3" /> KTP
+                      </a>
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="outline" className="text-xs gap-1 h-7 opacity-40" disabled data-testid={`button-download-ktp-${w.id}`}>
+                      <Download className="w-3 h-3" /> KTP
+                    </Button>
+                  )}
+                  {w.nomorWhatsapp ? (
+                    <Button size="sm" variant="outline" className="text-xs gap-1 h-7 text-green-700 border-green-200 hover:bg-green-50" asChild data-testid={`button-wa-${w.id}`}>
+                      <a href={`https://wa.me/${w.nomorWhatsapp.replace(/^0/, "62").replace(/[^0-9]/g, "")}`} target="_blank" rel="noopener noreferrer">
+                        <MessageCircle className="w-3 h-3" /> WA
+                      </a>
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="outline" className="text-xs gap-1 h-7 opacity-40" disabled data-testid={`button-wa-${w.id}`}>
+                      <MessageCircle className="w-3 h-3" /> WA
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>

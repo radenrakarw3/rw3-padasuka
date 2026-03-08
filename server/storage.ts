@@ -275,6 +275,7 @@ export class DatabaseStorage implements IStorage {
       tanggalLahir: warga.tanggalLahir,
       pekerjaan: warga.pekerjaan,
       statusKependudukan: warga.statusKependudukan,
+      fotoKtp: warga.fotoKtp,
       createdAt: warga.createdAt,
       nomorKk: kartuKeluarga.nomorKk,
       rt: kartuKeluarga.rt,
