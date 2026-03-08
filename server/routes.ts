@@ -416,18 +416,33 @@ export async function registerRoutes(
         }
       }
 
-      const w = await storage.getWargaById(parsed.wargaId);
-      const kk = await storage.getKkById(parsed.kkId);
-      const rt = await storage.getRtByNomor(parsed.nomorRt);
+      const data = await storage.createSuratWarga(parsed);
+      res.json(data);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/surat-warga/:id/generate", requireAdmin, async (req, res) => {
+    try {
+      const surat = await storage.getSuratWargaById(parseInt(req.params.id));
+      if (!surat) return res.status(404).json({ message: "Surat tidak ditemukan" });
+      if (surat.status !== "pending") {
+        return res.status(400).json({ message: "Hanya surat dengan status pending yang bisa di-generate" });
+      }
+
+      const w = await storage.getWargaById(surat.wargaId);
+      const kk = await storage.getKkById(surat.kkId);
+      const rt = await storage.getRtByNomor(surat.nomorRt);
 
       if (!w || !kk) {
         return res.status(400).json({ message: "Data warga/KK tidak ditemukan" });
       }
 
       const prompt = `Buatkan surat keterangan dari RT/RW dengan format resmi bahasa Indonesia.
-Jenis surat: ${parsed.jenisSurat}
-Perihal: ${parsed.perihal}
-${parsed.keterangan ? `Keterangan tambahan: ${parsed.keterangan}` : ""}
+Jenis surat: ${surat.jenisSurat}
+Perihal: ${surat.perihal}
+${surat.keterangan ? `Keterangan tambahan: ${surat.keterangan}` : ""}
 
 Data pemohon:
 - Nama: ${w.namaLengkap}
@@ -454,26 +469,22 @@ PENTING: JANGAN sertakan kop surat/header karena kop surat akan ditambahkan seca
 
 Buat dalam format teks biasa yang rapi, bukan markdown.`;
 
-      let isiSurat = "";
-      try {
-        isiSurat = await generateWithGemini(prompt);
-      } catch (err: any) {
-        console.error("Gemini error:", err.message);
-        isiSurat = "Surat sedang diproses, silakan tunggu persetujuan admin.";
-      }
-
-      const data = await storage.createSuratWarga(parsed);
-      await storage.updateSuratWargaStatus(data.id, "pending", isiSurat);
-      const updated = await storage.getSuratWargaById(data.id);
+      const isiSurat = await generateWithGemini(prompt);
+      const updated = await storage.updateSuratWargaStatus(surat.id, surat.status, isiSurat);
       res.json(updated);
     } catch (error: any) {
-      res.status(400).json({ message: error.message });
+      res.status(500).json({ message: error.message });
     }
   });
 
   app.patch("/api/surat-warga/:id/status", requireAdmin, async (req, res) => {
     const { status } = req.body;
-    const data = await storage.updateSuratWargaStatus(parseInt(req.params.id), status);
+    const surat = await storage.getSuratWargaById(parseInt(req.params.id));
+    if (!surat) return res.status(404).json({ message: "Surat tidak ditemukan" });
+    if (status === "disetujui" && !surat.isiSurat) {
+      return res.status(400).json({ message: "Surat belum di-generate. Silakan generate terlebih dahulu." });
+    }
+    const data = await storage.updateSuratWargaStatus(surat.id, status);
     if (!data) return res.status(404).json({ message: "Surat tidak ditemukan" });
     res.json(data);
   });

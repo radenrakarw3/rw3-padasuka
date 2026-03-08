@@ -62,7 +62,7 @@ export default function WargaPelayanan() {
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "Surat diajukan!", description: "Surat sedang diproses, tunggu persetujuan admin." });
+      toast({ title: "Surat diajukan!", description: "Permohonan surat terkirim. Admin akan memproses dan menyetujui surat Anda." });
       setShowForm(false);
       setJenisSurat("");
       setPerihal("");

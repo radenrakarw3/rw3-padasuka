@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, CheckCircle, XCircle, FileText, Eye } from "lucide-react";
+import { Clock, CheckCircle, XCircle, FileText, Eye, Sparkles, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useState } from "react";
 import type { SuratWarga, Warga } from "@shared/schema";
@@ -18,6 +18,19 @@ export default function AdminKelolaSurat() {
   const { data: suratList, isLoading } = useQuery<SuratWarga[]>({ queryKey: ["/api/surat-warga"] });
   const { data: wargaList } = useQuery<Warga[]>({ queryKey: ["/api/warga"] });
 
+  const generateMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("POST", `/api/surat-warga/${id}/generate`);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({ title: "Surat berhasil di-generate!" });
+      queryClient.invalidateQueries({ queryKey: ["/api/surat-warga"] });
+      setPreviewSurat(data);
+    },
+    onError: (err: any) => toast({ title: "Gagal generate", description: err.message, variant: "destructive" }),
+  });
+
   const updateMutation = useMutation({
     mutationFn: async ({ id, status }: { id: number; status: string }) => {
       await apiRequest("PATCH", `/api/surat-warga/${id}/status`, { status });
@@ -25,6 +38,7 @@ export default function AdminKelolaSurat() {
     onSuccess: () => {
       toast({ title: "Status surat diperbarui" });
       queryClient.invalidateQueries({ queryKey: ["/api/surat-warga"] });
+      setPreviewSurat(null);
     },
     onError: (err: any) => toast({ title: "Gagal", description: err.message, variant: "destructive" }),
   });
@@ -54,6 +68,7 @@ export default function AdminKelolaSurat() {
         suratList?.map(s => {
           const sc = statusConfig[s.status] || statusConfig.pending;
           const StatusIcon = sc.icon;
+          const hasContent = !!s.isiSurat;
           return (
             <Card key={s.id} data-testid={`card-surat-admin-${s.id}`}>
               <CardContent className="p-4 space-y-3">
@@ -64,6 +79,7 @@ export default function AdminKelolaSurat() {
                       Pemohon: {getWargaName(s.wargaId)} | RT {s.nomorRt.toString().padStart(2,"0")}
                     </p>
                     <p className="text-xs text-muted-foreground">Perihal: {s.perihal}</p>
+                    {s.keterangan && <p className="text-xs text-muted-foreground">Keterangan: {s.keterangan}</p>}
                   </div>
                   <Badge className={`${sc.color} text-[10px] flex-shrink-0 gap-1`}>
                     <StatusIcon className="w-3 h-3" />{sc.label}
@@ -71,12 +87,27 @@ export default function AdminKelolaSurat() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {s.isiSurat && (
+                  {s.status === "pending" && (
+                    <Button
+                      size="sm"
+                      className="gap-1 bg-blue-600 hover:bg-blue-700"
+                      onClick={() => generateMutation.mutate(s.id)}
+                      disabled={generateMutation.isPending}
+                      data-testid={`button-generate-surat-${s.id}`}
+                    >
+                      {generateMutation.isPending ? (
+                        <><Loader2 className="w-3 h-3 animate-spin" /> Generating...</>
+                      ) : (
+                        <><Sparkles className="w-3 h-3" /> {hasContent ? "Re-generate" : "Generate Surat"}</>
+                      )}
+                    </Button>
+                  )}
+                  {hasContent && (
                     <Button size="sm" variant="outline" className="gap-1" onClick={() => setPreviewSurat(s)} data-testid={`button-preview-surat-${s.id}`}>
                       <Eye className="w-3 h-3" /> Lihat Surat
                     </Button>
                   )}
-                  {s.status === "pending" && (
+                  {hasContent && s.status === "pending" && (
                     <>
                       <Button size="sm" className="bg-green-700 gap-1" onClick={() => updateMutation.mutate({ id: s.id, status: "disetujui" })} disabled={updateMutation.isPending} data-testid={`button-setujui-surat-${s.id}`}>
                         <CheckCircle className="w-3 h-3" /> Setujui
@@ -85,6 +116,11 @@ export default function AdminKelolaSurat() {
                         <XCircle className="w-3 h-3" /> Tolak
                       </Button>
                     </>
+                  )}
+                  {!hasContent && s.status === "pending" && (
+                    <Button size="sm" variant="destructive" className="gap-1" onClick={() => updateMutation.mutate({ id: s.id, status: "ditolak" })} disabled={updateMutation.isPending} data-testid={`button-tolak-surat-${s.id}-nogen`}>
+                      <XCircle className="w-3 h-3" /> Tolak
+                    </Button>
                   )}
                 </div>
 
@@ -108,6 +144,16 @@ export default function AdminKelolaSurat() {
               {previewSurat?.isiSurat}
             </pre>
           </div>
+          {previewSurat?.status === "pending" && (
+            <div className="flex gap-2 pt-2">
+              <Button className="flex-1 bg-green-700 gap-1" onClick={() => updateMutation.mutate({ id: previewSurat.id, status: "disetujui" })} disabled={updateMutation.isPending} data-testid="button-setujui-preview">
+                <CheckCircle className="w-4 h-4" /> Setujui Surat
+              </Button>
+              <Button variant="destructive" className="gap-1" onClick={() => updateMutation.mutate({ id: previewSurat.id, status: "ditolak" })} disabled={updateMutation.isPending} data-testid="button-tolak-preview">
+                <XCircle className="w-4 h-4" /> Tolak
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
