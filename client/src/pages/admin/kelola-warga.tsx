@@ -10,25 +10,35 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, User, ChevronLeft, ChevronRight, Upload, X, FileText, Download, MessageCircle } from "lucide-react";
+import { Plus, Search, User, ChevronLeft, ChevronRight, Upload, X, FileText, Download, MessageCircle, Pencil } from "lucide-react";
 import type { KartuKeluarga } from "@shared/schema";
-import { pekerjaanOptions, agamaOptions, jenisKelaminOptions, statusPerkawinanOptions, kedudukanKeluargaOptions } from "@/lib/constants";
+import { pekerjaanOptions, agamaOptions, jenisKelaminOptions, statusPerkawinanOptions, kedudukanKeluargaOptions, statusKependudukanOptions } from "@/lib/constants";
 
 const PER_PAGE = 10;
+
+const defaultForm = {
+  kkId: "", namaLengkap: "", nik: "", nomorWhatsapp: "",
+  jenisKelamin: "Laki-laki", statusPerkawinan: "Belum Kawin",
+  agama: "Islam", kedudukanKeluarga: "Anak", tanggalLahir: "", pekerjaan: "",
+  statusKependudukan: "Aktif",
+};
 
 export default function AdminKelolaWarga() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [page, setPage] = useState(1);
-  const [form, setForm] = useState({
-    kkId: "", namaLengkap: "", nik: "", nomorWhatsapp: "",
-    jenisKelamin: "Laki-laki", statusPerkawinan: "Belum Kawin",
-    agama: "Islam", kedudukanKeluarga: "Anak", tanggalLahir: "", pekerjaan: "",
-  });
+  const [form, setForm] = useState({ ...defaultForm });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editForm, setEditForm] = useState({ ...defaultForm });
+  const [editingWargaId, setEditingWargaId] = useState<number | null>(null);
+  const [editSelectedFile, setEditSelectedFile] = useState<File | null>(null);
+  const [editFilePreview, setEditFilePreview] = useState<string | null>(null);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: kkList } = useQuery<KartuKeluarga[]>({ queryKey: ["/api/kk"] });
 
@@ -62,6 +72,34 @@ export default function AdminKelolaWarga() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  const handleEditFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const validTypes = ["image/jpeg", "image/jpg", "image/png", "application/pdf"];
+    if (!validTypes.includes(file.type)) {
+      toast({ title: "Format tidak didukung", description: "Gunakan JPG, PNG, atau PDF", variant: "destructive" });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "File terlalu besar", description: "Maksimal 5MB", variant: "destructive" });
+      return;
+    }
+    setEditSelectedFile(file);
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = (ev) => setEditFilePreview(ev.target?.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setEditFilePreview(null);
+    }
+  };
+
+  const clearEditFile = () => {
+    setEditSelectedFile(null);
+    setEditFilePreview(null);
+    if (editFileInputRef.current) editFileInputRef.current.value = "";
+  };
+
   const createMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/warga", {
@@ -70,6 +108,7 @@ export default function AdminKelolaWarga() {
         nomorWhatsapp: form.nomorWhatsapp || null,
         tanggalLahir: form.tanggalLahir || null,
         pekerjaan: form.pekerjaan || null,
+        statusKependudukan: form.statusKependudukan,
       });
       const created = await res.json();
       if (selectedFile && created.id) {
@@ -90,11 +129,67 @@ export default function AdminKelolaWarga() {
       toast({ title: "Warga ditambahkan" });
       setDialogOpen(false);
       clearFile();
+      setForm({ ...defaultForm });
       queryClient.invalidateQueries({ queryKey: ["/api/warga-with-kk"] });
       queryClient.invalidateQueries({ queryKey: ["/api/warga"] });
     },
     onError: (err: any) => toast({ title: "Gagal", description: err.message, variant: "destructive" }),
   });
+
+  const editMutation = useMutation({
+    mutationFn: async () => {
+      if (!editingWargaId) return;
+      await apiRequest("PATCH", `/api/warga/${editingWargaId}`, {
+        ...editForm,
+        kkId: parseInt(editForm.kkId),
+        nomorWhatsapp: editForm.nomorWhatsapp || null,
+        tanggalLahir: editForm.tanggalLahir || null,
+        pekerjaan: editForm.pekerjaan || null,
+        statusKependudukan: editForm.statusKependudukan,
+      });
+      if (editSelectedFile && editingWargaId) {
+        const formData = new FormData();
+        formData.append("file", editSelectedFile);
+        const uploadRes = await fetch(`/api/upload/ktp/${editingWargaId}`, {
+          method: "POST",
+          body: formData,
+          credentials: "include",
+        });
+        if (!uploadRes.ok) {
+          const err = await uploadRes.json().catch(() => ({ message: "Upload gagal" }));
+          throw new Error(`Data disimpan, tapi upload foto gagal: ${err.message}`);
+        }
+      }
+    },
+    onSuccess: () => {
+      toast({ title: "Data warga diperbarui" });
+      setEditDialogOpen(false);
+      clearEditFile();
+      setEditingWargaId(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/warga-with-kk"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/warga"] });
+    },
+    onError: (err: any) => toast({ title: "Gagal", description: err.message, variant: "destructive" }),
+  });
+
+  const openEditDialog = (w: any) => {
+    setEditForm({
+      kkId: w.kkId?.toString() || "",
+      namaLengkap: w.namaLengkap || "",
+      nik: w.nik || "",
+      nomorWhatsapp: w.nomorWhatsapp || "",
+      jenisKelamin: w.jenisKelamin || "Laki-laki",
+      statusPerkawinan: w.statusPerkawinan || "Belum Kawin",
+      agama: w.agama || "Islam",
+      kedudukanKeluarga: w.kedudukanKeluarga || "Anak",
+      tanggalLahir: w.tanggalLahir || "",
+      pekerjaan: w.pekerjaan || "",
+      statusKependudukan: w.statusKependudukan || "Aktif",
+    });
+    setEditingWargaId(w.id);
+    clearEditFile();
+    setEditDialogOpen(true);
+  };
 
   const filtered = useMemo(() => {
     return wargaList?.filter(w =>
@@ -112,11 +207,150 @@ export default function AdminKelolaWarga() {
     setPage(1);
   };
 
+  const renderFormFields = (
+    formData: typeof defaultForm,
+    setFormData: (f: typeof defaultForm) => void,
+    fileRef: React.RefObject<HTMLInputElement>,
+    file: File | null,
+    preview: string | null,
+    onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void,
+    onClearFile: () => void,
+    testIdPrefix: string,
+  ) => (
+    <div className="space-y-3">
+      <div className="space-y-1">
+        <Label className="text-sm">Kartu Keluarga</Label>
+        <Select value={formData.kkId} onValueChange={v => setFormData({...formData, kkId: v})}>
+          <SelectTrigger className="h-10" data-testid={`select-kk-${testIdPrefix}`}><SelectValue placeholder="Pilih KK" /></SelectTrigger>
+          <SelectContent>
+            {kkList?.map(k => <SelectItem key={k.id} value={k.id.toString()}>{k.nomorKk} - RT {k.rt}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1">
+        <Label className="text-sm">Nama Lengkap</Label>
+        <Input value={formData.namaLengkap} onChange={e => setFormData({...formData, namaLengkap: e.target.value})} className="h-10" data-testid={`input-nama-${testIdPrefix}`} />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-sm">NIK</Label>
+        <Input value={formData.nik} onChange={e => setFormData({...formData, nik: e.target.value})} className="h-10" data-testid={`input-nik-${testIdPrefix}`} />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-sm">No. WhatsApp</Label>
+        <Input value={formData.nomorWhatsapp} onChange={e => setFormData({...formData, nomorWhatsapp: e.target.value})} className="h-10" data-testid={`input-wa-${testIdPrefix}`} />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-sm">Tanggal Lahir</Label>
+        <Input type="date" value={formData.tanggalLahir} onChange={e => setFormData({...formData, tanggalLahir: e.target.value})} className="h-10" data-testid={`input-tanggal-lahir-${testIdPrefix}`} />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label className="text-sm">Jenis Kelamin</Label>
+          <Select value={formData.jenisKelamin} onValueChange={v => setFormData({...formData, jenisKelamin: v})}>
+            <SelectTrigger className="h-10" data-testid={`select-jk-${testIdPrefix}`}><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {jenisKelaminOptions.map(j => <SelectItem key={j} value={j}>{j}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-sm">Kedudukan</Label>
+          <Select value={formData.kedudukanKeluarga} onValueChange={v => setFormData({...formData, kedudukanKeluarga: v})}>
+            <SelectTrigger className="h-10" data-testid={`select-kedudukan-${testIdPrefix}`}><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {kedudukanKeluargaOptions.map(k => <SelectItem key={k} value={k}>{k}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label className="text-sm">Agama</Label>
+          <Select value={formData.agama} onValueChange={v => setFormData({...formData, agama: v})}>
+            <SelectTrigger className="h-10" data-testid={`select-agama-${testIdPrefix}`}><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {agamaOptions.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-sm">Status Kawin</Label>
+          <Select value={formData.statusPerkawinan} onValueChange={v => setFormData({...formData, statusPerkawinan: v})}>
+            <SelectTrigger className="h-10" data-testid={`select-status-kawin-${testIdPrefix}`}><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {statusPerkawinanOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label className="text-sm">Pekerjaan</Label>
+          <Select value={formData.pekerjaan} onValueChange={v => setFormData({...formData, pekerjaan: v})}>
+            <SelectTrigger className="h-10" data-testid={`select-pekerjaan-${testIdPrefix}`}><SelectValue placeholder="Pilih pekerjaan" /></SelectTrigger>
+            <SelectContent>
+              {pekerjaanOptions.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-sm">Status Kependudukan</Label>
+          <Select value={formData.statusKependudukan} onValueChange={v => setFormData({...formData, statusKependudukan: v})}>
+            <SelectTrigger className="h-10" data-testid={`select-status-kependudukan-${testIdPrefix}`}><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {statusKependudukanOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="space-y-1">
+        <Label className="text-sm">Upload Foto KTP</Label>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".jpg,.jpeg,.png,.pdf"
+          onChange={onFileSelect}
+          className="hidden"
+          data-testid={`input-file-ktp-${testIdPrefix}`}
+        />
+        {file ? (
+          <div className="flex items-center gap-2 rounded-md border p-2">
+            {preview ? (
+              <img src={preview} alt="Preview" className="w-16 h-16 object-cover rounded-md" data-testid={`img-preview-ktp-${testIdPrefix}`} />
+            ) : (
+              <div className="w-16 h-16 rounded-md bg-muted flex items-center justify-center">
+                <FileText className="w-6 h-6 text-muted-foreground" />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-xs truncate">{file.name}</p>
+              <p className="text-[10px] text-muted-foreground">{(file.size / 1024).toFixed(0)} KB</p>
+            </div>
+            <Button size="icon" variant="ghost" onClick={onClearFile} data-testid={`button-clear-file-ktp-${testIdPrefix}`}>
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full gap-1.5"
+            onClick={() => fileRef.current?.click()}
+            data-testid={`button-upload-ktp-${testIdPrefix}`}
+          >
+            <Upload className="w-4 h-4" /> Pilih File
+          </Button>
+        )}
+        <p className="text-[10px] text-muted-foreground">JPG, PNG, atau PDF. Maks 5MB</p>
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-bold" data-testid="text-warga-title">Data Warga</h2>
-        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) clearFile(); }}>
+        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { clearFile(); setForm({ ...defaultForm }); } }}>
           <DialogTrigger asChild>
             <Button className="gap-1.5" data-testid="button-tambah-warga">
               <Plus className="w-4 h-4" /> Tambah Warga
@@ -126,124 +360,25 @@ export default function AdminKelolaWarga() {
             <DialogHeader>
               <DialogTitle>Tambah Warga</DialogTitle>
             </DialogHeader>
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label className="text-sm">Kartu Keluarga</Label>
-                <Select value={form.kkId} onValueChange={v => setForm({...form, kkId: v})}>
-                  <SelectTrigger className="h-10" data-testid="select-kk-warga"><SelectValue placeholder="Pilih KK" /></SelectTrigger>
-                  <SelectContent>
-                    {kkList?.map(k => <SelectItem key={k.id} value={k.id.toString()}>{k.nomorKk} - RT {k.rt}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-sm">Nama Lengkap</Label>
-                <Input value={form.namaLengkap} onChange={e => setForm({...form, namaLengkap: e.target.value})} className="h-10" data-testid="input-nama-warga" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-sm">NIK</Label>
-                <Input value={form.nik} onChange={e => setForm({...form, nik: e.target.value})} className="h-10" data-testid="input-nik-warga" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-sm">No. WhatsApp</Label>
-                <Input value={form.nomorWhatsapp} onChange={e => setForm({...form, nomorWhatsapp: e.target.value})} className="h-10" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-sm">Jenis Kelamin</Label>
-                  <Select value={form.jenisKelamin} onValueChange={v => setForm({...form, jenisKelamin: v})}>
-                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {jenisKelaminOptions.map(j => <SelectItem key={j} value={j}>{j}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-sm">Kedudukan</Label>
-                  <Select value={form.kedudukanKeluarga} onValueChange={v => setForm({...form, kedudukanKeluarga: v})}>
-                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {kedudukanKeluargaOptions.map(k => <SelectItem key={k} value={k}>{k}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-sm">Agama</Label>
-                  <Select value={form.agama} onValueChange={v => setForm({...form, agama: v})}>
-                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {agamaOptions.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-sm">Status Kawin</Label>
-                  <Select value={form.statusPerkawinan} onValueChange={v => setForm({...form, statusPerkawinan: v})}>
-                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {statusPerkawinanOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-sm">Pekerjaan</Label>
-                <Select value={form.pekerjaan} onValueChange={v => setForm({...form, pekerjaan: v})}>
-                  <SelectTrigger className="h-10"><SelectValue placeholder="Pilih pekerjaan" /></SelectTrigger>
-                  <SelectContent>
-                    {pekerjaanOptions.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-sm">Upload Foto KTP</Label>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".jpg,.jpeg,.png,.pdf"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                  data-testid="input-file-ktp"
-                />
-                {selectedFile ? (
-                  <div className="flex items-center gap-2 rounded-md border p-2">
-                    {filePreview ? (
-                      <img src={filePreview} alt="Preview" className="w-16 h-16 object-cover rounded-md" data-testid="img-preview-ktp" />
-                    ) : (
-                      <div className="w-16 h-16 rounded-md bg-muted flex items-center justify-center">
-                        <FileText className="w-6 h-6 text-muted-foreground" />
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs truncate">{selectedFile.name}</p>
-                      <p className="text-[10px] text-muted-foreground">{(selectedFile.size / 1024).toFixed(0)} KB</p>
-                    </div>
-                    <Button size="icon" variant="ghost" onClick={clearFile} data-testid="button-clear-file-ktp">
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full gap-1.5"
-                    onClick={() => fileInputRef.current?.click()}
-                    data-testid="button-upload-ktp"
-                  >
-                    <Upload className="w-4 h-4" /> Pilih File
-                  </Button>
-                )}
-                <p className="text-[10px] text-muted-foreground">JPG, PNG, atau PDF. Maks 5MB</p>
-              </div>
-              <Button className="w-full h-10" onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !form.kkId || !form.namaLengkap || !form.nik} data-testid="button-simpan-warga">
-                {createMutation.isPending ? "Menyimpan..." : "Simpan Warga"}
-              </Button>
-            </div>
+            {renderFormFields(form, setForm, fileInputRef, selectedFile, filePreview, handleFileSelect, clearFile, "warga")}
+            <Button className="w-full h-10" onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !form.kkId || !form.namaLengkap || !form.nik} data-testid="button-simpan-warga">
+              {createMutation.isPending ? "Menyimpan..." : "Simpan Warga"}
+            </Button>
           </DialogContent>
         </Dialog>
       </div>
+
+      <Dialog open={editDialogOpen} onOpenChange={(open) => { setEditDialogOpen(open); if (!open) { clearEditFile(); setEditingWargaId(null); } }}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Warga</DialogTitle>
+          </DialogHeader>
+          {renderFormFields(editForm, setEditForm, editFileInputRef, editSelectedFile, editFilePreview, handleEditFileSelect, clearEditFile, "edit-warga")}
+          <Button className="w-full h-10" onClick={() => editMutation.mutate()} disabled={editMutation.isPending || !editForm.kkId || !editForm.namaLengkap || !editForm.nik} data-testid="button-simpan-edit-warga">
+            {editMutation.isPending ? "Menyimpan..." : "Simpan Perubahan"}
+          </Button>
+        </DialogContent>
+      </Dialog>
 
       <div className="relative">
         <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -278,6 +413,9 @@ export default function AdminKelolaWarga() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 mt-2 pt-2 border-t">
+                  <Button size="icon" variant="ghost" onClick={() => openEditDialog(w)} data-testid={`button-edit-warga-${w.id}`}>
+                    <Pencil className="w-3.5 h-3.5" />
+                  </Button>
                   {w.fotoKtp ? (
                     <Button size="sm" variant="outline" className="text-xs gap-1 h-7" asChild data-testid={`button-download-ktp-${w.id}`}>
                       <a href={w.fotoKtp} download target="_blank" rel="noopener noreferrer">

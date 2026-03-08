@@ -10,8 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Home, Users, ChevronLeft, ChevronRight, Download, Upload, X, FileText, ChevronDown, User, MessageCircle, ShieldCheck, ShieldAlert, QrCode } from "lucide-react";
-import { statusRumahOptions, listrikOptions, rtOptions } from "@/lib/constants";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Plus, Search, Home, Users, ChevronLeft, ChevronRight, Download, Upload, X, FileText, ChevronDown, User, MessageCircle, ShieldCheck, ShieldAlert, QrCode, Pencil } from "lucide-react";
+import { statusRumahOptions, listrikOptions, rtOptions, kondisiBangunanOptions, sumberAirOptions, sanitasiWcOptions, jenisBansosOptions } from "@/lib/constants";
 import type { KartuKeluarga, Warga } from "@shared/schema";
 import QRCode from "qrcode";
 
@@ -35,8 +36,21 @@ export default function AdminKelolaKK() {
     nomorKk: "", rt: "1", alamat: "", statusRumah: "Milik Sendiri",
     jumlahPenghuni: "1", kondisiBangunan: "Permanen", sumberAir: "PDAM",
     sanitasiWc: "Jamban Sendiri", listrik: "PLN 900 VA", penerimaBansos: false,
+    jenisBansos: "" as string,
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingKkId, setEditingKkId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState({
+    nomorKk: "", rt: "1", alamat: "", statusRumah: "Milik Sendiri",
+    jumlahPenghuni: "1", kondisiBangunan: "Permanen", sumberAir: "PDAM",
+    sanitasiWc: "Jamban Sendiri", listrik: "PLN 900 VA", penerimaBansos: false,
+    jenisBansos: "" as string,
+  });
+  const [editSelectedFile, setEditSelectedFile] = useState<File | null>(null);
+  const [editFilePreview, setEditFilePreview] = useState<string | null>(null);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [expandedKk, setExpandedKk] = useState<number | null>(null);
@@ -140,12 +154,60 @@ export default function AdminKelolaKK() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  const handleEditFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const validTypes = ["image/jpeg", "image/jpg", "image/png", "application/pdf"];
+    if (!validTypes.includes(file.type)) {
+      toast({ title: "Format tidak didukung", description: "Gunakan JPG, PNG, atau PDF", variant: "destructive" });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "File terlalu besar", description: "Maksimal 5MB", variant: "destructive" });
+      return;
+    }
+    setEditSelectedFile(file);
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = (ev) => setEditFilePreview(ev.target?.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setEditFilePreview(null);
+    }
+  };
+
+  const clearEditFile = () => {
+    setEditSelectedFile(null);
+    setEditFilePreview(null);
+    if (editFileInputRef.current) editFileInputRef.current.value = "";
+  };
+
+  const openEditDialog = (kk: KartuKeluarga) => {
+    setEditingKkId(kk.id);
+    setEditForm({
+      nomorKk: kk.nomorKk,
+      rt: kk.rt.toString(),
+      alamat: kk.alamat,
+      statusRumah: kk.statusRumah,
+      jumlahPenghuni: kk.jumlahPenghuni.toString(),
+      kondisiBangunan: kk.kondisiBangunan,
+      sumberAir: kk.sumberAir,
+      sanitasiWc: kk.sanitasiWc,
+      listrik: kk.listrik,
+      penerimaBansos: kk.penerimaBansos,
+      jenisBansos: kk.jenisBansos || "",
+    });
+    clearEditFile();
+    setEditDialogOpen(true);
+  };
+
   const createMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/kk", {
         ...form,
         rt: parseInt(form.rt),
         jumlahPenghuni: parseInt(form.jumlahPenghuni),
+        jenisBansos: form.penerimaBansos ? form.jenisBansos : null,
       });
       const created = await res.json();
       if (selectedFile && created.id) {
@@ -165,8 +227,41 @@ export default function AdminKelolaKK() {
     onSuccess: () => {
       toast({ title: "KK berhasil ditambahkan" });
       setDialogOpen(false);
-      setForm({ nomorKk: "", rt: "1", alamat: "", statusRumah: "Milik Sendiri", jumlahPenghuni: "1", kondisiBangunan: "Permanen", sumberAir: "PDAM", sanitasiWc: "Jamban Sendiri", listrik: "PLN 900 VA", penerimaBansos: false });
+      setForm({ nomorKk: "", rt: "1", alamat: "", statusRumah: "Milik Sendiri", jumlahPenghuni: "1", kondisiBangunan: "Permanen", sumberAir: "PDAM", sanitasiWc: "Jamban Sendiri", listrik: "PLN 900 VA", penerimaBansos: false, jenisBansos: "" });
       clearFile();
+      queryClient.invalidateQueries({ queryKey: ["/api/kk"] });
+    },
+    onError: (err: any) => toast({ title: "Gagal", description: err.message, variant: "destructive" }),
+  });
+
+  const editMutation = useMutation({
+    mutationFn: async () => {
+      if (!editingKkId) return;
+      await apiRequest("PATCH", `/api/kk/${editingKkId}`, {
+        ...editForm,
+        rt: parseInt(editForm.rt),
+        jumlahPenghuni: parseInt(editForm.jumlahPenghuni),
+        jenisBansos: editForm.penerimaBansos ? editForm.jenisBansos : null,
+      });
+      if (editSelectedFile && editingKkId) {
+        const formData = new FormData();
+        formData.append("file", editSelectedFile);
+        const uploadRes = await fetch(`/api/upload/kk/${editingKkId}`, {
+          method: "POST",
+          body: formData,
+          credentials: "include",
+        });
+        if (!uploadRes.ok) {
+          const err = await uploadRes.json().catch(() => ({ message: "Upload gagal" }));
+          throw new Error(`KK diupdate, tapi upload foto gagal: ${err.message}`);
+        }
+      }
+    },
+    onSuccess: () => {
+      toast({ title: "KK berhasil diperbarui" });
+      setEditDialogOpen(false);
+      setEditingKkId(null);
+      clearEditFile();
       queryClient.invalidateQueries({ queryKey: ["/api/kk"] });
     },
     onError: (err: any) => toast({ title: "Gagal", description: err.message, variant: "destructive" }),
@@ -263,6 +358,78 @@ export default function AdminKelolaKK() {
                   </Select>
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-sm">Kondisi Bangunan</Label>
+                  <Select value={form.kondisiBangunan} onValueChange={v => setForm({...form, kondisiBangunan: v})} data-testid="select-kondisi-bangunan">
+                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {kondisiBangunanOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-sm">Sumber Air</Label>
+                  <Select value={form.sumberAir} onValueChange={v => setForm({...form, sumberAir: v})} data-testid="select-sumber-air">
+                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {sumberAirOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-sm">Sanitasi WC</Label>
+                  <Select value={form.sanitasiWc} onValueChange={v => setForm({...form, sanitasiWc: v})} data-testid="select-sanitasi-wc">
+                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {sanitasiWcOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1 flex items-end">
+                  <div className="flex items-center gap-2 h-10">
+                    <Checkbox
+                      id="penerimaBansos"
+                      checked={form.penerimaBansos}
+                      onCheckedChange={(checked) => setForm({...form, penerimaBansos: checked === true})}
+                      data-testid="checkbox-penerima-bansos"
+                    />
+                    <Label htmlFor="penerimaBansos" className="text-sm cursor-pointer">Penerima Bansos</Label>
+                  </div>
+                </div>
+              </div>
+              {form.penerimaBansos && (
+                <div className="space-y-1">
+                  <Label className="text-sm">Jenis Bansos</Label>
+                  <div className="grid grid-cols-2 gap-2 p-2 rounded-md border">
+                    {jenisBansosOptions.map(jenis => {
+                      const selected = form.jenisBansos ? form.jenisBansos.split(", ") : [];
+                      const isChecked = selected.includes(jenis);
+                      return (
+                        <div key={jenis} className="flex items-center gap-2">
+                          <Checkbox
+                            id={`bansos-${jenis}`}
+                            checked={isChecked}
+                            onCheckedChange={(checked) => {
+                              let updated: string[];
+                              if (checked) {
+                                updated = [...selected, jenis];
+                              } else {
+                                updated = selected.filter(s => s !== jenis);
+                              }
+                              setForm({...form, jenisBansos: updated.join(", ")});
+                            }}
+                            data-testid={`checkbox-bansos-${jenis}`}
+                          />
+                          <Label htmlFor={`bansos-${jenis}`} className="text-xs cursor-pointer">{jenis}</Label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               <div className="space-y-1">
                 <Label className="text-sm">Upload Foto KK</Label>
                 <input
@@ -440,6 +607,15 @@ export default function AdminKelolaKK() {
                           </a>
                         </Button>
                       )}
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="w-7 h-7"
+                        onClick={() => openEditDialog(k)}
+                        data-testid={`button-edit-kk-${k.id}`}
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
                       {isVerified && (
                         <Button
                           size="icon"
@@ -535,6 +711,174 @@ export default function AdminKelolaKK() {
           onClose={() => setQrDialogKk(null)}
         />
       )}
+
+      <Dialog open={editDialogOpen} onOpenChange={(open) => { setEditDialogOpen(open); if (!open) clearEditFile(); }}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Kartu Keluarga</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label className="text-sm">Nomor KK</Label>
+              <Input value={editForm.nomorKk} onChange={e => setEditForm({...editForm, nomorKk: e.target.value})} placeholder="16 digit nomor KK" className="h-10" data-testid="input-edit-nomor-kk" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-sm">RT</Label>
+                <Select value={editForm.rt} onValueChange={v => setEditForm({...editForm, rt: v})}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {rtOptions.map(i => <SelectItem key={i} value={i.toString()}>RT {i.toString().padStart(2,"0")}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-sm">Jumlah Penghuni</Label>
+                <Input type="number" value={editForm.jumlahPenghuni} onChange={e => setEditForm({...editForm, jumlahPenghuni: e.target.value})} className="h-10" data-testid="input-edit-jumlah-penghuni" />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-sm">Alamat</Label>
+              <Input value={editForm.alamat} onChange={e => setEditForm({...editForm, alamat: e.target.value})} className="h-10" data-testid="input-edit-alamat-kk" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-sm">Status Rumah</Label>
+                <Select value={editForm.statusRumah} onValueChange={v => setEditForm({...editForm, statusRumah: v})}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {statusRumahOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-sm">Listrik</Label>
+                <Select value={editForm.listrik} onValueChange={v => setEditForm({...editForm, listrik: v})}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {listrikOptions.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-sm">Kondisi Bangunan</Label>
+                <Select value={editForm.kondisiBangunan} onValueChange={v => setEditForm({...editForm, kondisiBangunan: v})} data-testid="select-edit-kondisi-bangunan">
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {kondisiBangunanOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-sm">Sumber Air</Label>
+                <Select value={editForm.sumberAir} onValueChange={v => setEditForm({...editForm, sumberAir: v})} data-testid="select-edit-sumber-air">
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {sumberAirOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-sm">Sanitasi WC</Label>
+                <Select value={editForm.sanitasiWc} onValueChange={v => setEditForm({...editForm, sanitasiWc: v})} data-testid="select-edit-sanitasi-wc">
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {sanitasiWcOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1 flex items-end">
+                <div className="flex items-center gap-2 h-10">
+                  <Checkbox
+                    id="edit-penerimaBansos"
+                    checked={editForm.penerimaBansos}
+                    onCheckedChange={(checked) => setEditForm({...editForm, penerimaBansos: checked === true})}
+                    data-testid="checkbox-edit-penerima-bansos"
+                  />
+                  <Label htmlFor="edit-penerimaBansos" className="text-sm cursor-pointer">Penerima Bansos</Label>
+                </div>
+              </div>
+            </div>
+            {editForm.penerimaBansos && (
+              <div className="space-y-1">
+                <Label className="text-sm">Jenis Bansos</Label>
+                <div className="grid grid-cols-2 gap-2 p-2 rounded-md border">
+                  {jenisBansosOptions.map(jenis => {
+                    const selected = editForm.jenisBansos ? editForm.jenisBansos.split(", ") : [];
+                    const isChecked = selected.includes(jenis);
+                    return (
+                      <div key={jenis} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`edit-bansos-${jenis}`}
+                          checked={isChecked}
+                          onCheckedChange={(checked) => {
+                            let updated: string[];
+                            if (checked) {
+                              updated = [...selected, jenis];
+                            } else {
+                              updated = selected.filter(s => s !== jenis);
+                            }
+                            setEditForm({...editForm, jenisBansos: updated.join(", ")});
+                          }}
+                          data-testid={`checkbox-edit-bansos-${jenis}`}
+                        />
+                        <Label htmlFor={`edit-bansos-${jenis}`} className="text-xs cursor-pointer">{jenis}</Label>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            <div className="space-y-1">
+              <Label className="text-sm">Upload Foto KK</Label>
+              <input
+                ref={editFileInputRef}
+                type="file"
+                accept=".jpg,.jpeg,.png,.pdf"
+                onChange={handleEditFileSelect}
+                className="hidden"
+                data-testid="input-edit-file-kk"
+              />
+              {editSelectedFile ? (
+                <div className="flex items-center gap-2 rounded-md border p-2">
+                  {editFilePreview ? (
+                    <img src={editFilePreview} alt="Preview" className="w-16 h-16 object-cover rounded-md" data-testid="img-edit-preview-kk" />
+                  ) : (
+                    <div className="w-16 h-16 rounded-md bg-muted flex items-center justify-center">
+                      <FileText className="w-6 h-6 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs truncate">{editSelectedFile.name}</p>
+                    <p className="text-[10px] text-muted-foreground">{(editSelectedFile.size / 1024).toFixed(0)} KB</p>
+                  </div>
+                  <Button size="icon" variant="ghost" onClick={clearEditFile} data-testid="button-edit-clear-file-kk">
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full gap-1.5"
+                  onClick={() => editFileInputRef.current?.click()}
+                  data-testid="button-edit-upload-kk"
+                >
+                  <Upload className="w-4 h-4" /> Pilih File
+                </Button>
+              )}
+              <p className="text-[10px] text-muted-foreground">JPG, PNG, atau PDF. Maks 5MB</p>
+            </div>
+            <Button className="w-full h-10" onClick={() => editMutation.mutate()} disabled={editMutation.isPending || !editForm.nomorKk || !editForm.alamat} data-testid="button-simpan-edit-kk">
+              {editMutation.isPending ? "Menyimpan..." : "Simpan Perubahan"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

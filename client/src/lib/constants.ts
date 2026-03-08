@@ -125,11 +125,31 @@ export const statusRumahOptions = [
   "Menumpang",
 ];
 
+export const kondisiBangunanOptions = [
+  "Permanen",
+  "Semi Permanen",
+  "Non Permanen",
+];
+
+export const sumberAirOptions = [
+  "PDAM",
+  "Sumur Gali",
+  "Sumur Bor",
+  "Lainnya",
+];
+
+export const sanitasiWcOptions = [
+  "Jamban Sendiri",
+  "Jamban Bersama",
+];
+
 export const listrikOptions = [
   "PLN 450 VA",
   "PLN 900 VA",
   "PLN 1300 VA",
+  "PLN 2200 VA",
   "PLN > 2200 VA",
+  "Tidak Ada",
 ];
 
 export const rtOptions = [1, 2, 3, 4, 5, 6, 7];
