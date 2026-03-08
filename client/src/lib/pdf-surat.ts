@@ -101,12 +101,12 @@ export async function generateSuratPDF(options: {
   const { nomorSurat, isiSurat, jenisSurat, fileName } = options;
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = 210;
-  const marginLeft = 25;
-  const marginRight = 25;
+  const marginLeft = 20;
+  const marginRight = 20;
   const contentWidth = pageWidth - marginLeft - marginRight;
   const pageHeight = 297;
   const startY = 42;
-  const bottomMargin = 15;
+  const bottomMargin = 12;
   const availableHeight = pageHeight - startY - bottomMargin;
   const colonMM = 35;
 
@@ -150,8 +150,8 @@ export async function generateSuratPDF(options: {
     if (isBiodataLine(l)) {
       const ci = l.indexOf(":");
       const val = l.substring(ci + 1).trim();
-      const valW = contentWidth - colonMM - 3;
-      const w = doc.splitTextToSize(val, valW);
+      const valMaxW = contentWidth - colonMM - 3;
+      const w = doc.splitTextToSize(val, Math.max(valMaxW, 20));
       totalBodyLines += Math.max(1, w.length);
     } else {
       const w = doc.splitTextToSize(t, contentWidth);
@@ -185,7 +185,7 @@ export async function generateSuratPDF(options: {
   const titleFs = Math.max(8, Math.round(12 * scale * 10) / 10);
 
   const drawKop = () => {
-    if (img) doc.addImage(img, "PNG", marginLeft, 12, 18, 18);
+    if (img) doc.addImage(img, "PNG", marginLeft + 2, 12, 18, 18);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.text("RUKUN WARGA 03", pageWidth / 2, 16, { align: "center" });
@@ -206,12 +206,14 @@ export async function generateSuratPDF(options: {
   drawKop();
   let y = startY;
 
-  const printBody = (text: string) => {
+  const printBody = (text: string, indent?: number) => {
     doc.setFontSize(fs);
     doc.setFont("helvetica", "normal");
-    const lines = doc.splitTextToSize(text, contentWidth);
-    for (const wl of lines) {
-      doc.text(wl, marginLeft, y);
+    const xPos = marginLeft + (indent || 0);
+    const maxW = contentWidth - (indent || 0);
+    const wrapped = doc.splitTextToSize(text, maxW);
+    for (const wl of wrapped) {
+      doc.text(wl, xPos, y);
       y += lh;
     }
   };
