@@ -1,0 +1,248 @@
+import { useState } from "react";
+import { useAuth } from "@/lib/auth";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
+import { Plus, FileText, Clock, CheckCircle, XCircle, Download, ArrowLeft } from "lucide-react";
+import type { SuratWarga, Warga, KartuKeluarga } from "@shared/schema";
+
+const jenisSuratOptions = [
+  { value: "surat_keterangan_domisili", label: "Surat Keterangan Domisili" },
+  { value: "surat_keterangan_tidak_mampu", label: "Surat Keterangan Tidak Mampu" },
+  { value: "surat_keterangan_usaha", label: "Surat Keterangan Usaha" },
+  { value: "surat_keterangan_belum_menikah", label: "Surat Keterangan Belum Menikah" },
+  { value: "surat_keterangan_berkelakuan_baik", label: "Surat Keterangan Berkelakuan Baik" },
+  { value: "surat_pengantar_rt", label: "Surat Pengantar RT" },
+  { value: "surat_keterangan_pindah", label: "Surat Keterangan Pindah" },
+  { value: "surat_keterangan_kematian", label: "Surat Keterangan Kematian" },
+  { value: "surat_keterangan_lainnya", label: "Surat Keterangan Lainnya" },
+];
+
+export default function WargaPelayanan() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [showForm, setShowForm] = useState(false);
+  const [selectedWarga, setSelectedWarga] = useState("");
+  const [jenisSurat, setJenisSurat] = useState("");
+  const [perihal, setPerihal] = useState("");
+  const [keterangan, setKeterangan] = useState("");
+
+  const { data: suratList, isLoading } = useQuery<SuratWarga[]>({
+    queryKey: ["/api/surat-warga"],
+  });
+
+  const { data: anggota } = useQuery<Warga[]>({
+    queryKey: ["/api/warga/kk", user?.kkId],
+    enabled: !!user?.kkId,
+  });
+
+  const { data: kk } = useQuery<KartuKeluarga>({
+    queryKey: ["/api/kk", user?.kkId],
+    enabled: !!user?.kkId,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/surat-warga", {
+        wargaId: parseInt(selectedWarga),
+        kkId: user?.kkId,
+        jenisSurat,
+        perihal,
+        keterangan: keterangan || undefined,
+        nomorRt: kk?.rt || 1,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Surat diajukan!", description: "Surat sedang diproses, tunggu persetujuan admin." });
+      setShowForm(false);
+      setJenisSurat("");
+      setPerihal("");
+      setKeterangan("");
+      setSelectedWarga("");
+      queryClient.invalidateQueries({ queryKey: ["/api/surat-warga"] });
+    },
+    onError: (err: any) => {
+      toast({ title: "Gagal mengajukan", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
+    pending: { label: "Menunggu", color: "bg-yellow-100 text-yellow-800", icon: Clock },
+    disetujui: { label: "Disetujui", color: "bg-green-100 text-green-800", icon: CheckCircle },
+    ditolak: { label: "Ditolak", color: "bg-red-100 text-red-800", icon: XCircle },
+  };
+
+  const handleDownload = (surat: SuratWarga) => {
+    if (!surat.isiSurat) return;
+    const blob = new Blob([surat.isiSurat], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Surat_${surat.jenisSurat}_${surat.id}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  if (showForm) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setShowForm(false)} data-testid="button-back-pelayanan">
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <h2 className="text-lg font-bold">Ajukan Surat</h2>
+        </div>
+
+        <Card>
+          <CardContent className="p-4 space-y-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Pemohon (Anggota KK)</Label>
+              <Select value={selectedWarga} onValueChange={setSelectedWarga}>
+                <SelectTrigger className="h-11" data-testid="select-pemohon-surat">
+                  <SelectValue placeholder="Pilih warga yang mengajukan" />
+                </SelectTrigger>
+                <SelectContent>
+                  {anggota?.map((w) => (
+                    <SelectItem key={w.id} value={w.id.toString()}>
+                      {w.namaLengkap} ({w.kedudukanKeluarga})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Jenis Surat</Label>
+              <Select value={jenisSurat} onValueChange={setJenisSurat}>
+                <SelectTrigger className="h-11" data-testid="select-jenis-surat">
+                  <SelectValue placeholder="Pilih jenis surat" />
+                </SelectTrigger>
+                <SelectContent>
+                  {jenisSuratOptions.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Perihal / Keperluan</Label>
+              <Input
+                value={perihal}
+                onChange={(e) => setPerihal(e.target.value)}
+                placeholder="Contoh: Keperluan melamar pekerjaan"
+                className="h-11"
+                data-testid="input-perihal-surat"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Keterangan Tambahan (opsional)</Label>
+              <Textarea
+                value={keterangan}
+                onChange={(e) => setKeterangan(e.target.value)}
+                placeholder="Tambahkan keterangan jika diperlukan..."
+                rows={3}
+                data-testid="input-keterangan-surat"
+              />
+            </div>
+
+            <Button
+              className="w-full h-12 text-base"
+              onClick={() => createMutation.mutate()}
+              disabled={!selectedWarga || !jenisSurat || !perihal || createMutation.isPending}
+              data-testid="button-ajukan-surat"
+            >
+              {createMutation.isPending ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Memproses...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  Ajukan Surat
+                </span>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-lg font-bold" data-testid="text-pelayanan-title">Pelayanan Surat</h2>
+        <Button onClick={() => setShowForm(true)} className="gap-1.5" data-testid="button-ajukan-surat-baru">
+          <Plus className="w-4 h-4" />
+          Ajukan Surat
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-3">
+          <Skeleton className="h-24 w-full rounded-xl" />
+          <Skeleton className="h-24 w-full rounded-xl" />
+        </div>
+      ) : suratList?.length === 0 ? (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground">Belum ada pengajuan surat</p>
+            <p className="text-xs text-muted-foreground mt-1">Tekan "Ajukan Surat" untuk membuat permohonan surat baru</p>
+          </CardContent>
+        </Card>
+      ) : (
+        suratList?.map((s) => {
+          const sc = statusConfig[s.status] || statusConfig.pending;
+          const StatusIcon = sc.icon;
+          const label = jenisSuratOptions.find(o => o.value === s.jenisSurat)?.label || s.jenisSurat;
+          return (
+            <Card key={s.id} data-testid={`card-surat-${s.id}`}>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-sm truncate">{label}</p>
+                    <p className="text-xs text-muted-foreground">{s.perihal}</p>
+                  </div>
+                  <Badge className={`${sc.color} text-[10px] flex-shrink-0 gap-1`}>
+                    <StatusIcon className="w-3 h-3" />
+                    {sc.label}
+                  </Badge>
+                </div>
+                {s.status === "disetujui" && s.isiSurat && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full mt-2 gap-1.5"
+                    onClick={() => handleDownload(s)}
+                    data-testid={`button-download-${s.id}`}
+                  >
+                    <Download className="w-4 h-4" />
+                    Download Surat
+                  </Button>
+                )}
+                <p className="text-[10px] text-muted-foreground mt-2">
+                  {s.createdAt ? new Date(s.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }) : ""}
+                </p>
+              </CardContent>
+            </Card>
+          );
+        })
+      )}
+    </div>
+  );
+}

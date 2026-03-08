@@ -1,38 +1,278 @@
-import { type User, type InsertUser } from "@shared/schema";
-import { randomUUID } from "crypto";
-
-// modify the interface with any CRUD methods
-// you might need
+import { eq, and, desc } from "drizzle-orm";
+import { db } from "./db";
+import {
+  kartuKeluarga, warga, rtData, laporan, suratWarga, suratRw,
+  profileEditRequest, waBlast,
+  type KartuKeluarga, type InsertKartuKeluarga,
+  type Warga, type InsertWarga,
+  type RtData, type InsertRtData,
+  type Laporan, type InsertLaporan,
+  type SuratWarga, type InsertSuratWarga,
+  type SuratRw, type InsertSuratRw,
+  type ProfileEditRequest, type InsertProfileEditRequest,
+  type WaBlast, type InsertWaBlast,
+} from "@shared/schema";
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  getKkByNomor(nomorKk: string): Promise<KartuKeluarga | undefined>;
+  getKkById(id: number): Promise<KartuKeluarga | undefined>;
+  getAllKk(): Promise<KartuKeluarga[]>;
+  createKk(data: InsertKartuKeluarga): Promise<KartuKeluarga>;
+  updateKk(id: number, data: Partial<InsertKartuKeluarga>): Promise<KartuKeluarga | undefined>;
+  deleteKk(id: number): Promise<void>;
+
+  getWargaByKkId(kkId: number): Promise<Warga[]>;
+  getWargaById(id: number): Promise<Warga | undefined>;
+  getAllWarga(): Promise<Warga[]>;
+  createWarga(data: InsertWarga): Promise<Warga>;
+  updateWarga(id: number, data: Partial<InsertWarga>): Promise<Warga | undefined>;
+  deleteWarga(id: number): Promise<void>;
+
+  getAllRt(): Promise<RtData[]>;
+  getRtByNomor(nomor: number): Promise<RtData | undefined>;
+  createRt(data: InsertRtData): Promise<RtData>;
+  updateRt(id: number, data: Partial<InsertRtData>): Promise<RtData | undefined>;
+
+  getLaporanByKkId(kkId: number): Promise<Laporan[]>;
+  getAllLaporan(): Promise<Laporan[]>;
+  createLaporan(data: InsertLaporan): Promise<Laporan>;
+  updateLaporanStatus(id: number, status: string, tanggapan?: string): Promise<Laporan | undefined>;
+
+  getSuratByKkId(kkId: number): Promise<SuratWarga[]>;
+  getAllSuratWarga(): Promise<SuratWarga[]>;
+  getSuratWargaById(id: number): Promise<SuratWarga | undefined>;
+  createSuratWarga(data: InsertSuratWarga): Promise<SuratWarga>;
+  updateSuratWargaStatus(id: number, status: string, isiSurat?: string): Promise<SuratWarga | undefined>;
+
+  getAllSuratRw(): Promise<SuratRw[]>;
+  getSuratRwById(id: number): Promise<SuratRw | undefined>;
+  createSuratRw(data: InsertSuratRw): Promise<SuratRw>;
+
+  getProfileEditsByKkId(kkId: number): Promise<ProfileEditRequest[]>;
+  getAllProfileEdits(): Promise<ProfileEditRequest[]>;
+  createProfileEdit(data: InsertProfileEditRequest): Promise<ProfileEditRequest>;
+  updateProfileEditStatus(id: number, status: string): Promise<ProfileEditRequest | undefined>;
+
+  getAllWaBlast(): Promise<WaBlast[]>;
+  createWaBlast(data: InsertWaBlast): Promise<WaBlast>;
+  updateWaBlastStatus(id: number, status: string, jumlah: number): Promise<WaBlast | undefined>;
+
+  getWargaByRt(rt: number): Promise<(Warga & { nomorKk: string; rt: number })[]>;
+  getAllWargaWithKk(): Promise<(Warga & { nomorKk: string; rt: number; alamat: string })[]>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-
-  constructor() {
-    this.users = new Map();
+export class DatabaseStorage implements IStorage {
+  async getKkByNomor(nomorKk: string): Promise<KartuKeluarga | undefined> {
+    const [result] = await db.select().from(kartuKeluarga).where(eq(kartuKeluarga.nomorKk, nomorKk));
+    return result;
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  async getKkById(id: number): Promise<KartuKeluarga | undefined> {
+    const [result] = await db.select().from(kartuKeluarga).where(eq(kartuKeluarga.id, id));
+    return result;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+  async getAllKk(): Promise<KartuKeluarga[]> {
+    return db.select().from(kartuKeluarga).orderBy(kartuKeluarga.rt, kartuKeluarga.id);
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+  async createKk(data: InsertKartuKeluarga): Promise<KartuKeluarga> {
+    const [result] = await db.insert(kartuKeluarga).values(data).returning();
+    return result;
+  }
+
+  async updateKk(id: number, data: Partial<InsertKartuKeluarga>): Promise<KartuKeluarga | undefined> {
+    const [result] = await db.update(kartuKeluarga).set(data).where(eq(kartuKeluarga.id, id)).returning();
+    return result;
+  }
+
+  async deleteKk(id: number): Promise<void> {
+    await db.delete(kartuKeluarga).where(eq(kartuKeluarga.id, id));
+  }
+
+  async getWargaByKkId(kkId: number): Promise<Warga[]> {
+    return db.select().from(warga).where(eq(warga.kkId, kkId)).orderBy(warga.id);
+  }
+
+  async getWargaById(id: number): Promise<Warga | undefined> {
+    const [result] = await db.select().from(warga).where(eq(warga.id, id));
+    return result;
+  }
+
+  async getAllWarga(): Promise<Warga[]> {
+    return db.select().from(warga).orderBy(warga.id);
+  }
+
+  async createWarga(data: InsertWarga): Promise<Warga> {
+    const [result] = await db.insert(warga).values(data).returning();
+    return result;
+  }
+
+  async updateWarga(id: number, data: Partial<InsertWarga>): Promise<Warga | undefined> {
+    const [result] = await db.update(warga).set(data).where(eq(warga.id, id)).returning();
+    return result;
+  }
+
+  async deleteWarga(id: number): Promise<void> {
+    await db.delete(warga).where(eq(warga.id, id));
+  }
+
+  async getAllRt(): Promise<RtData[]> {
+    return db.select().from(rtData).orderBy(rtData.nomorRt);
+  }
+
+  async getRtByNomor(nomor: number): Promise<RtData | undefined> {
+    const [result] = await db.select().from(rtData).where(eq(rtData.nomorRt, nomor));
+    return result;
+  }
+
+  async createRt(data: InsertRtData): Promise<RtData> {
+    const [result] = await db.insert(rtData).values(data).returning();
+    return result;
+  }
+
+  async updateRt(id: number, data: Partial<InsertRtData>): Promise<RtData | undefined> {
+    const [result] = await db.update(rtData).set(data).where(eq(rtData.id, id)).returning();
+    return result;
+  }
+
+  async getLaporanByKkId(kkId: number): Promise<Laporan[]> {
+    return db.select().from(laporan).where(eq(laporan.kkId, kkId)).orderBy(desc(laporan.createdAt));
+  }
+
+  async getAllLaporan(): Promise<Laporan[]> {
+    return db.select().from(laporan).orderBy(desc(laporan.createdAt));
+  }
+
+  async createLaporan(data: InsertLaporan): Promise<Laporan> {
+    const [result] = await db.insert(laporan).values(data).returning();
+    return result;
+  }
+
+  async updateLaporanStatus(id: number, status: string, tanggapan?: string): Promise<Laporan | undefined> {
+    const updateData: any = { status };
+    if (tanggapan !== undefined) updateData.tanggapanAdmin = tanggapan;
+    const [result] = await db.update(laporan).set(updateData).where(eq(laporan.id, id)).returning();
+    return result;
+  }
+
+  async getSuratByKkId(kkId: number): Promise<SuratWarga[]> {
+    return db.select().from(suratWarga).where(eq(suratWarga.kkId, kkId)).orderBy(desc(suratWarga.createdAt));
+  }
+
+  async getAllSuratWarga(): Promise<SuratWarga[]> {
+    return db.select().from(suratWarga).orderBy(desc(suratWarga.createdAt));
+  }
+
+  async getSuratWargaById(id: number): Promise<SuratWarga | undefined> {
+    const [result] = await db.select().from(suratWarga).where(eq(suratWarga.id, id));
+    return result;
+  }
+
+  async createSuratWarga(data: InsertSuratWarga): Promise<SuratWarga> {
+    const [result] = await db.insert(suratWarga).values(data).returning();
+    return result;
+  }
+
+  async updateSuratWargaStatus(id: number, status: string, isiSurat?: string): Promise<SuratWarga | undefined> {
+    const updateData: any = { status };
+    if (isiSurat !== undefined) updateData.isiSurat = isiSurat;
+    const [result] = await db.update(suratWarga).set(updateData).where(eq(suratWarga.id, id)).returning();
+    return result;
+  }
+
+  async getAllSuratRw(): Promise<SuratRw[]> {
+    return db.select().from(suratRw).orderBy(desc(suratRw.createdAt));
+  }
+
+  async getSuratRwById(id: number): Promise<SuratRw | undefined> {
+    const [result] = await db.select().from(suratRw).where(eq(suratRw.id, id));
+    return result;
+  }
+
+  async createSuratRw(data: InsertSuratRw): Promise<SuratRw> {
+    const [result] = await db.insert(suratRw).values(data).returning();
+    return result;
+  }
+
+  async getProfileEditsByKkId(kkId: number): Promise<ProfileEditRequest[]> {
+    return db.select().from(profileEditRequest).where(eq(profileEditRequest.kkId, kkId)).orderBy(desc(profileEditRequest.createdAt));
+  }
+
+  async getAllProfileEdits(): Promise<ProfileEditRequest[]> {
+    return db.select().from(profileEditRequest).orderBy(desc(profileEditRequest.createdAt));
+  }
+
+  async createProfileEdit(data: InsertProfileEditRequest): Promise<ProfileEditRequest> {
+    const [result] = await db.insert(profileEditRequest).values(data).returning();
+    return result;
+  }
+
+  async updateProfileEditStatus(id: number, status: string): Promise<ProfileEditRequest | undefined> {
+    const [result] = await db.update(profileEditRequest).set({ status }).where(eq(profileEditRequest.id, id)).returning();
+    return result;
+  }
+
+  async getAllWaBlast(): Promise<WaBlast[]> {
+    return db.select().from(waBlast).orderBy(desc(waBlast.createdAt));
+  }
+
+  async createWaBlast(data: InsertWaBlast): Promise<WaBlast> {
+    const [result] = await db.insert(waBlast).values(data).returning();
+    return result;
+  }
+
+  async updateWaBlastStatus(id: number, status: string, jumlah: number): Promise<WaBlast | undefined> {
+    const [result] = await db.update(waBlast).set({ status, jumlahPenerima: jumlah }).where(eq(waBlast.id, id)).returning();
+    return result;
+  }
+
+  async getWargaByRt(rt: number): Promise<(Warga & { nomorKk: string; rt: number })[]> {
+    const results = await db.select({
+      id: warga.id,
+      kkId: warga.kkId,
+      namaLengkap: warga.namaLengkap,
+      nik: warga.nik,
+      nomorWhatsapp: warga.nomorWhatsapp,
+      jenisKelamin: warga.jenisKelamin,
+      statusPerkawinan: warga.statusPerkawinan,
+      agama: warga.agama,
+      kedudukanKeluarga: warga.kedudukanKeluarga,
+      tanggalLahir: warga.tanggalLahir,
+      pekerjaan: warga.pekerjaan,
+      statusKependudukan: warga.statusKependudukan,
+      createdAt: warga.createdAt,
+      nomorKk: kartuKeluarga.nomorKk,
+      rt: kartuKeluarga.rt,
+    }).from(warga)
+      .innerJoin(kartuKeluarga, eq(warga.kkId, kartuKeluarga.id))
+      .where(eq(kartuKeluarga.rt, rt));
+    return results;
+  }
+
+  async getAllWargaWithKk(): Promise<(Warga & { nomorKk: string; rt: number; alamat: string })[]> {
+    const results = await db.select({
+      id: warga.id,
+      kkId: warga.kkId,
+      namaLengkap: warga.namaLengkap,
+      nik: warga.nik,
+      nomorWhatsapp: warga.nomorWhatsapp,
+      jenisKelamin: warga.jenisKelamin,
+      statusPerkawinan: warga.statusPerkawinan,
+      agama: warga.agama,
+      kedudukanKeluarga: warga.kedudukanKeluarga,
+      tanggalLahir: warga.tanggalLahir,
+      pekerjaan: warga.pekerjaan,
+      statusKependudukan: warga.statusKependudukan,
+      createdAt: warga.createdAt,
+      nomorKk: kartuKeluarga.nomorKk,
+      rt: kartuKeluarga.rt,
+      alamat: kartuKeluarga.alamat,
+    }).from(warga)
+      .innerJoin(kartuKeluarga, eq(warga.kkId, kartuKeluarga.id))
+      .orderBy(warga.namaLengkap);
+    return results;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
