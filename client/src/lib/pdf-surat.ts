@@ -22,20 +22,21 @@ function cleanText(text: string): string {
 
 function isBiodataLine(line: string): boolean {
   const trimmed = line.trim();
-  if (!/\s*:/.test(trimmed)) return false;
   const colonIdx = trimmed.indexOf(":");
+  if (colonIdx < 0) return false;
   const label = trimmed.substring(0, colonIdx).trim();
   if (label.length < 2 || label.length > 35) return false;
-  const biodataLabels = [
+  const labels = [
     /^nama/i, /^nik/i, /^tempat/i, /^tanggal\s*lahir/i, /^alamat/i,
-    /^rt/i, /^rw/i, /^kelurahan/i, /^kecamatan/i, /^kota/i, /^kabupaten/i,
-    /^agama/i, /^pekerjaan/i, /^jenis\s*kelamin/i, /^status/i, /^no\.?\s*(kk|telp|hp)/i,
-    /^kewarganegaraan/i, /^golongan\s*darah/i, /^pendidikan/i, /^hubungan/i,
-    /^jabatan/i, /^nomor/i, /^perihal/i, /^lampiran/i, /^sifat/i, /^hal\b/i,
-    /^hari/i, /^waktu/i, /^acara/i, /^tempat/i, /^rt\s*\/\s*rw/i,
-    /^no\.\s*kk\s*\/\s*nik/i,
+    /^rt\s*\/?\s*rw/i, /^rt\b/i, /^rw\b/i, /^kelurahan/i, /^kecamatan/i,
+    /^kota/i, /^kabupaten/i, /^provinsi/i,
+    /^agama/i, /^pekerjaan/i, /^jenis\s*kelamin/i, /^status/i,
+    /^no\.?\s*(kk|telp|hp)/i, /^kewarganegaraan/i, /^golongan\s*darah/i,
+    /^pendidikan/i, /^hubungan/i, /^jabatan/i,
+    /^nomor/i, /^perihal/i, /^lampiran/i, /^sifat/i, /^hal\b/i,
+    /^hari/i, /^waktu/i, /^acara/i, /^tempat/i,
   ];
-  return biodataLabels.some(r => r.test(label));
+  return labels.some(r => r.test(label));
 }
 
 function splitTwoColumns(line: string): { left: string; right: string } | null {
@@ -44,195 +45,51 @@ function splitTwoColumns(line: string): { left: string; right: string } | null {
     return { left: (parts[0] || "").trim(), right: (parts[1] || "").trim() };
   }
   const match = line.match(/^(.+?)\s{6,}(.+)$/);
-  if (match) {
-    return { left: match[1].trim(), right: match[2].trim() };
-  }
+  if (match) return { left: match[1].trim(), right: match[2].trim() };
   return null;
 }
 
-function isSignatureSection(lines: string[], startIdx: number): boolean {
+function isDateLine(line: string): boolean {
+  return /^(kota\s+)?(cimahi|bandung|jakarta),?\s+\d/i.test(line.trim());
+}
+
+function isSignatureTrigger(line: string): boolean {
+  const trimmed = line.trim();
   const triggers = [
     /^(hormat\s+kami|mengetahui|yang\s+bertanda\s+tangan|tertanda|di\s*ketahui|yang\s+membuat)/i,
     /^ketua\s+(rt|rw)/i,
-    /^(kota\s+)?(cimahi|bandung|jakarta),?\s+\d/i,
   ];
-  const line = lines[startIdx].trim();
-  if (triggers.some(r => r.test(line))) return true;
-
-  const split = splitTwoColumns(lines[startIdx]);
+  if (triggers.some(r => r.test(trimmed))) return true;
+  if (isDateLine(trimmed)) return true;
+  const split = splitTwoColumns(line);
   if (split && triggers.some(r => r.test(split.left) || r.test(split.right))) return true;
-
-  const remaining = lines.slice(startIdx);
-  const hasSignerName = remaining.some(l => {
-    const t = l.trim();
-    if (/^\(.*\)$/.test(t)) return true;
-    const s = splitTwoColumns(l);
-    if (s && (/^\(.*\)$/.test(s.left) || /^\(.*\)$/.test(s.right))) return true;
-    return false;
-  });
-  const hasKetuaRef = remaining.some(l => {
-    const t = l.trim();
-    if (/ketua\s+(rt|rw)/i.test(t)) return true;
-    const s = splitTwoColumns(l);
-    if (s && (/ketua/i.test(s.left) || /ketua/i.test(s.right))) return true;
-    return false;
-  });
-  if (hasSignerName && hasKetuaRef && remaining.length <= 20) return true;
-
   return false;
 }
 
-function hasTwoColumnSignature(sigLines: string[]): boolean {
-  let twoColCount = 0;
+function findSignatureStart(lines: string[]): number {
+  for (let i = lines.length - 1; i >= Math.max(0, lines.length - 25); i--) {
+    if (isSignatureTrigger(lines[i])) {
+      const remaining = lines.slice(i);
+      const hasName = remaining.some(l => {
+        const t = l.trim();
+        if (/^\(.*\)$/.test(t)) return true;
+        const s = splitTwoColumns(l);
+        return s ? (/^\(.*\)$/.test(s.left) || /^\(.*\)$/.test(s.right)) : false;
+      });
+      if (hasName) return i;
+    }
+  }
+  return -1;
+}
+
+function hasTwoColumnSig(sigLines: string[]): boolean {
+  let count = 0;
   for (const l of sigLines) {
-    const trimmed = l.trim();
-    if (!trimmed) continue;
-    const split = splitTwoColumns(l);
-    if (split && split.left && split.right) twoColCount++;
+    if (!l.trim()) continue;
+    const s = splitTwoColumns(l);
+    if (s && s.left && s.right) count++;
   }
-  return twoColCount >= 2;
-}
-
-interface ParsedContent {
-  bodyLines: string[];
-  sigLines: string[];
-  hasTitle: boolean;
-  dateLine: string | null;
-  isTwoColSig: boolean;
-}
-
-function parseContent(isiSurat: string): ParsedContent {
-  let processedText = cleanText(isiSurat);
-  processedText = processedText.replace(/^Nomor\s*:.*$/m, "").trim();
-  const allLines = processedText.split("\n");
-
-  let signatureStartIdx = -1;
-  for (let i = allLines.length - 1; i >= Math.max(0, allLines.length - 25); i--) {
-    if (isSignatureSection(allLines, i)) {
-      signatureStartIdx = i;
-    }
-  }
-
-  const bodyLines = signatureStartIdx >= 0 ? allLines.slice(0, signatureStartIdx) : allLines;
-  const sigLines = signatureStartIdx >= 0 ? allLines.slice(signatureStartIdx) : [];
-
-  let hasTitle = false;
-  for (let i = 0; i < Math.min(bodyLines.length, 6); i++) {
-    if (/^(SURAT KETERANGAN|SURAT PENGANTAR|SURAT UNDANGAN|SURAT PERNYATAAN|SURAT TUGAS)/i.test(bodyLines[i].trim())) {
-      hasTitle = true;
-      break;
-    }
-  }
-
-  let dateLine: string | null = null;
-  const dateIdx = sigLines.findIndex(l => /^(kota\s+)?(cimahi|bandung|jakarta),?\s+\d/i.test(l.trim()));
-  if (dateIdx >= 0) {
-    dateLine = sigLines[dateIdx].trim();
-    sigLines.splice(dateIdx, 1);
-  } else {
-    for (let i = bodyLines.length - 1; i >= Math.max(0, bodyLines.length - 5); i--) {
-      if (/^(kota\s+)?(cimahi|bandung|jakarta),?\s+\d/i.test(bodyLines[i].trim())) {
-        dateLine = bodyLines[i].trim();
-        bodyLines.splice(i, 1);
-        break;
-      }
-    }
-  }
-
-  const isTwoColSig = hasTwoColumnSignature(sigLines);
-
-  return { bodyLines, sigLines, hasTitle, dateLine, isTwoColSig };
-}
-
-function estimateHeight(doc: jsPDF, parsed: ParsedContent, nomorSurat: string | null | undefined, lh: number, fs: number, contentWidth: number, colonPos: number): number {
-  let h = 0;
-
-  if (nomorSurat && !parsed.hasTitle) {
-    h += lh;
-  }
-
-  let prevWasBiodata = false;
-
-  for (let i = 0; i < parsed.bodyLines.length; i++) {
-    const rawLine = parsed.bodyLines[i];
-    const trimmed = rawLine.trim();
-
-    if (trimmed === "") {
-      prevWasBiodata = false;
-      h += lh * 0.4;
-      continue;
-    }
-
-    const isTitleLine = /^(SURAT KETERANGAN|SURAT PENGANTAR|SURAT UNDANGAN|SURAT PERNYATAAN|SURAT TUGAS)/i.test(trimmed);
-    if (isTitleLine) {
-      prevWasBiodata = false;
-      h += lh * 0.3;
-      h += lh;
-      if (nomorSurat) h += lh;
-      h += lh * 0.3;
-      continue;
-    }
-
-    if (prevWasBiodata && /^\s{5,}/.test(rawLine) && !isBiodataLine(rawLine)) {
-      doc.setFontSize(fs);
-      const contMaxW = contentWidth - (colonPos + 3);
-      const wrapped = doc.splitTextToSize(trimmed, contMaxW);
-      h += wrapped.length * lh;
-      continue;
-    }
-
-    if (isBiodataLine(rawLine)) {
-      prevWasBiodata = true;
-      doc.setFontSize(fs);
-      const colonIdx = rawLine.indexOf(":");
-      const value = rawLine.substring(colonIdx + 1).trim();
-      const valueMaxW = contentWidth - (colonPos + 3);
-      const wrapped = doc.splitTextToSize(value, valueMaxW);
-      h += Math.max(1, wrapped.length) * lh;
-      continue;
-    }
-
-    prevWasBiodata = false;
-    doc.setFontSize(fs);
-    const wrapped = doc.splitTextToSize(trimmed, contentWidth);
-    h += wrapped.length * lh;
-  }
-
-  if (parsed.dateLine) {
-    h += lh * 1.5;
-  }
-
-  if (parsed.sigLines.length > 0) {
-    if (parsed.isTwoColSig) {
-      let nameLineCount = 0;
-      let otherLineCount = 0;
-      for (const l of parsed.sigLines) {
-        const trimmed = l.trim();
-        if (!trimmed) { otherLineCount++; continue; }
-        const split = splitTwoColumns(l);
-        const left = split ? split.left : trimmed;
-        if (/^\(.*\)$/.test(left)) {
-          nameLineCount++;
-        } else {
-          otherLineCount++;
-        }
-      }
-      h += otherLineCount * lh;
-      h += nameLineCount * (lh + lh * 2.5);
-    } else {
-      for (const l of parsed.sigLines) {
-        const trimmed = l.trim();
-        if (!trimmed) { h += lh * 0.3; continue; }
-        if (/^\(.*\)$/.test(trimmed)) {
-          h += lh * 3 + lh;
-        } else {
-          h += lh;
-        }
-      }
-    }
-  }
-
-  return h;
+  return count >= 2;
 }
 
 export async function generateSuratPDF(options: {
@@ -245,39 +102,90 @@ export async function generateSuratPDF(options: {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = 210;
   const marginLeft = 25;
-  const marginRight = 20;
+  const marginRight = 25;
   const contentWidth = pageWidth - marginLeft - marginRight;
   const pageHeight = 297;
   const startY = 42;
   const bottomMargin = 15;
   const availableHeight = pageHeight - startY - bottomMargin;
+  const colonMM = 35;
 
   let img: HTMLImageElement | null = null;
-  try {
-    img = await loadImage(logoImg);
-  } catch {}
+  try { img = await loadImage(logoImg); } catch {}
 
-  const parsed = parseContent(isiSurat);
+  let processedText = cleanText(isiSurat);
+  processedText = processedText.replace(/^Nomor\s*:.*$/m, "").trim();
+  const allLines = processedText.split("\n");
 
-  const baseFontSize = 10;
-  const baseLineHeight = 4.8;
-  const colonPos = 42;
+  const sigStart = findSignatureStart(allLines);
+  const bodyLines = sigStart >= 0 ? allLines.slice(0, sigStart) : [...allLines];
+  const sigLines = sigStart >= 0 ? allLines.slice(sigStart) : [];
 
-  let estHeight = estimateHeight(doc, parsed, nomorSurat, baseLineHeight, baseFontSize, contentWidth, colonPos);
-  let scale = 1;
-  if (estHeight > availableHeight) {
-    scale = availableHeight / estHeight;
-    if (scale < 0.6) scale = 0.6;
+  let dateLine: string | null = null;
+  const dateIdxSig = sigLines.findIndex(l => isDateLine(l));
+  if (dateIdxSig >= 0) {
+    dateLine = sigLines[dateIdxSig].trim();
+    sigLines.splice(dateIdxSig, 1);
   }
 
-  const fontSize = Math.round(baseFontSize * scale * 10) / 10;
-  const lineHeight = baseLineHeight * scale;
-  const titleFontSize = Math.round(12 * scale * 10) / 10;
+  let hasTitle = false;
+  for (let i = 0; i < Math.min(bodyLines.length, 8); i++) {
+    if (/^(SURAT KETERANGAN|SURAT PENGANTAR|SURAT UNDANGAN|SURAT PERNYATAAN|SURAT TUGAS)/i.test(bodyLines[i].trim())) {
+      hasTitle = true;
+      break;
+    }
+  }
+
+  const isTwoCol = hasTwoColumnSig(sigLines);
+
+  let totalBodyLines = 0;
+  for (const l of bodyLines) {
+    const t = l.trim();
+    if (!t) { totalBodyLines += 0.4; continue; }
+    if (/^(SURAT KETERANGAN|SURAT PENGANTAR|SURAT UNDANGAN|SURAT PERNYATAAN|SURAT TUGAS)/i.test(t)) {
+      totalBodyLines += 2.5;
+      continue;
+    }
+    doc.setFontSize(10);
+    if (isBiodataLine(l)) {
+      const ci = l.indexOf(":");
+      const val = l.substring(ci + 1).trim();
+      const valW = contentWidth - colonMM - 3;
+      const w = doc.splitTextToSize(val, valW);
+      totalBodyLines += Math.max(1, w.length);
+    } else {
+      const w = doc.splitTextToSize(t, contentWidth);
+      totalBodyLines += w.length;
+    }
+  }
+
+  let sigEstLines = 0;
+  if (dateLine) sigEstLines += 1.5;
+  for (const l of sigLines) {
+    const t = l.trim();
+    if (!t) { sigEstLines += 0.5; continue; }
+    const s = splitTwoColumns(l);
+    const left = s ? s.left : t;
+    if (/^\(.*\)$/.test(left)) { sigEstLines += 4; continue; }
+    sigEstLines += 1;
+  }
+  if (nomorSurat && !hasTitle) totalBodyLines += 1;
+
+  const totalLines = totalBodyLines + sigEstLines;
+  const baseLH = 4.8;
+  const neededHeight = totalLines * baseLH;
+  let scale = 1;
+  if (neededHeight > availableHeight) {
+    scale = availableHeight / neededHeight;
+    if (scale < 0.55) scale = 0.55;
+  }
+
+  const fs = Math.max(7, Math.round(10 * scale * 10) / 10);
+  const lh = baseLH * scale;
+  const titleFs = Math.max(8, Math.round(12 * scale * 10) / 10);
 
   const drawKop = () => {
-    if (img) {
-      doc.addImage(img, "PNG", marginLeft, 12, 18, 18);
-    }
+    if (img) doc.addImage(img, "PNG", marginLeft, 12, 18, 18);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.text("RUKUN WARGA 03", pageWidth / 2, 16, { align: "center" });
@@ -298,226 +206,187 @@ export async function generateSuratPDF(options: {
   drawKop();
   let y = startY;
 
-  const printText = (text: string, opts?: { bold?: boolean; center?: boolean; fs?: number; underline?: boolean; indent?: number }) => {
-    const fs2 = opts?.fs || fontSize;
-    doc.setFontSize(fs2);
-    doc.setFont("helvetica", opts?.bold ? "bold" : "normal");
-
-    if (opts?.center) {
-      doc.text(text, pageWidth / 2, y, { align: "center" });
-      if (opts?.underline) {
-        const tw = doc.getTextWidth(text);
-        doc.setLineWidth(0.3);
-        doc.line(pageWidth / 2 - tw / 2, y + 1, pageWidth / 2 + tw / 2, y + 1);
-      }
-      y += lineHeight;
-    } else {
-      const xPos = marginLeft + (opts?.indent || 0);
-      const maxW = contentWidth - (opts?.indent || 0);
-      const wrapped = doc.splitTextToSize(text, maxW);
-      for (const wl of wrapped) {
-        doc.text(wl, xPos, y);
-        y += lineHeight;
-      }
-    }
+  const printBody = (text: string) => {
+    doc.setFontSize(fs);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(fontSize);
+    const lines = doc.splitTextToSize(text, contentWidth);
+    for (const wl of lines) {
+      doc.text(wl, marginLeft, y);
+      y += lh;
+    }
   };
 
-  const printBiodataLine = (line: string, indent: number = 0) => {
-    const colonIdx = line.indexOf(":");
-    const label = line.substring(0, colonIdx).trim();
-    const value = line.substring(colonIdx + 1).trim();
-
-    doc.setFontSize(fontSize);
+  const printCentered = (text: string, bold?: boolean, size?: number) => {
+    doc.setFontSize(size || fs);
+    doc.setFont("helvetica", bold ? "bold" : "normal");
+    doc.text(text, pageWidth / 2, y, { align: "center" });
+    y += lh;
     doc.setFont("helvetica", "normal");
+    doc.setFontSize(fs);
+  };
 
-    const baseX = marginLeft + indent;
-    const colonX = baseX + colonPos;
-    doc.text(label, baseX, y);
+  const printBiodata = (line: string) => {
+    const ci = line.indexOf(":");
+    const label = line.substring(0, ci).trim();
+    const value = line.substring(ci + 1).trim();
+    doc.setFontSize(fs);
+    doc.setFont("helvetica", "normal");
+    const colonX = marginLeft + colonMM;
+    doc.text(label, marginLeft, y);
     doc.text(":", colonX, y);
-
     const valueX = colonX + 3;
-    const valueMaxW = contentWidth - indent - colonPos - 3;
-    const wrapped = doc.splitTextToSize(value, valueMaxW);
+    const maxW = contentWidth - colonMM - 3;
+    const wrapped = doc.splitTextToSize(value, maxW);
     for (let j = 0; j < wrapped.length; j++) {
       doc.text(wrapped[j], valueX, y);
-      y += lineHeight;
+      y += lh;
     }
   };
 
-  const printTwoColumnSignature = (sigLinesInput: string[]) => {
-    const leftColCenter = marginLeft + contentWidth * 0.25;
-    const rightColCenter = marginLeft + contentWidth * 0.75;
-    const colWidth = contentWidth * 0.45;
-
-    for (let i = 0; i < sigLinesInput.length; i++) {
-      const rawLine = sigLinesInput[i];
-      const trimmed = rawLine.trim();
-      if (!trimmed) {
-        y += lineHeight;
-        continue;
-      }
-
-      const split = splitTwoColumns(rawLine);
-      const left = split ? split.left : trimmed;
-      const right = split ? split.right : "";
-
-      const leftIsName = /^\(.*\)$/.test(left);
-      const rightIsName = /^\(.*\)$/.test(right);
-
-      if (leftIsName || rightIsName) {
-        y += lineHeight * 2.5;
-      }
-
-      doc.setFontSize(fontSize);
-
-      if (left) {
-        doc.setFont("helvetica", leftIsName ? "bold" : "normal");
-        const lw = doc.getTextWidth(left);
-        doc.text(left, leftColCenter - lw / 2, y);
-        if (leftIsName) {
-          doc.setLineWidth(0.3);
-          doc.line(leftColCenter - lw / 2, y + 1, leftColCenter + lw / 2, y + 1);
-        }
-      }
-      if (right) {
-        doc.setFont("helvetica", rightIsName ? "bold" : "normal");
-        const rw = doc.getTextWidth(right);
-        doc.text(right, rightColCenter - rw / 2, y);
-        if (rightIsName) {
-          doc.setLineWidth(0.3);
-          doc.line(rightColCenter - rw / 2, y + 1, rightColCenter + rw / 2, y + 1);
-        }
-      }
-
-      doc.setFont("helvetica", "normal");
-      y += lineHeight;
-    }
-  };
-
-  const printVerticalSignature = (sigLinesInput: string[]) => {
-    const sigCenterX = marginLeft + contentWidth * 0.75;
-    const sigWidth = contentWidth * 0.45;
-
-    for (let i = 0; i < sigLinesInput.length; i++) {
-      const line = sigLinesInput[i].trim();
-      if (!line) {
-        y += lineHeight * 0.3;
-        continue;
-      }
-
-      const isName = /^\(.*\)$/.test(line);
-
-      if (isName) {
-        y += lineHeight * 2.5;
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(fontSize);
-        const nw = doc.getTextWidth(line);
-        doc.text(line, sigCenterX - nw / 2, y);
-        doc.setLineWidth(0.3);
-        doc.line(sigCenterX - nw / 2, y + 1, sigCenterX + nw / 2, y + 1);
-        doc.setFont("helvetica", "normal");
-        y += lineHeight;
-        continue;
-      }
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(fontSize);
-      const tw = doc.getTextWidth(line);
-      if (tw < sigWidth) {
-        doc.text(line, sigCenterX - tw / 2, y);
-      } else {
-        const wrapped = doc.splitTextToSize(line, sigWidth);
-        for (const wl of wrapped) {
-          doc.text(wl, sigCenterX - sigWidth / 2, y);
-          y += lineHeight;
-        }
-        continue;
-      }
-      y += lineHeight;
-    }
-  };
-
-  if (nomorSurat && !parsed.hasTitle) {
-    printBiodataLine(`Nomor : ${nomorSurat}`);
+  if (nomorSurat && !hasTitle) {
+    printBiodata(`Nomor : ${nomorSurat}`);
   }
 
-  let nomorPrintedUnderTitle = false;
-  let inBiodataBlock = false;
+  let nomorDone = false;
   let prevWasBiodata = false;
-  const bioIndent = 5;
 
-  for (let i = 0; i < parsed.bodyLines.length; i++) {
-    const rawLine = parsed.bodyLines[i];
-    const trimmed = rawLine.trim();
+  for (let i = 0; i < bodyLines.length; i++) {
+    const raw = bodyLines[i];
+    const trimmed = raw.trim();
 
     if (trimmed === "") {
-      if (inBiodataBlock) inBiodataBlock = false;
       prevWasBiodata = false;
-      y += lineHeight * 0.4;
+      y += lh * 0.4;
       continue;
     }
 
-    const isTitleLine = /^(SURAT KETERANGAN|SURAT PENGANTAR|SURAT UNDANGAN|SURAT PERNYATAAN|SURAT TUGAS)/i.test(trimmed);
-    if (isTitleLine) {
-      inBiodataBlock = false;
+    if (/^(SURAT KETERANGAN|SURAT PENGANTAR|SURAT UNDANGAN|SURAT PERNYATAAN|SURAT TUGAS)/i.test(trimmed)) {
       prevWasBiodata = false;
-      y += lineHeight * 0.3;
+      y += lh * 0.3;
       const spaced = trimmed.split("").join(" ").replace(/\s{3,}/g, "   ");
-      printText(spaced, { bold: true, center: true, fs: titleFontSize });
-      if (nomorSurat && !nomorPrintedUnderTitle) {
-        printText(`Nomor: ${nomorSurat}`, { center: true, fs: fontSize });
-        nomorPrintedUnderTitle = true;
+      printCentered(spaced, true, titleFs);
+      if (nomorSurat && !nomorDone) {
+        printCentered(`Nomor: ${nomorSurat}`, false, fs);
+        nomorDone = true;
       }
-      y += lineHeight * 0.3;
+      y += lh * 0.3;
       continue;
     }
 
-    if (prevWasBiodata && /^\s{5,}/.test(rawLine) && !isBiodataLine(rawLine)) {
-      const contX = marginLeft + bioIndent + colonPos + 3;
-      const contMaxW = contentWidth - bioIndent - colonPos - 3;
-      doc.setFontSize(fontSize);
+    if (prevWasBiodata && /^\s{4,}/.test(raw) && !isBiodataLine(raw)) {
+      doc.setFontSize(fs);
       doc.setFont("helvetica", "normal");
-      const wrapped = doc.splitTextToSize(trimmed, contMaxW);
+      const contX = marginLeft + colonMM + 3;
+      const contW = contentWidth - colonMM - 3;
+      const wrapped = doc.splitTextToSize(trimmed, contW);
       for (const wl of wrapped) {
         doc.text(wl, contX, y);
-        y += lineHeight;
+        y += lh;
       }
       continue;
     }
 
-    if (isBiodataLine(rawLine)) {
-      inBiodataBlock = true;
+    if (isBiodataLine(raw)) {
       prevWasBiodata = true;
-      printBiodataLine(rawLine, bioIndent);
+      printBiodata(raw);
       continue;
     }
 
-    if (inBiodataBlock && !isBiodataLine(rawLine)) {
-      inBiodataBlock = false;
-    }
     prevWasBiodata = false;
-
-    printText(trimmed);
+    printBody(trimmed);
   }
 
-  if (parsed.dateLine || parsed.sigLines.length > 0) {
-    y += lineHeight * 0.5;
+  if (dateLine || sigLines.length > 0) {
+    y += lh * 0.5;
   }
 
-  if (parsed.dateLine) {
+  if (dateLine) {
+    doc.setFontSize(fs);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(fontSize);
-    doc.text(parsed.dateLine, pageWidth - marginRight, y, { align: "right" });
-    y += lineHeight * 1.2;
+    doc.text(dateLine, pageWidth - marginRight, y, { align: "right" });
+    y += lh * 1.2;
   }
 
-  if (parsed.sigLines.length > 0) {
-    if (parsed.isTwoColSig) {
-      printTwoColumnSignature(parsed.sigLines);
+  if (sigLines.length > 0) {
+    if (isTwoCol) {
+      const leftCenter = marginLeft + contentWidth * 0.25;
+      const rightCenter = marginLeft + contentWidth * 0.75;
+
+      for (const rawLine of sigLines) {
+        const trimmed = rawLine.trim();
+        if (!trimmed) { y += lh; continue; }
+
+        const split = splitTwoColumns(rawLine);
+        const left = split ? split.left : trimmed;
+        const right = split ? split.right : "";
+
+        const leftIsName = /^\(.*\)$/.test(left);
+        const rightIsName = /^\(.*\)$/.test(right);
+
+        if (leftIsName || rightIsName) {
+          y += lh * 2.5;
+        }
+
+        doc.setFontSize(fs);
+
+        if (left) {
+          doc.setFont("helvetica", leftIsName ? "bold" : "normal");
+          const w = doc.getTextWidth(left);
+          doc.text(left, leftCenter - w / 2, y);
+          if (leftIsName) {
+            doc.setLineWidth(0.3);
+            doc.line(leftCenter - w / 2, y + 1, leftCenter + w / 2, y + 1);
+          }
+        }
+        if (right) {
+          doc.setFont("helvetica", rightIsName ? "bold" : "normal");
+          const w = doc.getTextWidth(right);
+          doc.text(right, rightCenter - w / 2, y);
+          if (rightIsName) {
+            doc.setLineWidth(0.3);
+            doc.line(rightCenter - w / 2, y + 1, rightCenter + w / 2, y + 1);
+          }
+        }
+        doc.setFont("helvetica", "normal");
+        y += lh;
+      }
     } else {
-      printVerticalSignature(parsed.sigLines);
+      const sigCenter = marginLeft + contentWidth * 0.75;
+      const sigW = contentWidth * 0.45;
+
+      for (const rawLine of sigLines) {
+        const line = rawLine.trim();
+        if (!line) { y += lh * 0.3; continue; }
+
+        const isName = /^\(.*\)$/.test(line);
+        if (isName) {
+          y += lh * 2.5;
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(fs);
+          const w = doc.getTextWidth(line);
+          doc.text(line, sigCenter - w / 2, y);
+          doc.setLineWidth(0.3);
+          doc.line(sigCenter - w / 2, y + 1, sigCenter + w / 2, y + 1);
+          doc.setFont("helvetica", "normal");
+          y += lh;
+          continue;
+        }
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(fs);
+        const tw = doc.getTextWidth(line);
+        if (tw <= sigW) {
+          doc.text(line, sigCenter - tw / 2, y);
+        } else {
+          const wrapped = doc.splitTextToSize(line, sigW);
+          for (const wl of wrapped) {
+            doc.text(wl, sigCenter - sigW / 2, y);
+            y += lh;
+          }
+          continue;
+        }
+        y += lh;
+      }
     }
   }
 
