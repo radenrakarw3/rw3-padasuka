@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,9 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Home, Users, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Search, Home, Users, ChevronLeft, ChevronRight, Download, Upload, X, FileText } from "lucide-react";
 import { statusRumahOptions, listrikOptions, rtOptions } from "@/lib/constants";
-import type { KartuKeluarga } from "@shared/schema";
+import type { KartuKeluarga, Warga } from "@shared/schema";
 
 const PER_PAGE = 10;
 
@@ -27,21 +27,78 @@ export default function AdminKelolaKK() {
     jumlahPenghuni: "1", kondisiBangunan: "Permanen", sumberAir: "PDAM",
     sanitasiWc: "Jamban Sendiri", listrik: "PLN 900 VA", penerimaBansos: false,
   });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: kkList, isLoading } = useQuery<KartuKeluarga[]>({ queryKey: ["/api/kk"] });
+  const { data: wargaList } = useQuery<Warga[]>({ queryKey: ["/api/warga"] });
+
+  const kepalaByKkId = useMemo(() => {
+    const map: Record<number, Warga> = {};
+    wargaList?.forEach(w => {
+      if (w.kedudukanKeluarga === "Kepala Keluarga") {
+        map[w.kkId] = w;
+      }
+    });
+    return map;
+  }, [wargaList]);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const validTypes = ["image/jpeg", "image/jpg", "image/png", "application/pdf"];
+    if (!validTypes.includes(file.type)) {
+      toast({ title: "Format tidak didukung", description: "Gunakan JPG, PNG, atau PDF", variant: "destructive" });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "File terlalu besar", description: "Maksimal 5MB", variant: "destructive" });
+      return;
+    }
+    setSelectedFile(file);
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = (ev) => setFilePreview(ev.target?.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setFilePreview(null);
+    }
+  };
+
+  const clearFile = () => {
+    setSelectedFile(null);
+    setFilePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("POST", "/api/kk", {
+      const res = await apiRequest("POST", "/api/kk", {
         ...form,
         rt: parseInt(form.rt),
         jumlahPenghuni: parseInt(form.jumlahPenghuni),
       });
+      const created = await res.json();
+      if (selectedFile && created.id) {
+        const formData = new FormData();
+        formData.append("file", selectedFile);
+        const uploadRes = await fetch(`/api/upload/kk/${created.id}`, {
+          method: "POST",
+          body: formData,
+          credentials: "include",
+        });
+        if (!uploadRes.ok) {
+          const err = await uploadRes.json().catch(() => ({ message: "Upload gagal" }));
+          throw new Error(`KK disimpan, tapi upload foto gagal: ${err.message}`);
+        }
+      }
     },
     onSuccess: () => {
       toast({ title: "KK berhasil ditambahkan" });
       setDialogOpen(false);
       setForm({ nomorKk: "", rt: "1", alamat: "", statusRumah: "Milik Sendiri", jumlahPenghuni: "1", kondisiBangunan: "Permanen", sumberAir: "PDAM", sanitasiWc: "Jamban Sendiri", listrik: "PLN 900 VA", penerimaBansos: false });
+      clearFile();
       queryClient.invalidateQueries({ queryKey: ["/api/kk"] });
     },
     onError: (err: any) => toast({ title: "Gagal", description: err.message, variant: "destructive" }),
@@ -71,7 +128,7 @@ export default function AdminKelolaKK() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-bold" data-testid="text-kk-title">Kartu Keluarga</h2>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) clearFile(); }}>
           <DialogTrigger asChild>
             <Button className="gap-1.5" data-testid="button-tambah-kk">
               <Plus className="w-4 h-4" /> Tambah KK
@@ -125,6 +182,46 @@ export default function AdminKelolaKK() {
                   </Select>
                 </div>
               </div>
+              <div className="space-y-1">
+                <Label className="text-sm">Upload Foto KK</Label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.pdf"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  data-testid="input-file-kk"
+                />
+                {selectedFile ? (
+                  <div className="flex items-center gap-2 rounded-md border p-2">
+                    {filePreview ? (
+                      <img src={filePreview} alt="Preview" className="w-16 h-16 object-cover rounded-md" data-testid="img-preview-kk" />
+                    ) : (
+                      <div className="w-16 h-16 rounded-md bg-muted flex items-center justify-center">
+                        <FileText className="w-6 h-6 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs truncate">{selectedFile.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{(selectedFile.size / 1024).toFixed(0)} KB</p>
+                    </div>
+                    <Button size="icon" variant="ghost" onClick={clearFile} data-testid="button-clear-file-kk">
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full gap-1.5"
+                    onClick={() => fileInputRef.current?.click()}
+                    data-testid="button-upload-kk"
+                  >
+                    <Upload className="w-4 h-4" /> Pilih File
+                  </Button>
+                )}
+                <p className="text-[10px] text-muted-foreground">JPG, PNG, atau PDF. Maks 5MB</p>
+              </div>
               <Button className="w-full h-10" onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !form.nomorKk || !form.alamat} data-testid="button-simpan-kk">
                 {createMutation.isPending ? "Menyimpan..." : "Simpan KK"}
               </Button>
@@ -158,30 +255,50 @@ export default function AdminKelolaKK() {
         <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
       ) : (
         <div className="space-y-2">
-          {paginated.map(k => (
-            <Card key={k.id} data-testid={`card-kk-${k.id}`}>
-              <CardContent className="p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-9 h-9 rounded-lg bg-[hsl(163,55%,22%)] flex items-center justify-center flex-shrink-0">
-                      <Home className="w-4 h-4 text-white" />
+          {paginated.map(k => {
+            const kepala = kepalaByKkId[k.id];
+            return (
+              <Card key={k.id} data-testid={`card-kk-${k.id}`}>
+                <CardContent className="p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-9 h-9 rounded-lg bg-[hsl(163,55%,22%)] flex items-center justify-center flex-shrink-0">
+                        <Home className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-mono font-medium truncate">{k.nomorKk}</p>
+                        {kepala && (
+                          <p className="text-[11px] font-medium truncate" data-testid={`text-kepala-${k.id}`}>{kepala.namaLengkap}</p>
+                        )}
+                        <p className="text-[11px] text-muted-foreground truncate">{k.alamat}</p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-mono font-medium truncate">{k.nomorKk}</p>
-                      <p className="text-[11px] text-muted-foreground truncate">{k.alamat}</p>
+                    <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
+                      <Badge variant="secondary" className="text-[10px]">RT {k.rt.toString().padStart(2,"0")}</Badge>
+                      <Badge variant="secondary" className="text-[10px] gap-0.5">
+                        <Users className="w-3 h-3" />{k.jumlahPenghuni}
+                      </Badge>
+                      {k.penerimaBansos && <Badge className="bg-green-100 text-green-800 text-[10px]">Bansos</Badge>}
+                      {k.fotoKk && (
+                        <Button size="icon" variant="ghost" asChild data-testid={`button-download-kk-${k.id}`}>
+                          <a href={k.fotoKk} download target="_blank" rel="noopener noreferrer" title="Download KK">
+                            <Download className="w-4 h-4" />
+                          </a>
+                        </Button>
+                      )}
+                      {kepala?.fotoKtp && (
+                        <Button size="icon" variant="ghost" asChild data-testid={`button-download-ktp-kepala-${k.id}`}>
+                          <a href={kepala.fotoKtp} download target="_blank" rel="noopener noreferrer" title="Download KTP Kepala Keluarga">
+                            <Download className="w-4 h-4" />
+                          </a>
+                        </Button>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <Badge variant="secondary" className="text-[10px]">RT {k.rt.toString().padStart(2,"0")}</Badge>
-                    <Badge variant="secondary" className="text-[10px] gap-0.5">
-                      <Users className="w-3 h-3" />{k.jumlahPenghuni}
-                    </Badge>
-                    {k.penerimaBansos && <Badge className="bg-green-100 text-green-800 text-[10px]">Bansos</Badge>}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 

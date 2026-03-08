@@ -42,9 +42,20 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
 - **PDF Download**: A4 format with KOP surat (logo + RW03 letterhead), generated client-side using jsPDF (`client/src/lib/pdf-surat.ts`)
 - **Arsip Surat**: Admin archive page listing all approved surat warga + surat RW with nomor surat, searchable and filterable
 
+## File Upload System
+- **Backend**: Multer middleware, files stored in `uploads/kk/` and `uploads/ktp/` directories
+- **Static serving**: `/uploads` path serves uploaded files via Express static middleware
+- **Endpoints**: `POST /api/upload/kk/:kkId` and `POST /api/upload/ktp/:wargaId`
+- **Limits**: 5MB max, accepts JPG/JPEG/PNG/PDF
+- **Access control**: Warga can only upload for their own KK/KTP, admin can upload for any
+- **Old file cleanup**: Previous file is deleted when replaced
+- **DB columns**: `kartu_keluarga.foto_kk` and `warga.foto_ktp` store file paths
+- **Upload sources**: Admin KK form, Admin Warga form, Warga profile page
+- **Download**: Admin KK cards show download buttons for KK and KTP kepala keluarga when files exist
+
 ## Data Model (shared/schema.ts)
-- `kartu_keluarga`: KK data with RT assignment
-- `warga`: Resident data linked to KK
+- `kartu_keluarga`: KK data with RT assignment, foto_kk for uploaded KK scan
+- `warga`: Resident data linked to KK, foto_ktp for uploaded KTP scan
 - `rt_data`: RT 01-07 with ketua names
 - `laporan`: Reports from residents
 - `surat_warga`: Letter requests (AI-generated)

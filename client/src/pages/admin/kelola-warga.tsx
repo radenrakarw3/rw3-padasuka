@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, User, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Search, User, ChevronLeft, ChevronRight, Upload, X, FileText } from "lucide-react";
 import type { KartuKeluarga } from "@shared/schema";
 import { pekerjaanOptions, agamaOptions, jenisKelaminOptions, statusPerkawinanOptions, kedudukanKeluargaOptions } from "@/lib/constants";
 
@@ -26,24 +26,70 @@ export default function AdminKelolaWarga() {
     jenisKelamin: "Laki-laki", statusPerkawinan: "Belum Kawin",
     agama: "Islam", kedudukanKeluarga: "Anak", tanggalLahir: "", pekerjaan: "",
   });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: kkList } = useQuery<KartuKeluarga[]>({ queryKey: ["/api/kk"] });
 
   const { data: wargaList, isLoading } = useQuery<any[]>({ queryKey: ["/api/warga-with-kk"] });
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const validTypes = ["image/jpeg", "image/jpg", "image/png", "application/pdf"];
+    if (!validTypes.includes(file.type)) {
+      toast({ title: "Format tidak didukung", description: "Gunakan JPG, PNG, atau PDF", variant: "destructive" });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "File terlalu besar", description: "Maksimal 5MB", variant: "destructive" });
+      return;
+    }
+    setSelectedFile(file);
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = (ev) => setFilePreview(ev.target?.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setFilePreview(null);
+    }
+  };
+
+  const clearFile = () => {
+    setSelectedFile(null);
+    setFilePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   const createMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("POST", "/api/warga", {
+      const res = await apiRequest("POST", "/api/warga", {
         ...form,
         kkId: parseInt(form.kkId),
         nomorWhatsapp: form.nomorWhatsapp || null,
         tanggalLahir: form.tanggalLahir || null,
         pekerjaan: form.pekerjaan || null,
       });
+      const created = await res.json();
+      if (selectedFile && created.id) {
+        const formData = new FormData();
+        formData.append("file", selectedFile);
+        const uploadRes = await fetch(`/api/upload/ktp/${created.id}`, {
+          method: "POST",
+          body: formData,
+          credentials: "include",
+        });
+        if (!uploadRes.ok) {
+          const err = await uploadRes.json().catch(() => ({ message: "Upload gagal" }));
+          throw new Error(`Warga disimpan, tapi upload foto gagal: ${err.message}`);
+        }
+      }
     },
     onSuccess: () => {
       toast({ title: "Warga ditambahkan" });
       setDialogOpen(false);
+      clearFile();
       queryClient.invalidateQueries({ queryKey: ["/api/warga-with-kk"] });
       queryClient.invalidateQueries({ queryKey: ["/api/warga"] });
     },
@@ -70,7 +116,7 @@ export default function AdminKelolaWarga() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-bold" data-testid="text-warga-title">Data Warga</h2>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) clearFile(); }}>
           <DialogTrigger asChild>
             <Button className="gap-1.5" data-testid="button-tambah-warga">
               <Plus className="w-4 h-4" /> Tambah Warga
@@ -150,6 +196,46 @@ export default function AdminKelolaWarga() {
                     {pekerjaanOptions.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-sm">Upload Foto KTP</Label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.pdf"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  data-testid="input-file-ktp"
+                />
+                {selectedFile ? (
+                  <div className="flex items-center gap-2 rounded-md border p-2">
+                    {filePreview ? (
+                      <img src={filePreview} alt="Preview" className="w-16 h-16 object-cover rounded-md" data-testid="img-preview-ktp" />
+                    ) : (
+                      <div className="w-16 h-16 rounded-md bg-muted flex items-center justify-center">
+                        <FileText className="w-6 h-6 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs truncate">{selectedFile.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{(selectedFile.size / 1024).toFixed(0)} KB</p>
+                    </div>
+                    <Button size="icon" variant="ghost" onClick={clearFile} data-testid="button-clear-file-ktp">
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full gap-1.5"
+                    onClick={() => fileInputRef.current?.click()}
+                    data-testid="button-upload-ktp"
+                  >
+                    <Upload className="w-4 h-4" /> Pilih File
+                  </Button>
+                )}
+                <p className="text-[10px] text-muted-foreground">JPG, PNG, atau PDF. Maks 5MB</p>
               </div>
               <Button className="w-full h-10" onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !form.kkId || !form.namaLengkap || !form.nik} data-testid="button-simpan-warga">
                 {createMutation.isPending ? "Menyimpan..." : "Simpan Warga"}

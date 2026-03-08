@@ -2,6 +2,10 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import session from "express-session";
 import bcrypt from "bcrypt";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import express from "express";
 import { storage } from "./storage";
 import { insertKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertProfileEditSchema, insertWaBlastSchema } from "@shared/schema";
 
@@ -104,6 +108,32 @@ async function notifyWarga(wargaId: number, template: string) {
 
 const otpStore = new Map<string, { otp: string; kkId: number; nomorKk: string; phone: string; expiresAt: number; attempts: number; lastRequestAt: number }>();
 
+const uploadsDir = path.join(process.cwd(), "uploads");
+fs.mkdirSync(path.join(uploadsDir, "kk"), { recursive: true });
+fs.mkdirSync(path.join(uploadsDir, "ktp"), { recursive: true });
+
+const uploadStorage = multer.diskStorage({
+  destination: (req, _file, cb) => {
+    const type = (req as any).uploadType || "kk";
+    cb(null, path.join(uploadsDir, type));
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+  },
+});
+
+const upload = multer({
+  storage: uploadStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = [".jpg", ".jpeg", ".png", ".pdf"];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowed.includes(ext)) cb(null, true);
+    else cb(new Error("Format file tidak didukung. Gunakan JPG, PNG, atau PDF."));
+  },
+});
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -116,6 +146,13 @@ export async function registerRoutes(
       cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 },
     })
   );
+
+  app.use("/uploads", (req: Request, res: Response, next: any) => {
+    if (!req.session?.kkId && !req.session?.isAdmin) {
+      return res.status(401).json({ message: "Silakan login terlebih dahulu" });
+    }
+    next();
+  }, express.static(uploadsDir));
 
   function requireAuth(req: Request, res: Response, next: any) {
     if (!req.session.kkId && !req.session.isAdmin) {
@@ -747,6 +784,62 @@ Buat surat dalam format teks biasa yang rapi dan profesional.`;
       res.json({ sent: successCount, total: recipients.length, blast: updated[0] });
     } catch (error: any) {
       res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/upload/kk/:kkId", requireAuth, (req: Request, res: Response, next: any) => {
+    (req as any).uploadType = "kk";
+    next();
+  }, upload.single("file"), async (req: Request, res: Response) => {
+    try {
+      const kkId = parseInt(req.params.kkId);
+      if (!req.file) return res.status(400).json({ message: "File harus diunggah" });
+
+      const kk = await storage.getKkById(kkId);
+      if (!kk) return res.status(404).json({ message: "KK tidak ditemukan" });
+
+      if (!req.session.isAdmin && req.session.kkId !== kkId) {
+        return res.status(403).json({ message: "Tidak memiliki akses" });
+      }
+
+      if (kk.fotoKk) {
+        const oldPath = path.join(uploadsDir, "kk", path.basename(kk.fotoKk));
+        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      }
+
+      const filePath = `/uploads/kk/${req.file.filename}`;
+      await storage.updateKk(kkId, { fotoKk: filePath } as any);
+      res.json({ path: filePath });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/upload/ktp/:wargaId", requireAuth, (req: Request, res: Response, next: any) => {
+    (req as any).uploadType = "ktp";
+    next();
+  }, upload.single("file"), async (req: Request, res: Response) => {
+    try {
+      const wargaId = parseInt(req.params.wargaId);
+      if (!req.file) return res.status(400).json({ message: "File harus diunggah" });
+
+      const w = await storage.getWargaById(wargaId);
+      if (!w) return res.status(404).json({ message: "Warga tidak ditemukan" });
+
+      if (!req.session.isAdmin && req.session.kkId !== w.kkId) {
+        return res.status(403).json({ message: "Tidak memiliki akses" });
+      }
+
+      if (w.fotoKtp) {
+        const oldPath = path.join(uploadsDir, "ktp", path.basename(w.fotoKtp));
+        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      }
+
+      const filePath = `/uploads/ktp/${req.file.filename}`;
+      await storage.updateWarga(wargaId, { fotoKtp: filePath } as any);
+      res.json({ path: filePath });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
     }
   });
 

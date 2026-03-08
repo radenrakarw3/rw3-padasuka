@@ -18,6 +18,7 @@ export const kartuKeluarga = pgTable("kartu_keluarga", {
   linkGmaps: text("link_gmaps"),
   latitude: text("latitude"),
   longitude: text("longitude"),
+  fotoKk: text("foto_kk"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -34,6 +35,7 @@ export const warga = pgTable("warga", {
   tanggalLahir: text("tanggal_lahir"),
   pekerjaan: text("pekerjaan"),
   statusKependudukan: text("status_kependudukan").notNull().default("Aktif"),
+  fotoKtp: text("foto_ktp"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
