@@ -9,6 +9,7 @@ import { Clock, CheckCircle, XCircle, FileText, Eye } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useState } from "react";
 import type { SuratWarga, Warga } from "@shared/schema";
+import KopSurat from "@/components/kop-surat";
 
 export default function AdminKelolaSurat() {
   const { toast } = useToast();
@@ -101,9 +102,12 @@ export default function AdminKelolaSurat() {
           <DialogHeader>
             <DialogTitle>Preview Surat</DialogTitle>
           </DialogHeader>
-          <pre className="text-xs whitespace-pre-wrap font-mono bg-muted p-4 rounded-md">
-            {previewSurat?.isiSurat}
-          </pre>
+          <div className="bg-white p-6 rounded-md border shadow-sm">
+            <KopSurat />
+            <pre className="text-xs whitespace-pre-wrap font-mono" data-testid="text-surat-preview">
+              {previewSurat?.isiSurat}
+            </pre>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

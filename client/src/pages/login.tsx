@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { LogIn, Shield, MessageCircle, ArrowLeft, Loader2, User } from "lucide-react";
-import logoImg from "@assets/2f80aef4-6f16-4fd8-8801-982a3e49dd03_1772991075891.JPG";
+import logoImg from "@assets/Untitled_design_(24)_1772993886433.png";
 
 interface WaContact {
   id: number;
@@ -139,11 +139,11 @@ export default function LoginPage() {
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-b from-[hsl(163,55%,22%)] to-[hsl(163,55%,14%)]">
       <div className="w-full max-w-sm space-y-6">
         <div className="flex flex-col items-center space-y-3">
-          <div className="w-24 h-24 rounded-2xl overflow-hidden bg-[hsl(40,45%,55%)] flex items-center justify-center shadow-lg">
+          <div className="w-24 h-24 rounded-2xl overflow-hidden bg-white flex items-center justify-center shadow-lg p-2">
             <img
               src={logoImg}
               alt="Logo RW 03"
-              className="w-full h-full object-cover"
+              className="w-full h-full object-contain"
               data-testid="img-logo"
             />
           </div>

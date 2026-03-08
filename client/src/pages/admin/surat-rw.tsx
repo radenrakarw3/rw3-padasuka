@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { useToast } from "@/hooks/use-toast";
 import { Plus, ScrollText, Eye, Download } from "lucide-react";
 import type { SuratRw } from "@shared/schema";
+import KopSurat from "@/components/kop-surat";
 
 const jenisSuratRwOptions = [
   { value: "Surat Undangan", label: "Surat Undangan" },
@@ -148,9 +149,12 @@ export default function AdminSuratRw() {
           <DialogHeader>
             <DialogTitle>{previewSurat?.jenisSurat}</DialogTitle>
           </DialogHeader>
-          <pre className="text-xs whitespace-pre-wrap font-mono bg-muted p-4 rounded-md">
-            {previewSurat?.isiSurat}
-          </pre>
+          <div className="bg-white p-6 rounded-md border shadow-sm">
+            <KopSurat />
+            <pre className="text-xs whitespace-pre-wrap font-mono" data-testid="text-surat-rw-preview">
+              {previewSurat?.isiSurat}
+            </pre>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

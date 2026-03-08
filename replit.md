@@ -50,6 +50,12 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
 - RT 01: Dadan Setiawan, RT 02: Jajang Kusmana, RT 03: Iyep Supriatna
 - RT 04: Eem Sulaeman, RT 05: Dadan Sobandi, RT 06: Dicky Irawan, RT 07: Abdul Muin
 
+## Logo
+- Official RW3 logo: `attached_assets/Untitled_design_(24)_1772993886433.png`
+- Used in: login page, warga header, admin header, KOP surat letterhead
+- KOP surat component: `client/src/components/kop-surat.tsx`
+- Gemini AI prompts exclude KOP header (added visually by frontend)
+
 ## Seeded Data
 - 291 KK records from CSV
 - 927 warga records from CSV

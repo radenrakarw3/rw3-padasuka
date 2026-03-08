@@ -444,12 +444,13 @@ Data pemohon:
 Ketua RT ${kk.rt}: ${rt?.namaKetua || "___________"}
 
 Format surat harus lengkap dengan:
-- Kop surat (RT/RW)
-- Nomor surat
+- Nomor surat (format: XXX/RT-${kk.rt}/RW-03/.../${new Date().getFullYear()})
 - Perihal
-- Isi surat yang jelas
+- Isi surat yang jelas dan profesional
 - Tempat tanda tangan RT dan RW
 - Tanggal surat hari ini
+
+PENTING: JANGAN sertakan kop surat/header karena kop surat akan ditambahkan secara otomatis oleh sistem. Langsung mulai dari nomor surat.
 
 Buat dalam format teks biasa yang rapi, bukan markdown.`;
 
@@ -493,12 +494,13 @@ ${parsed.tujuan ? `Ditujukan kepada: ${parsed.tujuan}` : ""}
 ${parsed.tanggalSurat ? `Tanggal surat: ${parsed.tanggalSurat}` : `Tanggal surat: hari ini`}
 
 Format surat harus lengkap dan resmi dengan:
-- Kop surat RW 03 Kelurahan Padasuka
-- Nomor surat
+- Nomor surat (format: XXX/RW-03/.../${new Date().getFullYear()})
 - Perihal
 - Isi surat yang jelas dan profesional
 - Tempat tanda tangan Ketua RW 03
-- Nama Ketua RW: ___________
+- Nama Ketua RW: Raden Raka
+
+PENTING: JANGAN sertakan kop surat/header karena kop surat dengan logo resmi RW 03 akan ditambahkan secara otomatis oleh sistem. Langsung mulai dari nomor surat.
 
 Buat dalam format teks biasa yang rapi, bukan markdown. Surat harus terlihat profesional dan resmi.`;
 
