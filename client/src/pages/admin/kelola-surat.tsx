@@ -162,8 +162,11 @@ export default function AdminKelolaSurat() {
           </DialogHeader>
           <div className="bg-white p-6 rounded-md border shadow-sm">
             <KopSurat />
+            {previewSurat?.nomorSurat && (
+              <p className="text-xs font-mono mb-1">Nomor    : {previewSurat.nomorSurat}</p>
+            )}
             <pre className="text-xs whitespace-pre-wrap font-mono" data-testid="text-surat-preview">
-              {previewSurat?.isiSurat}
+              {previewSurat?.isiSurat?.replace(/^Nomor\s*:.*\n?/m, "").trim()}
             </pre>
           </div>
           {previewSurat?.status === "pending" && (

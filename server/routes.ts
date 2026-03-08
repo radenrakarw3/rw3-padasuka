@@ -457,17 +457,32 @@ Data pemohon:
 - Jenis Kelamin: ${w.jenisKelamin}
 
 Ketua RT ${kk.rt}: ${rt?.namaKetua || "___________"}
+Ketua RW 03: Raden Raka
 
 Format surat harus lengkap dengan:
-- Nomor surat (format: XXX/RT-${kk.rt}/RW-03/.../${new Date().getFullYear()})
 - Perihal
 - Isi surat yang jelas dan profesional
-- Tempat tanda tangan RT dan RW
 - Tanggal surat hari ini
 
-PENTING: JANGAN sertakan kop surat/header karena kop surat akan ditambahkan secara otomatis oleh sistem. Langsung mulai dari nomor surat.
+PENTING:
+1. JANGAN sertakan kop surat/header karena kop surat akan ditambahkan secara otomatis oleh sistem.
+2. JANGAN sertakan nomor surat karena nomor surat akan di-assign otomatis oleh sistem.
+3. Langsung mulai dari "Perihal:" atau judul surat.
+4. Bagian tanda tangan di bagian akhir surat HARUS menggunakan format VERTIKAL (atas-bawah), BUKAN sejajar kiri-kanan. Format tanda tangan yang benar:
 
-Buat dalam format teks biasa yang rapi, bukan markdown.`;
+Mengetahui,
+Ketua RT ${String(kk.rt).padStart(2, "0")}
+
+
+(${rt?.namaKetua || "___________"})
+
+
+Ketua RW 03
+
+
+(Raden Raka)
+
+5. Buat dalam format teks biasa yang rapi, bukan markdown. Jangan gunakan tanda bintang (*) atau formatting markdown apapun.`;
 
       const isiSurat = await generateWithGemini(prompt);
       const updated = await storage.updateSuratWargaStatus(surat.id, surat.status, isiSurat);
@@ -494,6 +509,10 @@ Buat dalam format teks biasa yang rapi, bukan markdown.`;
         const year = new Date().getFullYear();
         const month = String(new Date().getMonth() + 1).padStart(2, "0");
         const nomorSurat = `${seq}/SK-W/RW-03/${month}/${year}`;
+        if (surat.isiSurat && /XXX\//.test(surat.isiSurat)) {
+          const fixedIsi = surat.isiSurat.replace(/XXX\/[^\n\r]*/g, nomorSurat);
+          await storage.updateSuratWargaStatus(surat.id, status, fixedIsi);
+        }
         await storage.updateSuratWargaNomor(surat.id, nomorSurat);
         const updated = await storage.getSuratWargaById(surat.id);
         return res.json(updated);
@@ -520,15 +539,24 @@ ${parsed.tujuan ? `Ditujukan kepada: ${parsed.tujuan}` : ""}
 ${parsed.tanggalSurat ? `Tanggal surat: ${parsed.tanggalSurat}` : `Tanggal surat: hari ini`}
 
 Format surat harus lengkap dan resmi dengan:
-- Nomor surat (format: XXX/RW-03/.../${new Date().getFullYear()})
 - Perihal
 - Isi surat yang jelas dan profesional
 - Tempat tanda tangan Ketua RW 03
 - Nama Ketua RW: Raden Raka
 
-PENTING: JANGAN sertakan kop surat/header karena kop surat dengan logo resmi RW 03 akan ditambahkan secara otomatis oleh sistem. Langsung mulai dari nomor surat.
+PENTING:
+1. JANGAN sertakan kop surat/header karena kop surat dengan logo resmi RW 03 akan ditambahkan secara otomatis oleh sistem.
+2. JANGAN sertakan nomor surat karena nomor surat akan di-assign otomatis oleh sistem.
+3. Langsung mulai dari "Perihal:" atau judul surat.
+4. Bagian tanda tangan di akhir surat format VERTIKAL:
 
-Buat dalam format teks biasa yang rapi, bukan markdown. Surat harus terlihat profesional dan resmi.`;
+Ketua RW 03
+Kelurahan Padasuka
+
+
+(Raden Raka)
+
+5. Buat dalam format teks biasa yang rapi, bukan markdown. Jangan gunakan tanda bintang (*) atau formatting markdown apapun. Surat harus terlihat profesional dan resmi.`;
 
       let isiSurat = "";
       try {
@@ -545,6 +573,10 @@ Buat dalam format teks biasa yang rapi, bukan markdown. Surat harus terlihat pro
       const year = new Date().getFullYear();
       const month = String(new Date().getMonth() + 1).padStart(2, "0");
       const nomorSurat = `${seq}/SK-RW/RW-03/${month}/${year}`;
+      if (isiSurat && /XXX\//.test(isiSurat)) {
+        const fixedIsi = isiSurat.replace(/XXX\/[^\n\r]*/g, nomorSurat);
+        await storage.updateSuratRwIsi(data.id, fixedIsi);
+      }
       await storage.updateSuratRwNomor(data.id, nomorSurat);
       const updated = await storage.getSuratRwById(data.id);
       res.json(updated);

@@ -69,6 +69,7 @@ export interface IStorage {
   countSuratRwThisYear(): Promise<number>;
   updateSuratWargaNomor(id: number, nomorSurat: string): Promise<SuratWarga | undefined>;
   updateSuratRwNomor(id: number, nomorSurat: string): Promise<SuratRw | undefined>;
+  updateSuratRwIsi(id: number, isiSurat: string): Promise<SuratRw | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -331,6 +332,11 @@ export class DatabaseStorage implements IStorage {
 
   async updateSuratRwNomor(id: number, nomorSurat: string): Promise<SuratRw | undefined> {
     const [result] = await db.update(suratRw).set({ nomorSurat }).where(eq(suratRw.id, id)).returning();
+    return result;
+  }
+
+  async updateSuratRwIsi(id: number, isiSurat: string): Promise<SuratRw | undefined> {
+    const [result] = await db.update(suratRw).set({ isiSurat }).where(eq(suratRw.id, id)).returning();
     return result;
   }
 }
