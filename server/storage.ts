@@ -70,6 +70,32 @@ export interface IStorage {
   updateSuratWargaNomor(id: number, nomorSurat: string): Promise<SuratWarga | undefined>;
   updateSuratRwNomor(id: number, nomorSurat: string): Promise<SuratRw | undefined>;
   updateSuratRwIsi(id: number, isiSurat: string): Promise<SuratRw | undefined>;
+
+  getDashboardStats(): Promise<DashboardStats>;
+}
+
+export interface DashboardStats {
+  totalKk: number;
+  totalWarga: number;
+  pendingLaporan: number;
+  pendingSurat: number;
+  jenisKelamin: Record<string, number>;
+  agama: Record<string, number>;
+  statusPerkawinan: Record<string, number>;
+  kedudukanKeluarga: Record<string, number>;
+  pekerjaan: { name: string; count: number }[];
+  statusKependudukan: Record<string, number>;
+  kelompokUsia: Record<string, number>;
+  waOwnership: { punya: number; belum: number };
+  ktpOwnership: { punya: number; belum: number };
+  statusRumah: Record<string, number>;
+  kondisiBangunan: Record<string, number>;
+  sumberAir: Record<string, number>;
+  sanitasiWc: Record<string, number>;
+  listrik: Record<string, number>;
+  bansos: { penerima: number; bukan: number };
+  kkFotoOwnership: { punya: number; belum: number };
+  perRt: { rt: number; kk: number; warga: number; bansos: number }[];
 }
 
 export class DatabaseStorage implements IStorage {
@@ -339,6 +365,116 @@ export class DatabaseStorage implements IStorage {
   async updateSuratRwIsi(id: number, isiSurat: string): Promise<SuratRw | undefined> {
     const [result] = await db.update(suratRw).set({ isiSurat }).where(eq(suratRw.id, id)).returning();
     return result;
+  }
+
+  async getDashboardStats(): Promise<DashboardStats> {
+    const allKk = await db.select().from(kartuKeluarga);
+    const allWarga = await db.select().from(warga);
+    const pendingLaporanResult = await db.select({ c: count() }).from(laporan).where(eq(laporan.status, "pending"));
+    const pendingSuratResult = await db.select({ c: count() }).from(suratWarga).where(eq(suratWarga.status, "pending"));
+
+    const totalKk = allKk.length;
+    const totalWarga = allWarga.length;
+    const pendingLaporan = pendingLaporanResult[0]?.c || 0;
+    const pendingSurat = pendingSuratResult[0]?.c || 0;
+
+    const countByField = (items: any[], field: string): Record<string, number> => {
+      const map: Record<string, number> = {};
+      for (const item of items) {
+        const val = item[field] || "Tidak Diketahui";
+        map[val] = (map[val] || 0) + 1;
+      }
+      return map;
+    };
+
+    const jenisKelamin = countByField(allWarga, "jenisKelamin");
+    const agama = countByField(allWarga, "agama");
+    const statusPerkawinan = countByField(allWarga, "statusPerkawinan");
+    const kedudukanKeluarga = countByField(allWarga, "kedudukanKeluarga");
+    const statusKependudukan = countByField(allWarga, "statusKependudukan");
+
+    const pekerjaanMap = countByField(allWarga, "pekerjaan");
+    const pekerjaanSorted = Object.entries(pekerjaanMap)
+      .map(([name, c]) => ({ name, count: c }))
+      .sort((a, b) => b.count - a.count);
+    const pekerjaan = pekerjaanSorted.length > 10
+      ? [
+          ...pekerjaanSorted.slice(0, 10),
+          { name: "Lainnya", count: pekerjaanSorted.slice(10).reduce((s, p) => s + p.count, 0) },
+        ]
+      : pekerjaanSorted;
+
+    const today = new Date();
+    const kelompokUsia: Record<string, number> = {
+      "0-5": 0, "6-17": 0, "18-25": 0, "26-40": 0, "41-55": 0, "56-65": 0, "65+": 0, "Tidak Diketahui": 0,
+    };
+    for (const w of allWarga) {
+      if (!w.tanggalLahir) {
+        kelompokUsia["Tidak Diketahui"]++;
+        continue;
+      }
+      const birth = new Date(w.tanggalLahir);
+      if (isNaN(birth.getTime())) {
+        kelompokUsia["Tidak Diketahui"]++;
+        continue;
+      }
+      let age = today.getFullYear() - birth.getFullYear();
+      const m = today.getMonth() - birth.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+      if (age <= 5) kelompokUsia["0-5"]++;
+      else if (age <= 17) kelompokUsia["6-17"]++;
+      else if (age <= 25) kelompokUsia["18-25"]++;
+      else if (age <= 40) kelompokUsia["26-40"]++;
+      else if (age <= 55) kelompokUsia["41-55"]++;
+      else if (age <= 65) kelompokUsia["56-65"]++;
+      else kelompokUsia["65+"]++;
+    }
+    if (kelompokUsia["Tidak Diketahui"] === 0) delete kelompokUsia["Tidak Diketahui"];
+
+    const waOwnership = {
+      punya: allWarga.filter(w => w.nomorWhatsapp).length,
+      belum: allWarga.filter(w => !w.nomorWhatsapp).length,
+    };
+    const ktpOwnership = {
+      punya: allWarga.filter(w => w.fotoKtp).length,
+      belum: allWarga.filter(w => !w.fotoKtp).length,
+    };
+
+    const statusRumah = countByField(allKk, "statusRumah");
+    const kondisiBangunan = countByField(allKk, "kondisiBangunan");
+    const sumberAir = countByField(allKk, "sumberAir");
+    const sanitasiWc = countByField(allKk, "sanitasiWc");
+    const listrik = countByField(allKk, "listrik");
+
+    const bansos = {
+      penerima: allKk.filter(k => k.penerimaBansos).length,
+      bukan: allKk.filter(k => !k.penerimaBansos).length,
+    };
+    const kkFotoOwnership = {
+      punya: allKk.filter(k => k.fotoKk).length,
+      belum: allKk.filter(k => !k.fotoKk).length,
+    };
+
+    const kkRtMap = new Map(allKk.map(k => [k.id, k.rt]));
+    const rtSet = [1, 2, 3, 4, 5, 6, 7];
+    const perRt = rtSet.map(rt => {
+      const kkInRt = allKk.filter(k => k.rt === rt);
+      return {
+        rt,
+        kk: kkInRt.length,
+        warga: allWarga.filter(w => kkRtMap.get(w.kkId) === rt).length,
+        bansos: kkInRt.filter(k => k.penerimaBansos).length,
+      };
+    });
+
+    return {
+      totalKk, totalWarga, pendingLaporan, pendingSurat,
+      jenisKelamin, agama, statusPerkawinan, kedudukanKeluarga,
+      pekerjaan, statusKependudukan, kelompokUsia,
+      waOwnership, ktpOwnership,
+      statusRumah, kondisiBangunan, sumberAir, sanitasiWc, listrik,
+      bansos, kkFotoOwnership, perRt,
+    };
   }
 }
 

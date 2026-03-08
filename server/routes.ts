@@ -318,6 +318,15 @@ export async function registerRoutes(
     });
   });
 
+  app.get("/api/stats/dashboard", requireAdmin, async (_req, res) => {
+    try {
+      const stats = await storage.getDashboardStats();
+      res.json(stats);
+    } catch (error) {
+      res.status(500).json({ message: "Gagal mengambil statistik" });
+    }
+  });
+
   app.get("/api/kk", requireAuth, async (req, res) => {
     if (req.session.isAdmin) {
       const data = await storage.getAllKk();

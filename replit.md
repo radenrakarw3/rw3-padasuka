@@ -30,7 +30,7 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
 
 ## Key Features
 1. **Warga Pages**: Beranda, Profil (view/edit request), Laporan, Pelayanan Surat
-2. **Admin Pages**: Dashboard, Kelola KK, Kelola Warga, Kelola Laporan, Kelola Surat, Surat RW (Surat Sakti), Arsip Surat, Edit Profil approval, WA Blast
+2. **Admin Pages**: Dashboard (comprehensive statistics), Kelola KK, Kelola Warga, Kelola Laporan, Kelola Surat, Surat RW (Surat Sakti), Arsip Surat, Edit Profil approval, WA Blast
 3. **Gemini AI**: Auto-generates surat keterangan and official RW letters
 4. **Star Sender**: WA Blast with category filters (semua, per RT, kepala keluarga, penerima bansos)
 5. **Auto WA Notifications**: Every status change (laporan, surat, profile edit) sends contextual WhatsApp notification to warga via Star Sender
@@ -52,6 +52,15 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
 - **DB columns**: `kartu_keluarga.foto_kk` and `warga.foto_ktp` store file paths
 - **Upload sources**: Admin KK form, Admin Warga form, Warga profile page
 - **Download**: Admin KK cards show download buttons for KK and KTP kepala keluarga when files exist
+
+## Admin Dashboard Statistics
+- **API**: `GET /api/stats/dashboard` (admin-only) — server-side aggregation of all stats
+- **Summary cards**: Total KK, Total Warga, Pending Laporan, Pending Surat
+- **Warga demographics**: Jenis Kelamin (donut), Agama (bar), Status Perkawinan (donut), Kelompok Usia (bar), Pekerjaan top 10 (bar), Kedudukan Keluarga (bar), Status Kependudukan (badges)
+- **Ownership stats**: WhatsApp, Foto KTP, Foto KK (pair stat bars)
+- **KK/Rumah data**: Status Rumah (donut), Listrik (donut), Kondisi Bangunan (bar), Sumber Air (bar), Sanitasi (bar), Penerima Bansos (pair stat)
+- **Per RT**: Enhanced breakdown with KK count, Warga count, Bansos count per RT
+- **Charts**: CSS-based (conic-gradient donuts, progress bar charts) — no external chart library
 
 ## Data Model (shared/schema.ts)
 - `kartu_keluarga`: KK data with RT assignment, foto_kk for uploaded KK scan

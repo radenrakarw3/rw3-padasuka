@@ -1,86 +1,381 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, Home, ClipboardList, FileText, MessageSquare } from "lucide-react";
-import type { KartuKeluarga, Warga, Laporan, SuratWarga } from "@shared/schema";
+import {
+  Users, Home, ClipboardList, FileText, UserCheck, UserX, UserMinus,
+  Phone, PhoneOff, CreditCard, ImageOff, Heart, Building2, Droplets,
+  Zap, ShowerHead, HandCoins
+} from "lucide-react";
 
-export default function AdminDashboard() {
-  const { data: kkList, isLoading: kkLoading } = useQuery<KartuKeluarga[]>({ queryKey: ["/api/kk"] });
-  const { data: wargaList, isLoading: wargaLoading } = useQuery<Warga[]>({ queryKey: ["/api/warga"] });
-  const { data: laporanList, isLoading: lapLoading } = useQuery<Laporan[]>({ queryKey: ["/api/laporan"] });
-  const { data: suratList, isLoading: suratLoading } = useQuery<SuratWarga[]>({ queryKey: ["/api/surat-warga"] });
+interface DashboardStats {
+  totalKk: number;
+  totalWarga: number;
+  pendingLaporan: number;
+  pendingSurat: number;
+  jenisKelamin: Record<string, number>;
+  agama: Record<string, number>;
+  statusPerkawinan: Record<string, number>;
+  kedudukanKeluarga: Record<string, number>;
+  pekerjaan: { name: string; count: number }[];
+  statusKependudukan: Record<string, number>;
+  kelompokUsia: Record<string, number>;
+  waOwnership: { punya: number; belum: number };
+  ktpOwnership: { punya: number; belum: number };
+  statusRumah: Record<string, number>;
+  kondisiBangunan: Record<string, number>;
+  sumberAir: Record<string, number>;
+  sanitasiWc: Record<string, number>;
+  listrik: Record<string, number>;
+  bansos: { penerima: number; bukan: number };
+  kkFotoOwnership: { punya: number; belum: number };
+  perRt: { rt: number; kk: number; warga: number; bansos: number }[];
+}
 
-  const isLoading = kkLoading || wargaLoading || lapLoading || suratLoading;
+const COLORS = [
+  "hsl(163,55%,22%)",
+  "hsl(40,45%,50%)",
+  "hsl(220,55%,35%)",
+  "hsl(348,55%,38%)",
+  "hsl(280,40%,45%)",
+  "hsl(160,40%,45%)",
+  "hsl(20,60%,50%)",
+  "hsl(190,50%,40%)",
+  "hsl(330,45%,50%)",
+  "hsl(100,35%,40%)",
+  "hsl(50,50%,45%)",
+];
 
-  const pendingLaporan = laporanList?.filter(l => l.status === "pending").length || 0;
-  const pendingSurat = suratList?.filter(s => s.status === "pending").length || 0;
+function DonutChart({ data, size = 120 }: { data: Record<string, number>; size?: number }) {
+  const entries = Object.entries(data).filter(([, v]) => v > 0);
+  const total = entries.reduce((s, [, v]) => s + v, 0);
+  if (total === 0) return <p className="text-xs text-muted-foreground">Belum ada data</p>;
 
-  const stats = [
-    { label: "Kartu Keluarga", value: kkList?.length || 0, icon: Home, color: "bg-[hsl(163,55%,22%)]" },
-    { label: "Total Warga", value: wargaList?.length || 0, icon: Users, color: "bg-[hsl(40,45%,50%)]" },
-    { label: "Laporan Pending", value: pendingLaporan, icon: ClipboardList, color: "bg-[hsl(348,55%,38%)]" },
-    { label: "Surat Pending", value: pendingSurat, icon: FileText, color: "bg-[hsl(220,55%,35%)]" },
-  ];
+  let cumulative = 0;
+  const segments = entries.map(([label, value], i) => {
+    const start = cumulative;
+    cumulative += (value / total) * 100;
+    return { label, value, pct: (value / total) * 100, start, color: COLORS[i % COLORS.length] };
+  });
 
-  const rtStats = [1, 2, 3, 4, 5, 6, 7].map(rt => ({
-    rt,
-    kk: kkList?.filter(k => k.rt === rt).length || 0,
-    warga: 0,
-  }));
-
-  if (wargaList && kkList) {
-    const kkRtMap = new Map(kkList.map(k => [k.id, k.rt]));
-    for (const w of wargaList) {
-      const rt = kkRtMap.get(w.kkId);
-      if (rt) {
-        const s = rtStats.find(r => r.rt === rt);
-        if (s) s.warga++;
-      }
-    }
-  }
+  const gradient = segments.map(s => `${s.color} ${s.start}% ${s.start + s.pct}%`).join(", ");
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col items-center gap-3">
+      <div
+        className="rounded-full relative"
+        style={{
+          width: size,
+          height: size,
+          background: `conic-gradient(${gradient})`,
+        }}
+        data-testid="chart-donut"
+      >
+        <div
+          className="absolute rounded-full bg-card"
+          style={{
+            width: size * 0.55,
+            height: size * 0.55,
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+          }}
+        >
+          <span className="absolute inset-0 flex items-center justify-center text-sm font-bold">{total}</span>
+        </div>
+      </div>
+      <div className="flex flex-wrap justify-center gap-x-3 gap-y-1">
+        {segments.map((s) => (
+          <div key={s.label} className="flex items-center gap-1">
+            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
+            <span className="text-[10px] text-muted-foreground">{s.label} ({s.value})</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function HorizontalBar({ data, maxVal }: { data: Record<string, number>; maxVal?: number }) {
+  const entries = Object.entries(data).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+  const max = maxVal || Math.max(...entries.map(([, v]) => v), 1);
+  if (entries.length === 0) return <p className="text-xs text-muted-foreground">Belum ada data</p>;
+
+  return (
+    <div className="space-y-2">
+      {entries.map(([label, value], i) => (
+        <div key={label} data-testid={`bar-${label}`}>
+          <div className="flex justify-between text-[11px] mb-0.5">
+            <span className="text-muted-foreground truncate mr-2">{label}</span>
+            <span className="font-medium flex-shrink-0">{value}</span>
+          </div>
+          <div className="h-4 bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{
+                width: `${Math.max(4, (value / max) * 100)}%`,
+                backgroundColor: COLORS[i % COLORS.length],
+              }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PairStat({ label1, val1, label2, val2, icon1, icon2, color1, color2 }: {
+  label1: string; val1: number; label2: string; val2: number;
+  icon1: React.ReactNode; icon2: React.ReactNode;
+  color1: string; color2: string;
+}) {
+  const total = val1 + val2;
+  const pct1 = total > 0 ? Math.round((val1 / total) * 100) : 0;
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-3">
+        <div className="flex-1 flex items-center gap-2 p-2 rounded-lg bg-muted/50">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: color1 }}>
+            {icon1}
+          </div>
+          <div>
+            <p className="text-lg font-bold">{val1}</p>
+            <p className="text-[10px] text-muted-foreground">{label1}</p>
+          </div>
+        </div>
+        <div className="flex-1 flex items-center gap-2 p-2 rounded-lg bg-muted/50">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: color2 }}>
+            {icon2}
+          </div>
+          <div>
+            <p className="text-lg font-bold">{val2}</p>
+            <p className="text-[10px] text-muted-foreground">{label2}</p>
+          </div>
+        </div>
+      </div>
+      <div className="h-2.5 bg-muted rounded-full overflow-hidden flex">
+        <div className="h-full rounded-l-full transition-all" style={{ width: `${pct1}%`, backgroundColor: color1 }} />
+        <div className="h-full rounded-r-full transition-all" style={{ width: `${100 - pct1}%`, backgroundColor: color2 }} />
+      </div>
+      <p className="text-[10px] text-center text-muted-foreground">{pct1}% {label1} / {100 - pct1}% {label2}</p>
+    </div>
+  );
+}
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <h3 className="text-sm font-semibold text-[hsl(163,55%,22%)] flex items-center gap-2 mb-3" data-testid={`section-${String(children).toLowerCase().replace(/\s/g, '-')}`}>
+      <div className="w-1 h-4 rounded-full bg-[hsl(163,55%,22%)]" />
+      {children}
+    </h3>
+  );
+}
+
+export default function AdminDashboard() {
+  const { data: stats, isLoading } = useQuery<DashboardStats>({ queryKey: ["/api/stats/dashboard"] });
+
+  if (isLoading || !stats) {
+    return (
+      <div className="space-y-4">
+        <h2 className="text-xl font-bold" data-testid="text-dashboard-title">Dashboard</h2>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}
+        </div>
+        {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-48 rounded-xl" />)}
+      </div>
+    );
+  }
+
+  const summaryCards = [
+    { label: "Kartu Keluarga", value: stats.totalKk, icon: Home, color: "bg-[hsl(163,55%,22%)]" },
+    { label: "Total Warga", value: stats.totalWarga, icon: Users, color: "bg-[hsl(40,45%,50%)]" },
+    { label: "Laporan Pending", value: stats.pendingLaporan, icon: ClipboardList, color: "bg-[hsl(348,55%,38%)]" },
+    { label: "Surat Pending", value: stats.pendingSurat, icon: FileText, color: "bg-[hsl(220,55%,35%)]" },
+  ];
+
+  const statusKepColors: Record<string, { color: string; icon: typeof UserCheck }> = {
+    "Aktif": { color: "hsl(163,55%,22%)", icon: UserCheck },
+    "Pindah": { color: "hsl(40,45%,50%)", icon: UserMinus },
+    "Meninggal": { color: "hsl(348,55%,38%)", icon: UserX },
+  };
+
+  const pekerjaanData: Record<string, number> = {};
+  for (const p of stats.pekerjaan) {
+    pekerjaanData[p.name] = p.count;
+  }
+
+  const maxRtWarga = Math.max(...stats.perRt.map(r => r.warga), 1);
+
+  return (
+    <div className="space-y-4">
       <h2 className="text-xl font-bold" data-testid="text-dashboard-title">Dashboard</h2>
 
-      {isLoading ? (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-28 rounded-xl" />)}
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {stats.map((s) => (
-            <Card key={s.label} data-testid={`card-stat-${s.label.toLowerCase().replace(/\s/g, '-')}`}>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-lg ${s.color} flex items-center justify-center flex-shrink-0`}>
-                    <s.icon className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{s.value}</p>
-                    <p className="text-xs text-muted-foreground">{s.label}</p>
-                  </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {summaryCards.map((s) => (
+          <Card key={s.label} data-testid={`card-stat-${s.label.toLowerCase().replace(/\s/g, '-')}`}>
+            <CardContent className="p-3">
+              <div className="flex items-center gap-2.5">
+                <div className={`w-9 h-9 rounded-lg ${s.color} flex items-center justify-center flex-shrink-0`}>
+                  <s.icon className="w-4 h-4 text-white" />
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+                <div>
+                  <p className="text-xl font-bold leading-tight">{s.value}</p>
+                  <p className="text-[10px] text-muted-foreground">{s.label}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
       <Card>
-        <CardContent className="p-4">
-          <h3 className="text-sm font-semibold mb-4">Data per RT</h3>
-          <div className="space-y-3">
-            {rtStats.map((r) => (
-              <div key={r.rt} className="flex items-center gap-3" data-testid={`row-rt-${r.rt}`}>
-                <span className="w-14 text-xs font-medium">RT {r.rt.toString().padStart(2, "0")}</span>
-                <div className="flex-1 bg-muted rounded-full h-6 relative overflow-hidden">
+        <CardContent className="p-3">
+          <SectionTitle>Status Kependudukan</SectionTitle>
+          <div className="grid grid-cols-3 gap-2">
+            {Object.entries(statusKepColors).map(([status, { color, icon: Icon }]) => (
+              <div key={status} className="flex items-center gap-2 p-2 rounded-lg bg-muted/50" data-testid={`badge-status-${status.toLowerCase()}`}>
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: color }}>
+                  <Icon className="w-3.5 h-3.5 text-white" />
+                </div>
+                <div>
+                  <p className="text-base font-bold leading-tight">{stats.statusKependudukan[status] || 0}</p>
+                  <p className="text-[9px] text-muted-foreground">{status}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-3">
+          <SectionTitle>Demografi Warga</SectionTitle>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div>
+              <p className="text-xs font-medium mb-2 text-muted-foreground">Jenis Kelamin</p>
+              <DonutChart data={stats.jenisKelamin} />
+            </div>
+            <div>
+              <p className="text-xs font-medium mb-2 text-muted-foreground">Status Perkawinan</p>
+              <DonutChart data={stats.statusPerkawinan} />
+            </div>
+            <div>
+              <p className="text-xs font-medium mb-2 text-muted-foreground">Agama</p>
+              <HorizontalBar data={stats.agama} />
+            </div>
+            <div>
+              <p className="text-xs font-medium mb-2 text-muted-foreground">Kelompok Usia</p>
+              <HorizontalBar data={stats.kelompokUsia} />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-3">
+          <SectionTitle>Pekerjaan</SectionTitle>
+          <HorizontalBar data={pekerjaanData} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-3">
+          <SectionTitle>Data Keluarga</SectionTitle>
+          <div className="space-y-5">
+            <div>
+              <p className="text-xs font-medium mb-2 text-muted-foreground">Kedudukan dalam Keluarga</p>
+              <HorizontalBar data={stats.kedudukanKeluarga} />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs font-medium mb-2 text-muted-foreground">Kepemilikan WhatsApp</p>
+                <PairStat
+                  label1="Punya" val1={stats.waOwnership.punya}
+                  label2="Belum" val2={stats.waOwnership.belum}
+                  icon1={<Phone className="w-3.5 h-3.5 text-white" />}
+                  icon2={<PhoneOff className="w-3.5 h-3.5 text-white" />}
+                  color1="hsl(163,55%,22%)" color2="hsl(0,0%,60%)"
+                />
+              </div>
+              <div>
+                <p className="text-xs font-medium mb-2 text-muted-foreground">Kepemilikan Foto KTP</p>
+                <PairStat
+                  label1="Punya" val1={stats.ktpOwnership.punya}
+                  label2="Belum" val2={stats.ktpOwnership.belum}
+                  icon1={<CreditCard className="w-3.5 h-3.5 text-white" />}
+                  icon2={<ImageOff className="w-3.5 h-3.5 text-white" />}
+                  color1="hsl(220,55%,35%)" color2="hsl(0,0%,60%)"
+                />
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-3">
+          <SectionTitle>Data Rumah & Fasilitas</SectionTitle>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div>
+              <p className="text-xs font-medium mb-2 text-muted-foreground">Status Rumah</p>
+              <DonutChart data={stats.statusRumah} size={100} />
+            </div>
+            <div>
+              <p className="text-xs font-medium mb-2 text-muted-foreground">Listrik</p>
+              <DonutChart data={stats.listrik} size={100} />
+            </div>
+            <div>
+              <p className="text-xs font-medium mb-2 text-muted-foreground">Kondisi Bangunan</p>
+              <HorizontalBar data={stats.kondisiBangunan} />
+            </div>
+            <div>
+              <p className="text-xs font-medium mb-2 text-muted-foreground">Sumber Air</p>
+              <HorizontalBar data={stats.sumberAir} />
+            </div>
+            <div>
+              <p className="text-xs font-medium mb-2 text-muted-foreground">Sanitasi WC</p>
+              <HorizontalBar data={stats.sanitasiWc} />
+            </div>
+            <div>
+              <p className="text-xs font-medium mb-2 text-muted-foreground">Penerima Bansos</p>
+              <PairStat
+                label1="Penerima" val1={stats.bansos.penerima}
+                label2="Bukan" val2={stats.bansos.bukan}
+                icon1={<HandCoins className="w-3.5 h-3.5 text-white" />}
+                icon2={<UserX className="w-3.5 h-3.5 text-white" />}
+                color1="hsl(40,45%,50%)" color2="hsl(0,0%,60%)"
+              />
+            </div>
+            <div>
+              <p className="text-xs font-medium mb-2 text-muted-foreground">Kepemilikan Foto KK</p>
+              <PairStat
+                label1="Punya" val1={stats.kkFotoOwnership.punya}
+                label2="Belum" val2={stats.kkFotoOwnership.belum}
+                icon1={<Home className="w-3.5 h-3.5 text-white" />}
+                icon2={<ImageOff className="w-3.5 h-3.5 text-white" />}
+                color1="hsl(163,55%,22%)" color2="hsl(0,0%,60%)"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-3">
+          <SectionTitle>Data per RT</SectionTitle>
+          <div className="space-y-2.5">
+            {stats.perRt.map((r) => (
+              <div key={r.rt} className="flex items-center gap-2.5" data-testid={`row-rt-${r.rt}`}>
+                <span className="w-12 text-xs font-medium flex-shrink-0">RT {r.rt.toString().padStart(2, "0")}</span>
+                <div className="flex-1 bg-muted rounded-full h-7 relative overflow-hidden">
                   <div
-                    className="h-full bg-[hsl(163,55%,22%)] rounded-full transition-all duration-500"
-                    style={{ width: `${Math.min(100, ((r.warga || 0) / Math.max(...rtStats.map(s => s.warga || 1))) * 100)}%` }}
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: `${Math.max(5, (r.warga / maxRtWarga) * 100)}%`,
+                      backgroundColor: "hsl(163,55%,22%)",
+                    }}
                   />
                   <span className="absolute inset-0 flex items-center justify-center text-[10px] font-medium">
-                    {r.kk} KK / {r.warga} Warga
+                    {r.kk} KK · {r.warga} Warga · {r.bansos} Bansos
                   </span>
                 </div>
               </div>
