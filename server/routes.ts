@@ -750,6 +750,50 @@ Buat surat dalam format teks biasa yang rapi dan profesional.`;
     res.json(data);
   });
 
+  app.post("/api/wa-blast/generate", requireAdmin, async (req, res) => {
+    try {
+      const { topik } = req.body;
+      if (!topik || typeof topik !== "string") {
+        return res.status(400).json({ message: "Topik pesan harus diisi" });
+      }
+
+      const prompt = `Kamu adalah Raden Raka, Ketua RW 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi.
+Umur kamu masih 23 tahun, jadi gaya bicara kamu santai, hangat, dekat sama warga, tapi tetap sopan dan menghormati.
+Kamu suka pakai sapaan "Wargi" untuk warga. Sesekali boleh pakai bahasa Sunda ringan biar akrab.
+
+Buatkan pesan WhatsApp broadcast untuk warga RW 03 dengan topik: "${topik}"
+
+ATURAN PENTING:
+1. Gunakan placeholder berikut yang WAJIB ada dalam pesan:
+   - {gender} = akan otomatis diganti jadi "Bapak" atau "Ibu" sesuai jenis kelamin penerima
+   - {warga} = akan otomatis diganti jadi nama lengkap penerima
+   - {rtxx} = akan otomatis diganti jadi nomor RT penerima (contoh: RT 03)
+2. Awali dengan salam "Assalamu'alaikum Wr. Wb." dan sapaan "{gender} {warga} Wargi {rtxx} yang terhormat,"
+3. Akhiri dengan ajakan cek web: "Info lengkap bisa dicek di web kita 👉 rw3padasukacimahi.org"
+4. Tutup dengan "Hatur nuhun! 🙏" dan tanda tangan "Raden Raka - Ketua RW 03 Padasuka"
+5. Jangan terlalu kaku/formal. Bayangkan kamu ngobrol santai tapi sopan ke warga yang sebagian besar lebih tua dari kamu.
+6. Jangan pakai markdown (tanpa tanda *). Gunakan teks biasa saja.
+7. Pesan harus singkat, padat, dan jelas. Maksimal 15 baris.
+8. Jika ada informasi yang perlu diisi (tanggal, waktu, tempat dll), gunakan format [ISI ...] sebagai placeholder yang bisa diedit admin.
+
+Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
+
+      let result = await generateWithGemini(prompt);
+      result = result.trim();
+
+      if (!result.includes("{gender}") || !result.includes("{warga}") || !result.includes("{rtxx}")) {
+        const header = `Assalamu'alaikum Wr. Wb.\n\n{gender} {warga} Wargi {rtxx} yang terhormat,\n\n`;
+        if (!result.includes("{gender}")) {
+          result = header + result;
+        }
+      }
+
+      res.json({ pesan: result });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.get("/api/wa-blast/preview", requireAdmin, async (req, res) => {
     try {
       const kategori = (req.query.kategori as string) || "semua";
@@ -824,7 +868,13 @@ Buat surat dalam format teks biasa yang rapi dan profesional.`;
 
       let successCount = 0;
       for (const recipient of recipients) {
-        const success = await sendWhatsApp(recipient.nomorWhatsapp, parsed.pesan);
+        let personalizedMsg = parsed.pesan;
+        const gender = recipient.jenisKelamin === "Perempuan" ? "Ibu" : "Bapak";
+        const rtNum = recipient.rt ? `RT ${String(recipient.rt).padStart(2, "0")}` : "RT -";
+        personalizedMsg = personalizedMsg.replace(/\{gender\}/gi, gender);
+        personalizedMsg = personalizedMsg.replace(/\{warga\}/gi, recipient.namaLengkap || "Warga");
+        personalizedMsg = personalizedMsg.replace(/\{rtxx\}/gi, rtNum);
+        const success = await sendWhatsApp(recipient.nomorWhatsapp, personalizedMsg);
         if (success) successCount++;
         await new Promise(resolve => setTimeout(resolve, 1000));
       }

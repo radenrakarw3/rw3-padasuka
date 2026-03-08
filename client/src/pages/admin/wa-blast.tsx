@@ -13,7 +13,8 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Send, MessageSquare, Users, CheckCircle, Clock, ChevronDown, ChevronUp, FileText, XCircle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Send, MessageSquare, Users, CheckCircle, Clock, ChevronDown, ChevronUp, FileText, XCircle, Sparkles, Loader2 } from "lucide-react";
 import type { WaBlast } from "@shared/schema";
 
 const MESSAGE_TEMPLATES = [
@@ -99,6 +100,7 @@ export default function AdminWaBlast() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState("");
+  const [topikAi, setTopikAi] = useState("");
 
   const { data: blastList, isLoading } = useQuery<WaBlast[]>({ queryKey: ["/api/wa-blast"] });
 
@@ -140,6 +142,19 @@ export default function AdminWaBlast() {
       queryClient.invalidateQueries({ queryKey: ["/api/wa-blast"] });
     },
     onError: (err: any) => toast({ title: "Gagal", description: err.message, variant: "destructive" }),
+  });
+
+  const generateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/wa-blast/generate", { topik: topikAi });
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      setPesan(data.pesan);
+      setSelectedTemplate("");
+      toast({ title: "Pesan Berhasil Dibuat AI ✨", description: "Pesan sudah digenerate, silakan edit jika perlu." });
+    },
+    onError: (err: any) => toast({ title: "Gagal Generate", description: err.message, variant: "destructive" }),
   });
 
   const kategoriLabel: Record<string, string> = {
@@ -220,6 +235,43 @@ export default function AdminWaBlast() {
           </div>
 
           <div className="space-y-2">
+            <Label className="text-sm font-medium flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-[hsl(40,45%,55%)]" />
+              Generate Pesan dengan AI
+            </Label>
+            <div className="flex gap-2">
+              <Input
+                value={topikAi}
+                onChange={(e) => setTopikAi(e.target.value)}
+                placeholder="Ketik topik, misal: kerja bakti minggu depan..."
+                className="h-11 flex-1"
+                data-testid="input-topik-ai"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && topikAi.trim() && !generateMutation.isPending) {
+                    generateMutation.mutate();
+                  }
+                }}
+              />
+              <Button
+                variant="outline"
+                className="h-11 px-4 border-[hsl(40,45%,55%)] text-[hsl(40,45%,55%)] hover:bg-[hsl(40,45%,55%)]/10"
+                onClick={() => generateMutation.mutate()}
+                disabled={!topikAi.trim() || generateMutation.isPending}
+                data-testid="button-generate-ai"
+              >
+                {generateMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Sparkles className="w-4 h-4" />
+                )}
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              AI akan buatkan pesan sebagai Ketua RW. Placeholder otomatis: <code className="bg-muted px-1 rounded">{"{gender}"}</code> = Bapak/Ibu, <code className="bg-muted px-1 rounded">{"{warga}"}</code> = nama, <code className="bg-muted px-1 rounded">{"{rtxx}"}</code> = RT
+            </p>
+          </div>
+
+          <div className="space-y-2">
             <Label className="text-sm font-medium">Isi Pesan</Label>
             <Textarea
               value={pesan}
@@ -227,11 +279,19 @@ export default function AdminWaBlast() {
                 setPesan(e.target.value);
                 if (selectedTemplate) setSelectedTemplate("");
               }}
-              placeholder="Ketik pesan yang akan dikirim ke warga..."
+              placeholder="Ketik pesan manual, pilih template, atau generate dengan AI..."
               rows={8}
               data-testid="input-pesan-blast"
             />
-            <p className="text-xs text-muted-foreground">{pesan.length} karakter</p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">{pesan.length} karakter</p>
+              {(pesan.includes("{gender}") || pesan.includes("{warga}") || pesan.includes("{rtxx}")) && (
+                <p className="text-[11px] text-[hsl(163,55%,22%)] font-medium flex items-center gap-1">
+                  <CheckCircle className="w-3 h-3" />
+                  Pesan akan dipersonalisasi per penerima
+                </p>
+              )}
+            </div>
           </div>
 
           <Button
