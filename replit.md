@@ -7,7 +7,7 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
 - **Frontend**: React + TypeScript + Tailwind CSS + shadcn/ui (mobile-first)
 - **Backend**: Express.js + TypeScript
 - **Database**: PostgreSQL with Drizzle ORM
-- **AI Integration**: Google Gemini API for letter generation
+- **AI Integration**: Google Gemini API (gemini-2.5-flash) for letter generation
 - **Messaging**: Star Sender API for WhatsApp blast
 
 ## Color Palette
