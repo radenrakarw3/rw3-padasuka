@@ -146,27 +146,6 @@ export async function generateSuratPDF(options: {
 
   const isTwoCol = hasTwoColumnSig(sigLines);
 
-  let totalBodyLines = 0;
-  for (const l of bodyLines) {
-    const t = l.trim();
-    if (!t) { totalBodyLines += 0.4; continue; }
-    if (isTitleLine(t)) {
-      totalBodyLines += 2.5;
-      continue;
-    }
-    doc.setFontSize(10);
-    if (isBiodataLine(l)) {
-      const ci = l.indexOf(":");
-      const val = l.substring(ci + 1).trim();
-      const valMaxW = contentWidth - colonMM - 3;
-      const w = doc.splitTextToSize(val, Math.max(valMaxW, 20));
-      totalBodyLines += Math.max(1, w.length);
-    } else {
-      const w = doc.splitTextToSize(t, contentWidth);
-      totalBodyLines += w.length;
-    }
-  }
-
   let sigEstLines = 0;
   if (dateLine) sigEstLines += 1.5;
   for (const l of sigLines) {
@@ -177,20 +156,45 @@ export async function generateSuratPDF(options: {
     if (/^\(.*\)$/.test(left)) { sigEstLines += 4; continue; }
     sigEstLines += 1;
   }
-  if (nomorSurat && !hasTitle) totalBodyLines += 1;
 
-  const totalLines = totalBodyLines + sigEstLines;
-  const baseLH = 4.8;
-  const neededHeight = totalLines * baseLH;
-  let scale = 1;
-  if (neededHeight > availableHeight) {
-    scale = availableHeight / neededHeight;
-    if (scale < 0.55) scale = 0.55;
+  const fixedFs = 10;
+  const fixedLh = 4.8;
+  const titleFs = 12;
+
+  let bodyLineCount = 0;
+  let fixedLineCount = 0;
+  for (const l of bodyLines) {
+    const t = l.trim();
+    if (!t) { fixedLineCount += 0.4; continue; }
+    if (isTitleLine(t)) { fixedLineCount += 2.5; continue; }
+    doc.setFontSize(fixedFs);
+    if (isBiodataLine(l)) {
+      const ci = l.indexOf(":");
+      const val = l.substring(ci + 1).trim();
+      const valMaxW = contentWidth - colonMM - 3;
+      const w = doc.splitTextToSize(val, Math.max(valMaxW, 20));
+      fixedLineCount += Math.max(1, w.length);
+    } else if (/^\s{4,}/.test(l) && !isBiodataLine(l)) {
+      fixedLineCount += 1;
+    } else {
+      const w = doc.splitTextToSize(t, contentWidth);
+      bodyLineCount += w.length;
+    }
+  }
+  if (nomorSurat && !hasTitle) fixedLineCount += 1;
+
+  const fixedHeight = (fixedLineCount + sigEstLines) * fixedLh;
+  const bodyAvailable = availableHeight - fixedHeight;
+  const bodyNeeded = bodyLineCount * fixedLh;
+
+  let bodyScale = 1;
+  if (bodyNeeded > bodyAvailable && bodyAvailable > 0) {
+    bodyScale = bodyAvailable / bodyNeeded;
+    if (bodyScale < 0.55) bodyScale = 0.55;
   }
 
-  const fs = Math.max(7, Math.round(10 * scale * 10) / 10);
-  const lh = baseLH * scale;
-  const titleFs = Math.max(8, Math.round(12 * scale * 10) / 10);
+  const bodyFs = Math.max(7, Math.round(fixedFs * bodyScale * 10) / 10);
+  const bodyLh = fixedLh * bodyScale;
 
   const drawKop = () => {
     if (img) doc.addImage(img, "PNG", marginLeft + 2, 12, 18, 18);
@@ -214,32 +218,30 @@ export async function generateSuratPDF(options: {
   drawKop();
   let y = startY;
 
-  const printBody = (text: string, indent?: number) => {
-    doc.setFontSize(fs);
+  const printBody = (text: string) => {
+    doc.setFontSize(bodyFs);
     doc.setFont("helvetica", "normal");
-    const xPos = marginLeft + (indent || 0);
-    const maxW = contentWidth - (indent || 0);
-    const wrapped = doc.splitTextToSize(text, maxW);
+    const wrapped = doc.splitTextToSize(text, contentWidth);
     for (const wl of wrapped) {
-      doc.text(wl, xPos, y);
-      y += lh;
+      doc.text(wl, marginLeft, y);
+      y += bodyLh;
     }
   };
 
   const printCentered = (text: string, bold?: boolean, size?: number) => {
-    doc.setFontSize(size || fs);
+    doc.setFontSize(size || fixedFs);
     doc.setFont("helvetica", bold ? "bold" : "normal");
     doc.text(text, pageWidth / 2, y, { align: "center" });
-    y += lh;
+    y += fixedLh;
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(fs);
+    doc.setFontSize(fixedFs);
   };
 
   const printBiodata = (line: string) => {
     const ci = line.indexOf(":");
     const label = line.substring(0, ci).trim();
     const value = line.substring(ci + 1).trim();
-    doc.setFontSize(fs);
+    doc.setFontSize(fixedFs);
     doc.setFont("helvetica", "normal");
     const colonX = marginLeft + colonMM;
     doc.text(label, marginLeft, y);
@@ -249,7 +251,7 @@ export async function generateSuratPDF(options: {
     const wrapped = doc.splitTextToSize(value, maxW);
     for (let j = 0; j < wrapped.length; j++) {
       doc.text(wrapped[j], valueX, y);
-      y += lh;
+      y += fixedLh;
     }
   };
 
@@ -266,32 +268,32 @@ export async function generateSuratPDF(options: {
 
     if (trimmed === "") {
       prevWasBiodata = false;
-      y += lh * 0.4;
+      y += fixedLh * 0.4;
       continue;
     }
 
     if (isTitleLine(trimmed)) {
       prevWasBiodata = false;
-      y += lh * 0.3;
+      y += fixedLh * 0.3;
       const spaced = trimmed.split("").join(" ").replace(/\s{3,}/g, "   ");
       printCentered(spaced, true, titleFs);
       if (nomorSurat && !nomorDone) {
-        printCentered(`Nomor: ${nomorSurat}`, false, fs);
+        printCentered(`Nomor: ${nomorSurat}`, false, fixedFs);
         nomorDone = true;
       }
-      y += lh * 0.3;
+      y += fixedLh * 0.3;
       continue;
     }
 
     if (prevWasBiodata && /^\s{4,}/.test(raw) && !isBiodataLine(raw)) {
-      doc.setFontSize(fs);
+      doc.setFontSize(fixedFs);
       doc.setFont("helvetica", "normal");
       const contX = marginLeft + colonMM + 3;
       const contW = contentWidth - colonMM - 3;
       const wrapped = doc.splitTextToSize(trimmed, contW);
       for (const wl of wrapped) {
         doc.text(wl, contX, y);
-        y += lh;
+        y += fixedLh;
       }
       continue;
     }
@@ -307,14 +309,14 @@ export async function generateSuratPDF(options: {
   }
 
   if (dateLine || sigLines.length > 0) {
-    y += lh * 0.5;
+    y += fixedLh * 0.5;
   }
 
   if (dateLine) {
-    doc.setFontSize(fs);
+    doc.setFontSize(fixedFs);
     doc.setFont("helvetica", "normal");
     doc.text(dateLine, pageWidth - marginRight, y, { align: "right" });
-    y += lh * 1.2;
+    y += fixedLh * 1.2;
   }
 
   if (sigLines.length > 0) {
@@ -324,7 +326,7 @@ export async function generateSuratPDF(options: {
 
       for (const rawLine of sigLines) {
         const trimmed = rawLine.trim();
-        if (!trimmed) { y += lh; continue; }
+        if (!trimmed) { y += fixedLh; continue; }
 
         const split = splitTwoColumns(rawLine);
         const left = split ? split.left : trimmed;
@@ -334,10 +336,10 @@ export async function generateSuratPDF(options: {
         const rightIsName = /^\(.*\)$/.test(right);
 
         if (leftIsName || rightIsName) {
-          y += lh * 2.5;
+          y += fixedLh * 2.5;
         }
 
-        doc.setFontSize(fs);
+        doc.setFontSize(fixedFs);
 
         if (left) {
           doc.setFont("helvetica", leftIsName ? "bold" : "normal");
@@ -358,7 +360,7 @@ export async function generateSuratPDF(options: {
           }
         }
         doc.setFont("helvetica", "normal");
-        y += lh;
+        y += fixedLh;
       }
     } else {
       const sigCenter = marginLeft + contentWidth * 0.75;
@@ -366,24 +368,24 @@ export async function generateSuratPDF(options: {
 
       for (const rawLine of sigLines) {
         const line = rawLine.trim();
-        if (!line) { y += lh * 0.3; continue; }
+        if (!line) { y += fixedLh * 0.3; continue; }
 
         const isName = /^\(.*\)$/.test(line);
         if (isName) {
-          y += lh * 2.5;
+          y += fixedLh * 2.5;
           doc.setFont("helvetica", "bold");
-          doc.setFontSize(fs);
+          doc.setFontSize(fixedFs);
           const w = doc.getTextWidth(line);
           doc.text(line, sigCenter - w / 2, y);
           doc.setLineWidth(0.3);
           doc.line(sigCenter - w / 2, y + 1, sigCenter + w / 2, y + 1);
           doc.setFont("helvetica", "normal");
-          y += lh;
+          y += fixedLh;
           continue;
         }
 
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(fs);
+        doc.setFontSize(fixedFs);
         const tw = doc.getTextWidth(line);
         if (tw <= sigW) {
           doc.text(line, sigCenter - tw / 2, y);
@@ -391,11 +393,11 @@ export async function generateSuratPDF(options: {
           const wrapped = doc.splitTextToSize(line, sigW);
           for (const wl of wrapped) {
             doc.text(wl, sigCenter - sigW / 2, y);
-            y += lh;
+            y += fixedLh;
           }
           continue;
         }
-        y += lh;
+        y += fixedLh;
       }
     }
   }
