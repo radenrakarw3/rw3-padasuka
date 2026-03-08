@@ -71,6 +71,8 @@ async function sendWhatsApp(phoneNumber: string, message: string): Promise<boole
   }
 }
 
+const otpStore = new Map<string, { otp: string; kkId: number; nomorKk: string; phone: string; expiresAt: number; attempts: number; lastRequestAt: number }>();
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -98,6 +100,89 @@ export async function registerRoutes(
     next();
   }
 
+  app.post("/api/auth/request-otp", async (req, res) => {
+    try {
+      const { nomorKk } = req.body;
+      if (!nomorKk) {
+        return res.status(400).json({ message: "Nomor KK harus diisi" });
+      }
+
+      const kk = await storage.getKkByNomor(nomorKk);
+      if (!kk) {
+        return res.status(404).json({ message: "Nomor KK tidak ditemukan" });
+      }
+
+      const members = await storage.getWargaByKkId(kk.id);
+      const kepala = members.find(w => w.kedudukanKeluarga === "Kepala Keluarga");
+      const memberWithWa = members.find(w => w.nomorWhatsapp);
+      const target = kepala?.nomorWhatsapp ? kepala : memberWithWa;
+
+      if (!target || !target.nomorWhatsapp) {
+        return res.status(400).json({ message: "Tidak ada nomor WhatsApp terdaftar di KK ini. Hubungi admin RW." });
+      }
+
+      const otp = String(Math.floor(Math.random() * 90) + 10);
+      const expiresAt = Date.now() + 5 * 60 * 1000;
+
+      const existing = otpStore.get(nomorKk);
+      if (existing && (Date.now() - existing.lastRequestAt) < 60000) {
+        return res.status(429).json({ message: "Tunggu 60 detik sebelum meminta OTP lagi" });
+      }
+
+      otpStore.set(nomorKk, { otp, kkId: kk.id, nomorKk: kk.nomorKk, phone: target.nomorWhatsapp, expiresAt, attempts: 0, lastRequestAt: Date.now() });
+
+      const message = `[RW 03 Padasuka]\nKode OTP login Anda: *${otp}*\nBerlaku 5 menit.\nJangan berikan kode ini kepada siapapun.`;
+      const sent = await sendWhatsApp(target.nomorWhatsapp, message);
+
+      if (!sent) {
+        return res.status(500).json({ message: "Gagal mengirim OTP. Coba lagi nanti." });
+      }
+
+      const maskedPhone = target.nomorWhatsapp.replace(/(\d{4})(\d+)(\d{3})/, "$1****$3");
+      return res.json({ message: "OTP terkirim", phone: maskedPhone });
+    } catch (error: any) {
+      return res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/auth/verify-otp", async (req, res) => {
+    try {
+      const { nomorKk, otp } = req.body;
+      if (!nomorKk || !otp) {
+        return res.status(400).json({ message: "Nomor KK dan kode OTP harus diisi" });
+      }
+
+      const stored = otpStore.get(nomorKk);
+      if (!stored) {
+        return res.status(400).json({ message: "Silakan minta OTP terlebih dahulu" });
+      }
+
+      if (Date.now() > stored.expiresAt) {
+        otpStore.delete(nomorKk);
+        return res.status(400).json({ message: "Kode OTP sudah kadaluarsa. Silakan minta ulang." });
+      }
+
+      if (stored.attempts >= 5) {
+        otpStore.delete(nomorKk);
+        return res.status(429).json({ message: "Terlalu banyak percobaan. Silakan minta OTP baru." });
+      }
+
+      if (stored.otp !== otp) {
+        stored.attempts++;
+        return res.status(401).json({ message: "Kode OTP salah" });
+      }
+
+      otpStore.delete(nomorKk);
+
+      req.session.kkId = stored.kkId;
+      req.session.nomorKk = stored.nomorKk;
+      req.session.isAdmin = false;
+      return res.json({ type: "warga", kkId: stored.kkId, nomorKk: stored.nomorKk, message: "Login berhasil" });
+    } catch (error: any) {
+      return res.status(500).json({ message: error.message });
+    }
+  });
+
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { username, password } = req.body;
@@ -111,20 +196,7 @@ export async function registerRoutes(
         return res.json({ type: "admin", message: "Login admin berhasil" });
       }
 
-      const kk = await storage.getKkByNomor(username);
-      if (!kk) {
-        return res.status(401).json({ message: "Nomor KK tidak ditemukan" });
-      }
-
-      const lastFour = kk.nomorKk.slice(-4);
-      if (password !== lastFour) {
-        return res.status(401).json({ message: "Password salah. Gunakan 4 digit terakhir nomor KK" });
-      }
-
-      req.session.kkId = kk.id;
-      req.session.nomorKk = kk.nomorKk;
-      req.session.isAdmin = false;
-      return res.json({ type: "warga", kkId: kk.id, nomorKk: kk.nomorKk, message: "Login berhasil" });
+      return res.status(401).json({ message: "Login tidak valid" });
     } catch (error: any) {
       return res.status(500).json({ message: error.message });
     }

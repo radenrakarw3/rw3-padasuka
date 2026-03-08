@@ -1,37 +1,125 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { LogIn, Eye, EyeOff, Shield } from "lucide-react";
+import { LogIn, Shield, MessageCircle, ArrowLeft, Loader2 } from "lucide-react";
 import logoImg from "@assets/2f80aef4-6f16-4fd8-8801-982a3e49dd03_1772991075891.JPG";
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, requestOtp, verifyOtp } = useAuth();
   const { toast } = useToast();
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const [nomorKk, setNomorKk] = useState("");
+  const [otp, setOtp] = useState("");
+  const [adminUsername, setAdminUsername] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [step, setStep] = useState<"kk" | "otp">("kk");
+  const [maskedPhone, setMaskedPhone] = useState("");
+  const [countdown, setCountdown] = useState(0);
+  const otpInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [countdown]);
+
+  useEffect(() => {
+    if (step === "otp" && otpInputRef.current) {
+      otpInputRef.current.focus();
+    }
+  }, [step]);
+
+  const handleRequestOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username || !password) {
-      toast({ title: "Mohon isi semua kolom", variant: "destructive" });
+    if (!nomorKk) {
+      toast({ title: "Masukkan nomor KK", variant: "destructive" });
       return;
     }
     setLoading(true);
     try {
-      await login(username, password);
+      const result = await requestOtp(nomorKk);
+      setMaskedPhone(result.phone);
+      setStep("otp");
+      setCountdown(60);
+      setOtp("");
+      toast({ title: "Kode OTP terkirim ke WhatsApp" });
+    } catch (error: any) {
+      const msg = error.message.includes(":")
+        ? error.message.split(":").slice(1).join(":").trim()
+        : error.message;
+      let parsed = msg;
+      try { parsed = JSON.parse(msg).message; } catch {}
+      toast({ title: "Gagal", description: parsed, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otp) {
+      toast({ title: "Masukkan kode OTP", variant: "destructive" });
+      return;
+    }
+    setLoading(true);
+    try {
+      await verifyOtp(nomorKk, otp);
       toast({ title: "Login berhasil!" });
     } catch (error: any) {
       const msg = error.message.includes(":")
         ? error.message.split(":").slice(1).join(":").trim()
         : error.message;
-      toast({ title: "Login Gagal", description: msg, variant: "destructive" });
+      let parsed = msg;
+      try { parsed = JSON.parse(msg).message; } catch {}
+      toast({ title: "OTP Gagal", description: parsed, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminUsername || !adminPassword) {
+      toast({ title: "Mohon isi semua kolom", variant: "destructive" });
+      return;
+    }
+    setLoading(true);
+    try {
+      await login(adminUsername, adminPassword);
+      toast({ title: "Login berhasil!" });
+    } catch (error: any) {
+      const msg = error.message.includes(":")
+        ? error.message.split(":").slice(1).join(":").trim()
+        : error.message;
+      let parsed = msg;
+      try { parsed = JSON.parse(msg).message; } catch {}
+      toast({ title: "Login Gagal", description: parsed, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (countdown > 0) return;
+    setLoading(true);
+    try {
+      const result = await requestOtp(nomorKk);
+      setMaskedPhone(result.phone);
+      setCountdown(60);
+      setOtp("");
+      toast({ title: "Kode OTP baru terkirim" });
+    } catch (error: any) {
+      const msg = error.message.includes(":")
+        ? error.message.split(":").slice(1).join(":").trim()
+        : error.message;
+      let parsed = msg;
+      try { parsed = JSON.parse(msg).message; } catch {}
+      toast({ title: "Gagal kirim ulang", description: parsed, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -67,7 +155,7 @@ export default function LoginPage() {
             <div className="flex items-center gap-2 justify-center">
               <button
                 type="button"
-                onClick={() => setIsAdmin(false)}
+                onClick={() => { setIsAdmin(false); setStep("kk"); }}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                   !isAdmin
                     ? "bg-primary text-primary-foreground"
@@ -79,7 +167,7 @@ export default function LoginPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setIsAdmin(true)}
+                onClick={() => { setIsAdmin(true); setStep("kk"); }}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
                   isAdmin
                     ? "bg-primary text-primary-foreground"
@@ -93,79 +181,173 @@ export default function LoginPage() {
             </div>
           </CardHeader>
           <CardContent className="px-5 pb-5 pt-3">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="username" className="text-base font-medium">
-                  {isAdmin ? "Username" : "Nomor Kartu Keluarga"}
-                </Label>
-                <Input
-                  id="username"
-                  type="text"
-                  placeholder={isAdmin ? "Masukkan username" : "Contoh: 3277022211060211"}
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="h-12 text-base"
-                  data-testid="input-username"
-                />
-                {!isAdmin && (
+            {isAdmin ? (
+              <form onSubmit={handleAdminLogin} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="admin-username" className="text-base font-medium">Username</Label>
+                  <Input
+                    id="admin-username"
+                    type="text"
+                    placeholder="Masukkan username"
+                    value={adminUsername}
+                    onChange={(e) => setAdminUsername(e.target.value)}
+                    className="h-12 text-base"
+                    data-testid="input-username"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="admin-password" className="text-base font-medium">Password</Label>
+                  <Input
+                    id="admin-password"
+                    type="password"
+                    placeholder="Masukkan password"
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    className="h-12 text-base"
+                    data-testid="input-password"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full h-12 text-base font-semibold"
+                  disabled={loading}
+                  data-testid="button-submit-login"
+                >
+                  {loading ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Masuk...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <LogIn className="w-5 h-5" />
+                      Masuk
+                    </span>
+                  )}
+                </Button>
+              </form>
+            ) : step === "kk" ? (
+              <form onSubmit={handleRequestOtp} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="nomor-kk" className="text-base font-medium">
+                    Nomor Kartu Keluarga
+                  </Label>
+                  <Input
+                    id="nomor-kk"
+                    type="text"
+                    placeholder="Contoh: 3277022211060211"
+                    value={nomorKk}
+                    onChange={(e) => setNomorKk(e.target.value)}
+                    className="h-12 text-base"
+                    data-testid="input-nomor-kk"
+                  />
                   <p className="text-xs text-muted-foreground">
                     Masukkan 16 digit nomor KK Anda
                   </p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-base font-medium">
-                  Password
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder={isAdmin ? "Masukkan password" : "4 digit terakhir No. KK"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="h-12 text-base pr-12"
-                    data-testid="input-password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                    data-testid="button-toggle-password"
-                  >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
                 </div>
-                {!isAdmin && (
-                  <p className="text-xs text-muted-foreground">
-                    Password = 4 digit terakhir nomor KK
+                <Button
+                  type="submit"
+                  className="w-full h-12 text-base font-semibold"
+                  disabled={loading}
+                  data-testid="button-request-otp"
+                >
+                  {loading ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Mengirim OTP...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <MessageCircle className="w-5 h-5" />
+                      Kirim Kode OTP via WhatsApp
+                    </span>
+                  )}
+                </Button>
+                <p className="text-xs text-center text-muted-foreground">
+                  Kode OTP akan dikirim ke nomor WhatsApp kepala keluarga
+                </p>
+              </form>
+            ) : (
+              <form onSubmit={handleVerifyOtp} className="space-y-4">
+                <button
+                  type="button"
+                  onClick={() => { setStep("kk"); setOtp(""); }}
+                  className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  data-testid="button-back-to-kk"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Ganti nomor KK
+                </button>
+
+                <div className="bg-muted/50 rounded-lg p-3 text-center space-y-1">
+                  <p className="text-sm text-muted-foreground">Kode OTP dikirim ke</p>
+                  <p className="font-semibold text-base" data-testid="text-masked-phone">
+                    {maskedPhone}
                   </p>
-                )}
-              </div>
-              <Button
-                type="submit"
-                className="w-full h-12 text-base font-semibold"
-                disabled={loading}
-                data-testid="button-submit-login"
-              >
-                {loading ? (
-                  <span className="flex items-center gap-2">
-                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Masuk...
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-2">
-                    <LogIn className="w-5 h-5" />
-                    Masuk
-                  </span>
-                )}
-              </Button>
-            </form>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="otp" className="text-base font-medium">Kode OTP</Label>
+                  <Input
+                    ref={otpInputRef}
+                    id="otp"
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={2}
+                    placeholder="__"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 2))}
+                    className="h-14 text-2xl text-center tracking-[0.5em] font-bold"
+                    data-testid="input-otp"
+                  />
+                  <p className="text-xs text-muted-foreground text-center">
+                    Masukkan 2 digit kode dari WhatsApp
+                  </p>
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full h-12 text-base font-semibold"
+                  disabled={loading || otp.length < 2}
+                  data-testid="button-verify-otp"
+                >
+                  {loading ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Memverifikasi...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <LogIn className="w-5 h-5" />
+                      Masuk
+                    </span>
+                  )}
+                </Button>
+
+                <div className="text-center">
+                  {countdown > 0 ? (
+                    <p className="text-sm text-muted-foreground" data-testid="text-countdown">
+                      Kirim ulang dalam {countdown} detik
+                    </p>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleResendOtp}
+                      className="text-sm text-primary font-medium hover:underline"
+                      disabled={loading}
+                      data-testid="button-resend-otp"
+                    >
+                      Kirim Ulang OTP
+                    </button>
+                  )}
+                </div>
+              </form>
+            )}
           </CardContent>
         </Card>
 
         <p className="text-center text-[hsl(40,20%,65%)] text-xs">
-          Satu akun per Kartu Keluarga
+          {isAdmin ? "Login khusus admin RW 03" : "Satu akun per Kartu Keluarga"}
         </p>
       </div>
     </div>

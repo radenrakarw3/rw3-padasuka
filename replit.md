@@ -16,9 +16,14 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
 - Supporting: White, Black, Dark Red, Dark Blue
 
 ## Auth System
-- **Warga Login**: Username = Nomor KK, Password = last 4 digits of KK number
+- **Warga Login**: 2-step OTP via WhatsApp (Star Sender)
+  1. Warga enters nomor KK → system sends 2-digit OTP to kepala keluarga's WhatsApp
+  2. Warga enters OTP code → verified and logged in
+  - OTP expires after 5 minutes, 60-second resend cooldown
+  - In-memory OTP store (Map) on server
 - **Admin Login**: Username = "admin", Password = "admin2026"
 - Session-based auth with express-session
+- Access control: warga can only access their own KK data, admin sees all
 
 ## Key Features
 1. **Warga Pages**: Beranda, Profil (view/edit request), Laporan, Pelayanan Surat

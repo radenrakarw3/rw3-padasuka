@@ -12,6 +12,8 @@ interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
   login: (username: string, password: string) => Promise<AuthUser>;
+  requestOtp: (nomorKk: string) => Promise<{ phone: string }>;
+  verifyOtp: (nomorKk: string, otp: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
 }
 
@@ -41,13 +43,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return data;
   }, []);
 
+  const requestOtp = useCallback(async (nomorKk: string) => {
+    const res = await apiRequest("POST", "/api/auth/request-otp", { nomorKk });
+    const data = await res.json();
+    return data;
+  }, []);
+
+  const verifyOtp = useCallback(async (nomorKk: string, otp: string) => {
+    const res = await apiRequest("POST", "/api/auth/verify-otp", { nomorKk, otp });
+    const data = await res.json();
+    setUser(data);
+    return data;
+  }, []);
+
   const logout = useCallback(async () => {
     await apiRequest("POST", "/api/auth/logout");
     setUser(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, requestOtp, verifyOtp, logout }}>
       {children}
     </AuthContext.Provider>
   );
