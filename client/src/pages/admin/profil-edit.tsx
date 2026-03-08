@@ -29,11 +29,16 @@ export default function AdminProfilEdit() {
   const getWargaName = (id: number) => wargaList?.find(w => w.id === id)?.namaLengkap || "Warga";
 
   const fieldLabels: Record<string, string> = {
+    namaLengkap: "Nama Lengkap",
+    nik: "NIK",
     nomorWhatsapp: "No. WhatsApp",
-    pekerjaan: "Pekerjaan",
+    jenisKelamin: "Jenis Kelamin",
     statusPerkawinan: "Status Perkawinan",
     agama: "Agama",
-    namaLengkap: "Nama Lengkap",
+    kedudukanKeluarga: "Kedudukan Keluarga",
+    tanggalLahir: "Tanggal Lahir",
+    pekerjaan: "Pekerjaan",
+    statusKependudukan: "Status Kependudukan",
   };
 
   const statusConfig: Record<string, { label: string; color: string }> = {

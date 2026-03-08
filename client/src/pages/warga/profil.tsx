@@ -8,16 +8,29 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Edit2, Check, X, User, MapPin, Phone, Briefcase, Clock } from "lucide-react";
+import { Edit2, Check, X, User, MapPin, Clock } from "lucide-react";
 import type { KartuKeluarga, Warga, ProfileEditRequest } from "@shared/schema";
+
+const fieldLabels: Record<string, string> = {
+  namaLengkap: "Nama Lengkap",
+  nik: "NIK",
+  nomorWhatsapp: "No. WhatsApp",
+  jenisKelamin: "Jenis Kelamin",
+  statusPerkawinan: "Status Kawin",
+  agama: "Agama",
+  kedudukanKeluarga: "Kedudukan",
+  tanggalLahir: "Tanggal Lahir",
+  pekerjaan: "Pekerjaan",
+  statusKependudukan: "Status",
+};
 
 export default function WargaProfil() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [editWa, setEditWa] = useState("");
-  const [editPekerjaan, setEditPekerjaan] = useState("");
+  const [editData, setEditData] = useState<Record<string, string>>({});
 
   const { data: kk, isLoading: kkLoading } = useQuery<KartuKeluarga>({
     queryKey: ["/api/kk", user?.kkId],
@@ -44,6 +57,7 @@ export default function WargaProfil() {
     onSuccess: () => {
       toast({ title: "Perubahan diajukan", description: "Menunggu persetujuan admin" });
       setEditingId(null);
+      setEditData({});
       queryClient.invalidateQueries({ queryKey: ["/api/profile-edits"] });
     },
     onError: (err: any) => {
@@ -66,20 +80,37 @@ export default function WargaProfil() {
 
   const handleEdit = (w: Warga) => {
     setEditingId(w.id);
-    setEditWa(w.nomorWhatsapp || "");
-    setEditPekerjaan(w.pekerjaan || "");
+    setEditData({
+      namaLengkap: w.namaLengkap || "",
+      nik: w.nik || "",
+      nomorWhatsapp: w.nomorWhatsapp || "",
+      jenisKelamin: w.jenisKelamin || "",
+      statusPerkawinan: w.statusPerkawinan || "",
+      agama: w.agama || "",
+      kedudukanKeluarga: w.kedudukanKeluarga || "",
+      tanggalLahir: w.tanggalLahir || "",
+      pekerjaan: w.pekerjaan || "",
+      statusKependudukan: w.statusKependudukan || "",
+    });
   };
 
   const handleCancel = () => {
     setEditingId(null);
-    setEditWa("");
-    setEditPekerjaan("");
+    setEditData({});
   };
 
   const handleSaveEdit = (w: Warga) => {
     const changes: Record<string, string> = {};
-    if (editWa !== (w.nomorWhatsapp || "")) changes.nomorWhatsapp = editWa;
-    if (editPekerjaan !== (w.pekerjaan || "")) changes.pekerjaan = editPekerjaan;
+    if (editData.namaLengkap !== (w.namaLengkap || "")) changes.namaLengkap = editData.namaLengkap;
+    if (editData.nik !== (w.nik || "")) changes.nik = editData.nik;
+    if (editData.nomorWhatsapp !== (w.nomorWhatsapp || "")) changes.nomorWhatsapp = editData.nomorWhatsapp;
+    if (editData.jenisKelamin !== (w.jenisKelamin || "")) changes.jenisKelamin = editData.jenisKelamin;
+    if (editData.statusPerkawinan !== (w.statusPerkawinan || "")) changes.statusPerkawinan = editData.statusPerkawinan;
+    if (editData.agama !== (w.agama || "")) changes.agama = editData.agama;
+    if (editData.kedudukanKeluarga !== (w.kedudukanKeluarga || "")) changes.kedudukanKeluarga = editData.kedudukanKeluarga;
+    if (editData.tanggalLahir !== (w.tanggalLahir || "")) changes.tanggalLahir = editData.tanggalLahir;
+    if (editData.pekerjaan !== (w.pekerjaan || "")) changes.pekerjaan = editData.pekerjaan;
+    if (editData.statusKependudukan !== (w.statusKependudukan || "")) changes.statusKependudukan = editData.statusKependudukan;
 
     if (Object.keys(changes).length === 0) {
       toast({ title: "Tidak ada perubahan" });
@@ -88,6 +119,10 @@ export default function WargaProfil() {
     }
 
     submitEdit.mutate({ wargaId: w.id, kkId: w.kkId, changes });
+  };
+
+  const setField = (key: string, value: string) => {
+    setEditData(prev => ({ ...prev, [key]: value }));
   };
 
   const getPendingEdit = (wargaId: number) => {
@@ -177,82 +212,181 @@ export default function WargaProfil() {
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-                <div>
-                  <span className="text-muted-foreground">NIK</span>
-                  <p className="font-medium">{w.nik}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Jenis Kelamin</span>
-                  <p className="font-medium">{w.jenisKelamin}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Agama</span>
-                  <p className="font-medium">{w.agama}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Tanggal Lahir</span>
-                  <p className="font-medium">{w.tanggalLahir || "-"}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Status Kawin</span>
-                  <p className="font-medium">{w.statusPerkawinan}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Status</span>
-                  <Badge variant={w.statusKependudukan === "Aktif" ? "default" : "secondary"} className="text-[10px]">
-                    {w.statusKependudukan}
-                  </Badge>
-                </div>
-
-                {isEditing ? (
-                  <>
-                    <div className="col-span-2 space-y-1.5 pt-2 border-t">
-                      <Label className="text-xs flex items-center gap-1 font-medium">
-                        <Phone className="w-3 h-3" /> No. WhatsApp
-                      </Label>
+              {isEditing ? (
+                <div className="space-y-3 border-t pt-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Nama Lengkap</Label>
+                    <Input
+                      value={editData.namaLengkap}
+                      onChange={(e) => setField("namaLengkap", e.target.value)}
+                      className="h-10 text-sm"
+                      data-testid={`input-nama-${w.id}`}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">NIK</Label>
+                    <Input
+                      value={editData.nik}
+                      onChange={(e) => setField("nik", e.target.value)}
+                      className="h-10 text-sm"
+                      data-testid={`input-nik-${w.id}`}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">No. WhatsApp</Label>
+                    <Input
+                      value={editData.nomorWhatsapp}
+                      onChange={(e) => setField("nomorWhatsapp", e.target.value)}
+                      placeholder="08xxxxxxxxxx"
+                      className="h-10 text-sm"
+                      data-testid={`input-wa-${w.id}`}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">Jenis Kelamin</Label>
+                      <Select value={editData.jenisKelamin} onValueChange={(v) => setField("jenisKelamin", v)}>
+                        <SelectTrigger className="h-10 text-sm" data-testid={`select-jk-${w.id}`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Laki-laki">Laki-laki</SelectItem>
+                          <SelectItem value="Perempuan">Perempuan</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">Agama</Label>
+                      <Select value={editData.agama} onValueChange={(v) => setField("agama", v)}>
+                        <SelectTrigger className="h-10 text-sm" data-testid={`select-agama-${w.id}`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Islam">Islam</SelectItem>
+                          <SelectItem value="Kristen">Kristen</SelectItem>
+                          <SelectItem value="Katolik">Katolik</SelectItem>
+                          <SelectItem value="Hindu">Hindu</SelectItem>
+                          <SelectItem value="Buddha">Buddha</SelectItem>
+                          <SelectItem value="Konghucu">Konghucu</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">Status Kawin</Label>
+                      <Select value={editData.statusPerkawinan} onValueChange={(v) => setField("statusPerkawinan", v)}>
+                        <SelectTrigger className="h-10 text-sm" data-testid={`select-kawin-${w.id}`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Belum Kawin">Belum Kawin</SelectItem>
+                          <SelectItem value="Kawin">Kawin</SelectItem>
+                          <SelectItem value="Cerai Hidup">Cerai Hidup</SelectItem>
+                          <SelectItem value="Cerai Mati">Cerai Mati</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">Kedudukan</Label>
+                      <Select value={editData.kedudukanKeluarga} onValueChange={(v) => setField("kedudukanKeluarga", v)}>
+                        <SelectTrigger className="h-10 text-sm" data-testid={`select-kedudukan-${w.id}`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Kepala Keluarga">Kepala Keluarga</SelectItem>
+                          <SelectItem value="Istri">Istri</SelectItem>
+                          <SelectItem value="Anak">Anak</SelectItem>
+                          <SelectItem value="Menantu">Menantu</SelectItem>
+                          <SelectItem value="Cucu">Cucu</SelectItem>
+                          <SelectItem value="Orang Tua">Orang Tua</SelectItem>
+                          <SelectItem value="Famili Lain">Famili Lain</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">Tanggal Lahir</Label>
                       <Input
-                        value={editWa}
-                        onChange={(e) => setEditWa(e.target.value)}
-                        placeholder="08xxxxxxxxxx"
+                        type="date"
+                        value={editData.tanggalLahir}
+                        onChange={(e) => setField("tanggalLahir", e.target.value)}
                         className="h-10 text-sm"
-                        data-testid={`input-wa-${w.id}`}
+                        data-testid={`input-tgl-lahir-${w.id}`}
                       />
                     </div>
-                    <div className="col-span-2 space-y-1.5">
-                      <Label className="text-xs flex items-center gap-1 font-medium">
-                        <Briefcase className="w-3 h-3" /> Pekerjaan
-                      </Label>
-                      <Input
-                        value={editPekerjaan}
-                        onChange={(e) => setEditPekerjaan(e.target.value)}
-                        placeholder="Masukkan pekerjaan"
-                        className="h-10 text-sm"
-                        data-testid={`input-pekerjaan-${w.id}`}
-                      />
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">Status</Label>
+                      <Select value={editData.statusKependudukan} onValueChange={(v) => setField("statusKependudukan", v)}>
+                        <SelectTrigger className="h-10 text-sm" data-testid={`select-status-${w.id}`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Aktif">Aktif</SelectItem>
+                          <SelectItem value="Pindah">Pindah</SelectItem>
+                          <SelectItem value="Meninggal">Meninggal</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
-                  </>
-                ) : (
-                  <>
-                    <div>
-                      <span className="text-muted-foreground flex items-center gap-1"><Phone className="w-3 h-3" /> WhatsApp</span>
-                      <p className="font-medium">{w.nomorWhatsapp || "-"}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground flex items-center gap-1"><Briefcase className="w-3 h-3" /> Pekerjaan</span>
-                      <p className="font-medium">{w.pekerjaan || "-"}</p>
-                    </div>
-                  </>
-                )}
-              </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Pekerjaan</Label>
+                    <Input
+                      value={editData.pekerjaan}
+                      onChange={(e) => setField("pekerjaan", e.target.value)}
+                      placeholder="Masukkan pekerjaan"
+                      className="h-10 text-sm"
+                      data-testid={`input-pekerjaan-${w.id}`}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                  <div>
+                    <span className="text-muted-foreground">NIK</span>
+                    <p className="font-medium">{w.nik}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">No. WhatsApp</span>
+                    <p className="font-medium">{w.nomorWhatsapp || "-"}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Jenis Kelamin</span>
+                    <p className="font-medium">{w.jenisKelamin}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Agama</span>
+                    <p className="font-medium">{w.agama}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Tanggal Lahir</span>
+                    <p className="font-medium">{w.tanggalLahir || "-"}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Pekerjaan</span>
+                    <p className="font-medium">{w.pekerjaan || "-"}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Status Kawin</span>
+                    <p className="font-medium">{w.statusPerkawinan}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Status</span>
+                    <Badge variant={w.statusKependudukan === "Aktif" ? "default" : "secondary"} className="text-[10px]">
+                      {w.statusKependudukan}
+                    </Badge>
+                  </div>
+                </div>
+              )}
 
               {pendingEdit && (
                 <div className="mt-3 p-2 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
-                  <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">Perubahan menunggu persetujuan:</p>
-                  <div className="text-xs text-amber-600 dark:text-amber-500 mt-1">
+                  <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">Perubahan menunggu persetujuan admin:</p>
+                  <div className="text-xs text-amber-600 dark:text-amber-500 mt-1 space-y-0.5">
                     {Object.entries(pendingEdit.fieldChanges as Record<string, string>).map(([key, val]) => (
                       <p key={key}>
-                        {key === "nomorWhatsapp" ? "No. WhatsApp" : key === "pekerjaan" ? "Pekerjaan" : key}: <span className="font-medium">{val}</span>
+                        {fieldLabels[key] || key}: <span className="font-medium">{val}</span>
                       </p>
                     ))}
                   </div>
