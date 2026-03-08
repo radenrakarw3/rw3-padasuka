@@ -15,6 +15,87 @@ import type { KartuKeluarga } from "@shared/schema";
 
 const PER_PAGE = 10;
 
+const pekerjaanOptions = [
+  "Belum/Tidak Bekerja",
+  "Mengurus Rumah Tangga",
+  "Ibu Rumah Tangga",
+  "Pelajar/Mahasiswa",
+  "Pensiunan",
+  "Pegawai Negeri Sipil (PNS)",
+  "Tentara Nasional Indonesia (TNI)",
+  "Kepolisian RI (POLRI)",
+  "Perdagangan",
+  "Petani/Pekebun",
+  "Peternak",
+  "Nelayan/Perikanan",
+  "Industri",
+  "Konstruksi",
+  "Transportasi",
+  "Karyawan Swasta",
+  "Karyawan BUMN",
+  "Karyawan BUMD",
+  "Karyawan Honorer",
+  "Buruh Harian Lepas",
+  "Buruh Tani/Perkebunan",
+  "Buruh Nelayan/Perikanan",
+  "Buruh Peternakan",
+  "Pembantu Rumah Tangga",
+  "Tukang Cukur",
+  "Tukang Listrik",
+  "Tukang Batu",
+  "Tukang Kayu",
+  "Tukang Sol Sepatu",
+  "Tukang Las/Pandai Besi",
+  "Tukang Jahit",
+  "Tukang Gigi",
+  "Penata Rias",
+  "Penata Busana",
+  "Penata Rambut",
+  "Mekanik",
+  "Seniman",
+  "Tabib",
+  "Paraji",
+  "Perancang Busana",
+  "Penerjemah",
+  "Imam Masjid",
+  "Pendeta",
+  "Pastor",
+  "Wartawan",
+  "Ustadz/Mubaligh",
+  "Juru Masak",
+  "Promotor Acara",
+  "Anggota DPR-RI",
+  "Anggota DPD",
+  "Anggota DPRD Provinsi",
+  "Anggota DPRD Kabupaten/Kota",
+  "Dosen",
+  "Guru",
+  "Pilot",
+  "Pengacara",
+  "Notaris",
+  "Arsitek",
+  "Akuntan",
+  "Konsultan",
+  "Dokter",
+  "Bidan",
+  "Perawat",
+  "Apoteker",
+  "Psikiater/Psikolog",
+  "Penyiar Televisi",
+  "Penyiar Radio",
+  "Pelaut",
+  "Peneliti",
+  "Sopir",
+  "Pialang",
+  "Paranormal",
+  "Pedagang",
+  "Perangkat Desa",
+  "Kepala Desa",
+  "Biarawati",
+  "Wiraswasta",
+  "Lainnya",
+];
+
 export default function AdminKelolaWarga() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
@@ -155,7 +236,12 @@ export default function AdminKelolaWarga() {
               </div>
               <div className="space-y-1">
                 <Label className="text-sm">Pekerjaan</Label>
-                <Input value={form.pekerjaan} onChange={e => setForm({...form, pekerjaan: e.target.value})} className="h-10" />
+                <Select value={form.pekerjaan} onValueChange={v => setForm({...form, pekerjaan: v})}>
+                  <SelectTrigger className="h-10"><SelectValue placeholder="Pilih pekerjaan" /></SelectTrigger>
+                  <SelectContent>
+                    {pekerjaanOptions.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <Button className="w-full h-10" onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !form.kkId || !form.namaLengkap || !form.nik} data-testid="button-simpan-warga">
                 {createMutation.isPending ? "Menyimpan..." : "Simpan Warga"}
