@@ -1,4 +1,5 @@
-import { Switch, Route } from "wouter";
+import { useState } from "react";
+import { Switch, Route, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -20,11 +21,39 @@ import AdminKelolaSurat from "@/pages/admin/kelola-surat";
 import AdminSuratRw from "@/pages/admin/surat-rw";
 import AdminProfilEdit from "@/pages/admin/profil-edit";
 import AdminWaBlast from "@/pages/admin/wa-blast";
+import { X } from "lucide-react";
+import welcomeImg from "@assets/Wilujeng_Sumping_Wargi_RW03!_1772993003046.png";
+
+function WelcomePopup({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={onClose} data-testid="welcome-overlay">
+      <div className="relative w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-black/40 text-white flex items-center justify-center hover:bg-black/60 transition-colors"
+          data-testid="button-close-welcome"
+        >
+          <X className="w-5 h-5" />
+        </button>
+        <img
+          src={welcomeImg}
+          alt="Wilujeng Sumping Wargi RW03!"
+          className="w-full h-auto"
+          data-testid="img-welcome"
+        />
+      </div>
+    </div>
+  );
+}
 
 function WargaRoutes() {
+  const [showWelcome, setShowWelcome] = useState(true);
+
   return (
     <WargaLayout>
+      {showWelcome && <WelcomePopup onClose={() => setShowWelcome(false)} />}
       <Switch>
+        <Route path="/">{() => <Redirect to="/warga" />}</Route>
         <Route path="/warga" component={WargaBeranda} />
         <Route path="/warga/profil" component={WargaProfil} />
         <Route path="/warga/laporan" component={WargaLaporan} />
@@ -39,6 +68,7 @@ function AdminRoutes() {
   return (
     <AdminLayout>
       <Switch>
+        <Route path="/">{() => <Redirect to="/admin" />}</Route>
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/admin/kk" component={AdminKelolaKK} />
         <Route path="/admin/warga" component={AdminKelolaWarga} />
