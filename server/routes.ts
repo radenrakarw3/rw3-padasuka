@@ -530,25 +530,30 @@ Ketua RW 03
 
   app.post("/api/surat-rw", requireAdmin, async (req, res) => {
     try {
-      const parsed = insertSuratRwSchema.parse(req.body);
+      const { konteks, ...suratData } = req.body;
+      const parsed = insertSuratRwSchema.parse(suratData);
+
+      const contextBlock = konteks ? `\nDetail informasi tambahan:\n${konteks}\n` : "";
 
       const prompt = `Buatkan ${parsed.jenisSurat} resmi dari RW 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi.
 
 Perihal: ${parsed.perihal}
 ${parsed.tujuan ? `Ditujukan kepada: ${parsed.tujuan}` : ""}
 ${parsed.tanggalSurat ? `Tanggal surat: ${parsed.tanggalSurat}` : `Tanggal surat: hari ini`}
+${contextBlock}
+INSTRUKSI PEMBUATAN SURAT:
+1. Buat surat ${parsed.jenisSurat} yang lengkap, resmi, dan profesional.
+2. Gunakan SEMUA informasi detail yang diberikan di atas secara akurat. Jangan mengarang data yang tidak diberikan.
+3. Sesuaikan gaya bahasa dan format dengan jenis surat (undangan harus ada waktu/tempat/acara, surat tugas harus ada uraian tugas, dll).
+4. Nama Ketua RW 03: Raden Raka.
 
-Format surat harus lengkap dan resmi dengan:
-- Perihal
-- Isi surat yang jelas dan profesional
-- Tempat tanda tangan Ketua RW 03
-- Nama Ketua RW: Raden Raka
+LARANGAN:
+1. JANGAN sertakan kop surat/header (sudah otomatis oleh sistem).
+2. JANGAN sertakan nomor surat (sudah otomatis oleh sistem).
+3. JANGAN gunakan markdown (bintang, hashtag, dll). Tulis teks biasa saja.
+4. Langsung mulai dari "Lampiran:" atau "Perihal:" atau judul surat.
 
-PENTING:
-1. JANGAN sertakan kop surat/header karena kop surat dengan logo resmi RW 03 akan ditambahkan secara otomatis oleh sistem.
-2. JANGAN sertakan nomor surat karena nomor surat akan di-assign otomatis oleh sistem.
-3. Langsung mulai dari "Perihal:" atau judul surat.
-4. Bagian tanda tangan di akhir surat format VERTIKAL:
+FORMAT TANDA TANGAN (di akhir surat, WAJIB format vertikal atas-bawah):
 
 Ketua RW 03
 Kelurahan Padasuka
@@ -556,7 +561,7 @@ Kelurahan Padasuka
 
 (Raden Raka)
 
-5. Buat dalam format teks biasa yang rapi, bukan markdown. Jangan gunakan tanda bintang (*) atau formatting markdown apapun. Surat harus terlihat profesional dan resmi.`;
+Buat surat dalam format teks biasa yang rapi dan profesional.`;
 
       let isiSurat = "";
       try {
