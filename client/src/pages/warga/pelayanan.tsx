@@ -11,8 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, FileText, Clock, CheckCircle, XCircle, Download, ArrowLeft } from "lucide-react";
+import { Plus, FileText, Clock, CheckCircle, XCircle, Download, ArrowLeft, Loader2 } from "lucide-react";
 import type { SuratWarga, Warga, KartuKeluarga } from "@shared/schema";
+import { generateSuratPDF } from "@/lib/pdf-surat";
 
 const jenisSuratOptions = [
   { value: "surat_keterangan_domisili", label: "Surat Keterangan Domisili" },
@@ -81,15 +82,23 @@ export default function WargaPelayanan() {
     ditolak: { label: "Ditolak", color: "bg-red-100 text-red-800", icon: XCircle },
   };
 
-  const handleDownload = (surat: SuratWarga) => {
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const handleDownload = async (surat: SuratWarga) => {
     if (!surat.isiSurat) return;
-    const blob = new Blob([surat.isiSurat], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Surat_${surat.jenisSurat}_${surat.id}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+    setDownloadingId(surat.id);
+    try {
+      const label = jenisSuratOptions.find(o => o.value === surat.jenisSurat)?.label || surat.jenisSurat;
+      await generateSuratPDF({
+        nomorSurat: surat.nomorSurat,
+        isiSurat: surat.isiSurat,
+        jenisSurat: label,
+        fileName: `Surat_${label.replace(/\s/g, "_")}_${surat.nomorSurat?.replace(/\//g, "-") || surat.id}`,
+      });
+    } catch {
+      toast({ title: "Gagal membuat PDF", variant: "destructive" });
+    } finally {
+      setDownloadingId(null);
+    }
   };
 
   if (showForm) {
@@ -224,16 +233,22 @@ export default function WargaPelayanan() {
                   </Badge>
                 </div>
                 {s.status === "disetujui" && s.isiSurat && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full mt-2 gap-1.5"
-                    onClick={() => handleDownload(s)}
-                    data-testid={`button-download-${s.id}`}
-                  >
-                    <Download className="w-4 h-4" />
-                    Download Surat
-                  </Button>
+                  <div className="mt-2 space-y-1">
+                    {s.nomorSurat && (
+                      <p className="text-[10px] text-muted-foreground">No. Surat: {s.nomorSurat}</p>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full gap-1.5"
+                      onClick={() => handleDownload(s)}
+                      disabled={downloadingId === s.id}
+                      data-testid={`button-download-${s.id}`}
+                    >
+                      {downloadingId === s.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                      Download PDF
+                    </Button>
+                  </div>
                 )}
                 <p className="text-[10px] text-muted-foreground mt-2">
                   {s.createdAt ? new Date(s.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }) : ""}

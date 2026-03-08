@@ -30,9 +30,15 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
 
 ## Key Features
 1. **Warga Pages**: Beranda, Profil (view/edit request), Laporan, Pelayanan Surat
-2. **Admin Pages**: Dashboard, Kelola KK, Kelola Warga, Kelola Laporan, Kelola Surat, Surat RW (Surat Sakti), Edit Profil approval, WA Blast
+2. **Admin Pages**: Dashboard, Kelola KK, Kelola Warga, Kelola Laporan, Kelola Surat, Surat RW (Surat Sakti), Arsip Surat, Edit Profil approval, WA Blast
 3. **Gemini AI**: Auto-generates surat keterangan and official RW letters
 4. **Star Sender**: WA Blast with category filters (semua, per RT, kepala keluarga, penerima bansos)
+
+## Letter System
+- **Surat Warga Flow**: Warga submits request → Admin clicks "Generate" (Gemini AI) → Admin reviews → Approve/Reject → Nomor surat auto-assigned on approval (format: XXX/SK-W/RW-03/MM/YYYY)
+- **Surat RW Flow**: Admin creates surat → Gemini AI generates → Nomor surat auto-assigned on creation (format: XXX/SK-RW/RW-03/MM/YYYY)
+- **PDF Download**: A4 format with KOP surat (logo + RW03 letterhead), generated client-side using jsPDF (`client/src/lib/pdf-surat.ts`)
+- **Arsip Surat**: Admin archive page listing all approved surat warga + surat RW with nomor surat, searchable and filterable
 
 ## Data Model (shared/schema.ts)
 - `kartu_keluarga`: KK data with RT assignment

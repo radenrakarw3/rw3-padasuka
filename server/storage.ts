@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql, count } from "drizzle-orm";
 import { db } from "./db";
 import {
   kartuKeluarga, warga, rtData, laporan, suratWarga, suratRw,
@@ -64,6 +64,11 @@ export interface IStorage {
   getAdminByUsername(username: string): Promise<AdminUser | undefined>;
   getAllAdmins(): Promise<AdminUser[]>;
   createAdmin(data: InsertAdminUser): Promise<AdminUser>;
+
+  countSuratWargaThisYear(): Promise<number>;
+  countSuratRwThisYear(): Promise<number>;
+  updateSuratWargaNomor(id: number, nomorSurat: string): Promise<SuratWarga | undefined>;
+  updateSuratRwNomor(id: number, nomorSurat: string): Promise<SuratRw | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -290,6 +295,42 @@ export class DatabaseStorage implements IStorage {
 
   async createAdmin(data: InsertAdminUser): Promise<AdminUser> {
     const [result] = await db.insert(adminUser).values(data).returning();
+    return result;
+  }
+
+  async countSuratWargaThisYear(): Promise<number> {
+    const year = new Date().getFullYear();
+    const start = new Date(`${year}-01-01`);
+    const end = new Date(`${year + 1}-01-01`);
+    const [result] = await db.select({ count: count() }).from(suratWarga)
+      .where(and(
+        sql`${suratWarga.createdAt} >= ${start}`,
+        sql`${suratWarga.createdAt} < ${end}`,
+        sql`${suratWarga.nomorSurat} IS NOT NULL`
+      ));
+    return result?.count || 0;
+  }
+
+  async countSuratRwThisYear(): Promise<number> {
+    const year = new Date().getFullYear();
+    const start = new Date(`${year}-01-01`);
+    const end = new Date(`${year + 1}-01-01`);
+    const [result] = await db.select({ count: count() }).from(suratRw)
+      .where(and(
+        sql`${suratRw.createdAt} >= ${start}`,
+        sql`${suratRw.createdAt} < ${end}`,
+        sql`${suratRw.nomorSurat} IS NOT NULL`
+      ));
+    return result?.count || 0;
+  }
+
+  async updateSuratWargaNomor(id: number, nomorSurat: string): Promise<SuratWarga | undefined> {
+    const [result] = await db.update(suratWarga).set({ nomorSurat }).where(eq(suratWarga.id, id)).returning();
+    return result;
+  }
+
+  async updateSuratRwNomor(id: number, nomorSurat: string): Promise<SuratRw | undefined> {
+    const [result] = await db.update(suratRw).set({ nomorSurat }).where(eq(suratRw.id, id)).returning();
     return result;
   }
 }

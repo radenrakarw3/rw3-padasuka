@@ -478,15 +478,30 @@ Buat dalam format teks biasa yang rapi, bukan markdown.`;
   });
 
   app.patch("/api/surat-warga/:id/status", requireAdmin, async (req, res) => {
-    const { status } = req.body;
-    const surat = await storage.getSuratWargaById(parseInt(req.params.id));
-    if (!surat) return res.status(404).json({ message: "Surat tidak ditemukan" });
-    if (status === "disetujui" && !surat.isiSurat) {
-      return res.status(400).json({ message: "Surat belum di-generate. Silakan generate terlebih dahulu." });
+    try {
+      const { status } = req.body;
+      const surat = await storage.getSuratWargaById(parseInt(req.params.id));
+      if (!surat) return res.status(404).json({ message: "Surat tidak ditemukan" });
+      if (status === "disetujui" && !surat.isiSurat) {
+        return res.status(400).json({ message: "Surat belum di-generate. Silakan generate terlebih dahulu." });
+      }
+      const data = await storage.updateSuratWargaStatus(surat.id, status);
+      if (!data) return res.status(404).json({ message: "Surat tidak ditemukan" });
+
+      if (status === "disetujui" && !surat.nomorSurat) {
+        const currentCount = await storage.countSuratWargaThisYear();
+        const seq = String(currentCount + 1).padStart(3, "0");
+        const year = new Date().getFullYear();
+        const month = String(new Date().getMonth() + 1).padStart(2, "0");
+        const nomorSurat = `${seq}/SK-W/RW-03/${month}/${year}`;
+        await storage.updateSuratWargaNomor(surat.id, nomorSurat);
+        const updated = await storage.getSuratWargaById(surat.id);
+        return res.json(updated);
+      }
+      res.json(data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
     }
-    const data = await storage.updateSuratWargaStatus(surat.id, status);
-    if (!data) return res.status(404).json({ message: "Surat tidak ditemukan" });
-    res.json(data);
   });
 
   app.get("/api/surat-rw", requireAdmin, async (_req, res) => {
@@ -524,7 +539,15 @@ Buat dalam format teks biasa yang rapi, bukan markdown. Surat harus terlihat pro
       }
 
       const data = await storage.createSuratRw({ ...parsed, isiSurat });
-      res.json(data);
+
+      const currentCount = await storage.countSuratRwThisYear();
+      const seq = String(currentCount + 1).padStart(3, "0");
+      const year = new Date().getFullYear();
+      const month = String(new Date().getMonth() + 1).padStart(2, "0");
+      const nomorSurat = `${seq}/SK-RW/RW-03/${month}/${year}`;
+      await storage.updateSuratRwNomor(data.id, nomorSurat);
+      const updated = await storage.getSuratRwById(data.id);
+      res.json(updated);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
     }

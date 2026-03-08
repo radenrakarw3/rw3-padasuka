@@ -21,6 +21,7 @@ import AdminKelolaSurat from "@/pages/admin/kelola-surat";
 import AdminSuratRw from "@/pages/admin/surat-rw";
 import AdminProfilEdit from "@/pages/admin/profil-edit";
 import AdminWaBlast from "@/pages/admin/wa-blast";
+import AdminArsipSurat from "@/pages/admin/arsip-surat";
 import { X } from "lucide-react";
 import welcomeImg from "@assets/Wilujeng_Sumping_Wargi_RW03!_1772993003046.png";
 
@@ -77,6 +78,7 @@ function AdminRoutes() {
         <Route path="/admin/surat-rw" component={AdminSuratRw} />
         <Route path="/admin/profil-edit" component={AdminProfilEdit} />
         <Route path="/admin/wa-blast" component={AdminWaBlast} />
+        <Route path="/admin/arsip-surat" component={AdminArsipSurat} />
         <Route component={NotFound} />
       </Switch>
     </AdminLayout>

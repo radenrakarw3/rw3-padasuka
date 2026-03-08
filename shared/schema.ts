@@ -58,6 +58,7 @@ export const laporan = pgTable("laporan", {
 
 export const suratWarga = pgTable("surat_warga", {
   id: serial("id").primaryKey(),
+  nomorSurat: text("nomor_surat"),
   wargaId: integer("warga_id").notNull().references(() => warga.id),
   kkId: integer("kk_id").notNull().references(() => kartuKeluarga.id),
   jenisSurat: text("jenis_surat").notNull(),
@@ -71,6 +72,7 @@ export const suratWarga = pgTable("surat_warga", {
 
 export const suratRw = pgTable("surat_rw", {
   id: serial("id").primaryKey(),
+  nomorSurat: text("nomor_surat"),
   jenisSurat: text("jenis_surat").notNull(),
   perihal: text("perihal").notNull(),
   tujuan: text("tujuan"),

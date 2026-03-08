@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import {
   LayoutDashboard, Users, FileText, ClipboardList, ScrollText,
-  MessageSquare, LogOut, Menu, X, Home as HomeIcon
+  MessageSquare, LogOut, Menu, X, Home as HomeIcon, Archive
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import logoImg from "@assets/Untitled_design_(24)_1772993886433.png";
@@ -15,6 +15,7 @@ const navItems = [
   { path: "/admin/laporan", icon: ClipboardList, label: "Laporan" },
   { path: "/admin/surat", icon: FileText, label: "Surat Warga" },
   { path: "/admin/surat-rw", icon: ScrollText, label: "Surat RW" },
+  { path: "/admin/arsip-surat", icon: Archive, label: "Arsip Surat" },
   { path: "/admin/profil-edit", icon: Users, label: "Edit Profil" },
   { path: "/admin/wa-blast", icon: MessageSquare, label: "WA Blast" },
 ];

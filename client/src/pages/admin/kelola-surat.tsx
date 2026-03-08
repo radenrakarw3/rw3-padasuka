@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, CheckCircle, XCircle, FileText, Eye, Sparkles, Loader2 } from "lucide-react";
+import { Clock, CheckCircle, XCircle, FileText, Eye, Sparkles, Loader2, Download } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useState } from "react";
 import type { SuratWarga, Warga } from "@shared/schema";
 import KopSurat from "@/components/kop-surat";
+import { generateSuratPDF } from "@/lib/pdf-surat";
 
 export default function AdminKelolaSurat() {
   const { toast } = useToast();
@@ -44,6 +45,21 @@ export default function AdminKelolaSurat() {
   });
 
   const getWargaName = (id: number) => wargaList?.find(w => w.id === id)?.namaLengkap || "Warga";
+
+  const handleDownloadPDF = async (s: SuratWarga) => {
+    if (!s.isiSurat) return;
+    try {
+      const label = s.jenisSurat.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+      await generateSuratPDF({
+        nomorSurat: s.nomorSurat,
+        isiSurat: s.isiSurat,
+        jenisSurat: label,
+        fileName: `Surat_${label.replace(/\s/g, "_")}_${s.nomorSurat?.replace(/\//g, "-") || s.id}`,
+      });
+    } catch {
+      toast({ title: "Gagal membuat PDF", variant: "destructive" });
+    }
+  };
 
   const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
     pending: { label: "Menunggu", color: "bg-yellow-100 text-yellow-800", icon: Clock },
@@ -80,6 +96,7 @@ export default function AdminKelolaSurat() {
                     </p>
                     <p className="text-xs text-muted-foreground">Perihal: {s.perihal}</p>
                     {s.keterangan && <p className="text-xs text-muted-foreground">Keterangan: {s.keterangan}</p>}
+                    {s.nomorSurat && <p className="text-xs font-medium text-primary">No: {s.nomorSurat}</p>}
                   </div>
                   <Badge className={`${sc.color} text-[10px] flex-shrink-0 gap-1`}>
                     <StatusIcon className="w-3 h-3" />{sc.label}
@@ -120,6 +137,11 @@ export default function AdminKelolaSurat() {
                   {!hasContent && s.status === "pending" && (
                     <Button size="sm" variant="destructive" className="gap-1" onClick={() => updateMutation.mutate({ id: s.id, status: "ditolak" })} disabled={updateMutation.isPending} data-testid={`button-tolak-surat-${s.id}-nogen`}>
                       <XCircle className="w-3 h-3" /> Tolak
+                    </Button>
+                  )}
+                  {hasContent && s.status === "disetujui" && (
+                    <Button size="sm" variant="outline" className="gap-1" onClick={() => handleDownloadPDF(s)} data-testid={`button-download-surat-${s.id}`}>
+                      <Download className="w-3 h-3" /> Download PDF
                     </Button>
                   )}
                 </div>

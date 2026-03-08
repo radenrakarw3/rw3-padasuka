@@ -10,9 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, ScrollText, Eye, Download } from "lucide-react";
+import { Plus, ScrollText, Eye, Download, Loader2 } from "lucide-react";
 import type { SuratRw } from "@shared/schema";
 import KopSurat from "@/components/kop-surat";
+import { generateSuratPDF } from "@/lib/pdf-surat";
 
 const jenisSuratRwOptions = [
   { value: "Surat Undangan", label: "Surat Undangan" },
@@ -53,15 +54,18 @@ export default function AdminSuratRw() {
     onError: (err: any) => toast({ title: "Gagal", description: err.message, variant: "destructive" }),
   });
 
-  const handleDownload = (surat: SuratRw) => {
+  const handleDownload = async (surat: SuratRw) => {
     if (!surat.isiSurat) return;
-    const blob = new Blob([surat.isiSurat], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${surat.jenisSurat.replace(/\s/g, "_")}_${surat.id}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      await generateSuratPDF({
+        nomorSurat: surat.nomorSurat,
+        isiSurat: surat.isiSurat,
+        jenisSurat: surat.jenisSurat,
+        fileName: `${surat.jenisSurat.replace(/\s/g, "_")}_${surat.nomorSurat?.replace(/\//g, "-") || surat.id}`,
+      });
+    } catch {
+      toast({ title: "Gagal membuat PDF", variant: "destructive" });
+    }
   };
 
   return (
@@ -126,6 +130,7 @@ export default function AdminSuratRw() {
                   <p className="font-semibold text-sm">{s.jenisSurat}</p>
                   <p className="text-xs text-muted-foreground">{s.perihal}</p>
                   {s.tujuan && <p className="text-xs text-muted-foreground">Kepada: {s.tujuan}</p>}
+                  {s.nomorSurat && <p className="text-xs font-medium text-primary">No: {s.nomorSurat}</p>}
                 </div>
               </div>
               <div className="flex gap-2">
