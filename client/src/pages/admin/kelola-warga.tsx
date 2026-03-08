@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
@@ -44,6 +44,17 @@ export default function AdminKelolaWarga() {
   const [kkDropdownOpen, setKkDropdownOpen] = useState(false);
   const [editKkSearch, setEditKkSearch] = useState("");
   const [editKkDropdownOpen, setEditKkDropdownOpen] = useState(false);
+  const kkPickerRef = useRef<HTMLDivElement>(null);
+  const editKkPickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (kkPickerRef.current && !kkPickerRef.current.contains(e.target as Node)) setKkDropdownOpen(false);
+      if (editKkPickerRef.current && !editKkPickerRef.current.contains(e.target as Node)) setEditKkDropdownOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const { data: kkList } = useQuery<KartuKeluarga[]>({ queryKey: ["/api/kk"] });
 
@@ -225,6 +236,7 @@ export default function AdminKelolaWarga() {
     setSearchVal: (v: string) => void,
     dropdownOpen: boolean,
     setDropdownOpen: (v: boolean) => void,
+    pickerRef: React.RefObject<HTMLDivElement>,
   ) => {
     const selectedKk = kkList?.find(k => k.id.toString() === formData.kkId);
     const filteredKkList = kkList?.filter(k => {
@@ -234,7 +246,7 @@ export default function AdminKelolaWarga() {
     }) || [];
     return (
     <div className="space-y-3">
-      <div className="space-y-1 relative">
+      <div className="space-y-1 relative" ref={pickerRef}>
         <Label className="text-sm">Kartu Keluarga</Label>
         {selectedKk ? (
           <div className="flex items-center gap-2 rounded-md border p-2 h-10">
@@ -411,7 +423,7 @@ export default function AdminKelolaWarga() {
             <DialogHeader>
               <DialogTitle>Tambah Warga</DialogTitle>
             </DialogHeader>
-            {renderFormFields(form, setForm, fileInputRef, selectedFile, filePreview, handleFileSelect, clearFile, "warga", kkSearch, setKkSearch, kkDropdownOpen, setKkDropdownOpen)}
+            {renderFormFields(form, setForm, fileInputRef, selectedFile, filePreview, handleFileSelect, clearFile, "warga", kkSearch, setKkSearch, kkDropdownOpen, setKkDropdownOpen, kkPickerRef)}
             <Button className="w-full h-10" onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !form.kkId || !form.namaLengkap || !form.nik} data-testid="button-simpan-warga">
               {createMutation.isPending ? "Menyimpan..." : "Simpan Warga"}
             </Button>
@@ -424,7 +436,7 @@ export default function AdminKelolaWarga() {
           <DialogHeader>
             <DialogTitle>Edit Warga</DialogTitle>
           </DialogHeader>
-          {renderFormFields(editForm, setEditForm, editFileInputRef, editSelectedFile, editFilePreview, handleEditFileSelect, clearEditFile, "edit-warga", editKkSearch, setEditKkSearch, editKkDropdownOpen, setEditKkDropdownOpen)}
+          {renderFormFields(editForm, setEditForm, editFileInputRef, editSelectedFile, editFilePreview, handleEditFileSelect, clearEditFile, "edit-warga", editKkSearch, setEditKkSearch, editKkDropdownOpen, setEditKkDropdownOpen, editKkPickerRef)}
           <Button className="w-full h-10" onClick={() => editMutation.mutate()} disabled={editMutation.isPending || !editForm.kkId || !editForm.namaLengkap || !editForm.nik} data-testid="button-simpan-edit-warga">
             {editMutation.isPending ? "Menyimpan..." : "Simpan Perubahan"}
           </Button>

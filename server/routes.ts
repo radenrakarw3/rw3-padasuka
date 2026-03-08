@@ -14,6 +14,9 @@ declare module "express-session" {
     kkId?: number;
     nomorKk?: string;
     isAdmin?: boolean;
+    adminId?: number;
+    adminUsername?: string;
+    adminNama?: string;
   }
 }
 
@@ -291,8 +294,11 @@ export async function registerRoutes(
         const passwordMatch = await bcrypt.compare(password, adminAccount.passwordHash);
         if (passwordMatch) {
           req.session.isAdmin = true;
+          req.session.adminId = adminAccount.id;
+          req.session.adminUsername = adminAccount.username;
+          req.session.adminNama = adminAccount.namaLengkap;
           req.session.kkId = undefined;
-          return res.json({ type: "admin", message: "Login admin berhasil" });
+          return res.json({ type: "admin", message: "Login admin berhasil", adminId: adminAccount.id, username: adminAccount.username, namaLengkap: adminAccount.namaLengkap });
         }
       }
 
@@ -304,7 +310,7 @@ export async function registerRoutes(
 
   app.get("/api/auth/me", (req, res) => {
     if (req.session.isAdmin) {
-      return res.json({ type: "admin", isAdmin: true });
+      return res.json({ type: "admin", isAdmin: true, adminId: req.session.adminId, username: req.session.adminUsername, namaLengkap: req.session.adminNama });
     }
     if (req.session.kkId) {
       return res.json({ type: "warga", kkId: req.session.kkId, nomorKk: req.session.nomorKk });
@@ -358,7 +364,8 @@ export async function registerRoutes(
 
   app.patch("/api/kk/:id", requireAdmin, async (req, res) => {
     try {
-      const data = await storage.updateKk(parseInt(req.params.id), req.body);
+      const parsed = insertKkSchema.partial().parse(req.body);
+      const data = await storage.updateKk(parseInt(req.params.id), parsed);
       if (!data) return res.status(404).json({ message: "KK tidak ditemukan" });
       res.json(data);
     } catch (error: any) {
@@ -406,7 +413,8 @@ export async function registerRoutes(
 
   app.patch("/api/warga/:id", requireAdmin, async (req, res) => {
     try {
-      const data = await storage.updateWarga(parseInt(req.params.id), req.body);
+      const parsed = insertWargaSchema.partial().parse(req.body);
+      const data = await storage.updateWarga(parseInt(req.params.id), parsed);
       if (!data) return res.status(404).json({ message: "Warga tidak ditemukan" });
       res.json(data);
     } catch (error: any) {
