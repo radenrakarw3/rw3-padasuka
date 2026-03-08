@@ -439,6 +439,8 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Data warga/KK tidak ditemukan" });
       }
 
+      const todayFormatted = new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Jakarta" });
+
       const prompt = `Buatkan surat keterangan dari RT/RW dengan format resmi bahasa Indonesia.
 Jenis surat: ${surat.jenisSurat}
 Perihal: ${surat.perihal}
@@ -462,7 +464,7 @@ Ketua RW 03: Raden Raka
 Format surat harus lengkap dengan:
 - Perihal
 - Isi surat yang jelas dan profesional
-- Tanggal surat hari ini
+- Tanggal surat: Cimahi, ${todayFormatted}
 
 PENTING:
 1. JANGAN sertakan kop surat/header karena kop surat akan ditambahkan secara otomatis oleh sistem.
@@ -535,7 +537,7 @@ Kelurahan Padasuka | Kelurahan Padasuka
 
 Perihal: ${parsed.perihal}
 ${parsed.tujuan ? `Ditujukan kepada: ${parsed.tujuan}` : ""}
-${parsed.tanggalSurat ? `Tanggal surat: ${parsed.tanggalSurat}` : `Tanggal surat: hari ini`}
+${parsed.tanggalSurat ? `Tanggal surat: ${parsed.tanggalSurat}` : `Tanggal surat: Cimahi, ${new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Jakarta" })}`}
 ${contextBlock}
 INSTRUKSI PEMBUATAN SURAT:
 1. Buat surat ${parsed.jenisSurat} yang lengkap, resmi, dan profesional.
