@@ -100,12 +100,11 @@ function WargaRoutes() {
     <WargaLayout>
       {showWelcome && <WelcomePopup onClose={() => setShowWelcome(false)} />}
       <Switch>
-        <Route path="/">{() => <Redirect to="/warga" />}</Route>
         <Route path="/warga" component={WargaBeranda} />
         <Route path="/warga/profil" component={WargaProfil} />
         <Route path="/warga/laporan" component={WargaLaporan} />
         <Route path="/warga/pelayanan" component={WargaPelayanan} />
-        <Route component={NotFound} />
+        <Route>{() => <Redirect to="/warga" />}</Route>
       </Switch>
     </WargaLayout>
   );
@@ -115,7 +114,6 @@ function AdminRoutes() {
   return (
     <AdminLayout>
       <Switch>
-        <Route path="/">{() => <Redirect to="/admin" />}</Route>
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/admin/kk" component={AdminKelolaKK} />
         <Route path="/admin/warga" component={AdminKelolaWarga} />
@@ -125,7 +123,7 @@ function AdminRoutes() {
         <Route path="/admin/profil-edit" component={AdminProfilEdit} />
         <Route path="/admin/wa-blast" component={AdminWaBlast} />
         <Route path="/admin/arsip-surat" component={AdminArsipSurat} />
-        <Route component={NotFound} />
+        <Route>{() => <Redirect to="/admin" />}</Route>
       </Switch>
     </AdminLayout>
   );

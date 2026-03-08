@@ -227,7 +227,7 @@ export async function registerRoutes(
 
       otpStore.set(nomorKk, { otp, kkId: kk.id, nomorKk: kk.nomorKk, phone: target.nomorWhatsapp, expiresAt, attempts: 0, lastRequestAt: Date.now() });
 
-      const message = `[RW 03 Padasuka]\nKode OTP login Anda: *${otp}*\nBerlaku 5 menit.\nJangan berikan kode ini kepada siapapun.`;
+      const message = `[RW 03 Padasuka]\n\nKode OTP login: *${otp}*\nBerlaku 5 menit.\nJangan berikan kode ini ke siapapun ya.\n\nLogin di web 👉 rw3padasukacimahi.org`;
       const sent = await sendWhatsApp(target.nomorWhatsapp, message);
 
       if (!sent) {
@@ -459,7 +459,7 @@ export async function registerRoutes(
       const data = await storage.createLaporan(parsed);
 
       const jenisLabel = jenisLaporanLabels[parsed.jenisLaporan] || parsed.jenisLaporan;
-      notifyWarga(parsed.wargaId, `[RW 03 Padasuka]\n\nLaporan Anda telah *berhasil dikirim*.\n\nJudul: *${parsed.judul}*\nKategori: ${jenisLabel}\n\nLaporan Anda akan segera ditinjau oleh pengurus RW. Terima kasih atas partisipasi Anda.`);
+      notifyWarga(parsed.wargaId, `[RW 03 Padasuka]\n\nLaporan Wargi berhasil dikirim ✅\n\nJudul: *${parsed.judul}*\nKategori: ${jenisLabel}\n\nLaporan akan segera ditinjau oleh pengurus RW.\n\nSekarang cek status laporan jadi gampang, langsung buka aja web kita di 👉 rw3padasukacimahi.org\n\nHatur nuhun Wargi! 🙏`);
 
       res.json(data);
     } catch (error: any) {
@@ -478,9 +478,10 @@ export async function registerRoutes(
       ditolak: "ditolak",
     };
     const statusText = statusLabels[status] || status;
-    let waMsg = `[RW 03 Padasuka]\n\nUpdate Laporan Anda:\n\nJudul: *${data.judul}*\nStatus: *${statusText.charAt(0).toUpperCase() + statusText.slice(1)}*`;
+    let waMsg = `[RW 03 Padasuka]\n\nUpdate Laporan Wargi:\n\nJudul: *${data.judul}*\nStatus: *${statusText.charAt(0).toUpperCase() + statusText.slice(1)}*`;
     if (tanggapan) waMsg += `\n\nTanggapan Admin:\n${tanggapan}`;
-    if (status === "selesai") waMsg += `\n\nTerima kasih atas laporan Anda. Semoga lingkungan kita semakin baik.`;
+    if (status === "selesai") waMsg += `\n\nHatur nuhun atas laporannya Wargi, semoga lingkungan kita semakin baik! 🙏`;
+    waMsg += `\n\nCek detail laporan langsung di web 👉 rw3padasukacimahi.org`;
     notifyWarga(data.wargaId, waMsg);
 
     res.json(data);
@@ -511,7 +512,7 @@ export async function registerRoutes(
       const data = await storage.createSuratWarga(parsed);
 
       const jenisLabel = jenisSuratLabels[parsed.jenisSurat] || parsed.jenisSurat;
-      notifyWarga(parsed.wargaId, `[RW 03 Padasuka]\n\nPermohonan surat Anda telah *berhasil dikirim*.\n\nJenis: *${jenisLabel}*\nPerihal: ${parsed.perihal}\n\nPermohonan Anda akan segera diproses oleh pengurus RW. Mohon tunggu notifikasi selanjutnya.`);
+      notifyWarga(parsed.wargaId, `[RW 03 Padasuka]\n\nPermohonan surat Wargi berhasil dikirim ✅\n\nJenis: *${jenisLabel}*\nPerihal: ${parsed.perihal}\n\nPermohonan akan segera diproses pengurus RW. Nanti Wargi dapet notifikasi lagi ya kalau sudah selesai.\n\nPantau terus di web 👉 rw3padasukacimahi.org\n\nHatur nuhun! 🙏`);
 
       res.json(data);
     } catch (error: any) {
@@ -582,7 +583,7 @@ Kelurahan Padasuka | Kelurahan Padasuka
       const updated = await storage.updateSuratWargaStatus(surat.id, surat.status, isiSurat);
 
       const jenisLabel = jenisSuratLabels[surat.jenisSurat] || surat.jenisSurat;
-      notifyWarga(surat.wargaId, `[RW 03 Padasuka]\n\nSurat Anda sedang *diproses*.\n\nJenis: *${jenisLabel}*\nPerihal: ${surat.perihal}\n\nDokumen surat telah dibuat dan sedang menunggu persetujuan admin. Mohon tunggu notifikasi selanjutnya.`);
+      notifyWarga(surat.wargaId, `[RW 03 Padasuka]\n\nSurat Wargi sedang *diproses* ⏳\n\nJenis: *${jenisLabel}*\nPerihal: ${surat.perihal}\n\nDokumen surat sudah dibuat, tinggal nunggu persetujuan ya.\n\nPantau terus di web 👉 rw3padasukacimahi.org`);
 
       res.json(updated);
     } catch (error: any) {
@@ -617,9 +618,9 @@ Kelurahan Padasuka | Kelurahan Padasuka
 
       const jenisLabel = jenisSuratLabels[surat.jenisSurat] || surat.jenisSurat;
       if (status === "disetujui") {
-        notifyWarga(surat.wargaId, `[RW 03 Padasuka]\n\nSurat Anda telah *DISETUJUI* ✅\n\nJenis: *${jenisLabel}*\nPerihal: ${surat.perihal}${finalNomor ? `\nNomor Surat: ${finalNomor}` : ""}\n\nSilakan login ke aplikasi RW 03 untuk mengunduh surat Anda dalam format PDF.\n\nTerima kasih.`);
+        notifyWarga(surat.wargaId, `[RW 03 Padasuka]\n\nSurat Wargi telah *DISETUJUI* ✅\n\nJenis: *${jenisLabel}*\nPerihal: ${surat.perihal}${finalNomor ? `\nNomor Surat: ${finalNomor}` : ""}\n\nSekarang dengan adanya web rw3padasukacimahi.org jadi mudah kan ngurus surat Wargi RW03! Langsung buka web nya, login, terus download surat PDF nya ya 👉 rw3padasukacimahi.org\n\nHatur nuhun! 🙏`);
       } else if (status === "ditolak") {
-        notifyWarga(surat.wargaId, `[RW 03 Padasuka]\n\nMohon maaf, permohonan surat Anda *ditolak*.\n\nJenis: *${jenisLabel}*\nPerihal: ${surat.perihal}\n\nSilakan hubungi pengurus RW untuk informasi lebih lanjut atau ajukan permohonan ulang.`);
+        notifyWarga(surat.wargaId, `[RW 03 Padasuka]\n\nMohon maaf, permohonan surat Wargi *ditolak* ❌\n\nJenis: *${jenisLabel}*\nPerihal: ${surat.perihal}\n\nSilakan hubungi pengurus RW untuk info lebih lanjut atau ajukan permohonan ulang di web 👉 rw3padasukacimahi.org`);
       }
 
       if (status === "disetujui" && !surat.nomorSurat) {
@@ -736,9 +737,9 @@ Buat surat dalam format teks biasa yang rapi dan profesional.`;
       const changes = edit.fieldChanges as Record<string, any>;
       await storage.updateWarga(edit.wargaId, changes);
       const fieldList = Object.entries(changes).map(([k, v]) => `- ${k}: ${v}`).join("\n");
-      notifyWarga(edit.wargaId, `[RW 03 Padasuka]\n\nPerubahan data profil Anda telah *DISETUJUI* ✅\n\nData yang diperbarui:\n${fieldList}\n\nTerima kasih.`);
+      notifyWarga(edit.wargaId, `[RW 03 Padasuka]\n\nPerubahan data profil Wargi telah *DISETUJUI* ✅\n\nData yang diperbarui:\n${fieldList}\n\nCek profil terbaru langsung di web 👉 rw3padasukacimahi.org\n\nHatur nuhun! 🙏`);
     } else if (status === "ditolak") {
-      notifyWarga(edit.wargaId, `[RW 03 Padasuka]\n\nMohon maaf, pengajuan perubahan data profil Anda *ditolak*.\n\nSilakan hubungi pengurus RW untuk informasi lebih lanjut.`);
+      notifyWarga(edit.wargaId, `[RW 03 Padasuka]\n\nMohon maaf, pengajuan perubahan data profil Wargi *ditolak* ❌\n\nSilakan hubungi pengurus RW untuk info lebih lanjut atau ajukan ulang di web 👉 rw3padasukacimahi.org`);
     }
 
     res.json(edit);
