@@ -6,7 +6,7 @@ import {
   MessageSquare, LogOut, Menu, X, Home as HomeIcon, Archive
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import logoImg from "@assets/Untitled_design_(24)_1772993886433.png";
+import logoGold from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
 
 const navItems = [
   { path: "/admin", icon: LayoutDashboard, label: "Dashboard" },
@@ -39,9 +39,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             >
               {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </Button>
-            <div className="w-8 h-8 rounded-md bg-white flex items-center justify-center flex-shrink-0 p-0.5">
-              <img src={logoImg} alt="Logo RW 03" className="w-full h-full object-contain" />
-            </div>
+            <img src={logoGold} alt="Logo RW 03" className="w-8 h-8 object-contain flex-shrink-0" />
             <div>
               <h1 className="text-sm font-bold" data-testid="text-admin-header">Admin Panel - RW 03</h1>
               <p className="text-[10px] text-[hsl(40,30%,80%)]">Kelurahan Padasuka, Cimahi</p>

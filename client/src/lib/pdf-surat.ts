@@ -1,5 +1,5 @@
 import { jsPDF } from "jspdf";
-import logoImg from "@assets/Untitled_design_(24)_1772993886433.png";
+import logoGreen from "@assets/RW3-Cimahi-Logo-Green@16x_1772999415502.png";
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -119,7 +119,7 @@ export async function generateSuratPDF(options: {
   const colonMM = 35;
 
   let img: HTMLImageElement | null = null;
-  try { img = await loadImage(logoImg); } catch {}
+  try { img = await loadImage(logoGreen); } catch {}
 
   let processedText = cleanText(isiSurat);
   processedText = processedText.replace(/^Nomor\s*:.*$/m, "").trim();

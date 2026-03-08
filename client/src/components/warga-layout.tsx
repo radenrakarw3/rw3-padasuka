@@ -1,7 +1,7 @@
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import { User, FileText, ClipboardList, LogOut, Home } from "lucide-react";
-import logoImg from "@assets/Untitled_design_(24)_1772993886433.png";
+import logoGold from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
 
 const navItems = [
   { path: "/warga", icon: Home, label: "Beranda" },
@@ -19,9 +19,7 @@ export default function WargaLayout({ children }: { children: React.ReactNode })
       <header className="sticky top-0 z-50 bg-[hsl(163,55%,22%)] text-white px-4 py-3 shadow-md">
         <div className="flex items-center justify-between gap-2 max-w-lg mx-auto">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-8 h-8 rounded-md bg-white flex items-center justify-center flex-shrink-0 p-0.5">
-              <img src={logoImg} alt="Logo RW 03" className="w-full h-full object-contain" />
-            </div>
+            <img src={logoGold} alt="Logo RW 03" className="w-8 h-8 object-contain flex-shrink-0" />
             <div className="min-w-0">
               <h1 className="text-sm font-bold truncate" data-testid="text-header-title">RW 03 Padasuka</h1>
               <p className="text-[10px] text-[hsl(40,30%,80%)] truncate">Sistem Informasi Warga</p>

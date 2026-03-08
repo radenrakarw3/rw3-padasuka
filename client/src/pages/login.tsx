@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { LogIn, Shield, MessageCircle, ArrowLeft, Loader2, User } from "lucide-react";
-import logoImg from "@assets/Untitled_design_(24)_1772993886433.png";
+import logoGold from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
 
 interface WaContact {
   id: number;
@@ -139,14 +139,12 @@ export default function LoginPage() {
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-b from-[hsl(163,55%,22%)] to-[hsl(163,55%,14%)]">
       <div className="w-full max-w-sm space-y-6">
         <div className="flex flex-col items-center space-y-3">
-          <div className="w-24 h-24 rounded-2xl overflow-hidden bg-white flex items-center justify-center shadow-lg p-2">
-            <img
-              src={logoImg}
-              alt="Logo RW 03"
-              className="w-full h-full object-contain"
-              data-testid="img-logo"
-            />
-          </div>
+          <img
+            src={logoGold}
+            alt="Logo RW 03"
+            className="w-24 h-24 object-contain drop-shadow-lg"
+            data-testid="img-logo"
+          />
           <div className="text-center">
             <h1 className="text-2xl font-bold text-white" data-testid="text-app-title">
               RW 03 Padasuka

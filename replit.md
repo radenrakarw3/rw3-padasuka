@@ -59,8 +59,10 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
 - RT 04: Eem Sulaeman, RT 05: Dadan Sobandi, RT 06: Dicky Irawan, RT 07: Abdul Muin
 
 ## Logo
-- Official RW3 logo: `attached_assets/Untitled_design_(24)_1772993886433.png`
-- Used in: login page, warga header, admin header, KOP surat letterhead
+- Green logo: `@assets/RW3-Cimahi-Logo-Green@16x_1772999415502.png` (on white/light backgrounds)
+- Gold logo: `@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png` (on green/dark backgrounds)
+- Rules: green bg → gold logo, gold bg → green logo, white bg → green logo, black bg → gold logo
+- Used in: login page (gold), warga header (gold), admin header (gold), KOP surat (green), PDF surat (green)
 - KOP surat component: `client/src/components/kop-surat.tsx`
 - Gemini AI prompts exclude KOP header (added visually by frontend)
 
