@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,14 +10,17 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Home, Users } from "lucide-react";
+import { Plus, Search, Home, Users, ChevronLeft, ChevronRight } from "lucide-react";
 import type { KartuKeluarga } from "@shared/schema";
+
+const PER_PAGE = 10;
 
 export default function AdminKelolaKK() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [filterRt, setFilterRt] = useState("semua");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [page, setPage] = useState(1);
   const [form, setForm] = useState({
     nomorKk: "", rt: "1", alamat: "", statusRumah: "Milik Sendiri",
     jumlahPenghuni: "1", kondisiBangunan: "Permanen", sumberAir: "PDAM",
@@ -43,11 +46,25 @@ export default function AdminKelolaKK() {
     onError: (err: any) => toast({ title: "Gagal", description: err.message, variant: "destructive" }),
   });
 
-  const filtered = kkList?.filter(k => {
-    const matchSearch = k.nomorKk.includes(search) || k.alamat.toLowerCase().includes(search.toLowerCase());
-    const matchRt = filterRt === "semua" || k.rt === parseInt(filterRt);
-    return matchSearch && matchRt;
-  }) || [];
+  const filtered = useMemo(() => {
+    return kkList?.filter(k => {
+      const matchSearch = k.nomorKk.includes(search) || k.alamat.toLowerCase().includes(search.toLowerCase());
+      const matchRt = filterRt === "semua" || k.rt === parseInt(filterRt);
+      return matchSearch && matchRt;
+    }) || [];
+  }, [kkList, search, filterRt]);
+
+  const totalPages = Math.ceil(filtered.length / PER_PAGE);
+  const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
+  const handleSearchChange = (val: string) => {
+    setSearch(val);
+    setPage(1);
+  };
+  const handleFilterChange = (val: string) => {
+    setFilterRt(val);
+    setPage(1);
+  };
 
   return (
     <div className="space-y-4">
@@ -123,9 +140,9 @@ export default function AdminKelolaKK() {
       <div className="flex flex-wrap gap-2">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari nomor KK atau alamat..." className="h-10 pl-9" data-testid="input-search-kk" />
+          <Input value={search} onChange={e => handleSearchChange(e.target.value)} placeholder="Cari nomor KK atau alamat..." className="h-10 pl-9" data-testid="input-search-kk" />
         </div>
-        <Select value={filterRt} onValueChange={setFilterRt}>
+        <Select value={filterRt} onValueChange={handleFilterChange}>
           <SelectTrigger className="w-32 h-10" data-testid="select-filter-rt">
             <SelectValue placeholder="Filter RT" />
           </SelectTrigger>
@@ -136,13 +153,16 @@ export default function AdminKelolaKK() {
         </Select>
       </div>
 
-      <p className="text-xs text-muted-foreground">{filtered.length} KK ditemukan</p>
+      <p className="text-xs text-muted-foreground" data-testid="text-kk-count">
+        Menampilkan {paginated.length} dari {filtered.length} KK
+        {totalPages > 1 && ` (halaman ${page} dari ${totalPages})`}
+      </p>
 
       {isLoading ? (
         <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
       ) : (
         <div className="space-y-2">
-          {filtered.map(k => (
+          {paginated.map(k => (
             <Card key={k.id} data-testid={`card-kk-${k.id}`}>
               <CardContent className="p-3">
                 <div className="flex items-center justify-between gap-2">
@@ -166,6 +186,34 @@ export default function AdminKelolaKK() {
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1"
+            disabled={page <= 1}
+            onClick={() => setPage(p => p - 1)}
+            data-testid="button-prev-kk"
+          >
+            <ChevronLeft className="w-4 h-4" /> Sebelumnya
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            {page} / {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1"
+            disabled={page >= totalPages}
+            onClick={() => setPage(p => p + 1)}
+            data-testid="button-next-kk"
+          >
+            Berikutnya <ChevronRight className="w-4 h-4" />
+          </Button>
         </div>
       )}
     </div>
