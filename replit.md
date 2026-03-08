@@ -56,6 +56,14 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
 - **Upload sources**: Admin KK form, Admin Warga form, Warga profile page
 - **Download**: Admin KK cards show download buttons for KK and KTP kepala keluarga when files exist
 
+## KK Verification System
+- **Verified** = foto KK uploaded + kepala keluarga has KTP uploaded + kepala keluarga has WA number + WA number not duplicated across warga
+- **Unverified** = missing any of the above criteria; each missing item shown as reason
+- **WA normalization**: strips non-digits, converts leading 0 to 62, ensures 62 prefix — consistent across duplicate detection and display
+- **QR Code**: verified families get QR code button → opens dialog with downloadable QR (links to rw3padasukacimahi.org) for sticker use
+- **Filter cards**: clickable stat cards at top to filter verified/unverified KK
+- **Visual**: verified cards have green border + shield icon, unverified have amber border + warning reasons displayed
+
 ## Admin Dashboard Statistics
 - **API**: `GET /api/stats/dashboard` (admin-only) — server-side aggregation of all stats
 - **Summary cards**: Total KK, Total Warga, Pending Laporan, Pending Surat

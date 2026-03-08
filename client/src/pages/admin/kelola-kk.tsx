@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,16 +10,25 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Home, Users, ChevronLeft, ChevronRight, Download, Upload, X, FileText, ChevronDown, User, MessageCircle } from "lucide-react";
+import { Plus, Search, Home, Users, ChevronLeft, ChevronRight, Download, Upload, X, FileText, ChevronDown, User, MessageCircle, ShieldCheck, ShieldAlert, QrCode } from "lucide-react";
 import { statusRumahOptions, listrikOptions, rtOptions } from "@/lib/constants";
 import type { KartuKeluarga, Warga } from "@shared/schema";
+import QRCode from "qrcode";
 
 const PER_PAGE = 10;
+
+type VerificationStatus = "verified" | "unverified";
+
+interface VerificationResult {
+  status: VerificationStatus;
+  reasons: string[];
+}
 
 export default function AdminKelolaKK() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [filterRt, setFilterRt] = useState("semua");
+  const [filterVerifikasi, setFilterVerifikasi] = useState("semua");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [form, setForm] = useState({
@@ -31,6 +40,7 @@ export default function AdminKelolaKK() {
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [expandedKk, setExpandedKk] = useState<number | null>(null);
+  const [qrDialogKk, setQrDialogKk] = useState<KartuKeluarga | null>(null);
 
   const { data: kkList, isLoading } = useQuery<KartuKeluarga[]>({ queryKey: ["/api/kk"] });
   const { data: wargaList } = useQuery<Warga[]>({ queryKey: ["/api/warga"] });
@@ -53,6 +63,54 @@ export default function AdminKelolaKK() {
     });
     return map;
   }, [wargaList]);
+
+  const normalizePhone = useCallback((phone: string) => {
+    let n = phone.replace(/[^0-9]/g, "");
+    if (n.startsWith("0")) n = "62" + n.substring(1);
+    if (!n.startsWith("62")) n = "62" + n;
+    return n;
+  }, []);
+
+  const duplicateWaNumbers = useMemo(() => {
+    const phoneCount: Record<string, number> = {};
+    wargaList?.forEach(w => {
+      if (w.nomorWhatsapp) {
+        const normalized = normalizePhone(w.nomorWhatsapp);
+        phoneCount[normalized] = (phoneCount[normalized] || 0) + 1;
+      }
+    });
+    const dupes = new Set<string>();
+    Object.entries(phoneCount).forEach(([phone, count]) => {
+      if (count > 1) dupes.add(phone);
+    });
+    return dupes;
+  }, [wargaList, normalizePhone]);
+
+  const getVerification = useCallback((kk: KartuKeluarga): VerificationResult => {
+    const reasons: string[] = [];
+    const kepala = kepalaByKkId[kk.id];
+    const members = membersByKkId[kk.id] || [];
+
+    if (!kk.fotoKk) reasons.push("Foto KK belum diupload");
+    if (!kepala) {
+      reasons.push("Kepala keluarga belum terdaftar");
+    } else {
+      if (!kepala.fotoKtp) reasons.push("KTP kepala keluarga belum diupload");
+      if (!kepala.nomorWhatsapp) {
+        reasons.push("Nomor WhatsApp belum diisi");
+      } else {
+        const normalized = normalizePhone(kepala.nomorWhatsapp);
+        if (duplicateWaNumbers.has(normalized)) {
+          reasons.push("Nomor WhatsApp digunakan lebih dari 1 warga");
+        }
+      }
+    }
+
+    return {
+      status: reasons.length === 0 ? "verified" : "unverified",
+      reasons,
+    };
+  }, [kepalaByKkId, membersByKkId, duplicateWaNumbers, normalizePhone]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -118,9 +176,22 @@ export default function AdminKelolaKK() {
     return kkList?.filter(k => {
       const matchSearch = k.nomorKk.includes(search) || k.alamat.toLowerCase().includes(search.toLowerCase());
       const matchRt = filterRt === "semua" || k.rt === parseInt(filterRt);
-      return matchSearch && matchRt;
+      let matchVerif = true;
+      if (filterVerifikasi !== "semua") {
+        const v = getVerification(k);
+        matchVerif = filterVerifikasi === "terverifikasi" ? v.status === "verified" : v.status === "unverified";
+      }
+      return matchSearch && matchRt && matchVerif;
     }) || [];
-  }, [kkList, search, filterRt]);
+  }, [kkList, search, filterRt, filterVerifikasi, getVerification]);
+
+  const verifiedCount = useMemo(() => {
+    return kkList?.filter(k => getVerification(k).status === "verified").length || 0;
+  }, [kkList, getVerification]);
+
+  const unverifiedCount = useMemo(() => {
+    return (kkList?.length || 0) - verifiedCount;
+  }, [kkList, verifiedCount]);
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
@@ -240,6 +311,35 @@ export default function AdminKelolaKK() {
         </Dialog>
       </div>
 
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          onClick={() => { setFilterVerifikasi(filterVerifikasi === "terverifikasi" ? "semua" : "terverifikasi"); setPage(1); }}
+          className={`flex items-center gap-2 p-3 rounded-xl border transition-all ${filterVerifikasi === "terverifikasi" ? "bg-green-50 border-green-300 ring-1 ring-green-300" : "bg-card border-border hover:border-green-200"}`}
+          data-testid="button-filter-terverifikasi"
+        >
+          <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
+            <ShieldCheck className="w-4 h-4 text-green-700" />
+          </div>
+          <div className="text-left min-w-0">
+            <p className="text-lg font-bold text-green-700 leading-none" data-testid="text-count-terverifikasi">{verifiedCount}</p>
+            <p className="text-[10px] text-muted-foreground">Terverifikasi</p>
+          </div>
+        </button>
+        <button
+          onClick={() => { setFilterVerifikasi(filterVerifikasi === "belum" ? "semua" : "belum"); setPage(1); }}
+          className={`flex items-center gap-2 p-3 rounded-xl border transition-all ${filterVerifikasi === "belum" ? "bg-amber-50 border-amber-300 ring-1 ring-amber-300" : "bg-card border-border hover:border-amber-200"}`}
+          data-testid="button-filter-belum"
+        >
+          <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
+            <ShieldAlert className="w-4 h-4 text-amber-700" />
+          </div>
+          <div className="text-left min-w-0">
+            <p className="text-lg font-bold text-amber-700 leading-none" data-testid="text-count-belum">{unverifiedCount}</p>
+            <p className="text-[10px] text-muted-foreground">Belum Verifikasi</p>
+          </div>
+        </button>
+      </div>
+
       <div className="flex flex-wrap gap-2">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -259,6 +359,7 @@ export default function AdminKelolaKK() {
       <p className="text-xs text-muted-foreground" data-testid="text-kk-count">
         Menampilkan {paginated.length} dari {filtered.length} KK
         {totalPages > 1 && ` (halaman ${page} dari ${totalPages})`}
+        {filterVerifikasi !== "semua" && ` · Filter: ${filterVerifikasi === "terverifikasi" ? "Terverifikasi" : "Belum Verifikasi"}`}
       </p>
 
       {isLoading ? (
@@ -269,13 +370,19 @@ export default function AdminKelolaKK() {
             const kepala = kepalaByKkId[k.id];
             const members = membersByKkId[k.id] || [];
             const isExpanded = expandedKk === k.id;
+            const verification = getVerification(k);
+            const isVerified = verification.status === "verified";
             return (
-              <Card key={k.id} data-testid={`card-kk-${k.id}`}>
+              <Card key={k.id} className={`${isVerified ? "border-green-200" : "border-amber-200"}`} data-testid={`card-kk-${k.id}`}>
                 <CardContent className="p-3">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-9 h-9 rounded-lg bg-[hsl(163,55%,22%)] flex items-center justify-center flex-shrink-0">
-                        <Home className="w-4 h-4 text-white" />
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${isVerified ? "bg-green-100" : "bg-amber-100"}`}>
+                        {isVerified ? (
+                          <ShieldCheck className="w-4 h-4 text-green-700" />
+                        ) : (
+                          <ShieldAlert className="w-4 h-4 text-amber-700" />
+                        )}
                       </div>
                       <div className="min-w-0">
                         <p className="text-xs font-mono font-medium truncate">{k.nomorKk}</p>
@@ -285,68 +392,105 @@ export default function AdminKelolaKK() {
                         <p className="text-[11px] text-muted-foreground truncate">{k.alamat}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
+                    <div className="flex items-center gap-1 flex-shrink-0 flex-wrap justify-end">
                       <Badge variant="secondary" className="text-[10px]">RT {k.rt.toString().padStart(2,"0")}</Badge>
                       <Badge variant="secondary" className="text-[10px] gap-0.5">
                         <Users className="w-3 h-3" />{k.jumlahPenghuni}
                       </Badge>
                       {k.penerimaBansos && <Badge className="bg-green-100 text-green-800 text-[10px]">Bansos</Badge>}
+                    </div>
+                  </div>
+
+                  {!isVerified && (
+                    <div className="mt-2 p-2 rounded-lg bg-amber-50 border border-amber-200">
+                      <p className="text-[10px] font-medium text-amber-800 mb-1">Belum terverifikasi:</p>
+                      <ul className="space-y-0.5">
+                        {verification.reasons.map((r, i) => (
+                          <li key={i} className="text-[10px] text-amber-700 flex items-start gap-1">
+                            <span className="text-amber-400 mt-0.5">•</span>
+                            {r}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-1 mt-2 pt-2 border-t">
+                    <button
+                      onClick={() => setExpandedKk(isExpanded ? null : k.id)}
+                      className="flex items-center gap-1 flex-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      data-testid={`button-toggle-anggota-${k.id}`}
+                    >
+                      <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                      <Users className="w-3 h-3" />
+                      Anggota ({members.length})
+                    </button>
+                    <div className="flex items-center gap-1 flex-shrink-0">
                       {k.fotoKk && (
-                        <Button size="icon" variant="ghost" asChild data-testid={`button-download-kk-${k.id}`}>
+                        <Button size="icon" variant="ghost" className="w-7 h-7" asChild data-testid={`button-download-kk-${k.id}`}>
                           <a href={k.fotoKk} download target="_blank" rel="noopener noreferrer" title="Download KK">
-                            <Download className="w-4 h-4" />
+                            <Download className="w-3.5 h-3.5" />
                           </a>
                         </Button>
                       )}
                       {kepala?.fotoKtp && (
-                        <Button size="icon" variant="ghost" asChild data-testid={`button-download-ktp-kepala-${k.id}`}>
-                          <a href={kepala.fotoKtp} download target="_blank" rel="noopener noreferrer" title="Download KTP Kepala Keluarga">
-                            <Download className="w-4 h-4" />
+                        <Button size="icon" variant="ghost" className="w-7 h-7" asChild data-testid={`button-download-ktp-kepala-${k.id}`}>
+                          <a href={kepala.fotoKtp} download target="_blank" rel="noopener noreferrer" title="Download KTP">
+                            <Download className="w-3.5 h-3.5" />
                           </a>
+                        </Button>
+                      )}
+                      {isVerified && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="w-7 h-7 text-green-700"
+                          onClick={() => setQrDialogKk(k)}
+                          data-testid={`button-qr-${k.id}`}
+                        >
+                          <QrCode className="w-3.5 h-3.5" />
                         </Button>
                       )}
                     </div>
                   </div>
-                  <button
-                    onClick={() => setExpandedKk(isExpanded ? null : k.id)}
-                    className="flex items-center gap-1 mt-2 pt-2 border-t w-full text-xs text-muted-foreground hover:text-foreground transition-colors"
-                    data-testid={`button-toggle-anggota-${k.id}`}
-                  >
-                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-                    <Users className="w-3 h-3" />
-                    Lihat Anggota ({members.length})
-                  </button>
+
                   {isExpanded && (
                     <div className="mt-2 space-y-1.5" data-testid={`list-anggota-${k.id}`}>
-                      {members.map(m => (
-                        <div key={m.id} className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 p-2" data-testid={`anggota-${m.id}`}>
-                          <div className="flex items-center gap-2 min-w-0">
-                            <div className="w-7 h-7 rounded-full bg-[hsl(163,55%,22%)]/10 flex items-center justify-center flex-shrink-0">
-                              <User className="w-3.5 h-3.5 text-[hsl(163,55%,22%)]" />
+                      {members.map(m => {
+                        const mWaDupe = m.nomorWhatsapp ? duplicateWaNumbers.has(normalizePhone(m.nomorWhatsapp)) : false;
+                        return (
+                          <div key={m.id} className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 p-2" data-testid={`anggota-${m.id}`}>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className="w-7 h-7 rounded-full bg-[hsl(163,55%,22%)]/10 flex items-center justify-center flex-shrink-0">
+                                <User className="w-3.5 h-3.5 text-[hsl(163,55%,22%)]" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-medium truncate">{m.namaLengkap}</p>
+                                <p className="text-[10px] text-muted-foreground">{m.kedudukanKeluarga} · {m.jenisKelamin === "Laki-laki" ? "L" : "P"} · {m.pekerjaan || "-"}</p>
+                                {mWaDupe && m.nomorWhatsapp && (
+                                  <p className="text-[9px] text-amber-600 font-medium">⚠ Nomor WA duplikat</p>
+                                )}
+                              </div>
                             </div>
-                            <div className="min-w-0">
-                              <p className="text-xs font-medium truncate">{m.namaLengkap}</p>
-                              <p className="text-[10px] text-muted-foreground">{m.kedudukanKeluarga} · {m.jenisKelamin === "Laki-laki" ? "L" : "P"} · {m.pekerjaan || "-"}</p>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              {m.fotoKtp && (
+                                <Button size="icon" variant="ghost" className="w-6 h-6" asChild data-testid={`button-download-ktp-anggota-${m.id}`}>
+                                  <a href={m.fotoKtp} download target="_blank" rel="noopener noreferrer" title="Download KTP">
+                                    <Download className="w-3 h-3" />
+                                  </a>
+                                </Button>
+                              )}
+                              {m.nomorWhatsapp && (
+                                <Button size="icon" variant="ghost" className="w-6 h-6 text-green-700" asChild data-testid={`button-wa-anggota-${m.id}`}>
+                                  <a href={`https://wa.me/${m.nomorWhatsapp.replace(/^0/, "62").replace(/[^0-9]/g, "")}`} target="_blank" rel="noopener noreferrer" title="WhatsApp">
+                                    <MessageCircle className="w-3 h-3" />
+                                  </a>
+                                </Button>
+                              )}
                             </div>
                           </div>
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            {m.fotoKtp && (
-                              <Button size="icon" variant="ghost" className="w-6 h-6" asChild data-testid={`button-download-ktp-anggota-${m.id}`}>
-                                <a href={m.fotoKtp} download target="_blank" rel="noopener noreferrer" title="Download KTP">
-                                  <Download className="w-3 h-3" />
-                                </a>
-                              </Button>
-                            )}
-                            {m.nomorWhatsapp && (
-                              <Button size="icon" variant="ghost" className="w-6 h-6 text-green-700" asChild data-testid={`button-wa-anggota-${m.id}`}>
-                                <a href={`https://wa.me/${m.nomorWhatsapp.replace(/^0/, "62").replace(/[^0-9]/g, "")}`} target="_blank" rel="noopener noreferrer" title="WhatsApp">
-                                  <MessageCircle className="w-3 h-3" />
-                                </a>
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </CardContent>
@@ -383,6 +527,82 @@ export default function AdminKelolaKK() {
           </Button>
         </div>
       )}
+
+      {qrDialogKk && (
+        <QrDialog
+          kk={qrDialogKk}
+          kepala={kepalaByKkId[qrDialogKk.id]}
+          onClose={() => setQrDialogKk(null)}
+        />
+      )}
     </div>
+  );
+}
+
+function QrDialog({ kk, kepala, onClose }: { kk: KartuKeluarga; kepala?: Warga; onClose: () => void }) {
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const qrUrl = `https://rw3padasukacimahi.org`;
+  const generated = useRef(false);
+
+  if (!generated.current) {
+    generated.current = true;
+    QRCode.toDataURL(qrUrl, {
+      width: 280,
+      margin: 2,
+      color: { dark: "#1a5c45", light: "#ffffff" },
+    }).then(setQrDataUrl).catch(() => setQrDataUrl(null));
+  }
+
+  const downloadQr = () => {
+    if (!qrDataUrl) return;
+    const link = document.createElement("a");
+    link.download = `QR-RW03-${kk.nomorKk}.png`;
+    link.href = qrDataUrl;
+    link.click();
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="text-center">QR Code Keluarga Terverifikasi</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col items-center gap-3 py-2">
+          <div className="bg-white p-4 rounded-xl border-2 border-green-200 shadow-sm">
+            {qrDataUrl ? (
+              <img src={qrDataUrl} alt="QR Code" className="w-[200px] h-[200px]" data-testid="img-qr-code" />
+            ) : (
+              <div className="w-[200px] h-[200px] flex items-center justify-center">
+                <QrCode className="w-16 h-16 text-muted-foreground animate-pulse" />
+              </div>
+            )}
+          </div>
+
+          <div className="text-center space-y-1">
+            <p className="text-xs font-semibold text-[hsl(163,55%,22%)]">KELUARGA TERVERIFIKASI</p>
+            <p className="text-sm font-bold">{kepala?.namaLengkap || "-"}</p>
+            <p className="text-xs text-muted-foreground font-mono">{kk.nomorKk}</p>
+            <p className="text-[11px] text-muted-foreground">RT {kk.rt.toString().padStart(2, "0")} · {kk.alamat}</p>
+          </div>
+
+          <div className="bg-green-50 border border-green-200 rounded-lg p-2.5 text-center w-full">
+            <p className="text-[10px] text-green-700">
+              Scan QR ini untuk mengakses layanan digital RW 03 Padasuka
+            </p>
+            <p className="text-[11px] font-medium text-green-800 mt-0.5">rw3padasukacimahi.org</p>
+          </div>
+
+          <Button
+            className="w-full gap-2"
+            onClick={downloadQr}
+            disabled={!qrDataUrl}
+            data-testid="button-download-qr"
+          >
+            <Download className="w-4 h-4" />
+            Download QR untuk Stiker
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
