@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, CheckCircle, XCircle, FileText, Eye, Sparkles, Loader2, Download } from "lucide-react";
+import { Clock, CheckCircle, XCircle, FileText, Eye, Sparkles, Loader2, Download, Printer, HandCoins } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useState } from "react";
 import type { SuratWarga, Warga } from "@shared/schema";
@@ -98,9 +98,22 @@ export default function AdminKelolaSurat() {
                     {s.keterangan && <p className="text-xs text-muted-foreground">Keterangan: {s.keterangan}</p>}
                     {s.nomorSurat && <p className="text-xs font-medium text-primary">No: {s.nomorSurat}</p>}
                   </div>
-                  <Badge className={`${sc.color} text-[10px] flex-shrink-0 gap-1`}>
-                    <StatusIcon className="w-3 h-3" />{sc.label}
-                  </Badge>
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    <Badge className={`${sc.color} text-[10px] gap-1`}>
+                      <StatusIcon className="w-3 h-3" />{sc.label}
+                    </Badge>
+                    <Badge
+                      variant={s.metodeLayanan === "tau_beres" ? "default" : "outline"}
+                      className={`text-[10px] gap-1 ${s.metodeLayanan === "tau_beres" ? "bg-amber-600 hover:bg-amber-700" : ""}`}
+                      data-testid={`badge-metode-admin-${s.id}`}
+                    >
+                      {s.metodeLayanan === "tau_beres" ? (
+                        <><HandCoins className="w-3 h-3" /> Tau Beres</>
+                      ) : (
+                        <><Printer className="w-3 h-3" /> Print Mandiri</>
+                      )}
+                    </Badge>
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap gap-2">

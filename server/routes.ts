@@ -520,7 +520,8 @@ export async function registerRoutes(
       const data = await storage.createSuratWarga(parsed);
 
       const jenisLabel = jenisSuratLabels[parsed.jenisSurat] || parsed.jenisSurat;
-      notifyWarga(parsed.wargaId, `[RW 03 Padasuka]\n\nPermohonan surat Wargi berhasil dikirim ✅\n\nJenis: *${jenisLabel}*\nPerihal: ${parsed.perihal}\n\nPermohonan akan segera diproses pengurus RW. Nanti Wargi dapet notifikasi lagi ya kalau sudah selesai.\n\nPantau terus di web 👉 rw3padasukacimahi.org\n\nHatur nuhun! 🙏`);
+      const metodeLabel = parsed.metodeLayanan === "tau_beres" ? "Tau Beres (di-print & ditandatangani RT/RW)" : "Print Mandiri (download & print sendiri)";
+      notifyWarga(parsed.wargaId, `[RW 03 Padasuka]\n\nPermohonan surat Wargi berhasil dikirim ✅\n\nJenis: *${jenisLabel}*\nPerihal: ${parsed.perihal}\nLayanan: *${metodeLabel}*\n\nPermohonan akan segera diproses pengurus RW. Nanti Wargi dapet notifikasi lagi ya kalau sudah selesai.\n\nPantau terus di web 👉 rw3padasukacimahi.org\n\nHatur nuhun! 🙏`);
 
       res.json(data);
     } catch (error: any) {
@@ -626,7 +627,11 @@ Kelurahan Padasuka | Kelurahan Padasuka
 
       const jenisLabel = jenisSuratLabels[surat.jenisSurat] || surat.jenisSurat;
       if (status === "disetujui") {
-        notifyWarga(surat.wargaId, `[RW 03 Padasuka]\n\nSurat Wargi telah *DISETUJUI* ✅\n\nJenis: *${jenisLabel}*\nPerihal: ${surat.perihal}${finalNomor ? `\nNomor Surat: ${finalNomor}` : ""}\n\nSekarang dengan adanya web rw3padasukacimahi.org jadi mudah kan ngurus surat Wargi RW03! Langsung buka web nya, login, terus download surat PDF nya ya 👉 rw3padasukacimahi.org\n\nHatur nuhun! 🙏`);
+        const isTauBeres = surat.metodeLayanan === "tau_beres";
+        const instruksi = isTauBeres
+          ? "Surat akan segera di-print dan ditandatangani oleh pengurus RT/RW. Silakan ambil di sekretariat RW ya, jangan lupa bawa infaq seikhlasnya untuk kas RW 🙏"
+          : "Langsung buka web nya, login, terus download surat PDF nya ya 👉 rw3padasukacimahi.org";
+        notifyWarga(surat.wargaId, `[RW 03 Padasuka]\n\nSurat Wargi telah *DISETUJUI* ✅\n\nJenis: *${jenisLabel}*\nPerihal: ${surat.perihal}${finalNomor ? `\nNomor Surat: ${finalNomor}` : ""}\nLayanan: *${isTauBeres ? "Tau Beres" : "Print Mandiri"}*\n\n${instruksi}\n\nHatur nuhun! 🙏`);
       } else if (status === "ditolak") {
         notifyWarga(surat.wargaId, `[RW 03 Padasuka]\n\nMohon maaf, permohonan surat Wargi *ditolak* ❌\n\nJenis: *${jenisLabel}*\nPerihal: ${surat.perihal}\n\nSilakan hubungi pengurus RW untuk info lebih lanjut atau ajukan permohonan ulang di web 👉 rw3padasukacimahi.org`);
       }

@@ -11,9 +11,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, FileText, Clock, CheckCircle, XCircle, Download, ArrowLeft, Loader2 } from "lucide-react";
+import { Plus, FileText, Clock, CheckCircle, XCircle, Download, ArrowLeft, Loader2, Printer, HandCoins } from "lucide-react";
 import type { SuratWarga, Warga, KartuKeluarga } from "@shared/schema";
 import { generateSuratPDF } from "@/lib/pdf-surat";
+
+const metodeLayananOptions = [
+  {
+    value: "print_mandiri",
+    label: "Print Mandiri",
+    icon: Printer,
+    description: "Download PDF & print sendiri",
+    detail: "Gratis",
+  },
+  {
+    value: "tau_beres",
+    label: "Tau Beres",
+    icon: HandCoins,
+    description: "Surat di-print & ditandatangani RT/RW",
+    detail: "Infaq seikhlasnya untuk Kas RW",
+  },
+];
 
 const jenisSuratOptions = [
   { value: "surat_keterangan_domisili", label: "Surat Keterangan Domisili" },
@@ -35,6 +52,7 @@ export default function WargaPelayanan() {
   const [jenisSurat, setJenisSurat] = useState("");
   const [perihal, setPerihal] = useState("");
   const [keterangan, setKeterangan] = useState("");
+  const [metodeLayanan, setMetodeLayanan] = useState("print_mandiri");
 
   const { data: suratList, isLoading } = useQuery<SuratWarga[]>({
     queryKey: ["/api/surat-warga"],
@@ -58,6 +76,7 @@ export default function WargaPelayanan() {
         jenisSurat,
         perihal,
         keterangan: keterangan || undefined,
+        metodeLayanan,
         nomorRt: kk?.rt || 1,
       });
       return res.json();
@@ -69,6 +88,7 @@ export default function WargaPelayanan() {
       setPerihal("");
       setKeterangan("");
       setSelectedWarga("");
+      setMetodeLayanan("print_mandiri");
       queryClient.invalidateQueries({ queryKey: ["/api/surat-warga"] });
     },
     onError: (err: any) => {
@@ -168,6 +188,47 @@ export default function WargaPelayanan() {
               />
             </div>
 
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Pilih Metode Layanan</Label>
+              <div className="grid grid-cols-1 gap-3">
+                {metodeLayananOptions.map((opt) => {
+                  const Icon = opt.icon;
+                  const isSelected = metodeLayanan === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setMetodeLayanan(opt.value)}
+                      className={`relative flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all ${
+                        isSelected
+                          ? "border-primary bg-primary/5 shadow-sm"
+                          : "border-muted hover:border-muted-foreground/30"
+                      }`}
+                      data-testid={`option-metode-${opt.value}`}
+                    >
+                      <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${
+                        isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                      }`}>
+                        <Icon className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm">{opt.label}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{opt.description}</p>
+                        <Badge variant={opt.value === "print_mandiri" ? "secondary" : "outline"} className="mt-1.5 text-[10px]">
+                          {opt.detail}
+                        </Badge>
+                      </div>
+                      {isSelected && (
+                        <div className="absolute top-3 right-3">
+                          <CheckCircle className="w-5 h-5 text-primary" />
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <Button
               className="w-full h-12 text-base"
               onClick={() => createMutation.mutate()}
@@ -228,27 +289,54 @@ export default function WargaPelayanan() {
                     <p className="font-semibold text-sm truncate">{label}</p>
                     <p className="text-xs text-muted-foreground">{s.perihal}</p>
                   </div>
-                  <Badge className={`${sc.color} text-[10px] flex-shrink-0 gap-1`}>
-                    <StatusIcon className="w-3 h-3" />
-                    {sc.label}
-                  </Badge>
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    <Badge className={`${sc.color} text-[10px] gap-1`}>
+                      <StatusIcon className="w-3 h-3" />
+                      {sc.label}
+                    </Badge>
+                    <Badge variant="outline" className="text-[10px] gap-1" data-testid={`badge-metode-${s.id}`}>
+                      {s.metodeLayanan === "tau_beres" ? (
+                        <><HandCoins className="w-3 h-3" /> Tau Beres</>
+                      ) : (
+                        <><Printer className="w-3 h-3" /> Print Mandiri</>
+                      )}
+                    </Badge>
+                  </div>
                 </div>
                 {s.status === "disetujui" && s.isiSurat && (
-                  <div className="mt-2 space-y-1">
+                  <div className="mt-2 space-y-2">
                     {s.nomorSurat && (
                       <p className="text-[10px] text-muted-foreground">No. Surat: {s.nomorSurat}</p>
                     )}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full gap-1.5"
-                      onClick={() => handleDownload(s)}
-                      disabled={downloadingId === s.id}
-                      data-testid={`button-download-${s.id}`}
-                    >
-                      {downloadingId === s.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                      Buka & Unduh PDF
-                    </Button>
+                    {s.metodeLayanan === "tau_beres" ? (
+                      <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-3" data-testid={`info-tau-beres-${s.id}`}>
+                        <p className="text-xs font-medium text-green-800 dark:text-green-300">Surat Anda sedang disiapkan</p>
+                        <p className="text-[11px] text-green-700 dark:text-green-400 mt-1">Surat akan di-print dan ditandatangani oleh pengurus RT/RW. Silakan ambil di sekretariat RW dengan membawa infaq seikhlasnya untuk kas RW.</p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full gap-1.5 mt-2"
+                          onClick={() => handleDownload(s)}
+                          disabled={downloadingId === s.id}
+                          data-testid={`button-download-${s.id}`}
+                        >
+                          {downloadingId === s.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                          Lihat PDF (opsional)
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full gap-1.5"
+                        onClick={() => handleDownload(s)}
+                        disabled={downloadingId === s.id}
+                        data-testid={`button-download-${s.id}`}
+                      >
+                        {downloadingId === s.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                        Buka & Unduh PDF
+                      </Button>
+                    )}
                   </div>
                 )}
                 <p className="text-[10px] text-muted-foreground mt-2">

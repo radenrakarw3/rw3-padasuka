@@ -42,7 +42,13 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
 ## Letter System
 - **Surat Warga Flow**: Warga submits request → Admin clicks "Generate" (Gemini AI) → Admin reviews → Approve/Reject → Nomor surat auto-assigned on approval (format: XXX/SK-W/RW-03/MM/YYYY)
 - **Surat RW Flow**: Admin creates surat → Gemini AI generates → Nomor surat auto-assigned on creation (format: XXX/SK-RW/RW-03/MM/YYYY)
-- **PDF Download**: A4 format with KOP surat (logo + RW03 letterhead), generated client-side using jsPDF (`client/src/lib/pdf-surat.ts`)
+- **PDF Download**: A4 format with KOP surat (logo + RW03 letterhead), generated client-side using jsPDF (`client/src/lib/pdf-surat.ts`), mobile-friendly (opens in new tab on mobile devices)
+- **Metode Layanan**: Warga chooses between:
+  - *Print Mandiri*: Download PDF & print sendiri (gratis)
+  - *Tau Beres*: Surat di-print & ditandatangani RT/RW, warga bayar infaq seikhlasnya untuk kas RW
+  - Column `metode_layanan` in `surat_warga` table, validated via `z.enum(["print_mandiri","tau_beres"])`
+  - WhatsApp notifications differ based on metode (download instructions vs pickup/infaq instructions)
+  - Admin sees metode badge per surat request
 - **Arsip Surat**: Admin archive page listing all approved surat warga + surat RW with nomor surat, searchable and filterable
 
 ## File Upload System
