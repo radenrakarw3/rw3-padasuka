@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Edit2, Check, X, User, MapPin, Clock, Upload, FileImage, RefreshCw } from "lucide-react";
+import { Edit2, Check, X, User, MapPin, Clock, Upload, RefreshCw, ChevronDown, ChevronUp, Shield } from "lucide-react";
 import type { KartuKeluarga, Warga, ProfileEditRequest } from "@shared/schema";
 import { pekerjaanOptions, agamaOptions, jenisKelaminOptions, statusPerkawinanOptions, kedudukanKeluargaOptions, statusKependudukanOptions } from "@/lib/constants";
 
@@ -27,6 +27,16 @@ const fieldLabels: Record<string, string> = {
   statusKependudukan: "Status",
 };
 
+function maskNik(nik: string | null): string {
+  if (!nik || nik.length < 6) return "••••••••••••••••";
+  return nik.slice(0, 4) + "••••••••" + nik.slice(-4);
+}
+
+function maskKk(nomorKk: string | null | undefined): string {
+  if (!nomorKk || nomorKk.length < 6) return "••••••••••••••••";
+  return nomorKk.slice(0, 4) + "••••••••" + nomorKk.slice(-4);
+}
+
 export default function WargaProfil() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -34,6 +44,7 @@ export default function WargaProfil() {
   const [editData, setEditData] = useState<Record<string, string>>({});
   const [uploadingKk, setUploadingKk] = useState(false);
   const [uploadingKtpId, setUploadingKtpId] = useState<number | null>(null);
+  const [showDokumen, setShowDokumen] = useState(false);
   const kkFileRef = useRef<HTMLInputElement>(null);
   const ktpFileRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
@@ -78,7 +89,6 @@ export default function WargaProfil() {
       <div className="space-y-4">
         <Skeleton className="h-24 w-full rounded-xl" />
         <Skeleton className="h-40 w-full rounded-xl" />
-        <Skeleton className="h-40 w-full rounded-xl" />
       </div>
     );
   }
@@ -107,7 +117,6 @@ export default function WargaProfil() {
   const handleSaveEdit = (w: Warga) => {
     const changes: Record<string, string> = {};
     if (editData.namaLengkap !== (w.namaLengkap || "")) changes.namaLengkap = editData.namaLengkap;
-    if (editData.nik !== (w.nik || "")) changes.nik = editData.nik;
     if (editData.nomorWhatsapp !== (w.nomorWhatsapp || "")) changes.nomorWhatsapp = editData.nomorWhatsapp;
     if (editData.jenisKelamin !== (w.jenisKelamin || "")) changes.jenisKelamin = editData.jenisKelamin;
     if (editData.statusPerkawinan !== (w.statusPerkawinan || "")) changes.statusPerkawinan = editData.statusPerkawinan;
@@ -206,89 +215,27 @@ export default function WargaProfil() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-bold" data-testid="text-profil-title">Data Keluarga</h2>
+      <h2 className="text-lg font-bold" data-testid="text-profil-title">Profil Keluarga</h2>
 
       <Card className="bg-gradient-to-r from-[hsl(163,55%,22%)] to-[hsl(163,45%,28%)] text-white border-0">
-        <CardContent className="p-4 space-y-2">
-          <p className="text-xs text-white/60">No. KK: {kk?.nomorKk}</p>
-          <div className="flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-[hsl(40,45%,65%)]" />
-            <p className="text-sm" data-testid="text-alamat">{kk?.alamat}</p>
+        <CardContent className="p-4">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-11 h-11 rounded-full bg-white/15 flex items-center justify-center flex-shrink-0">
+              <MapPin className="w-5 h-5 text-[hsl(40,45%,65%)]" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium leading-snug" data-testid="text-alamat">{kk?.alamat}</p>
+              <p className="text-xs text-white/60 mt-0.5">RT {kk?.rt?.toString().padStart(2, "0")} / RW 03</p>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="bg-white/15 px-2 py-0.5 rounded" data-testid="text-rt">RT {kk?.rt?.toString().padStart(2, "0")} / RW 03</span>
-            <span className="bg-white/15 px-2 py-0.5 rounded">{kk?.statusRumah}</span>
+          <div className="flex flex-wrap gap-2 text-[11px]">
+            <span className="bg-white/15 px-2 py-0.5 rounded" data-testid="text-rt">{kk?.statusRumah}</span>
             <span className="bg-white/15 px-2 py-0.5 rounded">{kk?.jumlahPenghuni} penghuni</span>
+            <span className="bg-white/15 px-2 py-0.5 rounded flex items-center gap-1">
+              <Shield className="w-3 h-3" />
+              KK {maskKk(kk?.nomorKk)}
+            </span>
           </div>
-        </CardContent>
-      </Card>
-
-      <Card data-testid="card-upload-kk">
-        <CardContent className="p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <FileImage className="w-4 h-4 text-muted-foreground" />
-            <p className="text-sm font-semibold">Dokumen Kartu Keluarga</p>
-          </div>
-          {kk?.fotoKk ? (
-            <div className="space-y-2">
-              <div className="relative rounded-md overflow-hidden border">
-                <img
-                  src={kk.fotoKk}
-                  alt="Foto KK"
-                  className="w-full max-h-48 object-contain bg-muted"
-                  data-testid="img-foto-kk"
-                />
-              </div>
-              <input
-                ref={kkFileRef}
-                type="file"
-                accept="image/jpeg,image/png,image/jpg,application/pdf"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) handleUploadKk(f);
-                }}
-                data-testid="input-file-kk"
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs gap-1"
-                disabled={uploadingKk}
-                onClick={() => kkFileRef.current?.click()}
-                data-testid="button-ganti-kk"
-              >
-                {uploadingKk ? <RefreshCw className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                Ganti
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">Belum ada dokumen KK yang diunggah.</p>
-              <input
-                ref={kkFileRef}
-                type="file"
-                accept="image/jpeg,image/png,image/jpg,application/pdf"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) handleUploadKk(f);
-                }}
-                data-testid="input-file-kk"
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs gap-1"
-                disabled={uploadingKk}
-                onClick={() => kkFileRef.current?.click()}
-                data-testid="button-upload-kk"
-              >
-                {uploadingKk ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
-                Upload Foto KK
-              </Button>
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -303,14 +250,14 @@ export default function WargaProfil() {
         return (
           <Card key={w.id} data-testid={`card-warga-${w.id}`}>
             <CardContent className="p-4">
-              <div className="flex items-start justify-between gap-2 mb-3">
+              <div className="flex items-center justify-between gap-2 mb-3">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="w-10 h-10 rounded-full bg-[hsl(163,55%,22%)] flex items-center justify-center flex-shrink-0">
                     <User className="w-5 h-5 text-white" />
                   </div>
                   <div className="min-w-0">
                     <p className="font-semibold text-sm truncate" data-testid={`text-nama-${w.id}`}>{w.namaLengkap}</p>
-                    <p className="text-xs text-muted-foreground">{w.kedudukanKeluarga}</p>
+                    <p className="text-[11px] text-muted-foreground">{w.kedudukanKeluarga}</p>
                   </div>
                 </div>
                 {!isEditing && !pendingEdit && (
@@ -369,12 +316,8 @@ export default function WargaProfil() {
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium">NIK</Label>
-                    <Input
-                      value={editData.nik}
-                      onChange={(e) => setField("nik", e.target.value)}
-                      className="h-10 text-sm"
-                      data-testid={`input-nik-${w.id}`}
-                    />
+                    <p className="text-sm font-mono text-muted-foreground px-3 py-2 bg-muted rounded-md">{maskNik(w.nik)}</p>
+                    <p className="text-[10px] text-muted-foreground">Hubungi admin untuk perubahan NIK</p>
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium">No. WhatsApp</Label>
@@ -470,37 +413,29 @@ export default function WargaProfil() {
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-                  <div>
-                    <span className="text-muted-foreground">NIK</span>
-                    <p className="font-medium">{w.nik}</p>
+                <div className="space-y-1.5 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground w-20 flex-shrink-0">NIK</span>
+                    <span className="font-medium font-mono tracking-wide">{maskNik(w.nik)}</span>
                   </div>
-                  <div>
-                    <span className="text-muted-foreground">No. WhatsApp</span>
-                    <p className="font-medium">{w.nomorWhatsapp || "-"}</p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground w-20 flex-shrink-0">WhatsApp</span>
+                    <span className="font-medium">{w.nomorWhatsapp || "-"}</span>
                   </div>
-                  <div>
-                    <span className="text-muted-foreground">Jenis Kelamin</span>
-                    <p className="font-medium">{w.jenisKelamin}</p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground w-20 flex-shrink-0">Kelamin</span>
+                    <span className="font-medium">{w.jenisKelamin}</span>
                   </div>
-                  <div>
-                    <span className="text-muted-foreground">Agama</span>
-                    <p className="font-medium">{w.agama}</p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground w-20 flex-shrink-0">Agama</span>
+                    <span className="font-medium">{w.agama}</span>
                   </div>
-                  <div>
-                    <span className="text-muted-foreground">Tanggal Lahir</span>
-                    <p className="font-medium">{w.tanggalLahir || "-"}</p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground w-20 flex-shrink-0">Pekerjaan</span>
+                    <span className="font-medium">{w.pekerjaan || "-"}</span>
                   </div>
-                  <div>
-                    <span className="text-muted-foreground">Pekerjaan</span>
-                    <p className="font-medium">{w.pekerjaan || "-"}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Status Kawin</span>
-                    <p className="font-medium">{w.statusPerkawinan}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Status</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground w-20 flex-shrink-0">Status</span>
                     <Badge variant={w.statusKependudukan === "Aktif" ? "default" : "secondary"} className="text-[10px]">
                       {w.statusKependudukan}
                     </Badge>
@@ -509,33 +444,78 @@ export default function WargaProfil() {
               )}
 
               {pendingEdit && (
-                <div className="mt-3 p-2 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
-                  <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">Perubahan menunggu persetujuan admin:</p>
+                <div className="mt-3 p-2.5 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                  <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">Perubahan menunggu persetujuan:</p>
                   <div className="text-xs text-amber-600 dark:text-amber-500 mt-1 space-y-0.5">
                     {Object.entries(pendingEdit.fieldChanges as Record<string, string>).map(([key, val]) => (
                       <p key={key}>
-                        {fieldLabels[key] || key}: <span className="font-medium">{val}</span>
+                        {fieldLabels[key] || key}: <span className="font-medium">{key === "nik" ? maskNik(val) : val}</span>
                       </p>
                     ))}
                   </div>
                 </div>
               )}
+            </CardContent>
+          </Card>
+        );
+      })}
 
-              <div className="mt-3 pt-3 border-t space-y-2">
-                <div className="flex items-center gap-2">
-                  <FileImage className="w-3.5 h-3.5 text-muted-foreground" />
-                  <p className="text-xs font-semibold text-muted-foreground">Dokumen KTP</p>
+      <Card data-testid="card-dokumen">
+        <CardContent className="p-0">
+          <button
+            onClick={() => setShowDokumen(!showDokumen)}
+            className="w-full flex items-center justify-between p-4 text-left"
+            data-testid="button-toggle-dokumen"
+          >
+            <div className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm font-semibold">Upload Dokumen</span>
+            </div>
+            {showDokumen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+          </button>
+
+          {showDokumen && (
+            <div className="px-4 pb-4 space-y-4 border-t pt-4">
+              <p className="text-[11px] text-muted-foreground">Dokumen hanya digunakan untuk verifikasi oleh admin dan tidak ditampilkan secara publik.</p>
+
+              <div className="space-y-2">
+                <p className="text-xs font-medium">Kartu Keluarga (KK)</p>
+                <div className="flex items-center gap-3">
+                  <Badge variant={kk?.fotoKk ? "default" : "secondary"} className="text-[10px]">
+                    {kk?.fotoKk ? "Sudah diunggah" : "Belum diunggah"}
+                  </Badge>
+                  <input
+                    ref={kkFileRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/jpg,application/pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) handleUploadKk(f);
+                    }}
+                    data-testid="input-file-kk"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs gap-1 h-7"
+                    disabled={uploadingKk}
+                    onClick={() => kkFileRef.current?.click()}
+                    data-testid="button-upload-kk"
+                  >
+                    {uploadingKk ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                    {kk?.fotoKk ? "Ganti" : "Upload"}
+                  </Button>
                 </div>
-                {w.fotoKtp ? (
-                  <div className="space-y-2">
-                    <div className="relative rounded-md overflow-hidden border">
-                      <img
-                        src={w.fotoKtp}
-                        alt={`KTP ${w.namaLengkap}`}
-                        className="w-full max-h-36 object-contain bg-muted"
-                        data-testid={`img-foto-ktp-${w.id}`}
-                      />
-                    </div>
+              </div>
+
+              {anggota?.map((w) => (
+                <div key={w.id} className="space-y-2">
+                  <p className="text-xs font-medium">KTP — {w.namaLengkap}</p>
+                  <div className="flex items-center gap-3">
+                    <Badge variant={w.fotoKtp ? "default" : "secondary"} className="text-[10px]">
+                      {w.fotoKtp ? "Sudah diunggah" : "Belum diunggah"}
+                    </Badge>
                     <input
                       ref={(el) => { ktpFileRefs.current[w.id] = el; }}
                       type="file"
@@ -550,47 +530,21 @@ export default function WargaProfil() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-xs gap-1"
-                      disabled={uploadingKtpId === w.id}
-                      onClick={() => ktpFileRefs.current[w.id]?.click()}
-                      data-testid={`button-ganti-ktp-${w.id}`}
-                    >
-                      {uploadingKtpId === w.id ? <RefreshCw className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                      Ganti
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground">Belum ada dokumen KTP.</p>
-                    <input
-                      ref={(el) => { ktpFileRefs.current[w.id] = el; }}
-                      type="file"
-                      accept="image/jpeg,image/png,image/jpg,application/pdf"
-                      className="hidden"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) handleUploadKtp(w.id, f);
-                      }}
-                      data-testid={`input-file-ktp-${w.id}`}
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs gap-1"
+                      className="text-xs gap-1 h-7"
                       disabled={uploadingKtpId === w.id}
                       onClick={() => ktpFileRefs.current[w.id]?.click()}
                       data-testid={`button-upload-ktp-${w.id}`}
                     >
                       {uploadingKtpId === w.id ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
-                      Upload Foto KTP
+                      {w.fotoKtp ? "Ganti" : "Upload"}
                     </Button>
                   </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
