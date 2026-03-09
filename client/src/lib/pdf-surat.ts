@@ -11,6 +11,46 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
+function isMobileDevice(): boolean {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+    (window.innerWidth <= 768);
+}
+
+function savePdfMobileFriendly(doc: jsPDF, fileName: string) {
+  const safeName = `${fileName}.pdf`;
+  const blob = doc.output("blob");
+  const blobUrl = URL.createObjectURL(blob);
+
+  if (isMobileDevice()) {
+    const newWindow = window.open(blobUrl, "_blank");
+    if (!newWindow) {
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = safeName;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(blobUrl);
+      }, 5000);
+    } else {
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    }
+  } else {
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = safeName;
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+    }, 1000);
+  }
+}
+
 function cleanText(text: string): string {
   let cleaned = text.replace(/\*\*/g, "").replace(/\*/g, "");
   cleaned = cleaned.replace(/^#{1,6}\s+/gm, "");
@@ -403,7 +443,7 @@ export async function generateSuratPDF(options: {
   }
 
   const safeName = fileName || `${jenisSurat.replace(/\s+/g, "_")}${nomorSurat ? "_" + nomorSurat.replace(/\//g, "-") : ""}`;
-  doc.save(`${safeName}.pdf`);
+  savePdfMobileFriendly(doc, safeName);
 }
 
 export async function generateSuratRekomendasiBansosPDF(options: {
@@ -565,5 +605,5 @@ export async function generateSuratRekomendasiBansosPDF(options: {
   doc.line(rightSigX - rwNameW / 2, y + 1, rightSigX + rwNameW / 2, y + 1);
 
   const safeName = `Surat_Rekomendasi_Bansos_${kepalaKeluarga.replace(/\s+/g, "_")}`;
-  doc.save(`${safeName}.pdf`);
+  savePdfMobileFriendly(doc, safeName);
 }

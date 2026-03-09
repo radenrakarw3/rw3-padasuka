@@ -94,8 +94,9 @@ export default function WargaPelayanan() {
         jenisSurat: label,
         fileName: `Surat_${label.replace(/\s/g, "_")}_${surat.nomorSurat?.replace(/\//g, "-") || surat.id}`,
       });
+      toast({ title: "PDF berhasil dibuat", description: "Jika file tidak langsung terbuka, izinkan pop-up di browser Anda lalu coba lagi." });
     } catch {
-      toast({ title: "Gagal membuat PDF", variant: "destructive" });
+      toast({ title: "Gagal membuat PDF", description: "Silakan coba lagi. Pastikan pop-up tidak diblokir oleh browser.", variant: "destructive" });
     } finally {
       setDownloadingId(null);
     }
@@ -246,7 +247,7 @@ export default function WargaPelayanan() {
                       data-testid={`button-download-${s.id}`}
                     >
                       {downloadingId === s.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                      Download PDF
+                      Buka & Unduh PDF
                     </Button>
                   </div>
                 )}
