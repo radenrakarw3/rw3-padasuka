@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, FileText, Clock, CheckCircle, XCircle, Download, ArrowLeft, Loader2, Printer, HandCoins } from "lucide-react";
 import type { SuratWarga, Warga, KartuKeluarga } from "@shared/schema";
+import { generateSuratPDF } from "@/lib/pdf-surat";
 
 const metodeLayananOptions = [
   {
@@ -101,9 +102,23 @@ export default function WargaPelayanan() {
     ditolak: { label: "Ditolak", color: "bg-red-100 text-red-800", icon: XCircle },
   };
 
-  const getPdfLink = (surat: SuratWarga) => {
-    if (surat.pdfCode) return `/api/surat-pdf/${surat.pdfCode}`;
-    return null;
+  const [downloadingPdf, setDownloadingPdf] = useState<number | null>(null);
+  const handleDownloadPdf = async (s: SuratWarga) => {
+    if (!s.isiSurat) return;
+    setDownloadingPdf(s.id);
+    try {
+      const label = s.jenisSurat.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+      await generateSuratPDF({
+        nomorSurat: s.nomorSurat,
+        isiSurat: s.isiSurat,
+        jenisSurat: label,
+        fileName: `Surat_${label.replace(/\s/g, "_")}_${s.nomorSurat?.replace(/\//g, "-") || s.id}`,
+      });
+    } catch {
+      toast({ title: "Gagal membuat PDF", variant: "destructive" });
+    } finally {
+      setDownloadingPdf(null);
+    }
   };
 
   if (showForm) {
@@ -292,43 +307,26 @@ export default function WargaPelayanan() {
                     {s.nomorSurat && (
                       <p className="text-[10px] text-muted-foreground">No. Surat: {s.nomorSurat}</p>
                     )}
-                    {s.metodeLayanan === "tau_beres" ? (
+                    {s.metodeLayanan === "tau_beres" && (
                       <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-3" data-testid={`info-tau-beres-${s.id}`}>
                         <p className="text-xs font-medium text-green-800 dark:text-green-300">Surat Anda sedang disiapkan</p>
                         <p className="text-[11px] text-green-700 dark:text-green-400 mt-1">Surat akan di-print dan ditandatangani oleh pengurus RT/RW. Silakan ambil di sekretariat RW dengan membawa infaq seikhlasnya untuk kas RW.</p>
-                        {getPdfLink(s) && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="w-full gap-1.5 mt-2"
-                            asChild
-                            data-testid={`button-download-${s.id}`}
-                          >
-                            <a href={getPdfLink(s)!} target="_blank" rel="noopener noreferrer">
-                              <Download className="w-4 h-4" />
-                              Download PDF (opsional)
-                            </a>
-                          </Button>
-                        )}
                       </div>
-                    ) : (
-                      getPdfLink(s) ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="w-full gap-1.5"
-                          asChild
-                          data-testid={`button-download-${s.id}`}
-                        >
-                          <a href={getPdfLink(s)!} target="_blank" rel="noopener noreferrer">
-                            <Download className="w-4 h-4" />
-                            Download Surat PDF
-                          </a>
-                        </Button>
-                      ) : (
-                        <p className="text-[11px] text-muted-foreground">PDF sedang disiapkan...</p>
-                      )
                     )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full gap-1.5"
+                      onClick={() => handleDownloadPdf(s)}
+                      disabled={downloadingPdf === s.id}
+                      data-testid={`button-download-${s.id}`}
+                    >
+                      {downloadingPdf === s.id ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Membuat PDF...</>
+                      ) : (
+                        <><Download className="w-4 h-4" /> Download Surat PDF</>
+                      )}
+                    </Button>
                   </div>
                 )}
                 <p className="text-[10px] text-muted-foreground mt-2">

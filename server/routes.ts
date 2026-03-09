@@ -8,7 +8,6 @@ import fs from "fs";
 import express from "express";
 import { storage } from "./storage";
 import { insertKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertProfileEditSchema, insertWaBlastSchema, insertPengajuanBansosSchema } from "@shared/schema";
-import { generateSuratPDFBuffer } from "./pdf-generator";
 
 declare module "express-session" {
   interface SessionData {
@@ -117,8 +116,6 @@ fs.mkdirSync(path.join(uploadsDir, "kk"), { recursive: true });
 fs.mkdirSync(path.join(uploadsDir, "ktp"), { recursive: true });
 const pdfTempDir = path.join(uploadsDir, "pdf-temp");
 fs.mkdirSync(pdfTempDir, { recursive: true });
-const pdfSuratDir = path.join(uploadsDir, "surat-pdf");
-fs.mkdirSync(pdfSuratDir, { recursive: true });
 
 function cleanupOldPdfTemps() {
   try {
@@ -219,26 +216,9 @@ export async function registerRoutes(
     });
   });
 
-  app.get("/api/surat-pdf/:code", async (req: Request, res: Response) => {
-    try {
-      const code = req.params.code.replace(/[^a-zA-Z0-9]/g, "");
-      if (!code) return res.status(400).json({ message: "Kode tidak valid" });
-      const surat = await storage.getSuratWargaByPdfCode(code);
-      if (!surat || !surat.pdfPath || surat.status !== "disetujui") {
-        return res.status(404).json({ message: "Surat tidak ditemukan atau belum tersedia" });
-      }
-      const filePath = path.resolve(process.cwd(), surat.pdfPath);
-      const allowedDir = path.resolve(pdfSuratDir);
-      if (!filePath.startsWith(allowedDir)) return res.status(403).json({ message: "Akses ditolak" });
-      if (!fs.existsSync(filePath)) return res.status(404).json({ message: "File PDF tidak ditemukan" });
-      const jenisLabel = jenisSuratLabels[surat.jenisSurat] || surat.jenisSurat;
-      const downloadName = `${jenisLabel.replace(/\s+/g, "_")}_${surat.nomorSurat?.replace(/\//g, "-") || surat.id}.pdf`;
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename="${downloadName}"`);
-      fs.createReadStream(filePath).pipe(res);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
+
+  app.get("/api/surat-pdf/:code", (_req: Request, res: Response) => {
+    res.status(410).json({ message: "Link PDF ini sudah tidak berlaku. Silakan download surat langsung dari web rw3padasukacimahi.org" });
   });
 
   function requireAuth(req: Request, res: Response, next: any) {
@@ -765,41 +745,12 @@ Kelurahan Padasuka | Kelurahan Padasuka
         res.json(data);
       }
 
-      if (status === "disetujui" && finalIsi) {
-        setImmediate(async () => {
-          try {
-            const pdfCode = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-            const pdfBuffer = generateSuratPDFBuffer({
-              nomorSurat: finalNomor,
-              isiSurat: finalIsi,
-              jenisSurat: jenisLabel,
-            });
-            const pdfFileName = `${pdfCode}.pdf`;
-            const pdfFilePath = path.join(pdfSuratDir, pdfFileName);
-            fs.writeFileSync(pdfFilePath, pdfBuffer);
-            const pdfRelPath = `uploads/surat-pdf/${pdfFileName}`;
-            await storage.updateSuratWargaPdf(surat.id, pdfCode, pdfRelPath);
-
-            const baseUrl = process.env.NODE_ENV === "production"
-              ? "https://rw3padasukacimahi.org"
-              : `http://localhost:5000`;
-            const pdfLink = `${baseUrl}/api/surat-pdf/${pdfCode}`;
-
-            const isTauBeres = surat.metodeLayanan === "tau_beres";
-            const instruksi = isTauBeres
-              ? `Surat akan segera di-print dan ditandatangani oleh pengurus RT/RW. Silakan ambil di sekretariat RW ya, jangan lupa bawa infaq seikhlasnya untuk kas RW 🙏\n\nWargi juga bisa download PDF surat langsung dari link ini:\n👉 ${pdfLink}`
-              : `Langsung download surat PDF nya dari link ini ya:\n👉 ${pdfLink}`;
-            notifyWarga(surat.wargaId, `[RW 03 Padasuka]\n\nSurat Wargi telah *DISETUJUI* ✅\n\nJenis: *${jenisLabel}*\nPerihal: ${surat.perihal}${finalNomor ? `\nNomor Surat: ${finalNomor}` : ""}\nLayanan: *${isTauBeres ? "Tau Beres" : "Print Mandiri"}*\n\n${instruksi}\n\nHatur nuhun! 🙏`);
-            console.log(`PDF generated for surat #${surat.id}: ${pdfCode}`);
-          } catch (pdfErr) {
-            console.error("PDF generation failed for surat #" + surat.id + ":", pdfErr);
-            const isTauBeres = surat.metodeLayanan === "tau_beres";
-            const instruksi = isTauBeres
-              ? "Surat akan segera di-print dan ditandatangani oleh pengurus RT/RW. Silakan ambil di sekretariat RW ya 🙏"
-              : "Buka web rw3padasukacimahi.org untuk melihat surat Wargi.";
-            notifyWarga(surat.wargaId, `[RW 03 Padasuka]\n\nSurat Wargi telah *DISETUJUI* ✅\n\nJenis: *${jenisLabel}*\nPerihal: ${surat.perihal}${finalNomor ? `\nNomor Surat: ${finalNomor}` : ""}\n\n${instruksi}\n\nHatur nuhun! 🙏`);
-          }
-        });
+      if (status === "disetujui") {
+        const isTauBeres = surat.metodeLayanan === "tau_beres";
+        const instruksi = isTauBeres
+          ? "Surat akan segera di-print dan ditandatangani oleh pengurus RT/RW. Silakan ambil di sekretariat RW ya, jangan lupa bawa infaq seikhlasnya untuk kas RW 🙏\n\nWargi juga bisa download PDF surat langsung dari web:\n👉 rw3padasukacimahi.org"
+          : "Download surat PDF langsung dari web ya:\n👉 rw3padasukacimahi.org";
+        notifyWarga(surat.wargaId, `[RW 03 Padasuka]\n\nSurat Wargi telah *DISETUJUI* ✅\n\nJenis: *${jenisLabel}*\nPerihal: ${surat.perihal}${finalNomor ? `\nNomor Surat: ${finalNomor}` : ""}\nLayanan: *${isTauBeres ? "Tau Beres" : "Print Mandiri"}*\n\n${instruksi}\n\nHatur nuhun! 🙏`);
       } else if (status === "ditolak") {
         notifyWarga(surat.wargaId, `[RW 03 Padasuka]\n\nMohon maaf, permohonan surat Wargi *ditolak* ❌\n\nJenis: *${jenisLabel}*\nPerihal: ${surat.perihal}\n\nSilakan hubungi pengurus RW untuk info lebih lanjut atau ajukan permohonan ulang di web 👉 rw3padasukacimahi.org`);
       }

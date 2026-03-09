@@ -42,8 +42,8 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
 ## Letter System
 - **Surat Warga Flow**: Warga submits request → Admin clicks "Generate" (Gemini AI) → Admin reviews → Approve/Reject → Nomor surat auto-assigned on approval (format: XXX/SK-W/RW-03/MM/YYYY)
 - **Surat RW Flow**: Admin creates surat → Gemini AI generates → Nomor surat auto-assigned on creation (format: XXX/SK-RW/RW-03/MM/YYYY)
-- **PDF Download (Surat Warga)**: On approval, PDF is generated server-side (`server/pdf-generator.ts`) using jsPDF, saved to `uploads/surat-pdf/`, with unique `pdfCode` stored in DB. Public endpoint `GET /api/surat-pdf/:code` serves PDF (no auth, requires status=disetujui, path validated). WA notification includes direct download link. Warga page shows `<a>` link. Admin can still use client-side PDF generation (`client/src/lib/pdf-surat.ts`).
-- **PDF Download (Admin/Surat RW/Bansos)**: Still uses client-side jsPDF with mobile blob upload fallback (`POST /api/pdf/temp`)
+- **PDF Download**: All PDF generation is client-side only (`client/src/lib/pdf-surat.ts`) using jsPDF. Both admin and warga download PDFs via client-side generation. Mobile uses blob upload fallback (`POST /api/pdf/temp`). Server-side jsPDF was removed to prevent OOM crashes in production.
+- **No server-side PDF**: `server/pdf-generator.ts` exists but is NOT imported — jsPDF is excluded from server bundle to avoid OOM in production's limited memory.
 - **Metode Layanan**: Warga chooses between:
   - *Print Mandiri*: Download PDF & print sendiri (gratis)
   - *Tau Beres*: Surat di-print & ditandatangani RT/RW, warga bayar infaq seikhlasnya untuk kas RW
