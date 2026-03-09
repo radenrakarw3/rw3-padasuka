@@ -146,8 +146,9 @@ export async function generateSuratPDF(options: {
   isiSurat: string;
   jenisSurat: string;
   fileName?: string;
-}) {
-  const { nomorSurat, isiSurat, jenisSurat, fileName } = options;
+  returnBlob?: boolean;
+}): Promise<Blob | void> {
+  const { nomorSurat, isiSurat, jenisSurat, fileName, returnBlob } = options;
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = 210;
   const marginLeft = 20;
@@ -471,6 +472,9 @@ export async function generateSuratPDF(options: {
   }
 
   const safeName = fileName || `${jenisSurat.replace(/\s+/g, "_")}${nomorSurat ? "_" + nomorSurat.replace(/\//g, "-") : ""}`;
+  if (returnBlob) {
+    return doc.output("blob");
+  }
   await savePdfMobileFriendly(doc, safeName);
 }
 

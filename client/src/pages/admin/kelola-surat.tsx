@@ -44,14 +44,36 @@ export default function AdminKelolaSurat() {
     onError: (err: any) => toast({ title: "Gagal", description: err.message, variant: "destructive" }),
   });
 
-  const notifyWaMutation = useMutation({
-    mutationFn: async (id: number) => {
-      const res = await apiRequest("POST", `/api/surat-warga/${id}/notify-wa`);
-      return res.json();
-    },
-    onSuccess: () => toast({ title: "Notifikasi WhatsApp terkirim!" }),
-    onError: (err: any) => toast({ title: "Gagal kirim WA", description: err.message, variant: "destructive" }),
-  });
+  const [sendingWa, setSendingWa] = useState<number | null>(null);
+  const handleSendPdfWa = async (s: SuratWarga) => {
+    if (!s.isiSurat) return;
+    setSendingWa(s.id);
+    try {
+      const label = s.jenisSurat.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+      const blob = await generateSuratPDF({
+        nomorSurat: s.nomorSurat,
+        isiSurat: s.isiSurat,
+        jenisSurat: label,
+        returnBlob: true,
+      });
+      if (!blob) throw new Error("Gagal membuat PDF");
+      const formData = new FormData();
+      const fileName = `${label.replace(/\s/g, "_")}_${s.nomorSurat?.replace(/\//g, "-") || s.id}.pdf`;
+      formData.append("file", new File([blob], fileName, { type: "application/pdf" }));
+      const res = await fetch(`/api/surat-warga/${s.id}/send-pdf-wa`, {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Gagal mengirim");
+      toast({ title: "PDF surat berhasil dikirim via WhatsApp!" });
+    } catch (err: any) {
+      toast({ title: "Gagal kirim PDF via WA", description: err.message, variant: "destructive" });
+    } finally {
+      setSendingWa(null);
+    }
+  };
 
   const getWargaName = (id: number) => wargaList?.find(w => w.id === id)?.namaLengkap || "Warga";
 
@@ -169,14 +191,14 @@ export default function AdminKelolaSurat() {
                       <Button
                         size="sm"
                         className="gap-1 bg-green-600 hover:bg-green-700"
-                        onClick={() => notifyWaMutation.mutate(s.id)}
-                        disabled={notifyWaMutation.isPending}
+                        onClick={() => handleSendPdfWa(s)}
+                        disabled={sendingWa === s.id}
                         data-testid={`button-wa-surat-${s.id}`}
                       >
-                        {notifyWaMutation.isPending ? (
-                          <><Loader2 className="w-3 h-3 animate-spin" /> Mengirim...</>
+                        {sendingWa === s.id ? (
+                          <><Loader2 className="w-3 h-3 animate-spin" /> Mengirim PDF...</>
                         ) : (
-                          <><Send className="w-3 h-3" /> Kirim via WA</>
+                          <><Send className="w-3 h-3" /> Kirim PDF via WA</>
                         )}
                       </Button>
                     </>

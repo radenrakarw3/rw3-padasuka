@@ -760,7 +760,9 @@ Kelurahan Padasuka | Kelurahan Padasuka
     }
   });
 
-  app.post("/api/surat-warga/:id/notify-wa", requireAdmin, async (req, res) => {
+  const pdfWaUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+  app.post("/api/surat-warga/:id/send-pdf-wa", requireAdmin, pdfWaUpload.single("file"), async (req, res) => {
     try {
       const surat = await storage.getSuratWargaById(parseInt(req.params.id));
       if (!surat) return res.status(404).json({ message: "Surat tidak ditemukan" });
@@ -771,15 +773,50 @@ Kelurahan Padasuka | Kelurahan Padasuka
       if (!w?.nomorWhatsapp) {
         return res.status(400).json({ message: "Warga tidak memiliki nomor WhatsApp" });
       }
+      if (!req.file) {
+        return res.status(400).json({ message: "File PDF tidak ditemukan" });
+      }
+
+      const apiKey = process.env.STARSENDER_API_KEY;
+      const deviceId = process.env.STARSENDER_DEVICE_ID;
+      if (!apiKey || !deviceId) {
+        return res.status(500).json({ message: "Star Sender belum dikonfigurasi" });
+      }
+
+      let formattedPhone = w.nomorWhatsapp.replace(/[^0-9]/g, "");
+      if (formattedPhone.startsWith("0")) formattedPhone = "62" + formattedPhone.substring(1);
+      if (!formattedPhone.startsWith("62")) formattedPhone = "62" + formattedPhone;
+
       const jenisLabel = jenisSuratLabels[surat.jenisSurat] || surat.jenisSurat;
-      const isTauBeres = surat.metodeLayanan === "tau_beres";
-      const instruksi = isTauBeres
-        ? "Surat akan segera di-print dan ditandatangani oleh pengurus RT/RW. Silakan ambil di sekretariat RW ya, jangan lupa bawa infaq seikhlasnya untuk kas RW 🙏\n\nWargi juga bisa download PDF surat langsung dari web:\n👉 rw3padasukacimahi.org"
-        : "Download surat PDF langsung dari web ya:\n👉 rw3padasukacimahi.org";
-      await sendWhatsApp(w.nomorWhatsapp, `[RW 03 Padasuka]\n\nSurat Wargi telah *DISETUJUI* ✅\n\nJenis: *${jenisLabel}*\nPerihal: ${surat.perihal}${surat.nomorSurat ? `\nNomor Surat: ${surat.nomorSurat}` : ""}\nLayanan: *${isTauBeres ? "Tau Beres" : "Print Mandiri"}*\n\n${instruksi}\n\nHatur nuhun! 🙏`);
-      res.json({ message: "Notifikasi WhatsApp terkirim" });
+      const caption = `[RW 03 Padasuka]\n\nBerikut surat *${jenisLabel}* yang sudah disetujui ✅\n\nPerihal: ${surat.perihal}${surat.nomorSurat ? `\nNomor: ${surat.nomorSurat}` : ""}\n\nHatur nuhun! 🙏`;
+
+      const fileName = `${jenisLabel.replace(/\s+/g, "_")}_${surat.nomorSurat?.replace(/\//g, "-") || surat.id}.pdf`;
+
+      const FormData = (await import("form-data")).default;
+      const form = new FormData();
+      form.append("device_id", deviceId);
+      form.append("tujuan", formattedPhone + "@s.whatsapp.net");
+      form.append("message", caption);
+      form.append("file", req.file.buffer, { filename: fileName, contentType: "application/pdf" });
+
+      const response = await fetch("https://api.starsender.online/api/sendFiles", {
+        method: "POST",
+        headers: {
+          "Authorization": apiKey,
+          ...form.getHeaders(),
+        },
+        body: form as any,
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error("Star Sender sendFiles error:", errText);
+        return res.status(500).json({ message: "Gagal mengirim PDF via WhatsApp" });
+      }
+
+      res.json({ message: "PDF surat berhasil dikirim via WhatsApp" });
     } catch (error: any) {
-      console.error("WA notify surat error:", error);
+      console.error("WA send PDF error:", error);
       res.status(500).json({ message: error.message });
     }
   });
