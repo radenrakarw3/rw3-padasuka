@@ -20,29 +20,53 @@ declare module "express-session" {
   }
 }
 
-async function generateWithGemini(prompt: string): Promise<string> {
+async function generateWithGemini(prompt: string, maxRetries = 2): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.3, maxOutputTokens: 4096 },
-      }),
-    }
-  );
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.3, maxOutputTokens: 8192 },
+        }),
+      }
+    );
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      if (attempt < maxRetries) {
+        console.warn(`Gemini API error (attempt ${attempt + 1}), retrying...`, errorText);
+        continue;
+      }
+      throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    const candidate = data.candidates?.[0];
+    const text = candidate?.content?.parts?.[0]?.text || "";
+    const finishReason = candidate?.finishReason;
+
+    if (finishReason === "MAX_TOKENS" && attempt < maxRetries) {
+      console.warn(`Gemini response truncated (MAX_TOKENS), retrying attempt ${attempt + 2}...`);
+      continue;
+    }
+
+    if (!text || text.length < 100) {
+      if (attempt < maxRetries) {
+        console.warn(`Gemini response too short (${text.length} chars), retrying...`);
+        continue;
+      }
+    }
+
+    return text;
   }
 
-  const data = await response.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  throw new Error("Gemini gagal menghasilkan surat setelah beberapa percobaan");
 }
 
 async function sendWhatsApp(phoneNumber: string, message: string): Promise<boolean> {
@@ -177,7 +201,16 @@ export async function registerRoutes(
 
   const pdfTempPublicDir = path.join(uploadsDir, "pdf-temp");
   fs.mkdirSync(pdfTempPublicDir, { recursive: true });
-  app.use("/uploads/pdf-temp", express.static(pdfTempPublicDir));
+  const pdfTempTokens = new Map<string, { filePath: string; expires: number }>();
+  app.get("/uploads/pdf-temp/:token", (req, res) => {
+    const entry = pdfTempTokens.get(req.params.token);
+    if (!entry || Date.now() > entry.expires) {
+      pdfTempTokens.delete(req.params.token);
+      return res.status(404).json({ message: "File tidak ditemukan atau sudah kadaluarsa" });
+    }
+    res.setHeader("Content-Type", "application/pdf");
+    res.sendFile(entry.filePath);
+  });
 
   app.use("/uploads", (req: Request, res: Response, next: any) => {
     if (!req.session?.kkId && !req.session?.isAdmin) {
@@ -701,8 +734,27 @@ Kelurahan Padasuka | Kelurahan Padasuka
 6. Untuk bagian biodata/data pemohon, gunakan format yang konsisten dengan tanda titik dua (:) yang sejajar.
 7. Untuk label NIK, tulis "NIK" saja (3 huruf), JANGAN tulis "Nomor Induk Kependudukan".`;
 
-      let isiSurat = await generateWithGemini(prompt);
-      isiSurat = isiSurat.replace(/Nomor Induk Kependudukan\s*/gi, "NIK");
+      let isiSurat = "";
+      let suratComplete = false;
+      const maxSuratRetries = 3;
+      for (let attempt = 0; attempt < maxSuratRetries; attempt++) {
+        isiSurat = await generateWithGemini(prompt);
+        isiSurat = isiSurat.replace(/Nomor Induk Kependudukan\s*/gi, "NIK");
+        isiSurat = isiSurat.replace(/```[a-z]*\n?/g, "").replace(/```/g, "").trim();
+
+        const hasSignature = /Raden Raka/i.test(isiSurat) || /Ketua RW/i.test(isiSurat);
+        const hasDemikian = /[Dd]emikian/i.test(isiSurat);
+        const hasTitle = /SURAT\s+KETERANGAN|SURAT\s+PENGANTAR/i.test(isiSurat);
+        suratComplete = hasSignature && hasDemikian && hasTitle && isiSurat.length >= 300;
+
+        if (suratComplete) break;
+        console.warn(`Surat generate attempt ${attempt + 1} incomplete (len=${isiSurat.length}, sig=${hasSignature}, dem=${hasDemikian}, title=${hasTitle}), retrying...`);
+      }
+
+      if (!suratComplete || !isiSurat || isiSurat.length < 100) {
+        return res.status(500).json({ message: "Gagal membuat surat yang lengkap setelah beberapa percobaan. Silakan coba generate ulang." });
+      }
+
       const updated = await storage.updateSuratWargaStatus(surat.id, surat.status, isiSurat);
 
       const jenisLabel = jenisSuratLabels[surat.jenisSurat] || surat.jenisSurat;
@@ -796,15 +848,15 @@ Kelurahan Padasuka | Kelurahan Padasuka
 
       const fileName = `${jenisLabel.replace(/\s+/g, "_")}_${surat.nomorSurat?.replace(/\//g, "-") || surat.id}.pdf`;
 
-      const tempId = `wa_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      const tempDir = path.join(process.cwd(), "uploads", "pdf-temp");
-      await fs.promises.mkdir(tempDir, { recursive: true });
-      const tempFilePath = path.join(tempDir, `${tempId}.pdf`);
+      const token = `wa_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+      const tempFilePath = path.join(pdfTempPublicDir, `${token}.pdf`);
       await fs.promises.writeFile(tempFilePath, req.file.buffer);
+
+      pdfTempTokens.set(token, { filePath: tempFilePath, expires: Date.now() + 120000 });
 
       const protocol = req.headers["x-forwarded-proto"] || req.protocol || "https";
       const host = req.headers["x-forwarded-host"] || req.headers.host || "rw3padasukacimahi.org";
-      const fileUrl = `${protocol}://${host}/uploads/pdf-temp/${tempId}.pdf`;
+      const fileUrl = `${protocol}://${host}/uploads/pdf-temp/${token}`;
 
       console.log("Sending PDF via WA, file URL:", fileUrl);
 
@@ -826,8 +878,9 @@ Kelurahan Padasuka | Kelurahan Padasuka
       const resData = await response.text();
 
       setTimeout(() => {
+        pdfTempTokens.delete(token);
         fs.promises.unlink(tempFilePath).catch(() => {});
-      }, 60000);
+      }, 120000);
 
       if (!response.ok) {
         console.error("Star Sender send document error:", resData);
@@ -884,12 +937,26 @@ Kelurahan Padasuka
 Buat surat dalam format teks biasa yang rapi dan profesional.`;
 
       let isiSurat = "";
+      let rwComplete = false;
       try {
-        isiSurat = await generateWithGemini(prompt);
-        isiSurat = isiSurat.replace(/Nomor Induk Kependudukan\s*/gi, "NIK");
+        for (let attempt = 0; attempt < 3; attempt++) {
+          isiSurat = await generateWithGemini(prompt);
+          isiSurat = isiSurat.replace(/Nomor Induk Kependudukan\s*/gi, "NIK");
+          isiSurat = isiSurat.replace(/```[a-z]*\n?/g, "").replace(/```/g, "").trim();
+
+          const hasSignature = /Raden Raka/i.test(isiSurat);
+          const hasTitle = /SURAT\s+/i.test(isiSurat);
+          const hasDemikian = /[Dd]emikian/i.test(isiSurat);
+          rwComplete = hasSignature && hasTitle && hasDemikian && isiSurat.length >= 200;
+          if (rwComplete) break;
+          console.warn(`Surat RW generate attempt ${attempt + 1} incomplete (len=${isiSurat.length}, sig=${hasSignature}, title=${hasTitle}, dem=${hasDemikian}), retrying...`);
+        }
       } catch (err: any) {
         console.error("Gemini error:", err.message);
-        isiSurat = "Gagal generate surat.";
+      }
+
+      if (!rwComplete || !isiSurat || isiSurat.length < 100) {
+        return res.status(500).json({ message: "Gagal membuat surat RW yang lengkap. Silakan coba lagi." });
       }
 
       const data = await storage.createSuratRw({ ...parsed, isiSurat });

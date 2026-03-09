@@ -37,14 +37,15 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
    - **Auto Placeholders**: `{gender}` (Bapak/Ibu), `{warga}` (nama lengkap), `{rtxx}` (RT number) — replaced per-recipient on send
    - Server validates AI output contains placeholders; injects header if missing
 5. **Auto WA Notifications**: Every status change (laporan, surat, profile edit) sends contextual WhatsApp notification to warga via Star Sender with domain link (rw3padasukacimahi.org)
-   - **Kirim PDF via WA**: Admin can send approved surat as PDF file via WhatsApp directly from Kelola Surat page. Client generates PDF blob → uploads to server → server sends via Star Sender `sendFiles` API
+   - **Kirim PDF via WA**: Admin can send approved surat as PDF file via WhatsApp directly from Kelola Surat page. Client generates compressed PDF blob → uploads to server → saves as temp file with token → sends file URL via Star Sender `/api/send` (messageType: "media") → temp file auto-deleted after 2 minutes
 6. **Shared Constants**: All dropdown options (pekerjaan, agama, jenis kelamin, status kawin, kedudukan, etc.) centralized in `client/src/lib/constants.ts`
 
 ## Letter System
 - **Surat Warga Flow**: Warga submits request → Admin clicks "Generate" (Gemini AI) → Admin reviews → Approve/Reject → Nomor surat auto-assigned on approval (format: XXX/SK-W/RW-03/MM/YYYY)
 - **Surat RW Flow**: Admin creates surat → Gemini AI generates → Nomor surat auto-assigned on creation (format: XXX/SK-RW/RW-03/MM/YYYY)
-- **PDF Download**: All PDF generation is client-side only (`client/src/lib/pdf-surat.ts`) using jsPDF. Both admin and warga download PDFs via client-side generation. Mobile uses blob upload fallback (`POST /api/pdf/temp`). Server-side jsPDF was removed to prevent OOM crashes in production.
+- **PDF Download**: All PDF generation is client-side only (`client/src/lib/pdf-surat.ts`) using jsPDF with compression enabled (`compress: true`). Logo is resized to 150x150px JPEG (70% quality) via canvas and cached for smaller PDFs. Both admin and warga download PDFs via client-side generation. Mobile uses blob upload fallback (`POST /api/pdf/temp`). Server-side jsPDF was removed to prevent OOM crashes in production.
 - **No server-side PDF**: `server/pdf-generator.ts` exists but is NOT imported — jsPDF is excluded from server bundle to avoid OOM in production's limited memory.
+- **Surat Generation Validation**: Gemini-generated surat content is validated for completeness (must have title, "Demikian" paragraph, signature block with "Raden Raka") before saving. Auto-retries up to 3 times if incomplete. Returns error if still incomplete after retries.
 - **Metode Layanan**: Warga chooses between:
   - *Print Mandiri*: Download PDF & print sendiri (gratis)
   - *Tau Beres*: Surat di-print & ditandatangani RT/RW, warga bayar infaq seikhlasnya untuk kas RW
