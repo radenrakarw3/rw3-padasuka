@@ -243,9 +243,11 @@ export default function LoginPage() {
                   <Input
                     id="nomor-kk"
                     type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     placeholder="Contoh: 3277022211060211"
                     value={nomorKk}
-                    onChange={(e) => setNomorKk(e.target.value)}
+                    onChange={(e) => setNomorKk(e.target.value.replace(/\D/g, ""))}
                     className="h-12 text-base"
                     data-testid="input-nomor-kk"
                   />

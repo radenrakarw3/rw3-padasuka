@@ -714,9 +714,11 @@ Kelurahan Padasuka | Kelurahan Padasuka
 (${rt?.namaKetua || "___________"}) | (Raden Raka)
 
 5. Buat dalam format teks biasa yang rapi, bukan markdown. Jangan gunakan tanda bintang (*) atau formatting markdown apapun.
-6. Untuk bagian biodata/data pemohon, gunakan format yang konsisten dengan tanda titik dua (:) yang sejajar.`;
+6. Untuk bagian biodata/data pemohon, gunakan format yang konsisten dengan tanda titik dua (:) yang sejajar.
+7. Untuk label NIK, tulis "NIK" saja (3 huruf), JANGAN tulis "Nomor Induk Kependudukan".`;
 
-      const isiSurat = await generateWithGemini(prompt);
+      let isiSurat = await generateWithGemini(prompt);
+      isiSurat = isiSurat.replace(/Nomor Induk Kependudukan\s*/gi, "NIK");
       const updated = await storage.updateSuratWargaStatus(surat.id, surat.status, isiSurat);
 
       const jenisLabel = jenisSuratLabels[surat.jenisSurat] || surat.jenisSurat;
@@ -836,6 +838,7 @@ LARANGAN:
 2. JANGAN sertakan nomor surat (sudah otomatis oleh sistem).
 3. JANGAN gunakan markdown (bintang, hashtag, dll). Tulis teks biasa saja.
 4. Urutan surat HARUS dimulai dari JUDUL SURAT dalam huruf kapital (contoh: SURAT UNDANGAN, SURAT TUGAS, dll), BARU KEMUDIAN di bawahnya tulis "Perihal: ..." atau "Lampiran: ...". JANGAN menaruh Perihal/Lampiran di atas judul surat.
+5. Untuk label NIK, tulis "NIK" saja (3 huruf), JANGAN tulis "Nomor Induk Kependudukan".
 
 FORMAT TANDA TANGAN (di akhir surat, WAJIB format vertikal atas-bawah):
 
@@ -850,6 +853,7 @@ Buat surat dalam format teks biasa yang rapi dan profesional.`;
       let isiSurat = "";
       try {
         isiSurat = await generateWithGemini(prompt);
+        isiSurat = isiSurat.replace(/Nomor Induk Kependudukan\s*/gi, "NIK");
       } catch (err: any) {
         console.error("Gemini error:", err.message);
         isiSurat = "Gagal generate surat.";

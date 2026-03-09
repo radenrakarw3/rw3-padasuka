@@ -120,6 +120,7 @@ export function generateSuratPDFBuffer(options: {
   }
 
   let processedText = cleanText(isiSurat);
+  processedText = processedText.replace(/Nomor Induk Kependudukan\s*/gi, "NIK");
   processedText = processedText.replace(/^Nomor\s*:.*$/m, "").trim();
   const allLines = processedText.split("\n");
 

@@ -163,6 +163,7 @@ export async function generateSuratPDF(options: {
   try { img = await loadImage(logoGreen); } catch {}
 
   let processedText = cleanText(isiSurat);
+  processedText = processedText.replace(/Nomor Induk Kependudukan\s*/gi, "NIK");
   processedText = processedText.replace(/^Nomor\s*:.*$/m, "").trim();
   const allLines = processedText.split("\n");
 
