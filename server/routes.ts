@@ -802,8 +802,11 @@ Kelurahan Padasuka | Kelurahan Padasuka
       const tempFilePath = path.join(tempDir, `${tempId}.pdf`);
       await fs.promises.writeFile(tempFilePath, req.file.buffer);
 
-      const baseUrl = process.env.BASE_URL || `https://rw3padasukacimahi.org`;
-      const fileUrl = `${baseUrl}/uploads/pdf-temp/${tempId}.pdf`;
+      const protocol = req.headers["x-forwarded-proto"] || req.protocol || "https";
+      const host = req.headers["x-forwarded-host"] || req.headers.host || "rw3padasukacimahi.org";
+      const fileUrl = `${protocol}://${host}/uploads/pdf-temp/${tempId}.pdf`;
+
+      console.log("Sending PDF via WA, file URL:", fileUrl);
 
       const response = await fetch("https://api.starsender.online/api/send", {
         method: "POST",
