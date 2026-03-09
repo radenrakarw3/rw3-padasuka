@@ -11,6 +11,27 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
+let compressedLogoCache: string | null = null;
+async function getCompressedLogo(): Promise<string | null> {
+  if (compressedLogoCache) return compressedLogoCache;
+  try {
+    const img = await loadImage(logoGreen);
+    const size = 150;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, size, size);
+    ctx.drawImage(img, 0, 0, size, size);
+    compressedLogoCache = canvas.toDataURL("image/jpeg", 0.7);
+    return compressedLogoCache;
+  } catch {
+    return null;
+  }
+}
+
 function isMobileDevice(): boolean {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
     (window.innerWidth <= 768);
@@ -149,7 +170,7 @@ export async function generateSuratPDF(options: {
   returnBlob?: boolean;
 }): Promise<Blob | void> {
   const { nomorSurat, isiSurat, jenisSurat, fileName, returnBlob } = options;
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4", compress: true });
   const pageWidth = 210;
   const marginLeft = 20;
   const marginRight = 20;
@@ -160,8 +181,7 @@ export async function generateSuratPDF(options: {
   const availableHeight = pageHeight - startY - bottomMargin;
   const colonMM = 35;
 
-  let img: HTMLImageElement | null = null;
-  try { img = await loadImage(logoGreen); } catch {}
+  const compressedLogo = await getCompressedLogo();
 
   let processedText = cleanText(isiSurat);
   processedText = processedText.replace(/Nomor Induk Kependudukan\s*/gi, "NIK");
@@ -266,7 +286,7 @@ export async function generateSuratPDF(options: {
   const bodyLh = fixedLh * bodyScale;
 
   const drawKop = () => {
-    if (img) doc.addImage(img, "PNG", marginLeft + 2, 12, 18, 18);
+    if (compressedLogo) doc.addImage(compressedLogo, "JPEG", marginLeft + 2, 12, 18, 18);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.text("RUKUN WARGA 03", pageWidth / 2, 16, { align: "center" });
@@ -489,7 +509,7 @@ export async function generateSuratRekomendasiBansosPDF(options: {
   ketuaRt: string;
 }) {
   const { jenisPengajuan, jenisBansos, kepalaKeluarga, nomorKk, alamat, rt, alasan, ketuaRt } = options;
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4", compress: true });
   const pageWidth = 210;
   const marginLeft = 20;
   const marginRight = 20;
@@ -498,12 +518,11 @@ export async function generateSuratRekomendasiBansosPDF(options: {
   const fixedFs = 10;
   const fixedLh = 5.5;
 
-  let img: HTMLImageElement | null = null;
-  try { img = await loadImage(logoGreen); } catch {}
+  const compressedLogo2 = await getCompressedLogo();
 
   function drawKop(page: number) {
-    if (img) {
-      doc.addImage(img, "PNG", marginLeft, 5, 18, 18);
+    if (compressedLogo2) {
+      doc.addImage(compressedLogo2, "JPEG", marginLeft, 5, 18, 18);
     }
     const kopX = marginLeft + 22;
     doc.setFont("helvetica", "bold");
