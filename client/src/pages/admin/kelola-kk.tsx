@@ -269,7 +269,14 @@ export default function AdminKelolaKK() {
 
   const filtered = useMemo(() => {
     return kkList?.filter(k => {
-      const matchSearch = k.nomorKk.includes(search) || k.alamat.toLowerCase().includes(search.toLowerCase());
+      const q = search.toLowerCase();
+      const kepala = kepalaByKkId[k.id];
+      const members = membersByKkId[k.id] || [];
+      const matchSearch = !q
+        || k.nomorKk.includes(search)
+        || k.alamat.toLowerCase().includes(q)
+        || (kepala && kepala.namaLengkap.toLowerCase().includes(q))
+        || members.some(w => w.namaLengkap.toLowerCase().includes(q));
       const matchRt = filterRt === "semua" || k.rt === parseInt(filterRt);
       let matchVerif = true;
       if (filterVerifikasi !== "semua") {
@@ -278,7 +285,7 @@ export default function AdminKelolaKK() {
       }
       return matchSearch && matchRt && matchVerif;
     }) || [];
-  }, [kkList, search, filterRt, filterVerifikasi, getVerification]);
+  }, [kkList, wargaList, search, filterRt, filterVerifikasi, getVerification, kepalaByKkId, membersByKkId]);
 
   const verifiedCount = useMemo(() => {
     return kkList?.filter(k => getVerification(k).status === "verified").length || 0;
@@ -510,7 +517,7 @@ export default function AdminKelolaKK() {
       <div className="flex flex-wrap gap-2">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input value={search} onChange={e => handleSearchChange(e.target.value)} placeholder="Cari nomor KK atau alamat..." className="h-10 pl-9" data-testid="input-search-kk" />
+          <Input value={search} onChange={e => handleSearchChange(e.target.value)} placeholder="Cari nama, nomor KK, atau alamat..." className="h-10 pl-9" data-testid="input-search-kk" />
         </div>
         <Select value={filterRt} onValueChange={handleFilterChange}>
           <SelectTrigger className="w-32 h-10" data-testid="select-filter-rt">
