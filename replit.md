@@ -29,8 +29,8 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
 - Access control: warga can only access their own KK data, admin sees all
 
 ## Key Features
-1. **Warga Pages**: Beranda, Profil (view/edit request), Laporan, Pelayanan Surat
-2. **Admin Pages**: Dashboard (comprehensive statistics), Kelola KK, Kelola Warga, Kelola Laporan, Kelola Surat, Surat RW (Surat Sakti), Arsip Surat, Edit Profil approval, Bansos Management, WA Blast
+1. **Warga Pages**: Beranda, Profil (view/edit request), Layanan (merged: Surat + Laporan + Donasi tabs)
+2. **Admin Pages**: Dashboard (comprehensive statistics), Kelola KK, Kelola Warga, Kelola Laporan, Kelola Surat, Surat RW (Surat Sakti), Arsip Surat, Edit Profil approval, Bansos Management, Donasi, WA Blast
 3. **Gemini AI**: Auto-generates surat keterangan and official RW letters
 4. **Star Sender**: WA Blast with category filters (semua, per RT, kepala keluarga, penerima bansos), preview recipient count, confirmation dialog, message templates, AI message generation, expandable history with sent/failed counts
    - **AI Message Generation**: Admin inputs a topic → Gemini generates personalized message as Ketua RW (Raden Raka, 23yo, friendly tone)
@@ -39,6 +39,12 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
 5. **Auto WA Notifications**: Every status change (laporan, surat, profile edit) sends contextual WhatsApp notification to warga via Star Sender with domain link (rw3padasukacimahi.org)
    - **Kirim PDF via WA**: Admin can send approved surat as PDF file via WhatsApp directly from Kelola Surat page. Client generates compressed PDF blob → uploads to server → saves as temp file with token → sends file URL via Star Sender `/api/send` (messageType: "media") → temp file auto-deleted after 2 minutes
 6. **Shared Constants**: All dropdown options (pekerjaan, agama, jenis kelamin, status kawin, kedudukan, etc.) centralized in `client/src/lib/constants.ts`
+7. **Donasi**: Crowdfunding feature for RW activities
+   - Admin creates donation campaigns (judul, deskripsi, target dana optional)
+   - Warga donates via Saweria (saweria.co/rw3padasuka), then reports donation (campaign, nama, jumlah)
+   - Admin verifies payment and confirms/rejects
+   - Confirmed donations appear on public leaderboard (aggregated by donatur name, sorted by total)
+   - Tables: `donasi_campaign`, `donasi`
 
 ## Letter System
 - **Surat Warga Flow**: Warga submits request → Admin clicks "Generate" (Gemini AI) → Admin reviews → Approve/Reject → Nomor surat auto-assigned on approval (format: XXX/SK-W/RW-03/MM/YYYY)
@@ -93,6 +99,8 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
 - `admin_user`: Admin accounts with bcrypt password hashes
 - `wa_blast`: WA blast message history
 - `pengajuan_bansos`: Bansos recommendation requests (rekomendasi penerima / rekomendasi coret)
+- `donasi_campaign`: Donation campaigns created by admin (judul, deskripsi, targetDana, status aktif/selesai)
+- `donasi`: Donation records from warga (campaignId, kkId, namaDonatur, jumlah, status pending/dikonfirmasi/ditolak)
 
 ## RT Data
 7 RT units with real ketua names from CSV:

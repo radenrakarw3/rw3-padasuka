@@ -1,13 +1,12 @@
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
-import { User, FileText, ClipboardList, LogOut, Home } from "lucide-react";
+import { User, FileText, LogOut, Home } from "lucide-react";
 import logoGold from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
 
 const navItems = [
   { path: "/warga", icon: Home, label: "Beranda" },
   { path: "/warga/profil", icon: User, label: "Profil" },
-  { path: "/warga/laporan", icon: ClipboardList, label: "Laporan" },
-  { path: "/warga/pelayanan", icon: FileText, label: "Pelayanan" },
+  { path: "/warga/layanan", icon: FileText, label: "Layanan" },
 ];
 
 export default function WargaLayout({ children }: { children: React.ReactNode }) {

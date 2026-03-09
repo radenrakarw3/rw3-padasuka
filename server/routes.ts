@@ -7,7 +7,7 @@ import path from "path";
 import fs from "fs";
 import express from "express";
 import { storage } from "./storage";
-import { insertKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertProfileEditSchema, insertWaBlastSchema, insertPengajuanBansosSchema } from "@shared/schema";
+import { insertKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertProfileEditSchema, insertWaBlastSchema, insertPengajuanBansosSchema, insertDonasiCampaignSchema, insertDonasiSchema } from "@shared/schema";
 
 declare module "express-session" {
   interface SessionData {
@@ -1292,6 +1292,80 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
+  });
+
+  app.get("/api/donasi-campaign", requireAuth, async (_req, res) => {
+    const campaigns = await storage.getAllDonasiCampaigns();
+    res.json(campaigns);
+  });
+
+  app.post("/api/donasi-campaign", requireAdmin, async (req, res) => {
+    try {
+      const parsed = insertDonasiCampaignSchema.parse(req.body);
+      const campaign = await storage.createDonasiCampaign(parsed);
+      res.json(campaign);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/donasi-campaign/:id/status", requireAdmin, async (req, res) => {
+    const { status } = req.body;
+    if (!["aktif", "selesai"].includes(status)) {
+      return res.status(400).json({ message: "Status tidak valid" });
+    }
+    const result = await storage.updateDonasiCampaignStatus(parseInt(req.params.id), status);
+    if (!result) return res.status(404).json({ message: "Campaign tidak ditemukan" });
+    res.json(result);
+  });
+
+  app.get("/api/donasi", requireAuth, async (req, res) => {
+    if (req.session.isAdmin) {
+      const all = await storage.getAllDonasi();
+      return res.json(all);
+    }
+    const kkId = req.session.kkId;
+    if (!kkId) return res.json([]);
+    const list = await storage.getDonasiByKkId(kkId);
+    res.json(list);
+  });
+
+  app.post("/api/donasi", requireAuth, async (req, res) => {
+    try {
+      const kkId = req.session.kkId;
+      if (!kkId) return res.status(403).json({ message: "Tidak memiliki akses" });
+
+      const parsed = insertDonasiSchema.parse({ ...req.body, kkId });
+      if (parsed.jumlah <= 0) {
+        return res.status(400).json({ message: "Jumlah donasi harus lebih dari 0" });
+      }
+
+      const campaigns = await storage.getAllDonasiCampaigns();
+      const campaign = campaigns.find(c => c.id === parsed.campaignId);
+      if (!campaign || campaign.status !== "aktif") {
+        return res.status(400).json({ message: "Campaign tidak ditemukan atau sudah selesai" });
+      }
+
+      const result = await storage.createDonasi(parsed);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/donasi/:id/status", requireAdmin, async (req, res) => {
+    const { status } = req.body;
+    if (!["pending", "dikonfirmasi", "ditolak"].includes(status)) {
+      return res.status(400).json({ message: "Status tidak valid" });
+    }
+    const result = await storage.updateDonasiStatus(parseInt(req.params.id), status);
+    if (!result) return res.status(404).json({ message: "Donasi tidak ditemukan" });
+    res.json(result);
+  });
+
+  app.get("/api/donasi/leaderboard", async (_req, res) => {
+    const leaderboard = await storage.getDonasiLeaderboard();
+    res.json(leaderboard);
   });
 
   return httpServer;

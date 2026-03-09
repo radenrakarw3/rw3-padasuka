@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLocation } from "wouter";
-import { User, FileText, ClipboardList, MessageCircle, Users } from "lucide-react";
+import { User, FileText, MessageCircle, Users } from "lucide-react";
 import type { KartuKeluarga, Warga } from "@shared/schema";
 
 export default function WargaBeranda() {
@@ -45,18 +45,11 @@ export default function WargaBeranda() {
       color: "bg-[hsl(163,55%,22%)]",
     },
     {
-      icon: ClipboardList,
-      label: "Laporan",
-      desc: "Buat laporan ke RW",
-      path: "/warga/laporan",
-      color: "bg-[hsl(40,45%,50%)]",
-    },
-    {
       icon: FileText,
-      label: "Pelayanan Surat",
-      desc: "Ajukan surat keterangan",
-      path: "/warga/pelayanan",
-      color: "bg-[hsl(220,55%,35%)]",
+      label: "Layanan",
+      desc: "Surat, laporan & donasi",
+      path: "/warga/layanan",
+      color: "bg-[hsl(40,45%,50%)]",
     },
     {
       icon: Users,

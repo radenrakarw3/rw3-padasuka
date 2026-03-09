@@ -10,8 +10,7 @@ import LoginPage from "@/pages/login";
 import WargaLayout from "@/components/warga-layout";
 import WargaBeranda from "@/pages/warga/beranda";
 import WargaProfil from "@/pages/warga/profil";
-import WargaLaporan from "@/pages/warga/laporan";
-import WargaPelayanan from "@/pages/warga/pelayanan";
+import WargaLayanan from "@/pages/warga/layanan";
 import AdminLayout from "@/components/admin-layout";
 import AdminDashboard from "@/pages/admin/dashboard";
 import AdminKelolaKK from "@/pages/admin/kelola-kk";
@@ -23,6 +22,7 @@ import AdminProfilEdit from "@/pages/admin/profil-edit";
 import AdminWaBlast from "@/pages/admin/wa-blast";
 import AdminArsipSurat from "@/pages/admin/arsip-surat";
 import AdminBansos from "@/pages/admin/bansos";
+import AdminDonasi from "@/pages/admin/donasi";
 import { X } from "lucide-react";
 import goldLogo from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
 import radenRakaImg from "@assets/raden_raka_nobg.png";
@@ -103,8 +103,7 @@ function WargaRoutes() {
       <Switch>
         <Route path="/warga" component={WargaBeranda} />
         <Route path="/warga/profil" component={WargaProfil} />
-        <Route path="/warga/laporan" component={WargaLaporan} />
-        <Route path="/warga/pelayanan" component={WargaPelayanan} />
+        <Route path="/warga/layanan" component={WargaLayanan} />
         <Route>{() => <Redirect to="/warga" />}</Route>
       </Switch>
     </WargaLayout>
@@ -125,6 +124,7 @@ function AdminRoutes() {
         <Route path="/admin/wa-blast" component={AdminWaBlast} />
         <Route path="/admin/arsip-surat" component={AdminArsipSurat} />
         <Route path="/admin/bansos" component={AdminBansos} />
+        <Route path="/admin/donasi" component={AdminDonasi} />
         <Route>{() => <Redirect to="/admin" />}</Route>
       </Switch>
     </AdminLayout>

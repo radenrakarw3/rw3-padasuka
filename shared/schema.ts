@@ -126,6 +126,25 @@ export const pengajuanBansos = pgTable("pengajuan_bansos", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const donasiCampaign = pgTable("donasi_campaign", {
+  id: serial("id").primaryKey(),
+  judul: text("judul").notNull(),
+  deskripsi: text("deskripsi").notNull(),
+  targetDana: integer("target_dana"),
+  status: text("status").notNull().default("aktif"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const donasi = pgTable("donasi", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id").notNull().references(() => donasiCampaign.id),
+  kkId: integer("kk_id").notNull().references(() => kartuKeluarga.id),
+  namaDonatur: text("nama_donatur").notNull(),
+  jumlah: integer("jumlah").notNull(),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const insertKkSchema = createInsertSchema(kartuKeluarga).omit({ id: true, createdAt: true });
 export const insertWargaSchema = createInsertSchema(warga).omit({ id: true, createdAt: true });
 export const insertRtSchema = createInsertSchema(rtData).omit({ id: true });
@@ -138,6 +157,8 @@ export const insertProfileEditSchema = createInsertSchema(profileEditRequest).om
 export const insertAdminSchema = createInsertSchema(adminUser).omit({ id: true, createdAt: true });
 export const insertWaBlastSchema = createInsertSchema(waBlast).omit({ id: true, createdAt: true, jumlahPenerima: true, jumlahBerhasil: true, status: true });
 export const insertPengajuanBansosSchema = createInsertSchema(pengajuanBansos).omit({ id: true, createdAt: true, status: true });
+export const insertDonasiCampaignSchema = createInsertSchema(donasiCampaign).omit({ id: true, createdAt: true, status: true });
+export const insertDonasiSchema = createInsertSchema(donasi).omit({ id: true, createdAt: true, status: true });
 
 export type KartuKeluarga = typeof kartuKeluarga.$inferSelect;
 export type InsertKartuKeluarga = z.infer<typeof insertKkSchema>;
@@ -159,3 +180,7 @@ export type WaBlast = typeof waBlast.$inferSelect;
 export type InsertWaBlast = z.infer<typeof insertWaBlastSchema>;
 export type PengajuanBansos = typeof pengajuanBansos.$inferSelect;
 export type InsertPengajuanBansos = z.infer<typeof insertPengajuanBansosSchema>;
+export type DonasiCampaign = typeof donasiCampaign.$inferSelect;
+export type InsertDonasiCampaign = z.infer<typeof insertDonasiCampaignSchema>;
+export type Donasi = typeof donasi.$inferSelect;
+export type InsertDonasi = z.infer<typeof insertDonasiSchema>;

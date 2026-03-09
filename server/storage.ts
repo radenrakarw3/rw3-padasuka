@@ -2,7 +2,7 @@ import { eq, and, desc, sql, count } from "drizzle-orm";
 import { db } from "./db";
 import {
   kartuKeluarga, warga, rtData, laporan, suratWarga, suratRw,
-  profileEditRequest, adminUser, waBlast, pengajuanBansos,
+  profileEditRequest, adminUser, waBlast, pengajuanBansos, donasiCampaign, donasi,
   type KartuKeluarga, type InsertKartuKeluarga,
   type Warga, type InsertWarga,
   type RtData, type InsertRtData,
@@ -13,6 +13,8 @@ import {
   type AdminUser, type InsertAdminUser,
   type WaBlast, type InsertWaBlast,
   type PengajuanBansos, type InsertPengajuanBansos,
+  type DonasiCampaign, type InsertDonasiCampaign,
+  type Donasi, type InsertDonasi,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -80,6 +82,15 @@ export interface IStorage {
   updatePengajuanBansosStatus(id: number, status: string): Promise<PengajuanBansos | undefined>;
   getPengajuanBansosById(id: number): Promise<PengajuanBansos | undefined>;
   updateKkBansos(kkId: number, penerimaBansos: boolean, jenisBansos: string | null): Promise<KartuKeluarga | undefined>;
+
+  getAllDonasiCampaigns(): Promise<DonasiCampaign[]>;
+  createDonasiCampaign(data: InsertDonasiCampaign): Promise<DonasiCampaign>;
+  updateDonasiCampaignStatus(id: number, status: string): Promise<DonasiCampaign | undefined>;
+  getAllDonasi(): Promise<(Donasi & { judulCampaign: string })[]>;
+  getDonasiByKkId(kkId: number): Promise<(Donasi & { judulCampaign: string })[]>;
+  createDonasi(data: InsertDonasi): Promise<Donasi>;
+  updateDonasiStatus(id: number, status: string): Promise<Donasi | undefined>;
+  getDonasiLeaderboard(): Promise<{ namaDonatur: string; total: number; count: number }[]>;
 
   getDashboardStats(): Promise<DashboardStats>;
 }
@@ -445,6 +456,59 @@ export class DatabaseStorage implements IStorage {
   async updateKkBansos(kkId: number, penerimaBansos: boolean, jenisBansos: string | null): Promise<KartuKeluarga | undefined> {
     const [result] = await db.update(kartuKeluarga).set({ penerimaBansos, jenisBansos }).where(eq(kartuKeluarga.id, kkId)).returning();
     return result;
+  }
+
+  async getAllDonasiCampaigns(): Promise<DonasiCampaign[]> {
+    return db.select().from(donasiCampaign).orderBy(desc(donasiCampaign.createdAt));
+  }
+
+  async createDonasiCampaign(data: InsertDonasiCampaign): Promise<DonasiCampaign> {
+    const [result] = await db.insert(donasiCampaign).values(data).returning();
+    return result;
+  }
+
+  async updateDonasiCampaignStatus(id: number, status: string): Promise<DonasiCampaign | undefined> {
+    const [result] = await db.update(donasiCampaign).set({ status }).where(eq(donasiCampaign.id, id)).returning();
+    return result;
+  }
+
+  async getAllDonasi(): Promise<(Donasi & { judulCampaign: string })[]> {
+    const allDonasi = await db.select().from(donasi).orderBy(desc(donasi.createdAt));
+    const campaigns = await db.select().from(donasiCampaign);
+    const campMap: Record<number, string> = {};
+    campaigns.forEach(c => { campMap[c.id] = c.judul; });
+    return allDonasi.map(d => ({ ...d, judulCampaign: campMap[d.campaignId] || "-" }));
+  }
+
+  async getDonasiByKkId(kkId: number): Promise<(Donasi & { judulCampaign: string })[]> {
+    const allDonasi = await db.select().from(donasi).where(eq(donasi.kkId, kkId)).orderBy(desc(donasi.createdAt));
+    const campaigns = await db.select().from(donasiCampaign);
+    const campMap: Record<number, string> = {};
+    campaigns.forEach(c => { campMap[c.id] = c.judul; });
+    return allDonasi.map(d => ({ ...d, judulCampaign: campMap[d.campaignId] || "-" }));
+  }
+
+  async createDonasi(data: InsertDonasi): Promise<Donasi> {
+    const [result] = await db.insert(donasi).values(data).returning();
+    return result;
+  }
+
+  async updateDonasiStatus(id: number, status: string): Promise<Donasi | undefined> {
+    const [result] = await db.update(donasi).set({ status }).where(eq(donasi.id, id)).returning();
+    return result;
+  }
+
+  async getDonasiLeaderboard(): Promise<{ namaDonatur: string; total: number; count: number }[]> {
+    const confirmed = await db.select().from(donasi).where(eq(donasi.status, "dikonfirmasi"));
+    const map: Record<string, { total: number; count: number }> = {};
+    confirmed.forEach(d => {
+      if (!map[d.namaDonatur]) map[d.namaDonatur] = { total: 0, count: 0 };
+      map[d.namaDonatur].total += d.jumlah;
+      map[d.namaDonatur].count += 1;
+    });
+    return Object.entries(map)
+      .map(([namaDonatur, v]) => ({ namaDonatur, ...v }))
+      .sort((a, b) => b.total - a.total);
   }
 
   async getDashboardStats(): Promise<DashboardStats> {
