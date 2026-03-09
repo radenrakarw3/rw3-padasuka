@@ -69,6 +69,8 @@ export interface IStorage {
   countSuratWargaThisYear(): Promise<number>;
   countSuratRwThisYear(): Promise<number>;
   updateSuratWargaNomor(id: number, nomorSurat: string): Promise<SuratWarga | undefined>;
+  updateSuratWargaPdf(id: number, pdfCode: string, pdfPath: string): Promise<SuratWarga | undefined>;
+  getSuratWargaByPdfCode(code: string): Promise<SuratWarga | undefined>;
   updateSuratRwNomor(id: number, nomorSurat: string): Promise<SuratRw | undefined>;
   updateSuratRwIsi(id: number, isiSurat: string): Promise<SuratRw | undefined>;
 
@@ -372,6 +374,16 @@ export class DatabaseStorage implements IStorage {
 
   async updateSuratWargaNomor(id: number, nomorSurat: string): Promise<SuratWarga | undefined> {
     const [result] = await db.update(suratWarga).set({ nomorSurat }).where(eq(suratWarga.id, id)).returning();
+    return result;
+  }
+
+  async updateSuratWargaPdf(id: number, pdfCode: string, pdfPath: string): Promise<SuratWarga | undefined> {
+    const [result] = await db.update(suratWarga).set({ pdfCode, pdfPath }).where(eq(suratWarga.id, id)).returning();
+    return result;
+  }
+
+  async getSuratWargaByPdfCode(code: string): Promise<SuratWarga | undefined> {
+    const [result] = await db.select().from(suratWarga).where(eq(suratWarga.pdfCode, code));
     return result;
   }
 

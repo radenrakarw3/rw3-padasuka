@@ -71,6 +71,8 @@ export const suratWarga = pgTable("surat_warga", {
   status: text("status").notNull().default("pending"),
   metodeLayanan: text("metode_layanan").notNull().default("print_mandiri"),
   nomorRt: integer("nomor_rt").notNull(),
+  pdfCode: text("pdf_code"),
+  pdfPath: text("pdf_path"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -128,7 +130,7 @@ export const insertKkSchema = createInsertSchema(kartuKeluarga).omit({ id: true,
 export const insertWargaSchema = createInsertSchema(warga).omit({ id: true, createdAt: true });
 export const insertRtSchema = createInsertSchema(rtData).omit({ id: true });
 export const insertLaporanSchema = createInsertSchema(laporan).omit({ id: true, createdAt: true, status: true, tanggapanAdmin: true });
-export const insertSuratWargaSchema = createInsertSchema(suratWarga).omit({ id: true, createdAt: true, status: true, isiSurat: true }).extend({
+export const insertSuratWargaSchema = createInsertSchema(suratWarga).omit({ id: true, createdAt: true, status: true, isiSurat: true, pdfCode: true, pdfPath: true, nomorSurat: true }).extend({
   metodeLayanan: z.enum(["print_mandiri", "tau_beres"]).default("print_mandiri"),
 });
 export const insertSuratRwSchema = createInsertSchema(suratRw).omit({ id: true, createdAt: true });

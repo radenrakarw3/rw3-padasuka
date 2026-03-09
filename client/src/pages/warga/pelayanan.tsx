@@ -13,7 +13,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, FileText, Clock, CheckCircle, XCircle, Download, ArrowLeft, Loader2, Printer, HandCoins } from "lucide-react";
 import type { SuratWarga, Warga, KartuKeluarga } from "@shared/schema";
-import { generateSuratPDF } from "@/lib/pdf-surat";
 
 const metodeLayananOptions = [
   {
@@ -102,24 +101,9 @@ export default function WargaPelayanan() {
     ditolak: { label: "Ditolak", color: "bg-red-100 text-red-800", icon: XCircle },
   };
 
-  const [downloadingId, setDownloadingId] = useState<number | null>(null);
-  const handleDownload = async (surat: SuratWarga) => {
-    if (!surat.isiSurat) return;
-    setDownloadingId(surat.id);
-    try {
-      const label = jenisSuratOptions.find(o => o.value === surat.jenisSurat)?.label || surat.jenisSurat;
-      await generateSuratPDF({
-        nomorSurat: surat.nomorSurat,
-        isiSurat: surat.isiSurat,
-        jenisSurat: label,
-        fileName: `Surat_${label.replace(/\s/g, "_")}_${surat.nomorSurat?.replace(/\//g, "-") || surat.id}`,
-      });
-      toast({ title: "PDF berhasil dibuat", description: "Jika file tidak langsung terbuka, izinkan pop-up di browser Anda lalu coba lagi." });
-    } catch {
-      toast({ title: "Gagal membuat PDF", description: "Silakan coba lagi. Pastikan pop-up tidak diblokir oleh browser.", variant: "destructive" });
-    } finally {
-      setDownloadingId(null);
-    }
+  const getPdfLink = (surat: SuratWarga) => {
+    if (surat.pdfCode) return `/api/surat-pdf/${surat.pdfCode}`;
+    return null;
   };
 
   if (showForm) {
@@ -312,30 +296,38 @@ export default function WargaPelayanan() {
                       <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-3" data-testid={`info-tau-beres-${s.id}`}>
                         <p className="text-xs font-medium text-green-800 dark:text-green-300">Surat Anda sedang disiapkan</p>
                         <p className="text-[11px] text-green-700 dark:text-green-400 mt-1">Surat akan di-print dan ditandatangani oleh pengurus RT/RW. Silakan ambil di sekretariat RW dengan membawa infaq seikhlasnya untuk kas RW.</p>
+                        {getPdfLink(s) && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-full gap-1.5 mt-2"
+                            asChild
+                            data-testid={`button-download-${s.id}`}
+                          >
+                            <a href={getPdfLink(s)!} target="_blank" rel="noopener noreferrer">
+                              <Download className="w-4 h-4" />
+                              Download PDF (opsional)
+                            </a>
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      getPdfLink(s) ? (
                         <Button
                           size="sm"
                           variant="outline"
-                          className="w-full gap-1.5 mt-2"
-                          onClick={() => handleDownload(s)}
-                          disabled={downloadingId === s.id}
+                          className="w-full gap-1.5"
+                          asChild
                           data-testid={`button-download-${s.id}`}
                         >
-                          {downloadingId === s.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                          Lihat PDF (opsional)
+                          <a href={getPdfLink(s)!} target="_blank" rel="noopener noreferrer">
+                            <Download className="w-4 h-4" />
+                            Download Surat PDF
+                          </a>
                         </Button>
-                      </div>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="w-full gap-1.5"
-                        onClick={() => handleDownload(s)}
-                        disabled={downloadingId === s.id}
-                        data-testid={`button-download-${s.id}`}
-                      >
-                        {downloadingId === s.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                        Buka & Unduh PDF
-                      </Button>
+                      ) : (
+                        <p className="text-[11px] text-muted-foreground">PDF sedang disiapkan...</p>
+                      )
                     )}
                   </div>
                 )}
