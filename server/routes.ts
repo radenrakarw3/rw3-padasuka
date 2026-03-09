@@ -133,6 +133,16 @@ async function notifyWarga(wargaId: number, template: string) {
   }
 }
 
+const ADMIN_NOTIF_PHONE = "081321133823";
+
+async function notifyAdmin(message: string) {
+  try {
+    await sendWhatsApp(ADMIN_NOTIF_PHONE, message);
+  } catch (err) {
+    console.error("Notif admin WA gagal:", err);
+  }
+}
+
 const otpStore = new Map<string, { otp: string; kkId: number; nomorKk: string; phone: string; expiresAt: number; attempts: number; lastRequestAt: number }>();
 
 const uploadsDir = path.join(process.cwd(), "uploads");
@@ -614,6 +624,12 @@ Salam hangat dari pengurus RW 03 Padasuka`;
       const jenisLabel = jenisLaporanLabels[parsed.jenisLaporan] || parsed.jenisLaporan;
       notifyWarga(parsed.wargaId, `[RW 03 Padasuka]\n\nLaporan Wargi berhasil dikirim ✅\n\nJudul: *${parsed.judul}*\nKategori: ${jenisLabel}\n\nLaporan akan segera ditinjau oleh pengurus RW.\n\nSekarang cek status laporan jadi gampang, langsung buka aja web kita di 👉 rw3padasukacimahi.org\n\nHatur nuhun Wargi! 🙏`);
 
+      if (!req.session.isAdmin) {
+        const wargaInfo = await storage.getWargaById(parsed.wargaId);
+        const namaWarga = wargaInfo?.namaLengkap || "Warga";
+        notifyAdmin(`[RW 03 Padasuka - Admin]\n\n📢 *Laporan Baru Masuk!*\n\nDari: *${namaWarga}*\nJudul: *${parsed.judul}*\nKategori: ${jenisLabel}\n\nSegera cek dan tindak lanjuti di 👉 rw3padasukacimahi.org`);
+      }
+
       res.json(data);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
@@ -667,6 +683,12 @@ Salam hangat dari pengurus RW 03 Padasuka`;
       const jenisLabel = jenisSuratLabels[parsed.jenisSurat] || parsed.jenisSurat;
       const metodeLabel = parsed.metodeLayanan === "tau_beres" ? "Tau Beres (di-print & ditandatangani RT/RW)" : "Print Mandiri (download & print sendiri)";
       notifyWarga(parsed.wargaId, `[RW 03 Padasuka]\n\nPermohonan surat Wargi berhasil dikirim ✅\n\nJenis: *${jenisLabel}*\nPerihal: ${parsed.perihal}\nLayanan: *${metodeLabel}*\n\nPermohonan akan segera diproses pengurus RW. Nanti Wargi dapet notifikasi lagi ya kalau sudah selesai.\n\nPantau terus di web 👉 rw3padasukacimahi.org\n\nHatur nuhun! 🙏`);
+
+      if (!req.session.isAdmin) {
+        const wargaInfo = await storage.getWargaById(parsed.wargaId);
+        const namaWarga = wargaInfo?.namaLengkap || "Warga";
+        notifyAdmin(`[RW 03 Padasuka - Admin]\n\n📋 *Permohonan Surat Baru!*\n\nDari: *${namaWarga}*\nJenis: *${jenisLabel}*\nPerihal: ${parsed.perihal}\nLayanan: ${metodeLabel}\n\nSegera proses di 👉 rw3padasukacimahi.org`);
+      }
 
       res.json(data);
     } catch (error: any) {
@@ -1347,6 +1369,10 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
       }
 
       const result = await storage.createDonasi(parsed);
+
+      const formatRupiah = (n: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n);
+      notifyAdmin(`[RW 03 Padasuka - Admin]\n\n💰 *Donasi Baru Masuk!*\n\nDonatur: *${parsed.namaDonatur}*\nKegiatan: *${campaign.judul}*\nJumlah: *${formatRupiah(parsed.jumlah)}*\n\nSegera verifikasi di 👉 rw3padasukacimahi.org`);
+
       res.json(result);
     } catch (error: any) {
       res.status(400).json({ message: error.message });

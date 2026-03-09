@@ -37,6 +37,7 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
    - **Auto Placeholders**: `{gender}` (Bapak/Ibu), `{warga}` (nama lengkap), `{rtxx}` (RT number) — replaced per-recipient on send
    - Server validates AI output contains placeholders; injects header if missing
 5. **Auto WA Notifications**: Every status change (laporan, surat, profile edit) sends contextual WhatsApp notification to warga via Star Sender with domain link (rw3padasukacimahi.org)
+   - **Admin Notification**: New laporan, surat, and donasi from warga triggers WA notification to admin (081321133823) with summary details
    - **Kirim PDF via WA**: Admin can send approved surat as PDF file via WhatsApp directly from Kelola Surat page. Client generates compressed PDF blob → uploads to server → saves as temp file with token → sends file URL via Star Sender `/api/send` (messageType: "media") → temp file auto-deleted after 2 minutes
 6. **Shared Constants**: All dropdown options (pekerjaan, agama, jenis kelamin, status kawin, kedudukan, etc.) centralized in `client/src/lib/constants.ts`
 7. **Donasi**: Crowdfunding feature for RW activities
