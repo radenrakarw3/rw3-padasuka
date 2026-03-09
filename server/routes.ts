@@ -405,7 +405,51 @@ export async function registerRoutes(
     try {
       const parsed = insertWargaSchema.parse(req.body);
       const data = await storage.createWarga(parsed);
+
       res.json(data);
+
+      if (data.nomorWhatsapp) {
+        (async () => {
+          try {
+            const kk = await storage.getKkById(data.kkId);
+            const rtNum = kk ? String(kk.rt).padStart(2, "0") : "—";
+            const nomorKkText = kk ? kk.nomorKk : "nomor KK Anda";
+            const waMessage = `Assalamu'alaikum ${data.jenisKelamin === "Perempuan" ? "Ibu" : "Bapak"} *${data.namaLengkap}* 🙏
+
+[RW 03 Padasuka - Kelurahan Padasuka, Kota Cimahi]
+
+Selamat! Data Wargi sudah berhasil terdaftar di sistem informasi digital RW 03 Padasuka ✅
+
+📌 *Apa itu rw3padasukacimahi.org?*
+Website resmi RW 03 Padasuka untuk memudahkan warga dalam mengurus administrasi dan layanan RT/RW secara online, kapan saja dan di mana saja.
+
+🔑 *Fitur yang bisa Wargi gunakan:*
+• Mengajukan surat keterangan (domisili, SKTM, usaha, dll) tanpa harus datang ke RT/RW
+• Melaporkan masalah (keamanan, kebersihan, infrastruktur)
+• Melihat data profil keluarga
+• Mengecek status bansos
+
+📱 *Cara menggunakannya:*
+1. Buka 👉 *rw3padasukacimahi.org*
+2. Masukkan *Nomor KK* (${nomorKkText})
+3. Pilih nama Wargi, lalu kode OTP akan dikirim ke WhatsApp ini
+4. Masukkan kode OTP → langsung bisa menggunakan semua fitur
+
+Data Wargi:
+• Nama: ${data.namaLengkap}
+• RT/RW: ${rtNum}/03
+
+Jika ada kendala, silakan hubungi pengurus RT ${rtNum} atau pengurus RW 03.
+
+Hatur nuhun! 🙏
+Salam hangat dari pengurus RW 03 Padasuka`;
+
+            await sendWhatsApp(data.nomorWhatsapp, waMessage);
+          } catch (err) {
+            console.error("Notif WA warga baru gagal:", err);
+          }
+        })();
+      }
     } catch (error: any) {
       res.status(400).json({ message: error.message });
     }
