@@ -575,7 +575,7 @@ Format surat harus lengkap dengan:
 PENTING:
 1. JANGAN sertakan kop surat/header karena kop surat akan ditambahkan secara otomatis oleh sistem.
 2. JANGAN sertakan nomor surat karena nomor surat akan di-assign otomatis oleh sistem.
-3. Langsung mulai dari "Perihal:" atau judul surat.
+3. Urutan surat HARUS dimulai dari JUDUL SURAT (contoh: SURAT KETERANGAN DOMISILI) yang ditulis dalam huruf kapital, BARU KEMUDIAN di bawahnya tulis "Perihal: ...". JANGAN menaruh Perihal di atas judul surat.
 4. Bagian tanda tangan di bagian akhir surat HARUS menggunakan format DUA KOLOM sejajar kiri-kanan. Tulis PERSIS seperti ini (gunakan tanda | sebagai pemisah kolom):
 
 Mengetahui, | Hormat kami,
@@ -674,7 +674,7 @@ LARANGAN:
 1. JANGAN sertakan kop surat/header (sudah otomatis oleh sistem).
 2. JANGAN sertakan nomor surat (sudah otomatis oleh sistem).
 3. JANGAN gunakan markdown (bintang, hashtag, dll). Tulis teks biasa saja.
-4. Langsung mulai dari "Lampiran:" atau "Perihal:" atau judul surat.
+4. Urutan surat HARUS dimulai dari JUDUL SURAT dalam huruf kapital (contoh: SURAT UNDANGAN, SURAT TUGAS, dll), BARU KEMUDIAN di bawahnya tulis "Perihal: ..." atau "Lampiran: ...". JANGAN menaruh Perihal/Lampiran di atas judul surat.
 
 FORMAT TANDA TANGAN (di akhir surat, WAJIB format vertikal atas-bawah):
 

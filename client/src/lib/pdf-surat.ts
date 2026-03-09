@@ -81,9 +81,9 @@ function isBiodataLine(line: string): boolean {
 
 function isTitleLine(line: string): boolean {
   const trimmed = line.trim();
-  if (trimmed.length > 60) return false;
-  if (/^(SURAT KETERANGAN|SURAT PENGANTAR|SURAT UNDANGAN|SURAT PERNYATAAN|SURAT TUGAS)/.test(trimmed)) return true;
-  if (/^(Surat Keterangan|Surat Pengantar|Surat Undangan|Surat Pernyataan|Surat Tugas)/i.test(trimmed) && trimmed === trimmed.toUpperCase()) return true;
+  if (trimmed.length > 60 || trimmed.length < 5) return false;
+  if (/^SURAT\s+[A-Z]/.test(trimmed) && trimmed === trimmed.toUpperCase()) return true;
+  if (/^(UNDANGAN|PENGUMUMAN|PEMBERITAHUAN|BERITA ACARA|LAPORAN)\b/.test(trimmed) && trimmed === trimmed.toUpperCase()) return true;
   return false;
 }
 
@@ -176,13 +176,39 @@ export async function generateSuratPDF(options: {
     sigLines.splice(dateIdxSig, 1);
   }
 
-  let hasTitle = false;
-  for (let i = 0; i < Math.min(bodyLines.length, 8); i++) {
+  let titleIdx = -1;
+  for (let i = 0; i < Math.min(bodyLines.length, 10); i++) {
     if (isTitleLine(bodyLines[i])) {
-      hasTitle = true;
+      titleIdx = i;
       break;
     }
   }
+
+  if (titleIdx > 0) {
+    const beforeTitle: string[] = [];
+    const perihalGroup: string[] = [];
+    for (let i = 0; i < titleIdx; i++) {
+      const t = bodyLines[i].trim();
+      if (/^(perihal|lampiran|hal|sifat)\s*[:\-]/i.test(t)) {
+        perihalGroup.push(bodyLines[i]);
+      } else if (t !== "") {
+        beforeTitle.push(bodyLines[i]);
+      }
+    }
+    if (perihalGroup.length > 0) {
+      const titleLine = bodyLines[titleIdx];
+      const afterTitle = bodyLines.slice(titleIdx + 1);
+      bodyLines.length = 0;
+      bodyLines.push(...beforeTitle);
+      bodyLines.push(titleLine);
+      bodyLines.push(...perihalGroup);
+      bodyLines.push(...afterTitle);
+
+      titleIdx = beforeTitle.length;
+    }
+  }
+
+  let hasTitle = titleIdx >= 0;
 
   const isTwoCol = hasTwoColumnSig(sigLines);
 
