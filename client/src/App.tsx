@@ -11,6 +11,7 @@ import WargaLayout from "@/components/warga-layout";
 import WargaBeranda from "@/pages/warga/beranda";
 import WargaProfil from "@/pages/warga/profil";
 import WargaLayanan from "@/pages/warga/layanan";
+import WargaDonasi from "@/pages/warga/donasi";
 import AdminLayout from "@/components/admin-layout";
 import AdminDashboard from "@/pages/admin/dashboard";
 import AdminKelolaKK from "@/pages/admin/kelola-kk";
@@ -104,6 +105,7 @@ function WargaRoutes() {
         <Route path="/warga" component={WargaBeranda} />
         <Route path="/warga/profil" component={WargaProfil} />
         <Route path="/warga/layanan" component={WargaLayanan} />
+        <Route path="/warga/donasi" component={WargaDonasi} />
         <Route>{() => <Redirect to="/warga" />}</Route>
       </Switch>
     </WargaLayout>
