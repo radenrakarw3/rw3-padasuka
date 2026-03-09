@@ -91,6 +91,7 @@ export interface IStorage {
   createDonasi(data: InsertDonasi): Promise<Donasi>;
   updateDonasiStatus(id: number, status: string): Promise<Donasi | undefined>;
   getDonasiLeaderboard(): Promise<{ namaDonatur: string; total: number; count: number }[]>;
+  getDonasiTerkumpulByCampaign(): Promise<Record<number, number>>;
 
   getDashboardStats(): Promise<DashboardStats>;
 }
@@ -503,12 +504,21 @@ export class DatabaseStorage implements IStorage {
     const map: Record<string, { total: number; count: number }> = {};
     confirmed.forEach(d => {
       if (!map[d.namaDonatur]) map[d.namaDonatur] = { total: 0, count: 0 };
-      map[d.namaDonatur].total += d.jumlah;
+      map[d.namaDonatur].total += Number(d.jumlah);
       map[d.namaDonatur].count += 1;
     });
     return Object.entries(map)
       .map(([namaDonatur, v]) => ({ namaDonatur, ...v }))
       .sort((a, b) => b.total - a.total);
+  }
+
+  async getDonasiTerkumpulByCampaign(): Promise<Record<number, number>> {
+    const confirmed = await db.select().from(donasi).where(eq(donasi.status, "dikonfirmasi"));
+    const result: Record<number, number> = {};
+    confirmed.forEach(d => {
+      result[d.campaignId] = (result[d.campaignId] || 0) + Number(d.jumlah);
+    });
+    return result;
   }
 
   async getDashboardStats(): Promise<DashboardStats> {

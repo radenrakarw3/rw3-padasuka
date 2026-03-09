@@ -38,6 +38,10 @@ export default function WargaDonasi() {
     queryKey: ["/api/donasi/leaderboard"],
   });
 
+  const { data: terkumpulMap } = useQuery<Record<number, number>>({
+    queryKey: ["/api/donasi/terkumpul"],
+  });
+
   const createMutation = useMutation({
     mutationFn: async () => {
       await apiRequest("POST", "/api/donasi", {
@@ -54,6 +58,7 @@ export default function WargaDonasi() {
       setNamaDonatur("");
       setJumlah("");
       queryClient.invalidateQueries({ queryKey: ["/api/donasi"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/donasi/terkumpul"] });
     },
     onError: (err: any) => {
       toast({ title: "Gagal mencatat donasi", description: err.message, variant: "destructive" });
@@ -174,24 +179,40 @@ export default function WargaDonasi() {
       {activeCampaigns.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-base font-bold" data-testid="text-campaign-title">Campaign Donasi</h3>
-          {activeCampaigns.map((c) => (
-            <Card key={c.id} className="border-[hsl(163,55%,22%)]/30" data-testid={`card-campaign-${c.id}`}>
-              <CardContent className="p-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-[hsl(163,55%,22%)]/10 flex items-center justify-center flex-shrink-0">
-                    <Heart className="w-5 h-5 text-[hsl(163,55%,22%)]" />
+          {activeCampaigns.map((c) => {
+            const collected = Number(terkumpulMap?.[c.id] || 0);
+            const target = Number(c.targetDana || 0);
+            return (
+              <Card key={c.id} className="border-[hsl(163,55%,22%)]/30" data-testid={`card-campaign-${c.id}`}>
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-[hsl(163,55%,22%)]/10 flex items-center justify-center flex-shrink-0">
+                      <Heart className="w-5 h-5 text-[hsl(163,55%,22%)]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm">{c.judul}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{c.deskripsi}</p>
+                      <p className="text-xs mt-2">
+                        Terkumpul: <span className="font-bold text-[hsl(163,55%,22%)]">{formatRupiah(collected)}</span>
+                        {target > 0 && (
+                          <span className="text-muted-foreground"> / {formatRupiah(target)}</span>
+                        )}
+                      </p>
+                      {target > 0 && (
+                        <div className="h-2 bg-muted rounded-full overflow-hidden mt-1.5">
+                          <div
+                            className="h-full bg-[hsl(163,55%,22%)] rounded-full transition-all"
+                            style={{ width: `${Math.min(100, (collected / target) * 100)}%` }}
+                            data-testid={`progress-campaign-${c.id}`}
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm">{c.judul}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{c.deskripsi}</p>
-                    {c.targetDana && (
-                      <p className="text-xs text-muted-foreground mt-1">Target: {formatRupiah(c.targetDana)}</p>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
 
           <Button
             className="w-full gap-2"
@@ -237,7 +258,7 @@ export default function WargaDonasi() {
                   <p className="text-[10px] text-muted-foreground">{entry.count}x donasi</p>
                 </div>
                 <p className="font-bold text-sm text-[hsl(163,55%,22%)] flex-shrink-0">
-                  {formatRupiah(entry.total)}
+                  {formatRupiah(Number(entry.total))}
                 </p>
               </CardContent>
             </Card>
@@ -258,7 +279,7 @@ export default function WargaDonasi() {
                     <div className="min-w-0">
                       <p className="font-semibold text-sm truncate">{d.judulCampaign}</p>
                       <p className="text-xs text-muted-foreground">a.n. {d.namaDonatur}</p>
-                      <p className="text-sm font-bold text-[hsl(163,55%,22%)] mt-0.5">{formatRupiah(d.jumlah)}</p>
+                      <p className="text-sm font-bold text-[hsl(163,55%,22%)] mt-0.5">{formatRupiah(Number(d.jumlah))}</p>
                     </div>
                     <Badge className={`${sc.color} text-[10px] gap-1 flex-shrink-0`}>
                       <StatusIcon className="w-3 h-3" />

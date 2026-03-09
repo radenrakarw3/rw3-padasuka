@@ -1368,5 +1368,10 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
     res.json(leaderboard);
   });
 
+  app.get("/api/donasi/terkumpul", requireAuth, async (_req, res) => {
+    const terkumpul = await storage.getDonasiTerkumpulByCampaign();
+    res.json(terkumpul);
+  });
+
   return httpServer;
 }

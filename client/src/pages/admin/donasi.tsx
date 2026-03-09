@@ -72,6 +72,7 @@ export default function AdminDonasi() {
       toast({ title: "Status donasi diperbarui!" });
       queryClient.invalidateQueries({ queryKey: ["/api/donasi"] });
       queryClient.invalidateQueries({ queryKey: ["/api/donasi/leaderboard"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/donasi/terkumpul"] });
     },
     onError: (err: any) => {
       toast({ title: "Gagal memperbarui", description: err.message, variant: "destructive" });
@@ -86,7 +87,7 @@ export default function AdminDonasi() {
 
   const totalTerkumpul = allDonasi
     ?.filter(d => d.status === "dikonfirmasi")
-    .reduce((sum, d) => sum + d.jumlah, 0) || 0;
+    .reduce((sum, d) => sum + Number(d.jumlah), 0) || 0;
 
   const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
     pending: { label: "Menunggu", color: "bg-yellow-100 text-yellow-800", icon: Clock },
@@ -198,7 +199,7 @@ export default function AdminDonasi() {
           <h2 className="text-lg font-bold">Campaign</h2>
           {campaigns.map((c) => {
             const campaignDonasi = allDonasi?.filter(d => d.campaignId === c.id && d.status === "dikonfirmasi") || [];
-            const collected = campaignDonasi.reduce((s, d) => s + d.jumlah, 0);
+            const collected = campaignDonasi.reduce((s, d) => s + Number(d.jumlah), 0);
             return (
               <Card key={c.id} data-testid={`card-admin-campaign-${c.id}`}>
                 <CardContent className="p-4">
@@ -215,13 +216,13 @@ export default function AdminDonasi() {
                         <p className="text-xs">
                           Terkumpul: <span className="font-bold text-[hsl(163,55%,22%)]">{formatRupiah(collected)}</span>
                         </p>
-                        {c.targetDana && (
+                        {c.targetDana && Number(c.targetDana) > 0 && (
                           <>
-                            <p className="text-xs text-muted-foreground">Target: {formatRupiah(c.targetDana)}</p>
+                            <p className="text-xs text-muted-foreground">Target: {formatRupiah(Number(c.targetDana))}</p>
                             <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden max-w-[120px]">
                               <div
                                 className="h-full bg-[hsl(163,55%,22%)] rounded-full transition-all"
-                                style={{ width: `${Math.min(100, (collected / c.targetDana) * 100)}%` }}
+                                style={{ width: `${Math.min(100, (collected / Number(c.targetDana)) * 100)}%` }}
                               />
                             </div>
                           </>
@@ -264,7 +265,7 @@ export default function AdminDonasi() {
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-sm">{d.judulCampaign}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">Donatur: <span className="font-medium text-foreground">{d.namaDonatur}</span></p>
-                    <p className="text-base font-bold text-[hsl(163,55%,22%)] mt-1">{formatRupiah(d.jumlah)}</p>
+                    <p className="text-base font-bold text-[hsl(163,55%,22%)] mt-1">{formatRupiah(Number(d.jumlah))}</p>
                     <p className="text-[10px] text-muted-foreground mt-1">
                       {d.createdAt ? new Date(d.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
                     </p>
@@ -323,7 +324,7 @@ export default function AdminDonasi() {
                       <p className="text-[10px] text-muted-foreground">{entry.count}x donasi</p>
                     </div>
                     <p className="font-bold text-sm text-[hsl(163,55%,22%)] flex-shrink-0">
-                      {formatRupiah(entry.total)}
+                      {formatRupiah(Number(entry.total))}
                     </p>
                   </div>
                 ))}
@@ -346,7 +347,7 @@ export default function AdminDonasi() {
                     <p className="font-semibold text-sm truncate">{d.namaDonatur}</p>
                     <p className="text-xs text-muted-foreground">{d.judulCampaign}</p>
                   </div>
-                  <p className="font-bold text-sm flex-shrink-0">{formatRupiah(d.jumlah)}</p>
+                  <p className="font-bold text-sm flex-shrink-0">{formatRupiah(Number(d.jumlah))}</p>
                   <Badge className={`${sc.color} text-[10px] gap-1 flex-shrink-0`}>
                     <StatusIcon className="w-3 h-3" />
                     {sc.label}
