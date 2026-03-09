@@ -175,6 +175,10 @@ export async function registerRoutes(
     })
   );
 
+  const pdfTempPublicDir = path.join(uploadsDir, "pdf-temp");
+  fs.mkdirSync(pdfTempPublicDir, { recursive: true });
+  app.use("/uploads/pdf-temp", express.static(pdfTempPublicDir));
+
   app.use("/uploads", (req: Request, res: Response, next: any) => {
     if (!req.session?.kkId && !req.session?.isAdmin) {
       return res.status(401).json({ message: "Silakan login terlebih dahulu" });
@@ -792,7 +796,14 @@ Kelurahan Padasuka | Kelurahan Padasuka
 
       const fileName = `${jenisLabel.replace(/\s+/g, "_")}_${surat.nomorSurat?.replace(/\//g, "-") || surat.id}.pdf`;
 
-      const fileBase64 = `data:application/pdf;base64,${req.file.buffer.toString("base64")}`;
+      const tempId = `wa_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const tempDir = path.join(process.cwd(), "uploads", "pdf-temp");
+      await fs.promises.mkdir(tempDir, { recursive: true });
+      const tempFilePath = path.join(tempDir, `${tempId}.pdf`);
+      await fs.promises.writeFile(tempFilePath, req.file.buffer);
+
+      const baseUrl = process.env.BASE_URL || `https://rw3padasukacimahi.org`;
+      const fileUrl = `${baseUrl}/uploads/pdf-temp/${tempId}.pdf`;
 
       const response = await fetch("https://api.starsender.online/api/send", {
         method: "POST",
@@ -801,16 +812,20 @@ Kelurahan Padasuka | Kelurahan Padasuka
           "Authorization": apiKey,
         },
         body: JSON.stringify({
-          messageType: "document",
+          messageType: "media",
           to: formattedPhone,
           body: caption,
           device_id: deviceId,
-          file: fileBase64,
-          filename: fileName,
+          file: fileUrl,
         }),
       });
 
       const resData = await response.text();
+
+      setTimeout(() => {
+        fs.promises.unlink(tempFilePath).catch(() => {});
+      }, 60000);
+
       if (!response.ok) {
         console.error("Star Sender send document error:", resData);
         return res.status(500).json({ message: "Gagal mengirim PDF via WhatsApp" });
