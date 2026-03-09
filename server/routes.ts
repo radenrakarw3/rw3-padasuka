@@ -792,28 +792,31 @@ Kelurahan Padasuka | Kelurahan Padasuka
 
       const fileName = `${jenisLabel.replace(/\s+/g, "_")}_${surat.nomorSurat?.replace(/\//g, "-") || surat.id}.pdf`;
 
-      const FormData = (await import("form-data")).default;
-      const form = new FormData();
-      form.append("device_id", deviceId);
-      form.append("tujuan", formattedPhone + "@s.whatsapp.net");
-      form.append("message", caption);
-      form.append("file", req.file.buffer, { filename: fileName, contentType: "application/pdf" });
+      const fileBase64 = `data:application/pdf;base64,${req.file.buffer.toString("base64")}`;
 
-      const response = await fetch("https://api.starsender.online/api/sendFiles", {
+      const response = await fetch("https://api.starsender.online/api/send", {
         method: "POST",
         headers: {
+          "Content-Type": "application/json",
           "Authorization": apiKey,
-          ...form.getHeaders(),
         },
-        body: form as any,
+        body: JSON.stringify({
+          messageType: "document",
+          to: formattedPhone,
+          body: caption,
+          device_id: deviceId,
+          file: fileBase64,
+          filename: fileName,
+        }),
       });
 
+      const resData = await response.text();
       if (!response.ok) {
-        const errText = await response.text();
-        console.error("Star Sender sendFiles error:", errText);
+        console.error("Star Sender send document error:", resData);
         return res.status(500).json({ message: "Gagal mengirim PDF via WhatsApp" });
       }
 
+      console.log("Star Sender send document success:", resData);
       res.json({ message: "PDF surat berhasil dikirim via WhatsApp" });
     } catch (error: any) {
       console.error("WA send PDF error:", error);
