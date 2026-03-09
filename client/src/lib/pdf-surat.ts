@@ -16,38 +16,39 @@ function isMobileDevice(): boolean {
     (window.innerWidth <= 768);
 }
 
-function savePdfMobileFriendly(doc: jsPDF, fileName: string) {
+async function savePdfMobileFriendly(doc: jsPDF, fileName: string) {
   const safeName = `${fileName}.pdf`;
   const blob = doc.output("blob");
-  const blobUrl = URL.createObjectURL(blob);
 
   if (isMobileDevice()) {
-    const newWindow = window.open(blobUrl, "_blank");
-    if (!newWindow) {
-      const link = document.createElement("a");
-      link.href = blobUrl;
-      link.download = safeName;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      document.body.appendChild(link);
-      link.click();
-      setTimeout(() => {
-        document.body.removeChild(link);
-        URL.revokeObjectURL(blobUrl);
-      }, 5000);
-    } else {
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
-    }
+    try {
+      const formData = new FormData();
+      formData.append("file", new File([blob], safeName, { type: "application/pdf" }));
+      formData.append("fileName", safeName);
+      const res = await fetch("/api/pdf/temp", { method: "POST", body: formData, credentials: "include" });
+      if (res.ok) {
+        const { url } = await res.json();
+        window.location.href = url;
+        return;
+      }
+    } catch {}
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = safeName;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => { document.body.removeChild(link); URL.revokeObjectURL(blobUrl); }, 5000);
   } else {
+    const blobUrl = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = blobUrl;
     link.download = safeName;
     document.body.appendChild(link);
     link.click();
-    setTimeout(() => {
-      document.body.removeChild(link);
-      URL.revokeObjectURL(blobUrl);
-    }, 1000);
+    setTimeout(() => { document.body.removeChild(link); URL.revokeObjectURL(blobUrl); }, 1000);
   }
 }
 
@@ -469,7 +470,7 @@ export async function generateSuratPDF(options: {
   }
 
   const safeName = fileName || `${jenisSurat.replace(/\s+/g, "_")}${nomorSurat ? "_" + nomorSurat.replace(/\//g, "-") : ""}`;
-  savePdfMobileFriendly(doc, safeName);
+  await savePdfMobileFriendly(doc, safeName);
 }
 
 export async function generateSuratRekomendasiBansosPDF(options: {
@@ -631,5 +632,5 @@ export async function generateSuratRekomendasiBansosPDF(options: {
   doc.line(rightSigX - rwNameW / 2, y + 1, rightSigX + rwNameW / 2, y + 1);
 
   const safeName = `Surat_Rekomendasi_Bansos_${kepalaKeluarga.replace(/\s+/g, "_")}`;
-  savePdfMobileFriendly(doc, safeName);
+  await savePdfMobileFriendly(doc, safeName);
 }

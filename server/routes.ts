@@ -114,6 +114,22 @@ const otpStore = new Map<string, { otp: string; kkId: number; nomorKk: string; p
 const uploadsDir = path.join(process.cwd(), "uploads");
 fs.mkdirSync(path.join(uploadsDir, "kk"), { recursive: true });
 fs.mkdirSync(path.join(uploadsDir, "ktp"), { recursive: true });
+const pdfTempDir = path.join(uploadsDir, "pdf-temp");
+fs.mkdirSync(pdfTempDir, { recursive: true });
+
+function cleanupOldPdfTemps() {
+  try {
+    const files = fs.readdirSync(pdfTempDir);
+    const now = Date.now();
+    for (const file of files) {
+      const filePath = path.join(pdfTempDir, file);
+      const stat = fs.statSync(filePath);
+      if (now - stat.mtimeMs > 10 * 60 * 1000) {
+        fs.unlinkSync(filePath);
+      }
+    }
+  } catch {}
+}
 
 const uploadStorage = multer.diskStorage({
   destination: (req, _file, cb) => {
@@ -156,6 +172,40 @@ export async function registerRoutes(
     }
     next();
   }, express.static(uploadsDir));
+
+  const pdfUpload = multer({
+    storage: multer.diskStorage({
+      destination: (_req, _file, cb) => cb(null, pdfTempDir),
+      filename: (_req, _file, cb) => cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`),
+    }),
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      if (file.mimetype === "application/pdf") cb(null, true);
+      else cb(new Error("Only PDF files allowed"));
+    },
+  });
+
+  app.post("/api/pdf/temp", requireAuth, pdfUpload.single("file"), (req: Request, res: Response) => {
+    if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+    cleanupOldPdfTemps();
+    const fileName = req.body?.fileName || req.file.filename;
+    const id = path.basename(req.file.filename, ".pdf");
+    res.json({ url: `/api/pdf/download/${id}?name=${encodeURIComponent(fileName)}` });
+  });
+
+  app.get("/api/pdf/download/:id", requireAuth, (req: Request, res: Response) => {
+    const id = req.params.id.replace(/[^a-zA-Z0-9\-_]/g, "");
+    const filePath = path.join(pdfTempDir, `${id}.pdf`);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ message: "File not found or expired" });
+    const downloadName = (req.query.name as string) || "surat.pdf";
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${downloadName}"`);
+    const stream = fs.createReadStream(filePath);
+    stream.pipe(res);
+    stream.on("end", () => {
+      setTimeout(() => { try { fs.unlinkSync(filePath); } catch {} }, 3000);
+    });
+  });
 
   function requireAuth(req: Request, res: Response, next: any) {
     if (!req.session.kkId && !req.session.isAdmin) {
