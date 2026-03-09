@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, CheckCircle, XCircle, FileText, Eye, Sparkles, Loader2, Download, Printer, HandCoins } from "lucide-react";
+import { Clock, CheckCircle, XCircle, FileText, Eye, Sparkles, Loader2, Download, Printer, HandCoins, Send } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useState } from "react";
 import type { SuratWarga, Warga } from "@shared/schema";
@@ -42,6 +42,15 @@ export default function AdminKelolaSurat() {
       setPreviewSurat(null);
     },
     onError: (err: any) => toast({ title: "Gagal", description: err.message, variant: "destructive" }),
+  });
+
+  const notifyWaMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("POST", `/api/surat-warga/${id}/notify-wa`);
+      return res.json();
+    },
+    onSuccess: () => toast({ title: "Notifikasi WhatsApp terkirim!" }),
+    onError: (err: any) => toast({ title: "Gagal kirim WA", description: err.message, variant: "destructive" }),
   });
 
   const getWargaName = (id: number) => wargaList?.find(w => w.id === id)?.namaLengkap || "Warga";
@@ -153,9 +162,24 @@ export default function AdminKelolaSurat() {
                     </Button>
                   )}
                   {hasContent && s.status === "disetujui" && (
-                    <Button size="sm" variant="outline" className="gap-1" onClick={() => handleDownloadPDF(s)} data-testid={`button-download-surat-${s.id}`}>
-                      <Download className="w-3 h-3" /> Download PDF
-                    </Button>
+                    <>
+                      <Button size="sm" variant="outline" className="gap-1" onClick={() => handleDownloadPDF(s)} data-testid={`button-download-surat-${s.id}`}>
+                        <Download className="w-3 h-3" /> Download PDF
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="gap-1 bg-green-600 hover:bg-green-700"
+                        onClick={() => notifyWaMutation.mutate(s.id)}
+                        disabled={notifyWaMutation.isPending}
+                        data-testid={`button-wa-surat-${s.id}`}
+                      >
+                        {notifyWaMutation.isPending ? (
+                          <><Loader2 className="w-3 h-3 animate-spin" /> Mengirim...</>
+                        ) : (
+                          <><Send className="w-3 h-3" /> Kirim via WA</>
+                        )}
+                      </Button>
+                    </>
                   )}
                 </div>
 

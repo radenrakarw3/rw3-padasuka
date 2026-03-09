@@ -760,6 +760,30 @@ Kelurahan Padasuka | Kelurahan Padasuka
     }
   });
 
+  app.post("/api/surat-warga/:id/notify-wa", requireAdmin, async (req, res) => {
+    try {
+      const surat = await storage.getSuratWargaById(parseInt(req.params.id));
+      if (!surat) return res.status(404).json({ message: "Surat tidak ditemukan" });
+      if (surat.status !== "disetujui" || !surat.isiSurat) {
+        return res.status(400).json({ message: "Hanya surat yang sudah disetujui yang bisa dikirim via WA" });
+      }
+      const w = await storage.getWargaById(surat.wargaId);
+      if (!w?.nomorWhatsapp) {
+        return res.status(400).json({ message: "Warga tidak memiliki nomor WhatsApp" });
+      }
+      const jenisLabel = jenisSuratLabels[surat.jenisSurat] || surat.jenisSurat;
+      const isTauBeres = surat.metodeLayanan === "tau_beres";
+      const instruksi = isTauBeres
+        ? "Surat akan segera di-print dan ditandatangani oleh pengurus RT/RW. Silakan ambil di sekretariat RW ya, jangan lupa bawa infaq seikhlasnya untuk kas RW 🙏\n\nWargi juga bisa download PDF surat langsung dari web:\n👉 rw3padasukacimahi.org"
+        : "Download surat PDF langsung dari web ya:\n👉 rw3padasukacimahi.org";
+      await sendWhatsApp(w.nomorWhatsapp, `[RW 03 Padasuka]\n\nSurat Wargi telah *DISETUJUI* ✅\n\nJenis: *${jenisLabel}*\nPerihal: ${surat.perihal}${surat.nomorSurat ? `\nNomor Surat: ${surat.nomorSurat}` : ""}\nLayanan: *${isTauBeres ? "Tau Beres" : "Print Mandiri"}*\n\n${instruksi}\n\nHatur nuhun! 🙏`);
+      res.json({ message: "Notifikasi WhatsApp terkirim" });
+    } catch (error: any) {
+      console.error("WA notify surat error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.get("/api/surat-rw", requireAdmin, async (_req, res) => {
     const data = await storage.getAllSuratRw();
     res.json(data);
