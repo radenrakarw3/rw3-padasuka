@@ -10,7 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, User, ChevronLeft, ChevronRight, Upload, X, FileText, Download, MessageCircle, Pencil } from "lucide-react";
+import { Plus, Search, User, ChevronLeft, ChevronRight, Upload, X, FileText, Download, MessageCircle, Pencil, Trash2, AlertTriangle } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import type { KartuKeluarga } from "@shared/schema";
 import { pekerjaanOptions, pendidikanOptions, agamaOptions, jenisKelaminOptions, statusPerkawinanOptions, kedudukanKeluargaOptions, statusKependudukanOptions } from "@/lib/constants";
 
@@ -44,6 +45,7 @@ export default function AdminKelolaWarga() {
   const [kkDropdownOpen, setKkDropdownOpen] = useState(false);
   const [editKkSearch, setEditKkSearch] = useState("");
   const [editKkDropdownOpen, setEditKkDropdownOpen] = useState(false);
+  const [deleteWarga, setDeleteWarga] = useState<any>(null);
   const kkPickerRef = useRef<HTMLDivElement>(null);
   const editKkPickerRef = useRef<HTMLDivElement>(null);
 
@@ -188,6 +190,21 @@ export default function AdminKelolaWarga() {
       queryClient.invalidateQueries({ queryKey: ["/api/warga"] });
     },
     onError: (err: any) => toast({ title: "Gagal", description: err.message, variant: "destructive" }),
+  });
+
+  const deleteWargaMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("DELETE", `/api/warga/${id}`);
+    },
+    onSuccess: () => {
+      toast({ title: "Warga berhasil dihapus" });
+      setDeleteWarga(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/warga-with-kk"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/warga"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/kk"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats/dashboard"] });
+    },
+    onError: (err: any) => toast({ title: "Gagal menghapus", description: err.message, variant: "destructive" }),
   });
 
   const openEditDialog = (w: any) => {
@@ -491,6 +508,15 @@ export default function AdminKelolaWarga() {
                   <Button size="icon" variant="ghost" onClick={() => openEditDialog(w)} data-testid={`button-edit-warga-${w.id}`}>
                     <Pencil className="w-3.5 h-3.5" />
                   </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                    onClick={() => setDeleteWarga(w)}
+                    data-testid={`button-delete-warga-${w.id}`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
                   {w.fotoKtp ? (
                     <Button size="sm" variant="outline" className="text-xs gap-1 h-7" asChild data-testid={`button-download-ktp-${w.id}`}>
                       <a href={w.fotoKtp} download target="_blank" rel="noopener noreferrer">
@@ -547,6 +573,37 @@ export default function AdminKelolaWarga() {
           </Button>
         </div>
       )}
+
+      <AlertDialog open={!!deleteWarga} onOpenChange={(open) => { if (!open) setDeleteWarga(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-500" />
+              Hapus Data Warga?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-left space-y-2">
+              <span className="block">Data <strong>{deleteWarga?.namaLengkap}</strong> (NIK: {deleteWarga?.nik}) akan dihapus beserta:</span>
+              <span className="block text-red-600 font-medium">
+                • Semua laporan warga terkait<br/>
+                • Semua surat warga terkait<br/>
+                • Semua pengajuan edit profil terkait
+              </span>
+              <span className="block font-semibold text-red-700">Tindakan ini tidak dapat dibatalkan!</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete-warga">Batal</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => deleteWarga && deleteWargaMutation.mutate(deleteWarga.id)}
+              disabled={deleteWargaMutation.isPending}
+              data-testid="button-confirm-delete-warga"
+            >
+              {deleteWargaMutation.isPending ? "Menghapus..." : "Hapus Warga"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

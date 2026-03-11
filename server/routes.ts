@@ -486,8 +486,14 @@ export async function registerRoutes(
   });
 
   app.delete("/api/kk/:id", requireAdmin, async (req, res) => {
-    await storage.deleteKk(parseInt(req.params.id));
-    res.json({ message: "KK dihapus" });
+    try {
+      const kk = await storage.getKkById(parseInt(req.params.id));
+      if (!kk) return res.status(404).json({ message: "KK tidak ditemukan" });
+      await storage.deleteKk(kk.id);
+      res.json({ message: "KK dan semua data terkait berhasil dihapus" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Gagal menghapus KK" });
+    }
   });
 
   app.get("/api/warga", requireAdmin, async (_req, res) => {
@@ -579,8 +585,14 @@ Salam hangat dari pengurus RW 03 Padasuka`;
   });
 
   app.delete("/api/warga/:id", requireAdmin, async (req, res) => {
-    await storage.deleteWarga(parseInt(req.params.id));
-    res.json({ message: "Warga dihapus" });
+    try {
+      const w = await storage.getWargaById(parseInt(req.params.id));
+      if (!w) return res.status(404).json({ message: "Warga tidak ditemukan" });
+      await storage.deleteWarga(w.id);
+      res.json({ message: "Warga dan semua data terkait berhasil dihapus" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Gagal menghapus warga" });
+    }
   });
 
   app.get("/api/warga-with-kk", requireAdmin, async (_req, res) => {
@@ -909,6 +921,35 @@ Buat surat dalam format teks biasa yang rapi dan profesional.`;
       if (!kk) return res.status(404).json({ message: "KK tidak ditemukan" });
       if (!kk.penerimaBansos) return res.status(400).json({ message: "KK ini bukan penerima bansos" });
       const updated = await storage.updateKkBansos(kkId, true, jenisBansos);
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/bansos/penerima/tambah", requireAdmin, async (req, res) => {
+    try {
+      const { kkId, jenisBansos } = req.body;
+      if (!kkId) return res.status(400).json({ message: "KK ID harus diisi" });
+      if (!jenisBansos || typeof jenisBansos !== "string") return res.status(400).json({ message: "Jenis bansos harus diisi" });
+      const kk = await storage.getKkById(kkId);
+      if (!kk) return res.status(404).json({ message: "KK tidak ditemukan" });
+      if (kk.penerimaBansos) return res.status(400).json({ message: "KK ini sudah terdaftar sebagai penerima bansos" });
+      const updated = await storage.updateKkBansos(kkId, true, jenisBansos);
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/bansos/penerima/hapus", requireAdmin, async (req, res) => {
+    try {
+      const { kkId } = req.body;
+      if (!kkId) return res.status(400).json({ message: "KK ID harus diisi" });
+      const kk = await storage.getKkById(kkId);
+      if (!kk) return res.status(404).json({ message: "KK tidak ditemukan" });
+      if (!kk.penerimaBansos) return res.status(400).json({ message: "KK ini bukan penerima bansos" });
+      const updated = await storage.updateKkBansos(kkId, false, null);
       res.json(updated);
     } catch (error: any) {
       res.status(500).json({ message: error.message });

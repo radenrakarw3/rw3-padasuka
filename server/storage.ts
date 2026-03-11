@@ -171,7 +171,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteKk(id: number): Promise<void> {
-    await db.delete(kartuKeluarga).where(eq(kartuKeluarga.id, id));
+    await db.transaction(async (tx) => {
+      const wargaList = await tx.select({ id: warga.id }).from(warga).where(eq(warga.kkId, id));
+      for (const w of wargaList) {
+        await tx.delete(laporan).where(eq(laporan.wargaId, w.id));
+        await tx.delete(suratWarga).where(eq(suratWarga.wargaId, w.id));
+        await tx.delete(profileEditRequest).where(eq(profileEditRequest.wargaId, w.id));
+      }
+      await tx.delete(warga).where(eq(warga.kkId, id));
+      await tx.delete(donasi).where(eq(donasi.kkId, id));
+      await tx.delete(pengajuanBansos).where(eq(pengajuanBansos.kkId, id));
+      await tx.delete(kartuKeluarga).where(eq(kartuKeluarga.id, id));
+    });
   }
 
   async getWargaByKkId(kkId: number): Promise<Warga[]> {
@@ -198,7 +209,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteWarga(id: number): Promise<void> {
-    await db.delete(warga).where(eq(warga.id, id));
+    await db.transaction(async (tx) => {
+      await tx.delete(laporan).where(eq(laporan.wargaId, id));
+      await tx.delete(suratWarga).where(eq(suratWarga.wargaId, id));
+      await tx.delete(profileEditRequest).where(eq(profileEditRequest.wargaId, id));
+      await tx.delete(warga).where(eq(warga.id, id));
+    });
   }
 
   async getAllRt(): Promise<RtData[]> {

@@ -72,6 +72,18 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
 - **Upload sources**: Admin KK form, Admin Warga form, Warga profile page
 - **Download**: Admin KK cards show download buttons for KK and KTP kepala keluarga when files exist
 
+## Delete KK/Warga System
+- **Delete KK**: Cascading transactional delete — removes all warga members, their laporan, surat_warga, profile_edit_requests, plus KK's donasi and pengajuan_bansos, all within a single DB transaction
+- **Delete Warga**: Cascading transactional delete — removes laporan, surat_warga, profile_edit_requests for that warga
+- **UI**: Red trash icon buttons on KK cards and warga cards, with AlertDialog confirmation showing detailed cascade warnings
+- **Safety**: Full cascade info displayed, explicit "cannot be undone" warning
+
+## Bansos Penerima Management
+- **Add Penerima**: Direct from bansos page via "Tambah Penerima Bansos" button, select non-penerima KK + jenis bansos
+- **Remove Penerima**: Per-card "Hapus" button with confirmation dialog, resets penerimaBansos to false and clears jenisBansos
+- **Edit Jenis**: Inline edit on penerima cards to update jenis bansos types
+- **Routes**: `POST /api/bansos/penerima/tambah`, `POST /api/bansos/penerima/hapus`, `PATCH /api/bansos/penerima/:kkId/jenis`
+
 ## KK Verification System
 - **Verified** = foto KK uploaded + kepala keluarga has KTP uploaded + kepala keluarga has WA number + WA number not duplicated across warga
 - **Unverified** = missing any of the above criteria; each missing item shown as reason

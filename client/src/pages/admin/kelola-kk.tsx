@@ -11,7 +11,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Home, Users, ChevronLeft, ChevronRight, Download, Upload, X, FileText, ChevronDown, User, MessageCircle, ShieldCheck, ShieldAlert, QrCode, Pencil } from "lucide-react";
+import { Plus, Search, Home, Users, ChevronLeft, ChevronRight, Download, Upload, X, FileText, ChevronDown, User, MessageCircle, ShieldCheck, ShieldAlert, QrCode, Pencil, Trash2, AlertTriangle } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { statusRumahOptions, listrikOptions, rtOptions, kondisiBangunanOptions, sumberAirOptions, sanitasiWcOptions, jenisBansosOptions } from "@/lib/constants";
 import type { KartuKeluarga, Warga } from "@shared/schema";
 import QRCode from "qrcode";
@@ -55,6 +56,7 @@ export default function AdminKelolaKK() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [expandedKk, setExpandedKk] = useState<number | null>(null);
   const [qrDialogKk, setQrDialogKk] = useState<KartuKeluarga | null>(null);
+  const [deleteKk, setDeleteKk] = useState<KartuKeluarga | null>(null);
 
   const { data: kkList, isLoading } = useQuery<KartuKeluarga[]>({ queryKey: ["/api/kk"] });
   const { data: wargaList } = useQuery<Warga[]>({ queryKey: ["/api/warga"] });
@@ -265,6 +267,20 @@ export default function AdminKelolaKK() {
       queryClient.invalidateQueries({ queryKey: ["/api/kk"] });
     },
     onError: (err: any) => toast({ title: "Gagal", description: err.message, variant: "destructive" }),
+  });
+
+  const deleteKkMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("DELETE", `/api/kk/${id}`);
+    },
+    onSuccess: () => {
+      toast({ title: "KK berhasil dihapus" });
+      setDeleteKk(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/kk"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/warga"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats/dashboard"] });
+    },
+    onError: (err: any) => toast({ title: "Gagal menghapus", description: err.message, variant: "destructive" }),
   });
 
   const filtered = useMemo(() => {
@@ -623,6 +639,15 @@ export default function AdminKelolaKK() {
                       >
                         <Pencil className="w-3.5 h-3.5" />
                       </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="w-7 h-7 text-red-500 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => setDeleteKk(k)}
+                        data-testid={`button-delete-kk-${k.id}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
                       {isVerified && (
                         <Button
                           size="icon"
@@ -886,6 +911,39 @@ export default function AdminKelolaKK() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteKk} onOpenChange={(open) => { if (!open) setDeleteKk(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-500" />
+              Hapus Kartu Keluarga?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-left space-y-2">
+              <span className="block">KK <strong>{deleteKk?.nomorKk}</strong> akan dihapus beserta:</span>
+              <span className="block text-red-600 font-medium">
+                • Semua anggota keluarga ({deleteKk ? (membersByKkId[deleteKk.id]?.length || 0) : 0} orang)<br/>
+                • Semua laporan warga terkait<br/>
+                • Semua surat warga terkait<br/>
+                • Semua donasi terkait<br/>
+                • Semua pengajuan bansos terkait
+              </span>
+              <span className="block font-semibold text-red-700">Tindakan ini tidak dapat dibatalkan!</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete-kk">Batal</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => deleteKk && deleteKkMutation.mutate(deleteKk.id)}
+              disabled={deleteKkMutation.isPending}
+              data-testid="button-confirm-delete-kk"
+            >
+              {deleteKkMutation.isPending ? "Menghapus..." : "Hapus KK"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

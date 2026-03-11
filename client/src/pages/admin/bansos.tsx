@@ -12,7 +12,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { HandCoins, Search, Plus, CheckCircle, XCircle, Clock, ChevronLeft, ChevronRight, FileText, UserMinus, UserPlus, Download } from "lucide-react";
+import { HandCoins, Search, Plus, CheckCircle, XCircle, Clock, ChevronLeft, ChevronRight, FileText, UserMinus, UserPlus, Download, AlertTriangle } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { jenisBansosOptions, rtOptions } from "@/lib/constants";
 import { generateSuratRekomendasiBansosPDF } from "@/lib/pdf-surat";
 import type { KartuKeluarga, PengajuanBansos, Warga, RtData } from "@shared/schema";
@@ -141,6 +142,10 @@ export default function AdminBansos() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editJenisKkId, setEditJenisKkId] = useState<number | null>(null);
   const [editJenisValue, setEditJenisValue] = useState<string[]>([]);
+  const [addPenerimaOpen, setAddPenerimaOpen] = useState(false);
+  const [addKkId, setAddKkId] = useState("");
+  const [addJenisBansos, setAddJenisBansos] = useState<string[]>(["PKH"]);
+  const [removePenerima, setRemovePenerima] = useState<BansosRecipient | null>(null);
 
   const [formKkId, setFormKkId] = useState("");
   const [formJenisPengajuan, setFormJenisPengajuan] = useState("rekomendasi_penerima");
@@ -243,6 +248,44 @@ export default function AdminBansos() {
     onError: (err: any) => toast({ title: "Gagal", description: err.message, variant: "destructive" }),
   });
 
+  const addPenerimaMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/bansos/penerima/tambah", {
+        kkId: parseInt(addKkId),
+        jenisBansos: addJenisBansos.join(", "),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Penerima bansos berhasil ditambahkan" });
+      setAddPenerimaOpen(false);
+      setAddKkId("");
+      setAddJenisBansos(["PKH"]);
+      queryClient.invalidateQueries({ queryKey: ["/api/bansos/penerima"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/kk"] });
+    },
+    onError: (err: any) => toast({ title: "Gagal", description: err.message, variant: "destructive" }),
+  });
+
+  const removePenerimaMutation = useMutation({
+    mutationFn: async (kkId: number) => {
+      const res = await apiRequest("POST", "/api/bansos/penerima/hapus", { kkId });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Penerima bansos berhasil dihapus" });
+      setRemovePenerima(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/bansos/penerima"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/kk"] });
+    },
+    onError: (err: any) => toast({ title: "Gagal", description: err.message, variant: "destructive" }),
+  });
+
+  const nonPenerimaKk = useMemo(() => {
+    if (!allKk) return [];
+    return allKk.filter(k => !k.penerimaBansos);
+  }, [allKk]);
+
   const handleDownloadSurat = async (p: PengajuanWithKk) => {
     const ketuaRt = rtDataList?.find(r => r.nomorRt === p.rt);
     await generateSuratRekomendasiBansosPDF({
@@ -301,6 +344,17 @@ export default function AdminBansos() {
         </button>
       </div>
 
+      {tab === "penerima" && (
+        <Button
+          variant="outline"
+          className="gap-1.5 w-full border-green-300 text-green-700 hover:bg-green-50"
+          onClick={() => setAddPenerimaOpen(true)}
+          data-testid="button-tambah-penerima"
+        >
+          <UserPlus className="w-4 h-4" /> Tambah Penerima Bansos
+        </Button>
+      )}
+
       <div className="flex flex-wrap gap-2">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -354,6 +408,15 @@ export default function AdminBansos() {
                       </div>
                       <div className="flex flex-col items-end gap-1 flex-shrink-0">
                         <Badge variant="secondary" className="text-[10px]">RT {k.rt.toString().padStart(2, "0")}</Badge>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-1.5 text-[10px] text-red-500 hover:text-red-700 hover:bg-red-50 gap-0.5"
+                          onClick={() => setRemovePenerima(k)}
+                          data-testid={`button-remove-penerima-${k.id}`}
+                        >
+                          <UserMinus className="w-3 h-3" /> Hapus
+                        </Button>
                       </div>
                     </div>
                     <div className="mt-2 pt-2 border-t">
@@ -598,6 +661,64 @@ export default function AdminBansos() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={addPenerimaOpen} onOpenChange={setAddPenerimaOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Tambah Penerima Bansos</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label className="text-sm">Pilih KK</Label>
+              <KkSearchPicker
+                kkOptions={nonPenerimaKk}
+                allWarga={allWarga || []}
+                value={addKkId}
+                onChange={setAddKkId}
+                placeholder="Cari nomor KK atau nama kepala..."
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-sm">Jenis Bansos</Label>
+              <MultiJenisBansosSelect value={addJenisBansos} onChange={setAddJenisBansos} />
+            </div>
+            <Button
+              className="w-full h-10"
+              onClick={() => addPenerimaMutation.mutate()}
+              disabled={addPenerimaMutation.isPending || !addKkId || addJenisBansos.length === 0}
+              data-testid="button-simpan-tambah-penerima"
+            >
+              {addPenerimaMutation.isPending ? "Menyimpan..." : "Tambah Penerima"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!removePenerima} onOpenChange={(open) => { if (!open) setRemovePenerima(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-500" />
+              Hapus Penerima Bansos?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-left">
+              KK <strong>{removePenerima?.nomorKk}</strong> ({removePenerima?.kepalaKeluarga || "-"}) akan dihapus dari daftar penerima bansos.
+              Status penerima dan jenis bansos akan direset.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-remove-penerima">Batal</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => removePenerima && removePenerimaMutation.mutate(removePenerima.id)}
+              disabled={removePenerimaMutation.isPending}
+              data-testid="button-confirm-remove-penerima"
+            >
+              {removePenerimaMutation.isPending ? "Menghapus..." : "Hapus dari Penerima"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
