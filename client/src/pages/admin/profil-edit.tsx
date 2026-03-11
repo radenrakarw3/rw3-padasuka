@@ -38,6 +38,7 @@ export default function AdminProfilEdit() {
     kedudukanKeluarga: "Kedudukan Keluarga",
     tanggalLahir: "Tanggal Lahir",
     pekerjaan: "Pekerjaan",
+    pendidikan: "Pendidikan",
     statusKependudukan: "Status Kependudukan",
   };
 

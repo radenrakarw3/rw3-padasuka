@@ -35,6 +35,7 @@ export const warga = pgTable("warga", {
   kedudukanKeluarga: text("kedudukan_keluarga").notNull(),
   tanggalLahir: text("tanggal_lahir"),
   pekerjaan: text("pekerjaan"),
+  pendidikan: text("pendidikan"),
   statusKependudukan: text("status_kependudukan").notNull().default("Aktif"),
   fotoKtp: text("foto_ktp"),
   createdAt: timestamp("created_at").defaultNow(),

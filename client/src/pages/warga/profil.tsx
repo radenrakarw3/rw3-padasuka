@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Edit2, Check, X, User, MapPin, Clock, Upload, RefreshCw, ChevronDown, ChevronUp, Shield } from "lucide-react";
 import type { KartuKeluarga, Warga, ProfileEditRequest } from "@shared/schema";
-import { pekerjaanOptions, agamaOptions, jenisKelaminOptions, statusPerkawinanOptions, kedudukanKeluargaOptions, statusKependudukanOptions } from "@/lib/constants";
+import { pekerjaanOptions, pendidikanOptions, agamaOptions, jenisKelaminOptions, statusPerkawinanOptions, kedudukanKeluargaOptions, statusKependudukanOptions } from "@/lib/constants";
 
 const fieldLabels: Record<string, string> = {
   namaLengkap: "Nama Lengkap",
@@ -24,6 +24,7 @@ const fieldLabels: Record<string, string> = {
   kedudukanKeluarga: "Kedudukan",
   tanggalLahir: "Tanggal Lahir",
   pekerjaan: "Pekerjaan",
+  pendidikan: "Pendidikan",
   statusKependudukan: "Status",
 };
 
@@ -105,6 +106,7 @@ export default function WargaProfil() {
       kedudukanKeluarga: w.kedudukanKeluarga || "",
       tanggalLahir: w.tanggalLahir || "",
       pekerjaan: w.pekerjaan || "",
+      pendidikan: w.pendidikan || "",
       statusKependudukan: w.statusKependudukan || "",
     });
   };
@@ -124,6 +126,7 @@ export default function WargaProfil() {
     if (editData.kedudukanKeluarga !== (w.kedudukanKeluarga || "")) changes.kedudukanKeluarga = editData.kedudukanKeluarga;
     if (editData.tanggalLahir !== (w.tanggalLahir || "")) changes.tanggalLahir = editData.tanggalLahir;
     if (editData.pekerjaan !== (w.pekerjaan || "")) changes.pekerjaan = editData.pekerjaan;
+    if (editData.pendidikan !== (w.pendidikan || "")) changes.pendidikan = editData.pendidikan;
     if (editData.statusKependudukan !== (w.statusKependudukan || "")) changes.statusKependudukan = editData.statusKependudukan;
 
     if (Object.keys(changes).length === 0) {
@@ -411,6 +414,17 @@ export default function WargaProfil() {
                       </SelectContent>
                     </Select>
                   </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Pendidikan</Label>
+                    <Select value={editData.pendidikan} onValueChange={(v) => setField("pendidikan", v)}>
+                      <SelectTrigger className="h-10 text-sm" data-testid={`select-pendidikan-${w.id}`}>
+                        <SelectValue placeholder="Pilih pendidikan" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {pendidikanOptions.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-1.5 text-xs">
@@ -433,6 +447,10 @@ export default function WargaProfil() {
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground w-20 flex-shrink-0">Pekerjaan</span>
                     <span className="font-medium">{w.pekerjaan || "-"}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground w-20 flex-shrink-0">Pendidikan</span>
+                    <span className="font-medium">{w.pendidikan || "-"}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground w-20 flex-shrink-0">Status</span>

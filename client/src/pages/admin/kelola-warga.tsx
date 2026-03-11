@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Search, User, ChevronLeft, ChevronRight, Upload, X, FileText, Download, MessageCircle, Pencil } from "lucide-react";
 import type { KartuKeluarga } from "@shared/schema";
-import { pekerjaanOptions, agamaOptions, jenisKelaminOptions, statusPerkawinanOptions, kedudukanKeluargaOptions, statusKependudukanOptions } from "@/lib/constants";
+import { pekerjaanOptions, pendidikanOptions, agamaOptions, jenisKelaminOptions, statusPerkawinanOptions, kedudukanKeluargaOptions, statusKependudukanOptions } from "@/lib/constants";
 
 const PER_PAGE = 10;
 
@@ -20,7 +20,7 @@ const defaultForm = {
   kkId: "", namaLengkap: "", nik: "", nomorWhatsapp: "",
   jenisKelamin: "Laki-laki", statusPerkawinan: "Belum Kawin",
   agama: "Islam", kedudukanKeluarga: "Anak", tanggalLahir: "", pekerjaan: "",
-  statusKependudukan: "Aktif",
+  pendidikan: "", statusKependudukan: "Aktif",
 };
 
 export default function AdminKelolaWarga() {
@@ -124,6 +124,7 @@ export default function AdminKelolaWarga() {
         nomorWhatsapp: form.nomorWhatsapp || null,
         tanggalLahir: form.tanggalLahir || null,
         pekerjaan: form.pekerjaan || null,
+        pendidikan: form.pendidikan || null,
         statusKependudukan: form.statusKependudukan,
       });
       const created = await res.json();
@@ -161,6 +162,7 @@ export default function AdminKelolaWarga() {
         nomorWhatsapp: editForm.nomorWhatsapp || null,
         tanggalLahir: editForm.tanggalLahir || null,
         pekerjaan: editForm.pekerjaan || null,
+        pendidikan: editForm.pendidikan || null,
         statusKependudukan: editForm.statusKependudukan,
       });
       if (editSelectedFile && editingWargaId) {
@@ -200,6 +202,7 @@ export default function AdminKelolaWarga() {
       kedudukanKeluarga: w.kedudukanKeluarga || "Anak",
       tanggalLahir: w.tanggalLahir || "",
       pekerjaan: w.pekerjaan || "",
+      pendidikan: w.pendidikan || "",
       statusKependudukan: w.statusKependudukan || "Aktif",
     });
     setEditingWargaId(w.id);
@@ -356,14 +359,23 @@ export default function AdminKelolaWarga() {
           </Select>
         </div>
         <div className="space-y-1">
-          <Label className="text-sm">Status Kependudukan</Label>
-          <Select value={formData.statusKependudukan} onValueChange={v => setFormData({...formData, statusKependudukan: v})}>
-            <SelectTrigger className="h-10" data-testid={`select-status-kependudukan-${testIdPrefix}`}><SelectValue /></SelectTrigger>
+          <Label className="text-sm">Pendidikan</Label>
+          <Select value={formData.pendidikan} onValueChange={v => setFormData({...formData, pendidikan: v})}>
+            <SelectTrigger className="h-10" data-testid={`select-pendidikan-${testIdPrefix}`}><SelectValue placeholder="Pilih pendidikan" /></SelectTrigger>
             <SelectContent>
-              {statusKependudukanOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              {pendidikanOptions.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
+      </div>
+      <div className="space-y-1">
+        <Label className="text-sm">Status Kependudukan</Label>
+        <Select value={formData.statusKependudukan} onValueChange={v => setFormData({...formData, statusKependudukan: v})}>
+          <SelectTrigger className="h-10" data-testid={`select-status-kependudukan-${testIdPrefix}`}><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {statusKependudukanOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
       <div className="space-y-1">
         <Label className="text-sm">Upload Foto KTP</Label>

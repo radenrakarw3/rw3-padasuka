@@ -127,6 +127,7 @@ export interface DashboardStats {
   statusPerkawinan: Record<string, number>;
   kedudukanKeluarga: Record<string, number>;
   pekerjaan: { name: string; count: number }[];
+  pendidikan: Record<string, number>;
   statusKependudukan: Record<string, number>;
   kelompokUsia: Record<string, number>;
   waOwnership: { punya: number; belum: number };
@@ -138,7 +139,10 @@ export interface DashboardStats {
   listrik: Record<string, number>;
   bansos: { penerima: number; bukan: number };
   kkFotoOwnership: { punya: number; belum: number };
-  perRt: { rt: number; kk: number; warga: number; bansos: number }[];
+  perRt: { rt: number; kk: number; warga: number; bansos: number; lakiLaki: number; perempuan: number }[];
+  keuangan: { totalPemasukan: number; totalPengeluaran: number; saldo: number };
+  donasiSummary: { totalDonasiMasuk: number; totalDonasiPending: number; campaignAktif: number; campaignSelesai: number; totalDonatur: number };
+  avgPenghuni: number;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -320,6 +324,7 @@ export class DatabaseStorage implements IStorage {
       kedudukanKeluarga: warga.kedudukanKeluarga,
       tanggalLahir: warga.tanggalLahir,
       pekerjaan: warga.pekerjaan,
+      pendidikan: warga.pendidikan,
       statusKependudukan: warga.statusKependudukan,
       createdAt: warga.createdAt,
       nomorKk: kartuKeluarga.nomorKk,
@@ -343,6 +348,7 @@ export class DatabaseStorage implements IStorage {
       kedudukanKeluarga: warga.kedudukanKeluarga,
       tanggalLahir: warga.tanggalLahir,
       pekerjaan: warga.pekerjaan,
+      pendidikan: warga.pendidikan,
       statusKependudukan: warga.statusKependudukan,
       fotoKtp: warga.fotoKtp,
       createdAt: warga.createdAt,
@@ -550,6 +556,9 @@ export class DatabaseStorage implements IStorage {
     const allSuratRw = await db.select().from(suratRw);
     const allProfileEdits = await db.select().from(profileEditRequest);
     const allPengajuanBansos = await db.select().from(pengajuanBansos);
+    const allKasRw = await db.select().from(kasRw);
+    const allDonasi = await db.select().from(donasi);
+    const allCampaigns = await db.select().from(donasiCampaign);
 
     const totalKk = allKk.length;
     const totalWarga = allWarga.length;
@@ -605,6 +614,7 @@ export class DatabaseStorage implements IStorage {
     const statusPerkawinan = countByField(allWarga, "statusPerkawinan");
     const kedudukanKeluarga = countByField(allWarga, "kedudukanKeluarga");
     const statusKependudukan = countByField(allWarga, "statusKependudukan");
+    const pendidikan = countByField(allWarga, "pendidikan");
 
     const pekerjaanMap = countByField(allWarga, "pekerjaan");
     const pekerjaanSorted = Object.entries(pekerjaanMap)
@@ -619,7 +629,7 @@ export class DatabaseStorage implements IStorage {
 
     const today = new Date();
     const kelompokUsia: Record<string, number> = {
-      "0-5": 0, "6-17": 0, "18-25": 0, "26-40": 0, "41-55": 0, "56-65": 0, "65+": 0, "Tidak Diketahui": 0,
+      "0-5": 0, "6-17": 0, "18-25": 0, "26-40": 0, "41-55": 0, "56-64": 0, "65+": 0, "Tidak Diketahui": 0,
     };
     for (const w of allWarga) {
       if (!w.tanggalLahir) {
@@ -639,7 +649,7 @@ export class DatabaseStorage implements IStorage {
       else if (age <= 25) kelompokUsia["18-25"]++;
       else if (age <= 40) kelompokUsia["26-40"]++;
       else if (age <= 55) kelompokUsia["41-55"]++;
-      else if (age <= 65) kelompokUsia["56-65"]++;
+      else if (age < 65) kelompokUsia["56-64"]++;
       else kelompokUsia["65+"]++;
     }
     if (kelompokUsia["Tidak Diketahui"] === 0) delete kelompokUsia["Tidak Diketahui"];
@@ -672,13 +682,33 @@ export class DatabaseStorage implements IStorage {
     const rtSet = [1, 2, 3, 4, 5, 6, 7];
     const perRt = rtSet.map(rt => {
       const kkInRt = allKk.filter(k => k.rt === rt);
+      const wargaInRt = allWarga.filter(w => kkRtMap.get(w.kkId) === rt);
       return {
         rt,
         kk: kkInRt.length,
-        warga: allWarga.filter(w => kkRtMap.get(w.kkId) === rt).length,
+        warga: wargaInRt.length,
         bansos: kkInRt.filter(k => k.penerimaBansos).length,
+        lakiLaki: wargaInRt.filter(w => w.jenisKelamin === "Laki-laki").length,
+        perempuan: wargaInRt.filter(w => w.jenisKelamin === "Perempuan").length,
       };
     });
+
+    let totalPemasukan = 0;
+    let totalPengeluaran = 0;
+    for (const item of allKasRw) {
+      if (item.tipe === "pemasukan") totalPemasukan += Number(item.jumlah);
+      else totalPengeluaran += Number(item.jumlah);
+    }
+    const keuangan = { totalPemasukan, totalPengeluaran, saldo: totalPemasukan - totalPengeluaran };
+
+    const totalDonasiMasuk = allDonasi.filter(d => d.status === "dikonfirmasi").reduce((s, d) => s + Number(d.jumlah), 0);
+    const totalDonasiPending = allDonasi.filter(d => d.status === "pending").length;
+    const campaignAktif = allCampaigns.filter(c => c.status === "aktif").length;
+    const campaignSelesai = allCampaigns.filter(c => c.status === "selesai").length;
+    const donasiSummary = { totalDonasiMasuk, totalDonasiPending, campaignAktif, campaignSelesai, totalDonatur: allDonasi.filter(d => d.status === "dikonfirmasi").length };
+
+    const totalPenghuni = allKk.reduce((s, k) => s + (k.jumlahPenghuni || 0), 0);
+    const avgPenghuni = allKk.length > 0 ? Math.round((totalPenghuni / allKk.length) * 10) / 10 : 0;
 
     return {
       totalKk, totalWarga, pendingLaporan, pendingSurat,
@@ -689,10 +719,11 @@ export class DatabaseStorage implements IStorage {
       totalPengajuanBansos: totalPengajuanBansosCount, statusPengajuanBansos,
       jenisBansos,
       jenisKelamin, agama, statusPerkawinan, kedudukanKeluarga,
-      pekerjaan, statusKependudukan, kelompokUsia,
+      pekerjaan, pendidikan, statusKependudukan, kelompokUsia,
       waOwnership, ktpOwnership,
       statusRumah, kondisiBangunan, sumberAir, sanitasiWc, listrik,
       bansos, kkFotoOwnership, perRt,
+      keuangan, donasiSummary, avgPenghuni,
     };
   }
 

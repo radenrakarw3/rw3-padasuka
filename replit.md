@@ -38,7 +38,7 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
    - Server validates AI output contains placeholders; injects header if missing
 5. **Auto WA Notifications**: Every status change (laporan, surat, profile edit) sends contextual WhatsApp notification to warga via Star Sender with domain link (rw3padasukacimahi.org)
    - **Admin Notification**: New laporan, surat, and donasi from warga triggers WA notification to admin (085860604142) with detailed info (nama, NIK, alamat, RT, jenis surat, perihal, keterangan)
-6. **Shared Constants**: All dropdown options (pekerjaan, agama, jenis kelamin, status kawin, kedudukan, etc.) centralized in `client/src/lib/constants.ts`
+6. **Shared Constants**: All dropdown options (pekerjaan, pendidikan, agama, jenis kelamin, status kawin, kedudukan, etc.) centralized in `client/src/lib/constants.ts`
 7. **Donasi**: Crowdfunding feature for RW activities
    - Admin creates donation campaigns (judul, deskripsi, target dana optional)
    - Warga donates via Bank Transfer BCA (1390997490 a.n. Raden Raka Abdul Kamal Syafaat), then reports donation (campaign, nama, jumlah)
@@ -82,16 +82,19 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
 
 ## Admin Dashboard Statistics
 - **API**: `GET /api/stats/dashboard` (admin-only) — server-side aggregation of all stats
-- **Summary cards**: Total KK, Total Warga, Pending Laporan, Pending Surat
-- **Warga demographics**: Jenis Kelamin (donut), Agama (bar), Status Perkawinan (donut), Kelompok Usia (bar), Pekerjaan top 10 (bar), Kedudukan Keluarga (bar), Status Kependudukan (badges)
+- **Summary cards**: Total KK, Total Warga, Pending Laporan, Pending Surat, Edit Profil Pending, Pengajuan Bansos
+- **Ringkasan Keuangan**: Pemasukan, Pengeluaran, Saldo kas RW + Donasi summary (total masuk, donatur, campaign aktif, pending)
+- **Ringkasan Layanan**: Status bars for Laporan, Surat Warga, Surat RW, Pengajuan Bansos
+- **Warga demographics**: Jenis Kelamin (donut), Agama (bar), Status Perkawinan (donut), Kelompok Usia with descriptive labels (bar), Pendidikan (bar), Pekerjaan top 10 (bar), Kedudukan Keluarga (bar), Status Kependudukan (badges)
+- **Data Keluarga**: Rata-rata anggota per KK, Kedudukan Keluarga, WhatsApp ownership, KTP ownership
 - **Ownership stats**: WhatsApp, Foto KTP, Foto KK (pair stat bars)
 - **KK/Rumah data**: Status Rumah (donut), Listrik (donut), Kondisi Bangunan (bar), Sumber Air (bar), Sanitasi (bar), Penerima Bansos (pair stat)
-- **Per RT**: Enhanced breakdown with KK count, Warga count, Bansos count per RT
+- **Per RT**: Enhanced breakdown with KK count, Warga count, Bansos count, gender ratio (L/P with percentage) per RT
 - **Charts**: CSS-based (conic-gradient donuts, progress bar charts) — no external chart library
 
 ## Data Model (shared/schema.ts)
 - `kartu_keluarga`: KK data with RT assignment, foto_kk for uploaded KK scan
-- `warga`: Resident data linked to KK, foto_ktp for uploaded KTP scan
+- `warga`: Resident data linked to KK, foto_ktp for uploaded KTP scan, pendidikan (education level)
 - `rt_data`: RT 01-07 with ketua names
 - `laporan`: Reports from residents
 - `surat_warga`: Letter requests (AI-generated)

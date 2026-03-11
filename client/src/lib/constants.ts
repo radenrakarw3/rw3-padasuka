@@ -79,6 +79,19 @@ export const pekerjaanOptions = [
   "Lainnya",
 ];
 
+export const pendidikanOptions = [
+  "Belum Sekolah",
+  "Tidak/Belum Tamat SD",
+  "Tamat SD/Sederajat",
+  "SLTP/Sederajat",
+  "SLTA/Sederajat",
+  "Diploma I/II",
+  "Akademi/Diploma III",
+  "Diploma IV/Strata I",
+  "Strata II",
+  "Strata III",
+];
+
 export const agamaOptions = [
   "Islam",
   "Kristen",
