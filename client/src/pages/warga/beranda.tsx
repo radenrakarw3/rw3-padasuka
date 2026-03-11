@@ -63,7 +63,7 @@ export default function WargaBeranda() {
     {
       icon: Heart,
       title: "Donasi",
-      desc: "Lihat campaign donasi aktif, berdonasi via Saweria, dan pantau progres pengumpulan dana komunitas.",
+      desc: "Lihat campaign donasi aktif, berdonasi via transfer bank, dan pantau progres pengumpulan dana komunitas.",
       path: "/warga/donasi",
       color: "text-rose-600",
       bg: "bg-rose-50 dark:bg-rose-950/30",
@@ -230,7 +230,7 @@ export default function WargaBeranda() {
             </li>
             <li className="flex gap-2">
               <span className="text-[hsl(163,55%,22%)] mt-0.5">•</span>
-              <span>Donasi dilakukan melalui Saweria dan dikonfirmasi oleh admin setelah pembayaran terverifikasi.</span>
+              <span>Donasi dilakukan melalui transfer bank BCA dan dikonfirmasi oleh admin setelah pembayaran terverifikasi.</span>
             </li>
             <li className="flex gap-2">
               <span className="text-[hsl(163,55%,22%)] mt-0.5">•</span>

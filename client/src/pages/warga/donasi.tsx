@@ -10,11 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import {
   Clock, CheckCircle, XCircle, Heart, Trophy,
-  ExternalLink, ArrowLeft, ChevronDown, ChevronUp
+  ArrowLeft, ChevronDown, ChevronUp, Copy, Info, Banknote
 } from "lucide-react";
 import type { DonasiCampaign, Donasi } from "@shared/schema";
-
-const SAWERIA_LINK = "https://saweria.co/rw3padasuka";
 
 const formatRupiah = (n: number) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n);
@@ -106,12 +104,26 @@ export default function WargaDonasi() {
           </CardContent>
         </Card>
 
+        <Card className="border border-blue-200 bg-blue-50/50">
+          <CardContent className="p-4">
+            <div className="flex gap-2.5">
+              <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-blue-900">Informasi Rekening</p>
+                <p className="text-xs text-blue-700 mt-1 leading-relaxed">
+                  Saat ini donasi dikirim ke rekening pribadi Ketua RW karena rekening yayasan RW 03 masih dalam proses pembuatan. Setelah rekening yayasan aktif, seluruh dana akan dipindahkan ke rekening resmi yayasan. Transparansi keuangan bisa dilihat di halaman Keuangan.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card className="border-2 border-[hsl(163,55%,22%)]/30">
           <CardContent className="p-5">
             <p className="text-base font-bold text-center mb-5">Cara Donasi</p>
 
             <div className="space-y-5">
-              <div className="flex gap-4" data-testid="step-1-saweria">
+              <div className="flex gap-4" data-testid="step-1-transfer">
                 <div className="flex flex-col items-center">
                   <div className="w-10 h-10 rounded-full bg-[hsl(163,55%,22%)] flex items-center justify-center flex-shrink-0">
                     <span className="text-white text-lg font-bold">1</span>
@@ -119,18 +131,46 @@ export default function WargaDonasi() {
                   <div className="w-0.5 flex-1 bg-[hsl(163,55%,22%)]/20 mt-1" />
                 </div>
                 <div className="pb-2 flex-1">
-                  <p className="text-base font-bold">Kirim Donasi via Saweria</p>
+                  <p className="text-base font-bold">Transfer ke Rekening BCA</p>
                   <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-                    Tekan tombol hijau di bawah ini. Anda akan diarahkan ke halaman Saweria untuk mengirim donasi.
+                    Kirim donasi melalui transfer bank ke rekening berikut:
                   </p>
-                  <Button
-                    className="w-full mt-3 h-12 text-base gap-2 bg-[hsl(163,55%,22%)] hover:bg-[hsl(163,55%,18%)]"
-                    onClick={() => window.open(SAWERIA_LINK, "_blank")}
-                    data-testid="button-saweria-link"
-                  >
-                    <ExternalLink className="w-5 h-5" />
-                    Buka Saweria Sekarang
-                  </Button>
+                  <div className="mt-3 rounded-xl border-2 border-[hsl(163,55%,22%)]/20 bg-[hsl(163,55%,22%)]/5 p-4 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Banknote className="w-4 h-4 text-[hsl(163,55%,22%)]" />
+                        <span className="text-xs text-muted-foreground">Bank</span>
+                      </div>
+                      <span className="text-sm font-bold">BCA</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">No. Rekening</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-base font-bold tracking-wider" data-testid="text-nomor-rekening">1390997490</span>
+                        <button
+                          onClick={() => {
+                            try {
+                              navigator.clipboard.writeText("1390997490");
+                              toast({ title: "Nomor rekening disalin!" });
+                            } catch {
+                              toast({ title: "Salin manual: 1390997490" });
+                            }
+                          }}
+                          className="p-1.5 rounded-md bg-[hsl(163,55%,22%)]/10 hover:bg-[hsl(163,55%,22%)]/20 transition-colors"
+                          data-testid="button-copy-rekening"
+                        >
+                          <Copy className="w-3.5 h-3.5 text-[hsl(163,55%,22%)]" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Atas Nama</span>
+                      <span className="text-sm font-semibold">Raden Raka Abdul Kamal Syafaat</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                    Bisa transfer via ATM, m-Banking, atau internet banking. Pastikan nama penerima sesuai sebelum mengirim.
+                  </p>
                 </div>
               </div>
 
@@ -144,7 +184,7 @@ export default function WargaDonasi() {
                 <div className="pb-2 flex-1">
                   <p className="text-base font-bold">Tulis Nama Anda</p>
                   <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-                    Tulis nama yang sama seperti yang Anda pakai saat donasi di Saweria.
+                    Tulis nama lengkap sesuai dengan nama pengirim transfer bank Anda.
                   </p>
                   <Input
                     value={namaDonatur}
@@ -165,7 +205,7 @@ export default function WargaDonasi() {
                 <div className="flex-1">
                   <p className="text-base font-bold">Tulis Jumlah Donasi</p>
                   <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-                    Tulis jumlah uang yang Anda kirim (dalam Rupiah, angka saja).
+                    Tulis jumlah uang yang Anda transfer (dalam Rupiah, angka saja).
                   </p>
                   <Input
                     type="number"
@@ -198,14 +238,28 @@ export default function WargaDonasi() {
               ) : (
                 <span className="flex items-center gap-2">
                   <CheckCircle className="w-5 h-5" />
-                  Kirim Konfirmasi Donasi
+                  Konfirmasi Donasi Saya
                 </span>
               )}
             </Button>
 
-            <p className="text-sm text-muted-foreground text-center mt-3 leading-relaxed">
-              Setelah dikirim, admin akan memeriksa dan mengkonfirmasi donasi Anda.
-            </p>
+            <div className="mt-4 rounded-lg bg-muted/50 p-3.5 space-y-2">
+              <p className="text-xs font-semibold text-center">Apa yang terjadi setelah ini?</p>
+              <div className="space-y-1.5">
+                <div className="flex items-start gap-2">
+                  <CheckCircle className="w-3.5 h-3.5 text-[hsl(163,55%,22%)] mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-muted-foreground">Admin akan mengecek mutasi rekening untuk memverifikasi transfer Anda</p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <CheckCircle className="w-3.5 h-3.5 text-[hsl(163,55%,22%)] mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-muted-foreground">Setelah dikonfirmasi, donasi Anda akan tercatat resmi dan muncul di leaderboard</p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <CheckCircle className="w-3.5 h-3.5 text-[hsl(163,55%,22%)] mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-muted-foreground">Anda bisa pantau status donasi di bagian "Donasi Saya" di bawah</p>
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
