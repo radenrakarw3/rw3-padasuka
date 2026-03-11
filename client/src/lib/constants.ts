@@ -76,6 +76,7 @@ export const pekerjaanOptions = [
   "Kepala Desa",
   "Biarawati",
   "Wiraswasta",
+  "Jasa",
   "Lainnya",
 ];
 
