@@ -1392,8 +1392,30 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
     if (!["pending", "dikonfirmasi", "ditolak"].includes(status)) {
       return res.status(400).json({ message: "Status tidak valid" });
     }
-    const result = await storage.updateDonasiStatus(parseInt(req.params.id), status);
+    const donasiId = parseInt(req.params.id);
+    const result = await storage.updateDonasiStatus(donasiId, status);
     if (!result) return res.status(404).json({ message: "Donasi tidak ditemukan" });
+
+    if (status === "dikonfirmasi") {
+      try {
+        const campaigns = await storage.getAllDonasiCampaigns();
+        const campaign = campaigns.find(c => c.id === result.campaignId);
+        const judulCampaign = campaign?.judul || "Donasi";
+        const today = new Date().toISOString().split("T")[0];
+
+        await storage.createKasRw({
+          tipe: "pemasukan",
+          kategori: "Donasi",
+          jumlah: result.jumlah,
+          keterangan: `Donasi: ${judulCampaign}`,
+          tanggal: today,
+          createdBy: "sistem",
+        });
+      } catch (err) {
+        console.error("Gagal auto-create kas RW dari donasi:", err);
+      }
+    }
+
     res.json(result);
   });
 
