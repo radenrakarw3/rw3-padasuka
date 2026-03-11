@@ -1,13 +1,13 @@
 # RW 03 Padasuka - Sistem Informasi Warga Digital
 
 ## Overview
-A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. Enables digitization of resident data, reporting, letter services (AI-generated), and mass WhatsApp messaging.
+A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. Enables digitization of resident data, reporting, letter services, financial management, and mass WhatsApp messaging.
 
 ## Architecture
 - **Frontend**: React + TypeScript + Tailwind CSS + shadcn/ui (mobile-first)
 - **Backend**: Express.js + TypeScript
 - **Database**: PostgreSQL with Drizzle ORM
-- **AI Integration**: Google Gemini API (gemini-2.5-flash) for letter generation
+- **AI Integration**: Google Gemini API (gemini-2.5-flash) for Surat RW (Surat Sakti) and WA Blast message generation
 - **Messaging**: Star Sender API for WhatsApp blast
 
 ## Color Palette
@@ -31,14 +31,13 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
 ## Key Features
 1. **Warga Pages**: Beranda, Profil (view/edit request), Layanan (merged: Surat + Laporan + Donasi tabs), Keuangan (laporan kas RW)
 2. **Admin Pages**: Dashboard (comprehensive statistics), Kelola KK, Kelola Warga, Kelola Laporan, Kelola Surat, Surat RW (Surat Sakti), Arsip Surat, Edit Profil approval, Bansos Management, Donasi, Keuangan (Kas RW), WA Blast
-3. **Gemini AI**: Auto-generates surat keterangan and official RW letters
+3. **Gemini AI**: Auto-generates official RW letters (Surat Sakti) and WA Blast messages only. Surat warga is fully manual.
 4. **Star Sender**: WA Blast with category filters (semua, per RT, kepala keluarga, penerima bansos), preview recipient count, confirmation dialog, message templates, AI message generation, expandable history with sent/failed counts. Blast runs in background (no timeout) with auto-polling status updates.
    - **AI Message Generation**: Admin inputs a topic → Gemini generates personalized message as Ketua RW (Raden Raka, 23yo, friendly tone)
    - **Auto Placeholders**: `{gender}` (Bapak/Ibu), `{warga}` (nama lengkap), `{rtxx}` (RT number) — replaced per-recipient on send
    - Server validates AI output contains placeholders; injects header if missing
 5. **Auto WA Notifications**: Every status change (laporan, surat, profile edit) sends contextual WhatsApp notification to warga via Star Sender with domain link (rw3padasukacimahi.org)
-   - **Admin Notification**: New laporan, surat, and donasi from warga triggers WA notification to admin (081321133823) with summary details
-   - **Kirim PDF via WA**: Admin can send approved surat as PDF file via WhatsApp directly from Kelola Surat page. Client generates compressed PDF blob → uploads to server → saves as temp file with token → sends file URL via Star Sender `/api/send` (messageType: "media") → temp file auto-deleted after 2 minutes
+   - **Admin Notification**: New laporan, surat, and donasi from warga triggers WA notification to admin (085860604142) with detailed info (nama, NIK, alamat, RT, jenis surat, perihal, keterangan)
 6. **Shared Constants**: All dropdown options (pekerjaan, agama, jenis kelamin, status kawin, kedudukan, etc.) centralized in `client/src/lib/constants.ts`
 7. **Donasi**: Crowdfunding feature for RW activities
    - Admin creates donation campaigns (judul, deskripsi, target dana optional)
@@ -52,21 +51,18 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
    - Tables: `donasi_campaign`, `donasi`
 
 ## Letter System
-- **Surat Warga Flow**: Warga submits request → Admin clicks "Generate" (Gemini AI) → Admin reviews → Approve/Reject → Nomor surat auto-assigned on approval (format: XXX/SK-W/RW-03/MM/YYYY)
+- **Surat Warga Flow (Manual)**: Warga fills detail form (jenis surat, perihal, keterangan detail) → WA notification to admin with full details → Admin processes surat manually → Admin inputs nomor surat manually → Approve/Reject → Admin uploads scanned surat file as arsip → Warga contacts admin via WA (085860604142) for pickup/info
+  - No AI generation for surat warga — fully manual process
+  - `surat_warga.fileSurat` stores uploaded scanned surat file path
+  - Nomor surat entered manually by admin (no auto-numbering for surat warga)
+  - Warga page shows "Hubungi Admin via WhatsApp" button instead of PDF download
 - **Surat RW Flow**: Admin creates surat → Gemini AI generates → Nomor surat auto-assigned on creation (format: XXX/SK-RW/RW-03/MM/YYYY)
-- **PDF Download**: All PDF generation is client-side only (`client/src/lib/pdf-surat.ts`) using jsPDF with compression enabled (`compress: true`). Logo is resized to 150x150px JPEG (70% quality) via canvas and cached for smaller PDFs. Both admin and warga download PDFs via client-side generation. Mobile uses blob upload fallback (`POST /api/pdf/temp`). Server-side jsPDF was removed to prevent OOM crashes in production.
-- **No server-side PDF**: `server/pdf-generator.ts` exists but is NOT imported — jsPDF is excluded from server bundle to avoid OOM in production's limited memory.
-- **Surat Generation Validation**: Gemini-generated surat content is validated for completeness (must have title, "Demikian" paragraph, signature block with "Raden Raka") before saving. Auto-retries up to 3 times if incomplete. Returns error if still incomplete after retries.
-- **Metode Layanan**: Warga chooses between:
-  - *Print Mandiri*: Download PDF & print sendiri (gratis)
-  - *Tau Beres*: Surat di-print & ditandatangani RT/RW, warga bayar infaq seikhlasnya untuk kas RW
-  - Column `metode_layanan` in `surat_warga` table, validated via `z.enum(["print_mandiri","tau_beres"])`
-  - WhatsApp notifications differ based on metode (download instructions vs pickup/infaq instructions)
-  - Admin sees metode badge per surat request
-- **Arsip Surat**: Admin archive page listing all approved surat warga + surat RW with nomor surat, searchable and filterable
+- **PDF for Surat RW**: Client-side PDF generation (`client/src/lib/pdf-surat.ts`) using jsPDF, used only for Surat RW and Bansos rekomendasi
+- **Arsip Surat**: Admin archive showing approved surat warga (with scan file indicator) + surat RW, searchable and filterable
+- **Upload Scan**: Admin uploads scanned surat file (JPG/PNG/PDF, max 10MB) stored in `uploads/surat/`
 
 ## File Upload System
-- **Backend**: Multer middleware, files stored in `uploads/kk/` and `uploads/ktp/` directories
+- **Backend**: Multer middleware, files stored in `uploads/kk/`, `uploads/ktp/`, and `uploads/surat/` directories
 - **Static serving**: `/uploads` path serves uploaded files via Express static middleware
 - **Endpoints**: `POST /api/upload/kk/:kkId` and `POST /api/upload/ktp/:wargaId`
 - **Limits**: 5MB max, accepts JPG/JPEG/PNG/PDF

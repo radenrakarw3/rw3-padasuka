@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { FileText, ScrollText, Download, Search, Calendar } from "lucide-react";
+import { FileText, ScrollText, Download, Search, Calendar, File, ExternalLink } from "lucide-react";
 import { useState, useMemo } from "react";
 import type { SuratWarga, SuratRw, Warga } from "@shared/schema";
 import { generateSuratPDF } from "@/lib/pdf-surat";
@@ -17,6 +17,7 @@ type ArchiveItem = {
   perihal: string;
   nomorSurat: string | null;
   isiSurat: string | null;
+  fileSurat: string | null;
   status: string;
   pemohon: string;
   tanggal: string;
@@ -38,7 +39,7 @@ export default function AdminArsipSurat() {
     const items: ArchiveItem[] = [];
 
     (suratWargaList || [])
-      .filter(s => s.status === "disetujui" && s.nomorSurat)
+      .filter(s => s.status === "disetujui")
       .forEach(s => {
         items.push({
           type: "warga",
@@ -47,6 +48,7 @@ export default function AdminArsipSurat() {
           perihal: s.perihal,
           nomorSurat: s.nomorSurat,
           isiSurat: s.isiSurat,
+          fileSurat: s.fileSurat || null,
           status: s.status,
           pemohon: getWargaName(s.wargaId),
           tanggal: s.createdAt ? new Date(s.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }) : "",
@@ -64,6 +66,7 @@ export default function AdminArsipSurat() {
           perihal: s.perihal,
           nomorSurat: s.nomorSurat,
           isiSurat: s.isiSurat,
+          fileSurat: null,
           status: "terbit",
           pemohon: "-",
           tanggal: s.createdAt ? new Date(s.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }) : "",
@@ -73,8 +76,8 @@ export default function AdminArsipSurat() {
 
     items.sort((a, b) => {
       const da = a.raw.createdAt ? new Date(a.raw.createdAt).getTime() : 0;
-      const db = b.raw.createdAt ? new Date(b.raw.createdAt).getTime() : 0;
-      return db - da;
+      const db2 = b.raw.createdAt ? new Date(b.raw.createdAt).getTime() : 0;
+      return db2 - da;
     });
 
     return items;
@@ -96,7 +99,7 @@ export default function AdminArsipSurat() {
     });
   }, [archiveItems, search, filterType]);
 
-  const handleDownload = async (item: ArchiveItem) => {
+  const handleDownloadRw = async (item: ArchiveItem) => {
     if (!item.isiSurat) return;
     try {
       await generateSuratPDF({
@@ -116,7 +119,7 @@ export default function AdminArsipSurat() {
     <div className="space-y-4">
       <div>
         <h2 className="text-lg font-bold" data-testid="text-arsip-title">Arsip Surat</h2>
-        <p className="text-xs text-muted-foreground">Daftar seluruh surat yang telah terbit dengan nomor surat</p>
+        <p className="text-xs text-muted-foreground">Daftar seluruh surat yang telah disetujui/terbit</p>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-2">
@@ -170,26 +173,48 @@ export default function AdminArsipSurat() {
                     )}
                     <p className="font-semibold text-sm truncate">{item.jenisSurat}</p>
                   </div>
-                  <p className="text-xs font-medium text-primary">{item.nomorSurat}</p>
+                  {item.nomorSurat && <p className="text-xs font-medium text-primary">{item.nomorSurat}</p>}
                   <p className="text-xs text-muted-foreground">Perihal: {item.perihal}</p>
                   {item.type === "warga" && (
                     <p className="text-xs text-muted-foreground">Pemohon: {item.pemohon}</p>
                   )}
                 </div>
-                <Badge className={`text-[10px] flex-shrink-0 ${item.type === "warga" ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800"}`}>
-                  {item.type === "warga" ? "Warga" : "RW"}
-                </Badge>
+                <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                  <Badge className={`text-[10px] ${item.type === "warga" ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800"}`}>
+                    {item.type === "warga" ? "Warga" : "RW"}
+                  </Badge>
+                  {item.type === "warga" && (
+                    <Badge variant="outline" className={`text-[10px] gap-1 ${item.fileSurat ? "border-green-500 text-green-700" : "border-orange-400 text-orange-600"}`}>
+                      <File className="w-3 h-3" />
+                      {item.fileSurat ? "Ada Scan" : "Belum Scan"}
+                    </Badge>
+                  )}
+                </div>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
                   <Calendar className="w-3 h-3" />
                   {item.tanggal}
                 </div>
-                {item.isiSurat && (
-                  <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={() => handleDownload(item)} data-testid={`button-download-arsip-${item.type}-${item.id}`}>
-                    <Download className="w-3 h-3" /> PDF
-                  </Button>
-                )}
+                <div className="flex gap-1">
+                  {item.type === "warga" && item.fileSurat && (
+                    <a
+                      href={item.fileSurat}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      data-testid={`button-view-arsip-${item.type}-${item.id}`}
+                    >
+                      <Button size="sm" variant="outline" className="gap-1 text-xs h-7">
+                        <ExternalLink className="w-3 h-3" /> Lihat Scan
+                      </Button>
+                    </a>
+                  )}
+                  {item.type === "rw" && item.isiSurat && (
+                    <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={() => handleDownloadRw(item)} data-testid={`button-download-arsip-${item.type}-${item.id}`}>
+                      <Download className="w-3 h-3" /> PDF
+                    </Button>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>

@@ -13,29 +13,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import {
   Plus, Send, Clock, CheckCircle, AlertCircle, ArrowLeft, FileText,
-  XCircle, Download, Loader2, Printer, HandCoins, ClipboardList
+  XCircle, MessageCircle, ClipboardList
 } from "lucide-react";
 import type { Laporan, Warga, SuratWarga, KartuKeluarga } from "@shared/schema";
-import { generateSuratPDF } from "@/lib/pdf-surat";
 
 type TabType = "surat" | "laporan";
-
-const metodeLayananOptions = [
-  {
-    value: "print_mandiri",
-    label: "Print Mandiri",
-    icon: Printer,
-    description: "Download PDF & print sendiri",
-    detail: "Gratis",
-  },
-  {
-    value: "tau_beres",
-    label: "Tau Beres",
-    icon: HandCoins,
-    description: "Surat di-print & ditandatangani RT/RW",
-    detail: "Infaq seikhlasnya untuk Kas RW",
-  },
-];
 
 const jenisSuratOptions = [
   { value: "surat_keterangan_domisili", label: "Surat Keterangan Domisili" },
@@ -57,7 +39,6 @@ function SuratTab() {
   const [jenisSurat, setJenisSurat] = useState("");
   const [perihal, setPerihal] = useState("");
   const [keterangan, setKeterangan] = useState("");
-  const [metodeLayanan, setMetodeLayanan] = useState("print_mandiri");
 
   const { data: suratList, isLoading } = useQuery<SuratWarga[]>({
     queryKey: ["/api/surat-warga"],
@@ -81,19 +62,17 @@ function SuratTab() {
         jenisSurat,
         perihal,
         keterangan: keterangan || undefined,
-        metodeLayanan,
         nomorRt: kk?.rt || 1,
       });
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "Surat diajukan!", description: "Permohonan surat terkirim. Admin akan memproses dan menyetujui surat Anda." });
+      toast({ title: "Surat diajukan!", description: "Permohonan surat terkirim. Admin akan memproses surat Anda." });
       setShowForm(false);
       setJenisSurat("");
       setPerihal("");
       setKeterangan("");
       setSelectedWarga("");
-      setMetodeLayanan("print_mandiri");
       queryClient.invalidateQueries({ queryKey: ["/api/surat-warga"] });
     },
     onError: (err: any) => {
@@ -105,25 +84,6 @@ function SuratTab() {
     pending: { label: "Menunggu", color: "bg-yellow-100 text-yellow-800", icon: Clock },
     disetujui: { label: "Disetujui", color: "bg-green-100 text-green-800", icon: CheckCircle },
     ditolak: { label: "Ditolak", color: "bg-red-100 text-red-800", icon: XCircle },
-  };
-
-  const [downloadingPdf, setDownloadingPdf] = useState<number | null>(null);
-  const handleDownloadPdf = async (s: SuratWarga) => {
-    if (!s.isiSurat) return;
-    setDownloadingPdf(s.id);
-    try {
-      const label = s.jenisSurat.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
-      await generateSuratPDF({
-        nomorSurat: s.nomorSurat,
-        isiSurat: s.isiSurat,
-        jenisSurat: label,
-        fileName: `Surat_${label.replace(/\s/g, "_")}_${s.nomorSurat?.replace(/\//g, "-") || s.id}`,
-      });
-    } catch {
-      toast({ title: "Gagal membuat PDF", variant: "destructive" });
-    } finally {
-      setDownloadingPdf(null);
-    }
   };
 
   if (showForm) {
@@ -182,55 +142,15 @@ function SuratTab() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Keterangan Tambahan (opsional)</Label>
+              <Label className="text-sm font-medium">Detail Kebutuhan Surat</Label>
               <Textarea
                 value={keterangan}
                 onChange={(e) => setKeterangan(e.target.value)}
-                placeholder="Tambahkan keterangan jika diperlukan..."
-                rows={3}
+                placeholder="Jelaskan detail kebutuhan surat Anda, misalnya:&#10;- Untuk keperluan apa?&#10;- Data tambahan yang perlu dicantumkan?&#10;- Catatan khusus lainnya?"
+                rows={5}
                 data-testid="input-keterangan-surat"
               />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Pilih Metode Layanan</Label>
-              <div className="grid grid-cols-1 gap-3">
-                {metodeLayananOptions.map((opt) => {
-                  const Icon = opt.icon;
-                  const isSelected = metodeLayanan === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setMetodeLayanan(opt.value)}
-                      className={`relative flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all ${
-                        isSelected
-                          ? "border-primary bg-primary/5 shadow-sm"
-                          : "border-muted hover:border-muted-foreground/30"
-                      }`}
-                      data-testid={`option-metode-${opt.value}`}
-                    >
-                      <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${
-                        isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                      }`}>
-                        <Icon className="w-5 h-5" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm">{opt.label}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{opt.description}</p>
-                        <Badge variant={opt.value === "print_mandiri" ? "secondary" : "outline"} className="mt-1.5 text-[10px]">
-                          {opt.detail}
-                        </Badge>
-                      </div>
-                      {isSelected && (
-                        <div className="absolute top-3 right-3">
-                          <CheckCircle className="w-5 h-5 text-primary" />
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+              <p className="text-[10px] text-muted-foreground">Semakin detail, semakin cepat diproses admin</p>
             </div>
 
             <Button
@@ -293,45 +213,49 @@ function SuratTab() {
                     <p className="font-semibold text-sm truncate">{label}</p>
                     <p className="text-xs text-muted-foreground">{s.perihal}</p>
                   </div>
-                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                    <Badge className={`${sc.color} text-[10px] gap-1`}>
-                      <StatusIcon className="w-3 h-3" />
-                      {sc.label}
-                    </Badge>
-                    <Badge variant="outline" className="text-[10px] gap-1" data-testid={`badge-metode-${s.id}`}>
-                      {s.metodeLayanan === "tau_beres" ? (
-                        <><HandCoins className="w-3 h-3" /> Tau Beres</>
-                      ) : (
-                        <><Printer className="w-3 h-3" /> Print Mandiri</>
-                      )}
-                    </Badge>
-                  </div>
+                  <Badge className={`${sc.color} text-[10px] gap-1 flex-shrink-0`}>
+                    <StatusIcon className="w-3 h-3" />
+                    {sc.label}
+                  </Badge>
                 </div>
-                {s.status === "disetujui" && s.isiSurat && (
+                {s.status === "disetujui" && (
                   <div className="mt-2 space-y-2">
                     {s.nomorSurat && (
                       <p className="text-[10px] text-muted-foreground">No. Surat: {s.nomorSurat}</p>
                     )}
-                    {s.metodeLayanan === "tau_beres" && (
-                      <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-3" data-testid={`info-tau-beres-${s.id}`}>
-                        <p className="text-xs font-medium text-green-800 dark:text-green-300">Surat Anda sedang disiapkan</p>
-                        <p className="text-[11px] text-green-700 dark:text-green-400 mt-1">Surat akan di-print dan ditandatangani oleh pengurus RT/RW. Silakan ambil di sekretariat RW dengan membawa infaq seikhlasnya untuk kas RW.</p>
-                      </div>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full gap-1.5"
-                      onClick={() => handleDownloadPdf(s)}
-                      disabled={downloadingPdf === s.id}
-                      data-testid={`button-download-${s.id}`}
+                    <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-3" data-testid={`info-approved-${s.id}`}>
+                      <p className="text-xs font-medium text-green-800 dark:text-green-300">Surat Anda telah disetujui!</p>
+                      <p className="text-[11px] text-green-700 dark:text-green-400 mt-1">Hubungi admin via WhatsApp untuk pengambilan surat atau informasi lebih lanjut.</p>
+                    </div>
+                    <a
+                      href="https://wa.me/6285860604142?text=Assalamualaikum%2C%20saya%20ingin%20menanyakan%20status%20surat%20saya%20yang%20sudah%20disetujui.%20Terima%20kasih."
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block"
+                      data-testid={`button-wa-admin-${s.id}`}
                     >
-                      {downloadingPdf === s.id ? (
-                        <><Loader2 className="w-4 h-4 animate-spin" /> Membuat PDF...</>
-                      ) : (
-                        <><Download className="w-4 h-4" /> Download Surat PDF</>
-                      )}
-                    </Button>
+                      <Button size="sm" className="w-full gap-1.5 bg-green-600 hover:bg-green-700">
+                        <MessageCircle className="w-4 h-4" /> Hubungi Admin via WhatsApp
+                      </Button>
+                    </a>
+                  </div>
+                )}
+                {s.status === "ditolak" && (
+                  <div className="mt-2">
+                    <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                      <p className="text-xs text-red-700 dark:text-red-300">Permohonan surat ditolak. Hubungi admin untuk info lebih lanjut.</p>
+                    </div>
+                    <a
+                      href="https://wa.me/6285860604142?text=Assalamualaikum%2C%20saya%20ingin%20menanyakan%20tentang%20permohonan%20surat%20saya%20yang%20ditolak.%20Terima%20kasih."
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block mt-2"
+                      data-testid={`button-wa-admin-ditolak-${s.id}`}
+                    >
+                      <Button size="sm" variant="outline" className="w-full gap-1.5">
+                        <MessageCircle className="w-4 h-4" /> Tanya Admin via WhatsApp
+                      </Button>
+                    </a>
                   </div>
                 )}
                 <p className="text-[10px] text-muted-foreground mt-2">

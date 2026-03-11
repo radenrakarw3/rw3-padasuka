@@ -73,6 +73,7 @@ export const suratWarga = pgTable("surat_warga", {
   nomorRt: integer("nomor_rt").notNull(),
   pdfCode: text("pdf_code"),
   pdfPath: text("pdf_path"),
+  fileSurat: text("file_surat"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -161,9 +162,7 @@ export const insertKkSchema = createInsertSchema(kartuKeluarga).omit({ id: true,
 export const insertWargaSchema = createInsertSchema(warga).omit({ id: true, createdAt: true });
 export const insertRtSchema = createInsertSchema(rtData).omit({ id: true });
 export const insertLaporanSchema = createInsertSchema(laporan).omit({ id: true, createdAt: true, status: true, tanggapanAdmin: true });
-export const insertSuratWargaSchema = createInsertSchema(suratWarga).omit({ id: true, createdAt: true, status: true, isiSurat: true, pdfCode: true, pdfPath: true, nomorSurat: true }).extend({
-  metodeLayanan: z.enum(["print_mandiri", "tau_beres"]).default("print_mandiri"),
-});
+export const insertSuratWargaSchema = createInsertSchema(suratWarga).omit({ id: true, createdAt: true, status: true, isiSurat: true, pdfCode: true, pdfPath: true, nomorSurat: true, fileSurat: true, metodeLayanan: true });
 export const insertSuratRwSchema = createInsertSchema(suratRw).omit({ id: true, createdAt: true });
 export const insertProfileEditSchema = createInsertSchema(profileEditRequest).omit({ id: true, createdAt: true, status: true });
 export const insertAdminSchema = createInsertSchema(adminUser).omit({ id: true, createdAt: true });

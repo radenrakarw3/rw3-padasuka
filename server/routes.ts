@@ -133,7 +133,7 @@ async function notifyWarga(wargaId: number, template: string) {
   }
 }
 
-const ADMIN_NOTIF_PHONE = "081321133823";
+const ADMIN_NOTIF_PHONE = "085860604142";
 
 async function notifyAdmin(message: string) {
   try {
@@ -148,6 +148,7 @@ const otpStore = new Map<string, { otp: string; kkId: number; nomorKk: string; p
 const uploadsDir = path.join(process.cwd(), "uploads");
 fs.mkdirSync(path.join(uploadsDir, "kk"), { recursive: true });
 fs.mkdirSync(path.join(uploadsDir, "ktp"), { recursive: true });
+fs.mkdirSync(path.join(uploadsDir, "surat"), { recursive: true });
 const pdfTempDir = path.join(uploadsDir, "pdf-temp");
 fs.mkdirSync(pdfTempDir, { recursive: true });
 
@@ -681,13 +682,14 @@ Salam hangat dari pengurus RW 03 Padasuka`;
       const data = await storage.createSuratWarga(parsed);
 
       const jenisLabel = jenisSuratLabels[parsed.jenisSurat] || parsed.jenisSurat;
-      const metodeLabel = parsed.metodeLayanan === "tau_beres" ? "Tau Beres (di-print & ditandatangani RT/RW)" : "Print Mandiri (download & print sendiri)";
-      notifyWarga(parsed.wargaId, `[RW 03 Padasuka]\n\nPermohonan surat Wargi berhasil dikirim ✅\n\nJenis: *${jenisLabel}*\nPerihal: ${parsed.perihal}\nLayanan: *${metodeLabel}*\n\nPermohonan akan segera diproses pengurus RW. Nanti Wargi dapet notifikasi lagi ya kalau sudah selesai.\n\nPantau terus di web 👉 rw3padasukacimahi.org\n\nHatur nuhun! 🙏`);
+      notifyWarga(parsed.wargaId, `[RW 03 Padasuka]\n\nPermohonan surat Wargi berhasil dikirim ✅\n\nJenis: *${jenisLabel}*\nPerihal: ${parsed.perihal}\n\nPermohonan akan segera diproses pengurus RW. Nanti Wargi dapet notifikasi lagi ya kalau sudah selesai.\n\nUntuk tanya status surat, hubungi admin via WhatsApp:\n👉 wa.me/6285860604142\n\nHatur nuhun! 🙏`);
 
       if (!req.session.isAdmin) {
         const wargaInfo = await storage.getWargaById(parsed.wargaId);
         const namaWarga = wargaInfo?.namaLengkap || "Warga";
-        notifyAdmin(`[RW 03 Padasuka - Admin]\n\n📋 *Permohonan Surat Baru!*\n\nDari: *${namaWarga}*\nJenis: *${jenisLabel}*\nPerihal: ${parsed.perihal}\nLayanan: ${metodeLabel}\n\nSegera proses di 👉 rw3padasukacimahi.org`);
+        const kk = await storage.getKkById(parsed.kkId);
+        const alamat = kk ? `${kk.alamat}, RT ${String(kk.rt).padStart(2, "0")}/RW 03` : "-";
+        notifyAdmin(`[RW 03 Padasuka - Admin]\n\n📋 *Permohonan Surat Baru!*\n\nDari: *${namaWarga}*\nNIK: ${wargaInfo?.nik || "-"}\nAlamat: ${alamat}\nRT: ${String(parsed.nomorRt).padStart(2, "0")}\n\nJenis Surat: *${jenisLabel}*\nPerihal: ${parsed.perihal}${parsed.keterangan ? `\nKeterangan: ${parsed.keterangan}` : ""}\n\nSegera proses di 👉 rw3padasukacimahi.org`);
       }
 
       res.json(data);
@@ -696,92 +698,32 @@ Salam hangat dari pengurus RW 03 Padasuka`;
     }
   });
 
-  app.post("/api/surat-warga/:id/generate", requireAdmin, async (req, res) => {
+  const suratUploadStorage = multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, path.join(uploadsDir, "surat")),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+    },
+  });
+  const suratUpload = multer({
+    storage: suratUploadStorage,
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      const allowed = [".jpg", ".jpeg", ".png", ".pdf"];
+      const ext = path.extname(file.originalname).toLowerCase();
+      if (allowed.includes(ext)) cb(null, true);
+      else cb(new Error("Format file tidak didukung. Gunakan JPG, PNG, atau PDF."));
+    },
+  });
+
+  app.post("/api/surat-warga/:id/upload", requireAdmin, suratUpload.single("file"), async (req, res) => {
     try {
       const surat = await storage.getSuratWargaById(parseInt(req.params.id));
       if (!surat) return res.status(404).json({ message: "Surat tidak ditemukan" });
-      if (surat.status !== "pending") {
-        return res.status(400).json({ message: "Hanya surat dengan status pending yang bisa di-generate" });
-      }
+      if (!req.file) return res.status(400).json({ message: "File tidak ditemukan" });
 
-      const w = await storage.getWargaById(surat.wargaId);
-      const kk = await storage.getKkById(surat.kkId);
-      const rt = await storage.getRtByNomor(surat.nomorRt);
-
-      if (!w || !kk) {
-        return res.status(400).json({ message: "Data warga/KK tidak ditemukan" });
-      }
-
-      const todayFormatted = new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Jakarta" });
-
-      const prompt = `Buatkan surat keterangan dari RT/RW dengan format resmi bahasa Indonesia.
-Jenis surat: ${surat.jenisSurat}
-Perihal: ${surat.perihal}
-${surat.keterangan ? `Keterangan tambahan: ${surat.keterangan}` : ""}
-
-Data pemohon:
-- Nama: ${w.namaLengkap}
-- NIK: ${w.nik}
-- Alamat: ${kk.alamat}
-- RT: ${kk.rt} / RW: 03
-- Kelurahan: Padasuka
-- Kecamatan: Cimahi Tengah
-- Kota: Cimahi
-- Agama: ${w.agama}
-- Pekerjaan: ${w.pekerjaan || "-"}
-- Jenis Kelamin: ${w.jenisKelamin}
-
-Ketua RT ${kk.rt}: ${rt?.namaKetua || "___________"}
-Ketua RW 03: Raden Raka
-
-Format surat harus lengkap dengan:
-- Perihal
-- Isi surat yang jelas dan profesional
-- Tanggal surat: Cimahi, ${todayFormatted}
-
-PENTING:
-1. JANGAN sertakan kop surat/header karena kop surat akan ditambahkan secara otomatis oleh sistem.
-2. JANGAN sertakan nomor surat karena nomor surat akan di-assign otomatis oleh sistem.
-3. Urutan surat HARUS dimulai dari JUDUL SURAT (contoh: SURAT KETERANGAN DOMISILI) yang ditulis dalam huruf kapital, BARU KEMUDIAN di bawahnya tulis "Perihal: ...". JANGAN menaruh Perihal di atas judul surat.
-4. Bagian tanda tangan di bagian akhir surat HARUS menggunakan format DUA KOLOM sejajar kiri-kanan. Tulis PERSIS seperti ini (gunakan tanda | sebagai pemisah kolom):
-
-Mengetahui, | Hormat kami,
-Ketua RT ${String(kk.rt).padStart(2, "0")} | Ketua RW 03
-Kelurahan Padasuka | Kelurahan Padasuka
-|
-|
-(${rt?.namaKetua || "___________"}) | (Raden Raka)
-
-5. Buat dalam format teks biasa yang rapi, bukan markdown. Jangan gunakan tanda bintang (*) atau formatting markdown apapun.
-6. Untuk bagian biodata/data pemohon, gunakan format yang konsisten dengan tanda titik dua (:) yang sejajar.
-7. Untuk label NIK, tulis "NIK" saja (3 huruf), JANGAN tulis "Nomor Induk Kependudukan".`;
-
-      let isiSurat = "";
-      let suratComplete = false;
-      const maxSuratRetries = 3;
-      for (let attempt = 0; attempt < maxSuratRetries; attempt++) {
-        isiSurat = await generateWithGemini(prompt);
-        isiSurat = isiSurat.replace(/Nomor Induk Kependudukan\s*/gi, "NIK");
-        isiSurat = isiSurat.replace(/```[a-z]*\n?/g, "").replace(/```/g, "").trim();
-
-        const hasSignature = /Raden Raka/i.test(isiSurat) || /Ketua RW/i.test(isiSurat);
-        const hasDemikian = /[Dd]emikian/i.test(isiSurat);
-        const hasTitle = /SURAT\s+KETERANGAN|SURAT\s+PENGANTAR/i.test(isiSurat);
-        suratComplete = hasSignature && hasDemikian && hasTitle && isiSurat.length >= 300;
-
-        if (suratComplete) break;
-        console.warn(`Surat generate attempt ${attempt + 1} incomplete (len=${isiSurat.length}, sig=${hasSignature}, dem=${hasDemikian}, title=${hasTitle}), retrying...`);
-      }
-
-      if (!suratComplete || !isiSurat || isiSurat.length < 100) {
-        return res.status(500).json({ message: "Gagal membuat surat yang lengkap setelah beberapa percobaan. Silakan coba generate ulang." });
-      }
-
-      const updated = await storage.updateSuratWargaStatus(surat.id, surat.status, isiSurat);
-
-      const jenisLabel = jenisSuratLabels[surat.jenisSurat] || surat.jenisSurat;
-      notifyWarga(surat.wargaId, `[RW 03 Padasuka]\n\nSurat Wargi sedang *diproses* ⏳\n\nJenis: *${jenisLabel}*\nPerihal: ${surat.perihal}\n\nDokumen surat sudah dibuat, tinggal nunggu persetujuan ya.\n\nPantau terus di web 👉 rw3padasukacimahi.org`);
-
+      const filePath = `/uploads/surat/${req.file.filename}`;
+      const updated = await storage.updateSuratWargaFileSurat(surat.id, filePath);
       res.json(updated);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -790,28 +732,21 @@ Kelurahan Padasuka | Kelurahan Padasuka
 
   app.patch("/api/surat-warga/:id/status", requireAdmin, async (req, res) => {
     try {
-      const { status } = req.body;
+      const { status, nomorSurat } = req.body;
+      if (!["disetujui", "ditolak"].includes(status)) {
+        return res.status(400).json({ message: "Status tidak valid. Gunakan 'disetujui' atau 'ditolak'." });
+      }
       const surat = await storage.getSuratWargaById(parseInt(req.params.id));
       if (!surat) return res.status(404).json({ message: "Surat tidak ditemukan" });
-      if (status === "disetujui" && !surat.isiSurat) {
-        return res.status(400).json({ message: "Surat belum di-generate. Silakan generate terlebih dahulu." });
+      if (surat.status !== "pending") {
+        return res.status(400).json({ message: "Hanya surat dengan status pending yang bisa diubah." });
       }
+
       const data = await storage.updateSuratWargaStatus(surat.id, status);
       if (!data) return res.status(404).json({ message: "Surat tidak ditemukan" });
 
-      let finalNomor = surat.nomorSurat;
-      let finalIsi = surat.isiSurat;
-      if (status === "disetujui" && !surat.nomorSurat) {
-        const currentCount = await storage.countSuratWargaThisYear();
-        const seq = String(currentCount + 1).padStart(3, "0");
-        const year = new Date().getFullYear();
-        const month = String(new Date().getMonth() + 1).padStart(2, "0");
-        finalNomor = `${seq}/SK-W/RW-03/${month}/${year}`;
-        if (surat.isiSurat && /XXX\//.test(surat.isiSurat)) {
-          finalIsi = surat.isiSurat.replace(/XXX\/[^\n\r]*/g, finalNomor);
-          await storage.updateSuratWargaStatus(surat.id, status, finalIsi);
-        }
-        await storage.updateSuratWargaNomor(surat.id, finalNomor);
+      if (status === "disetujui" && nomorSurat) {
+        await storage.updateSuratWargaNomor(surat.id, nomorSurat);
       }
 
       const jenisLabel = jenisSuratLabels[surat.jenisSurat] || surat.jenisSurat;
@@ -819,100 +754,15 @@ Kelurahan Padasuka | Kelurahan Padasuka
       if (status === "disetujui") {
         const updated = await storage.getSuratWargaById(surat.id);
         res.json(updated);
+        notifyWarga(surat.wargaId, `[RW 03 Padasuka]\n\nSurat Wargi telah *DISETUJUI* ✅\n\nJenis: *${jenisLabel}*\nPerihal: ${surat.perihal}${nomorSurat ? `\nNomor Surat: ${nomorSurat}` : ""}\n\nUntuk pengambilan surat atau informasi lebih lanjut, silakan hubungi admin via WhatsApp:\n👉 wa.me/6285860604142\n\nHatur nuhun! 🙏`);
+      } else if (status === "ditolak") {
+        res.json(data);
+        notifyWarga(surat.wargaId, `[RW 03 Padasuka]\n\nMohon maaf, permohonan surat Wargi *ditolak* ❌\n\nJenis: *${jenisLabel}*\nPerihal: ${surat.perihal}\n\nUntuk info lebih lanjut, hubungi admin via WhatsApp:\n👉 wa.me/6285860604142`);
       } else {
         res.json(data);
       }
-
-      if (status === "disetujui") {
-        const isTauBeres = surat.metodeLayanan === "tau_beres";
-        const instruksi = isTauBeres
-          ? "Surat akan segera di-print dan ditandatangani oleh pengurus RT/RW. Silakan ambil di sekretariat RW ya, jangan lupa bawa infaq seikhlasnya untuk kas RW 🙏\n\nWargi juga bisa download PDF surat langsung dari web:\n👉 rw3padasukacimahi.org"
-          : "Download surat PDF langsung dari web ya:\n👉 rw3padasukacimahi.org";
-        notifyWarga(surat.wargaId, `[RW 03 Padasuka]\n\nSurat Wargi telah *DISETUJUI* ✅\n\nJenis: *${jenisLabel}*\nPerihal: ${surat.perihal}${finalNomor ? `\nNomor Surat: ${finalNomor}` : ""}\nLayanan: *${isTauBeres ? "Tau Beres" : "Print Mandiri"}*\n\n${instruksi}\n\nHatur nuhun! 🙏`);
-      } else if (status === "ditolak") {
-        notifyWarga(surat.wargaId, `[RW 03 Padasuka]\n\nMohon maaf, permohonan surat Wargi *ditolak* ❌\n\nJenis: *${jenisLabel}*\nPerihal: ${surat.perihal}\n\nSilakan hubungi pengurus RW untuk info lebih lanjut atau ajukan permohonan ulang di web 👉 rw3padasukacimahi.org`);
-      }
     } catch (error: any) {
       console.error("Surat approval error:", error);
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  const pdfWaUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
-
-  app.post("/api/surat-warga/:id/send-pdf-wa", requireAdmin, pdfWaUpload.single("file"), async (req, res) => {
-    try {
-      const surat = await storage.getSuratWargaById(parseInt(req.params.id));
-      if (!surat) return res.status(404).json({ message: "Surat tidak ditemukan" });
-      if (surat.status !== "disetujui" || !surat.isiSurat) {
-        return res.status(400).json({ message: "Hanya surat yang sudah disetujui yang bisa dikirim via WA" });
-      }
-      const w = await storage.getWargaById(surat.wargaId);
-      if (!w?.nomorWhatsapp) {
-        return res.status(400).json({ message: "Warga tidak memiliki nomor WhatsApp" });
-      }
-      if (!req.file) {
-        return res.status(400).json({ message: "File PDF tidak ditemukan" });
-      }
-
-      const apiKey = process.env.STARSENDER_API_KEY;
-      const deviceId = process.env.STARSENDER_DEVICE_ID;
-      if (!apiKey || !deviceId) {
-        return res.status(500).json({ message: "Star Sender belum dikonfigurasi" });
-      }
-
-      let formattedPhone = w.nomorWhatsapp.replace(/[^0-9]/g, "");
-      if (formattedPhone.startsWith("0")) formattedPhone = "62" + formattedPhone.substring(1);
-      if (!formattedPhone.startsWith("62")) formattedPhone = "62" + formattedPhone;
-
-      const jenisLabel = jenisSuratLabels[surat.jenisSurat] || surat.jenisSurat;
-      const caption = `[RW 03 Padasuka]\n\nBerikut surat *${jenisLabel}* yang sudah disetujui ✅\n\nPerihal: ${surat.perihal}${surat.nomorSurat ? `\nNomor: ${surat.nomorSurat}` : ""}\n\nHatur nuhun! 🙏`;
-
-      const fileName = `${jenisLabel.replace(/\s+/g, "_")}_${surat.nomorSurat?.replace(/\//g, "-") || surat.id}.pdf`;
-
-      const token = `wa_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
-      const tempFilePath = path.join(pdfTempPublicDir, `${token}.pdf`);
-      await fs.promises.writeFile(tempFilePath, req.file.buffer);
-
-      pdfTempTokens.set(token, { filePath: tempFilePath, expires: Date.now() + 120000 });
-
-      const protocol = req.headers["x-forwarded-proto"] || req.protocol || "https";
-      const host = req.headers["x-forwarded-host"] || req.headers.host || "rw3padasukacimahi.org";
-      const fileUrl = `${protocol}://${host}/uploads/pdf-temp/${token}`;
-
-      console.log("Sending PDF via WA, file URL:", fileUrl);
-
-      const response = await fetch("https://api.starsender.online/api/send", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": apiKey,
-        },
-        body: JSON.stringify({
-          messageType: "media",
-          to: formattedPhone,
-          body: caption,
-          device_id: deviceId,
-          file: fileUrl,
-        }),
-      });
-
-      const resData = await response.text();
-
-      setTimeout(() => {
-        pdfTempTokens.delete(token);
-        fs.promises.unlink(tempFilePath).catch(() => {});
-      }, 120000);
-
-      if (!response.ok) {
-        console.error("Star Sender send document error:", resData);
-        return res.status(500).json({ message: "Gagal mengirim PDF via WhatsApp" });
-      }
-
-      console.log("Star Sender send document success:", resData);
-      res.json({ message: "PDF surat berhasil dikirim via WhatsApp" });
-    } catch (error: any) {
-      console.error("WA send PDF error:", error);
       res.status(500).json({ message: error.message });
     }
   });
