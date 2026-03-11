@@ -1061,7 +1061,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
   app.get("/api/wa-blast/preview", requireAdmin, async (req, res) => {
     try {
       const kategori = (req.query.kategori as string) || "semua";
-      const validKategori = ["semua", "per_rt", "kepala_keluarga", "penerima_bansos"];
+      const validKategori = ["semua", "per_rt", "kepala_keluarga", "penerima_bansos", "pemukiman", "perumahan"];
       if (!validKategori.includes(kategori)) {
         return res.status(400).json({ message: "Kategori tidak valid" });
       }
@@ -1070,11 +1070,20 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
         return res.status(400).json({ message: "Nomor RT tidak valid" });
       }
 
+      const pemukimanRt = [1, 2, 3, 4];
+      const perumahanRt = [5, 6, 7];
+
       let wargaList: any[] = [];
       if (kategori === "semua") {
         wargaList = await storage.getAllWargaWithKk();
       } else if (kategori === "per_rt" && rt) {
         wargaList = await storage.getWargaByRt(rt);
+      } else if (kategori === "pemukiman") {
+        const all = await storage.getAllWargaWithKk();
+        wargaList = all.filter(w => pemukimanRt.includes(w.rt));
+      } else if (kategori === "perumahan") {
+        const all = await storage.getAllWargaWithKk();
+        wargaList = all.filter(w => perumahanRt.includes(w.rt));
       } else if (kategori === "kepala_keluarga") {
         const all = await storage.getAllWargaWithKk();
         wargaList = all.filter(w => w.kedudukanKeluarga === "Kepala Keluarga");
@@ -1105,10 +1114,19 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
 
       let wargaList: any[] = [];
 
+      const pemukimanRt = [1, 2, 3, 4];
+      const perumahanRt = [5, 6, 7];
+
       if (parsed.kategoriFilter === "semua") {
         wargaList = await storage.getAllWargaWithKk();
       } else if (parsed.kategoriFilter === "per_rt" && parsed.filterRt) {
         wargaList = await storage.getWargaByRt(parsed.filterRt);
+      } else if (parsed.kategoriFilter === "pemukiman") {
+        const all = await storage.getAllWargaWithKk();
+        wargaList = all.filter(w => pemukimanRt.includes(w.rt));
+      } else if (parsed.kategoriFilter === "perumahan") {
+        const all = await storage.getAllWargaWithKk();
+        wargaList = all.filter(w => perumahanRt.includes(w.rt));
       } else if (parsed.kategoriFilter === "kepala_keluarga") {
         const all = await storage.getAllWargaWithKk();
         wargaList = all.filter(w => w.kedudukanKeluarga === "Kepala Keluarga");

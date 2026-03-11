@@ -13,6 +13,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { rtOptions } from "@/lib/constants";
 import { Input } from "@/components/ui/input";
 import { Send, MessageSquare, Users, CheckCircle, Clock, ChevronDown, ChevronUp, FileText, XCircle, Sparkles, Loader2 } from "lucide-react";
 import type { WaBlast } from "@shared/schema";
@@ -107,6 +108,7 @@ export default function AdminWaBlast() {
   const previewUrl = kategori === "per_rt"
     ? `/api/wa-blast/preview?kategori=${kategori}&rt=${filterRt}`
     : `/api/wa-blast/preview?kategori=${kategori}`;
+  const needsRtPicker = kategori === "per_rt";
   const { data: preview } = useQuery<{ total: number }>({
     queryKey: ["/api/wa-blast/preview", kategori, filterRt],
     queryFn: async () => {
@@ -162,6 +164,8 @@ export default function AdminWaBlast() {
   });
 
   const kategoriLabel: Record<string, string> = {
+    pemukiman: "Pemukiman (RT 01-04)",
+    perumahan: "Perumahan (RT 05-07)",
     semua: "Semua Warga",
     kepala_keluarga: "Kepala Keluarga",
     per_rt: `RT ${filterRt.padStart(2, "0")}`,
@@ -187,6 +191,8 @@ export default function AdminWaBlast() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="semua">Semua Warga (Semua nomor unik)</SelectItem>
+                <SelectItem value="pemukiman">Pemukiman (RT 01-04)</SelectItem>
+                <SelectItem value="perumahan">Perumahan (RT 05-07)</SelectItem>
                 <SelectItem value="kepala_keluarga">Kepala Keluarga Saja</SelectItem>
                 <SelectItem value="per_rt">Per RT</SelectItem>
                 <SelectItem value="penerima_bansos">Penerima Bansos</SelectItem>
@@ -194,7 +200,7 @@ export default function AdminWaBlast() {
             </Select>
           </div>
 
-          {kategori === "per_rt" && (
+          {needsRtPicker && (
             <div className="space-y-2">
               <Label className="text-sm font-medium">Pilih RT</Label>
               <Select value={filterRt} onValueChange={setFilterRt}>
@@ -202,7 +208,7 @@ export default function AdminWaBlast() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {[1, 2, 3, 4, 5, 6, 7].map(i => (
+                  {rtOptions.map(i => (
                     <SelectItem key={i} value={i.toString()}>RT {i.toString().padStart(2, "0")}</SelectItem>
                   ))}
                 </SelectContent>
@@ -361,6 +367,8 @@ export default function AdminWaBlast() {
         blastList?.map(b => {
           const histKategoriLabel: Record<string, string> = {
             semua: "Semua Warga",
+            pemukiman: "Pemukiman (RT 01-04)",
+            perumahan: "Perumahan (RT 05-07)",
             kepala_keluarga: "Kepala Keluarga",
             per_rt: `RT ${b.filterRt?.toString().padStart(2, "0") || ""}`,
             penerima_bansos: "Penerima Bansos",
