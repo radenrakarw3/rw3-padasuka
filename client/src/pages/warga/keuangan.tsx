@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, TrendingDown, Wallet, Filter, Heart } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { TrendingUp, TrendingDown, Wallet, Filter, Heart, ArrowUpRight, ArrowDownRight, BarChart3, Shield } from "lucide-react";
 import type { KasRw, DonasiCampaign } from "@shared/schema";
 
 function formatRupiah(num: number): string {
@@ -143,34 +144,100 @@ export default function WargaKeuangan() {
         )}
       </div>
 
-      {campaigns && campaigns.length > 0 && campaignKas && Object.keys(campaignKas).length > 0 && (
+      {campaigns && campaigns.length > 0 && campaignKas && (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-1.5">
-              <Heart className="w-3.5 h-3.5 text-[hsl(163,55%,22%)]" />
-              Kas Campaign Donasi
+              <BarChart3 className="w-3.5 h-3.5 text-[hsl(163,55%,22%)]" />
+              Kas per Campaign Donasi
             </CardTitle>
+            <p className="text-[10px] text-muted-foreground mt-0.5">Transparansi penggunaan dana setiap kegiatan</p>
           </CardHeader>
-          <CardContent className="space-y-2">
-            {campaigns.filter(c => campaignKas[c.id]).map((c) => {
-              const kas = campaignKas[c.id];
+          <CardContent className="space-y-3">
+            {campaigns.map((c) => {
+              const kas = campaignKas[c.id] || { pemasukan: 0, pengeluaran: 0, saldo: 0 };
+              const target = Number(c.targetDana || 0);
+              const persenTerkumpul = target > 0 ? Math.min(100, Math.round((kas.pemasukan / target) * 100)) : 0;
+              const persenTerpakai = kas.pemasukan > 0 ? Math.round((kas.pengeluaran / kas.pemasukan) * 100) : 0;
+              const transaksiCampaign = transaksi.filter(t => t.campaignId === c.id);
+              const jumlahMasuk = transaksiCampaign.filter(t => t.tipe === "pemasukan").length;
+              const jumlahKeluar = transaksiCampaign.filter(t => t.tipe === "pengeluaran").length;
+
               return (
-                <div key={c.id} className="rounded-lg border p-2.5" data-testid={`card-warga-campaign-kas-${c.id}`}>
-                  <p className="text-xs font-semibold mb-1.5">{c.judul}</p>
-                  <div className="grid grid-cols-3 gap-1 text-center">
-                    <div>
-                      <p className="text-[9px] text-muted-foreground">Masuk</p>
+                <div key={c.id} className="rounded-xl border-2 p-3 space-y-2.5" data-testid={`card-warga-campaign-kas-${c.id}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-[hsl(163,55%,22%)]/10 flex items-center justify-center flex-shrink-0">
+                        <Heart className="w-4 h-4 text-[hsl(163,55%,22%)]" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold truncate">{c.judul}</p>
+                        <p className="text-[10px] text-muted-foreground truncate">{c.deskripsi}</p>
+                      </div>
+                    </div>
+                    <Badge className={`text-[9px] flex-shrink-0 ${c.status === "aktif" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                      {c.status === "aktif" ? "Aktif" : "Selesai"}
+                    </Badge>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-lg bg-green-50 p-2 text-center">
+                      <div className="flex items-center justify-center gap-0.5 mb-0.5">
+                        <ArrowUpRight className="w-3 h-3 text-green-600" />
+                        <p className="text-[9px] text-green-700 font-medium">Masuk</p>
+                      </div>
                       <p className="text-[11px] font-bold text-green-600">{formatRupiah(kas.pemasukan)}</p>
+                      <p className="text-[8px] text-green-600/70">{jumlahMasuk} transaksi</p>
                     </div>
-                    <div>
-                      <p className="text-[9px] text-muted-foreground">Keluar</p>
+                    <div className="rounded-lg bg-red-50 p-2 text-center">
+                      <div className="flex items-center justify-center gap-0.5 mb-0.5">
+                        <ArrowDownRight className="w-3 h-3 text-red-600" />
+                        <p className="text-[9px] text-red-700 font-medium">Keluar</p>
+                      </div>
                       <p className="text-[11px] font-bold text-red-600">{formatRupiah(kas.pengeluaran)}</p>
+                      <p className="text-[8px] text-red-600/70">{jumlahKeluar} transaksi</p>
                     </div>
-                    <div>
-                      <p className="text-[9px] text-muted-foreground">Saldo</p>
+                    <div className={`rounded-lg p-2 text-center ${kas.saldo >= 0 ? "bg-blue-50" : "bg-red-50"}`}>
+                      <div className="flex items-center justify-center gap-0.5 mb-0.5">
+                        <Wallet className="w-3 h-3 text-blue-600" />
+                        <p className={`text-[9px] font-medium ${kas.saldo >= 0 ? "text-blue-700" : "text-red-700"}`}>Saldo</p>
+                      </div>
                       <p className={`text-[11px] font-bold ${kas.saldo >= 0 ? "text-blue-600" : "text-red-600"}`}>{formatRupiah(kas.saldo)}</p>
+                      <p className="text-[8px] text-muted-foreground">{jumlahMasuk + jumlahKeluar} total</p>
                     </div>
                   </div>
+
+                  {target > 0 && (
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="text-muted-foreground">Target: {formatRupiah(target)}</span>
+                        <span className="font-semibold text-[hsl(163,55%,22%)]">{persenTerkumpul}% terkumpul</span>
+                      </div>
+                      <div className="h-2.5 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-[hsl(163,55%,22%)] rounded-full transition-all"
+                          style={{ width: `${persenTerkumpul}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {kas.pemasukan > 0 && (
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="text-muted-foreground">Penggunaan dana</span>
+                        <span className={`font-semibold ${persenTerpakai > 80 ? "text-red-600" : persenTerpakai > 50 ? "text-yellow-600" : "text-green-600"}`}>
+                          {persenTerpakai}% terpakai
+                        </span>
+                      </div>
+                      <div className="h-2 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${persenTerpakai > 80 ? "bg-red-500" : persenTerpakai > 50 ? "bg-yellow-500" : "bg-green-500"}`}
+                          style={{ width: `${Math.min(100, persenTerpakai)}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -227,6 +294,16 @@ export default function WargaKeuangan() {
         </Card>
       )}
 
+      <div className="flex items-start gap-2 p-3 rounded-lg bg-[hsl(163,55%,22%)]/5 border border-[hsl(163,55%,22%)]/20">
+        <Shield className="w-4 h-4 text-[hsl(163,55%,22%)] flex-shrink-0 mt-0.5" />
+        <div>
+          <p className="text-[10px] font-semibold text-[hsl(163,55%,22%)]">Transparansi Keuangan</p>
+          <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
+            Seluruh pemasukan dari donasi tercatat otomatis oleh sistem saat dikonfirmasi admin. Data ini tidak bisa diedit atau dihapus secara manual demi menjaga akuntabilitas.
+          </p>
+        </div>
+      </div>
+
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Riwayat Transaksi</CardTitle>
@@ -280,11 +357,16 @@ export default function WargaKeuangan() {
                       </div>
                     </div>
                   </div>
-                  <span className={`text-xs font-semibold flex-shrink-0 ${
-                    t.tipe === "pemasukan" ? "text-green-600" : "text-red-600"
-                  }`}>
-                    {t.tipe === "pemasukan" ? "+" : "-"}{formatRupiah(t.jumlah)}
-                  </span>
+                  <div className="text-right flex-shrink-0">
+                    <span className={`text-xs font-semibold ${
+                      t.tipe === "pemasukan" ? "text-green-600" : "text-red-600"
+                    }`}>
+                      {t.tipe === "pemasukan" ? "+" : "-"}{formatRupiah(t.jumlah)}
+                    </span>
+                    {t.createdBy === "sistem" && (
+                      <p className="text-[8px] text-blue-500 font-medium">otomatis</p>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

@@ -47,6 +47,7 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
    - Confirmed donations automatically create kas RW pemasukan entry (kategori "Donasi", keterangan = campaign title, createdBy "sistem", campaignId linked) — no donor name in keuangan
    - Each campaign has its own kas: pemasukan from donations, pengeluaran can be recorded by admin per campaign
    - `kas_rw.campaignId` (nullable) links transactions to specific campaigns; null = kas umum RW
+   - Financial integrity: sistem-created kas entries (from donasi) cannot be edited/deleted; confirmed donations cannot be reverted; duplicate kas prevention via status transition checks
    - Confirmed donations appear on public leaderboard (aggregated by donatur name, sorted by total)
    - Tables: `donasi_campaign`, `donasi`
 

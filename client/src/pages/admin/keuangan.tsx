@@ -458,46 +458,53 @@ export default function AdminKeuangan() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className={`text-sm font-semibold ${
-                      t.tipe === "pemasukan" ? "text-green-600" : "text-red-600"
-                    }`}>
-                      {t.tipe === "pemasukan" ? "+" : "-"}{formatRupiah(t.jumlah)}
-                    </span>
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => startEdit(t)}
-                        className="p-1.5 rounded-md hover:bg-muted transition-colors"
-                        data-testid={`button-edit-${t.id}`}
-                      >
-                        <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
-                      </button>
-                      {deleteConfirmId === t.id ? (
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => deleteMutation.mutate(t.id)}
-                            className="p-1.5 rounded-md bg-red-100 hover:bg-red-200 transition-colors"
-                            data-testid={`button-confirm-delete-${t.id}`}
-                          >
-                            <Check className="w-3.5 h-3.5 text-red-600" />
-                          </button>
-                          <button
-                            onClick={() => setDeleteConfirmId(null)}
-                            className="p-1.5 rounded-md hover:bg-muted transition-colors"
-                            data-testid={`button-cancel-delete-${t.id}`}
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setDeleteConfirmId(t.id)}
-                          className="p-1.5 rounded-md hover:bg-red-50 transition-colors"
-                          data-testid={`button-delete-${t.id}`}
-                        >
-                          <Trash2 className="w-3.5 h-3.5 text-muted-foreground" />
-                        </button>
+                    <div className="text-right">
+                      <span className={`text-sm font-semibold ${
+                        t.tipe === "pemasukan" ? "text-green-600" : "text-red-600"
+                      }`}>
+                        {t.tipe === "pemasukan" ? "+" : "-"}{formatRupiah(t.jumlah)}
+                      </span>
+                      {t.createdBy === "sistem" && (
+                        <p className="text-[9px] text-blue-600 font-medium">otomatis</p>
                       )}
                     </div>
+                    {t.createdBy !== "sistem" && (
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => startEdit(t)}
+                          className="p-1.5 rounded-md hover:bg-muted transition-colors"
+                          data-testid={`button-edit-${t.id}`}
+                        >
+                          <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                        </button>
+                        {deleteConfirmId === t.id ? (
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => deleteMutation.mutate(t.id)}
+                              className="p-1.5 rounded-md bg-red-100 hover:bg-red-200 transition-colors"
+                              data-testid={`button-confirm-delete-${t.id}`}
+                            >
+                              <Check className="w-3.5 h-3.5 text-red-600" />
+                            </button>
+                            <button
+                              onClick={() => setDeleteConfirmId(null)}
+                              className="p-1.5 rounded-md hover:bg-muted transition-colors"
+                              data-testid={`button-cancel-delete-${t.id}`}
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setDeleteConfirmId(t.id)}
+                            className="p-1.5 rounded-md hover:bg-red-50 transition-colors"
+                            data-testid={`button-delete-${t.id}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-muted-foreground" />
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

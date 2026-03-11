@@ -1397,10 +1397,19 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
     if (!existing) return res.status(404).json({ message: "Donasi tidak ditemukan" });
 
     const previousStatus = existing.status;
+
+    if (previousStatus === "dikonfirmasi" && status !== "dikonfirmasi") {
+      return res.status(400).json({ message: "Donasi yang sudah dikonfirmasi tidak bisa diubah statusnya. Hubungi pengembang jika ada kesalahan." });
+    }
+
+    if (previousStatus === status) {
+      return res.json(existing);
+    }
+
     const result = await storage.updateDonasiStatus(donasiId, status);
     if (!result) return res.status(404).json({ message: "Donasi tidak ditemukan" });
 
-    if (status === "dikonfirmasi" && previousStatus !== "dikonfirmasi") {
+    if (status === "dikonfirmasi") {
       try {
         const campaigns = await storage.getAllDonasiCampaigns();
         const campaign = campaigns.find(c => c.id === result.campaignId);
@@ -1486,6 +1495,9 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
       const id = parseInt(req.params.id);
       const existing = await storage.getKasRwById(id);
       if (!existing) return res.status(404).json({ message: "Transaksi tidak ditemukan" });
+      if (existing.createdBy === "sistem") {
+        return res.status(403).json({ message: "Transaksi otomatis dari donasi tidak bisa diedit manual" });
+      }
       const parsed = insertKasRwSchema.partial().parse(req.body);
       const result = await storage.updateKasRw(id, parsed);
       res.json(result);
@@ -1499,6 +1511,9 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
       const id = parseInt(req.params.id);
       const existing = await storage.getKasRwById(id);
       if (!existing) return res.status(404).json({ message: "Transaksi tidak ditemukan" });
+      if (existing.createdBy === "sistem") {
+        return res.status(403).json({ message: "Transaksi otomatis dari donasi tidak bisa dihapus manual" });
+      }
       await storage.deleteKasRw(id);
       res.json({ message: "Transaksi berhasil dihapus" });
     } catch (error: any) {
