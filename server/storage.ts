@@ -2,7 +2,7 @@ import { eq, and, desc, sql, count } from "drizzle-orm";
 import { db } from "./db";
 import {
   kartuKeluarga, warga, rtData, laporan, suratWarga, suratRw,
-  profileEditRequest, adminUser, waBlast, pengajuanBansos, donasiCampaign, donasi,
+  profileEditRequest, adminUser, waBlast, pengajuanBansos, donasiCampaign, donasi, kasRw,
   type KartuKeluarga, type InsertKartuKeluarga,
   type Warga, type InsertWarga,
   type RtData, type InsertRtData,
@@ -15,6 +15,7 @@ import {
   type PengajuanBansos, type InsertPengajuanBansos,
   type DonasiCampaign, type InsertDonasiCampaign,
   type Donasi, type InsertDonasi,
+  type KasRw, type InsertKasRw,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -92,6 +93,13 @@ export interface IStorage {
   updateDonasiStatus(id: number, status: string): Promise<Donasi | undefined>;
   getDonasiLeaderboard(): Promise<{ namaDonatur: string; total: number; count: number }[]>;
   getDonasiTerkumpulByCampaign(): Promise<Record<number, number>>;
+
+  getAllKasRw(): Promise<KasRw[]>;
+  getKasRwById(id: number): Promise<KasRw | undefined>;
+  createKasRw(data: InsertKasRw): Promise<KasRw>;
+  updateKasRw(id: number, data: Partial<InsertKasRw>): Promise<KasRw | undefined>;
+  deleteKasRw(id: number): Promise<void>;
+  getKasRwSummary(): Promise<{ totalPemasukan: number; totalPengeluaran: number; saldo: number }>;
 
   getDashboardStats(): Promise<DashboardStats>;
 }
@@ -673,6 +681,40 @@ export class DatabaseStorage implements IStorage {
       statusRumah, kondisiBangunan, sumberAir, sanitasiWc, listrik,
       bansos, kkFotoOwnership, perRt,
     };
+  }
+
+  async getAllKasRw(): Promise<KasRw[]> {
+    return db.select().from(kasRw).orderBy(desc(kasRw.tanggal), desc(kasRw.createdAt));
+  }
+
+  async getKasRwById(id: number): Promise<KasRw | undefined> {
+    const [result] = await db.select().from(kasRw).where(eq(kasRw.id, id));
+    return result;
+  }
+
+  async createKasRw(data: InsertKasRw): Promise<KasRw> {
+    const [result] = await db.insert(kasRw).values(data).returning();
+    return result;
+  }
+
+  async updateKasRw(id: number, data: Partial<InsertKasRw>): Promise<KasRw | undefined> {
+    const [result] = await db.update(kasRw).set(data).where(eq(kasRw.id, id)).returning();
+    return result;
+  }
+
+  async deleteKasRw(id: number): Promise<void> {
+    await db.delete(kasRw).where(eq(kasRw.id, id));
+  }
+
+  async getKasRwSummary(): Promise<{ totalPemasukan: number; totalPengeluaran: number; saldo: number }> {
+    const all = await db.select().from(kasRw);
+    let totalPemasukan = 0;
+    let totalPengeluaran = 0;
+    for (const item of all) {
+      if (item.tipe === "pemasukan") totalPemasukan += Number(item.jumlah);
+      else totalPengeluaran += Number(item.jumlah);
+    }
+    return { totalPemasukan, totalPengeluaran, saldo: totalPemasukan - totalPengeluaran };
   }
 }
 

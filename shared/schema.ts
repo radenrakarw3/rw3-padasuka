@@ -145,6 +145,17 @@ export const donasi = pgTable("donasi", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const kasRw = pgTable("kas_rw", {
+  id: serial("id").primaryKey(),
+  tipe: text("tipe").notNull(),
+  kategori: text("kategori").notNull(),
+  jumlah: integer("jumlah").notNull(),
+  keterangan: text("keterangan").notNull(),
+  tanggal: text("tanggal").notNull(),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const insertKkSchema = createInsertSchema(kartuKeluarga).omit({ id: true, createdAt: true });
 export const insertWargaSchema = createInsertSchema(warga).omit({ id: true, createdAt: true });
 export const insertRtSchema = createInsertSchema(rtData).omit({ id: true });
@@ -159,6 +170,13 @@ export const insertWaBlastSchema = createInsertSchema(waBlast).omit({ id: true, 
 export const insertPengajuanBansosSchema = createInsertSchema(pengajuanBansos).omit({ id: true, createdAt: true, status: true });
 export const insertDonasiCampaignSchema = createInsertSchema(donasiCampaign).omit({ id: true, createdAt: true, status: true });
 export const insertDonasiSchema = createInsertSchema(donasi).omit({ id: true, createdAt: true, status: true });
+export const insertKasRwSchema = createInsertSchema(kasRw).omit({ id: true, createdAt: true, createdBy: true }).extend({
+  tipe: z.enum(["pemasukan", "pengeluaran"]),
+  jumlah: z.number().int().positive("Jumlah harus lebih dari 0"),
+  tanggal: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal harus YYYY-MM-DD"),
+  kategori: z.string().min(1, "Kategori harus dipilih"),
+  keterangan: z.string().min(1, "Keterangan tidak boleh kosong"),
+});
 
 export type KartuKeluarga = typeof kartuKeluarga.$inferSelect;
 export type InsertKartuKeluarga = z.infer<typeof insertKkSchema>;
@@ -184,3 +202,5 @@ export type DonasiCampaign = typeof donasiCampaign.$inferSelect;
 export type InsertDonasiCampaign = z.infer<typeof insertDonasiCampaignSchema>;
 export type Donasi = typeof donasi.$inferSelect;
 export type InsertDonasi = z.infer<typeof insertDonasiSchema>;
+export type KasRw = typeof kasRw.$inferSelect;
+export type InsertKasRw = z.infer<typeof insertKasRwSchema>;

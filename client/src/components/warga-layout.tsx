@@ -1,12 +1,13 @@
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
-import { User, FileText, LogOut, Home, Heart } from "lucide-react";
+import { User, FileText, LogOut, Home, Heart, Wallet } from "lucide-react";
 import logoGold from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
 
 const navItems = [
   { path: "/warga", icon: Home, label: "Beranda" },
   { path: "/warga/layanan", icon: FileText, label: "Layanan" },
   { path: "/warga/donasi", icon: Heart, label: "Donasi" },
+  { path: "/warga/keuangan", icon: Wallet, label: "Keuangan" },
   { path: "/warga/profil", icon: User, label: "Profil" },
 ];
 

@@ -29,8 +29,8 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
 - Access control: warga can only access their own KK data, admin sees all
 
 ## Key Features
-1. **Warga Pages**: Beranda, Profil (view/edit request), Layanan (merged: Surat + Laporan + Donasi tabs)
-2. **Admin Pages**: Dashboard (comprehensive statistics), Kelola KK, Kelola Warga, Kelola Laporan, Kelola Surat, Surat RW (Surat Sakti), Arsip Surat, Edit Profil approval, Bansos Management, Donasi, WA Blast
+1. **Warga Pages**: Beranda, Profil (view/edit request), Layanan (merged: Surat + Laporan + Donasi tabs), Keuangan (laporan kas RW)
+2. **Admin Pages**: Dashboard (comprehensive statistics), Kelola KK, Kelola Warga, Kelola Laporan, Kelola Surat, Surat RW (Surat Sakti), Arsip Surat, Edit Profil approval, Bansos Management, Donasi, Keuangan (Kas RW), WA Blast
 3. **Gemini AI**: Auto-generates surat keterangan and official RW letters
 4. **Star Sender**: WA Blast with category filters (semua, per RT, kepala keluarga, penerima bansos), preview recipient count, confirmation dialog, message templates, AI message generation, expandable history with sent/failed counts
    - **AI Message Generation**: Admin inputs a topic → Gemini generates personalized message as Ketua RW (Raden Raka, 23yo, friendly tone)
@@ -102,6 +102,27 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
 - `pengajuan_bansos`: Bansos recommendation requests (rekomendasi penerima / rekomendasi coret)
 - `donasi_campaign`: Donation campaigns created by admin (judul, deskripsi, targetDana, status aktif/selesai)
 - `donasi`: Donation records from warga (campaignId, kkId, namaDonatur, jumlah, status pending/dikonfirmasi/ditolak)
+- `kas_rw`: Financial transactions (tipe pemasukan/pengeluaran, kategori, jumlah, keterangan, tanggal, createdBy)
+
+## Keuangan Kas RW
+- **Admin**: Full CRUD management of kas RW transactions at `/admin/keuangan`
+  - Summary cards: Total Pemasukan, Total Pengeluaran, Saldo
+  - Form input with tipe toggle (pemasukan/pengeluaran), kategori dropdown, jumlah, keterangan, tanggal
+  - Kategori Pemasukan: Iuran Warga, Donasi, Infaq Surat, Sumbangan, Lainnya
+  - Kategori Pengeluaran: Kegiatan RT/RW, Kebersihan, Keamanan, Pembangunan, Sosial, Operasional, Lainnya
+  - Edit & delete with confirmation
+  - Filter by tipe and kategori
+- **Warga**: Read-only financial report at `/warga/keuangan`
+  - Summary cards, filter by bulan/kategori
+  - Ringkasan per kategori with progress bars
+  - Riwayat transaksi list
+- **API Routes**:
+  - `GET /api/kas-rw` (admin-only) - all transactions
+  - `POST /api/kas-rw` (admin-only) - create transaction
+  - `PUT /api/kas-rw/:id` (admin-only) - update transaction
+  - `DELETE /api/kas-rw/:id` (admin-only) - delete transaction
+  - `GET /api/kas-rw/summary` (auth) - financial summary
+  - `GET /api/kas-rw/laporan` (auth) - full report for warga
 
 ## RT Data
 7 RT units with real ketua names from CSV:

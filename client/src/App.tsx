@@ -24,6 +24,8 @@ import AdminWaBlast from "@/pages/admin/wa-blast";
 import AdminArsipSurat from "@/pages/admin/arsip-surat";
 import AdminBansos from "@/pages/admin/bansos";
 import AdminDonasi from "@/pages/admin/donasi";
+import AdminKeuangan from "@/pages/admin/keuangan";
+import WargaKeuangan from "@/pages/warga/keuangan";
 import { X } from "lucide-react";
 import goldLogo from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
 import radenRakaImg from "@assets/raden_raka_nobg.png";
@@ -106,6 +108,7 @@ function WargaRoutes() {
         <Route path="/warga/profil" component={WargaProfil} />
         <Route path="/warga/layanan" component={WargaLayanan} />
         <Route path="/warga/donasi" component={WargaDonasi} />
+        <Route path="/warga/keuangan" component={WargaKeuangan} />
         <Route>{() => <Redirect to="/warga" />}</Route>
       </Switch>
     </WargaLayout>
@@ -127,6 +130,7 @@ function AdminRoutes() {
         <Route path="/admin/arsip-surat" component={AdminArsipSurat} />
         <Route path="/admin/bansos" component={AdminBansos} />
         <Route path="/admin/donasi" component={AdminDonasi} />
+        <Route path="/admin/keuangan" component={AdminKeuangan} />
         <Route>{() => <Redirect to="/admin" />}</Route>
       </Switch>
     </AdminLayout>

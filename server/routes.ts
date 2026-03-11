@@ -7,7 +7,7 @@ import path from "path";
 import fs from "fs";
 import express from "express";
 import { storage } from "./storage";
-import { insertKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertProfileEditSchema, insertWaBlastSchema, insertPengajuanBansosSchema, insertDonasiCampaignSchema, insertDonasiSchema } from "@shared/schema";
+import { insertKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertProfileEditSchema, insertWaBlastSchema, insertPengajuanBansosSchema, insertDonasiCampaignSchema, insertDonasiSchema, insertKasRwSchema } from "@shared/schema";
 
 declare module "express-session" {
   interface SessionData {
@@ -1397,6 +1397,69 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
   app.get("/api/donasi/terkumpul", requireAuth, async (_req, res) => {
     const terkumpul = await storage.getDonasiTerkumpulByCampaign();
     res.json(terkumpul);
+  });
+
+  app.get("/api/kas-rw/summary", requireAuth, async (_req, res) => {
+    try {
+      const summary = await storage.getKasRwSummary();
+      res.json(summary);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/kas-rw/laporan", requireAuth, async (_req, res) => {
+    try {
+      const transaksi = await storage.getAllKasRw();
+      const summary = await storage.getKasRwSummary();
+      res.json({ transaksi, summary });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/kas-rw", requireAdmin, async (_req, res) => {
+    try {
+      const transaksi = await storage.getAllKasRw();
+      res.json(transaksi);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/kas-rw", requireAdmin, async (req, res) => {
+    try {
+      const parsed = insertKasRwSchema.parse(req.body);
+      const result = await storage.createKasRw({ ...parsed, createdBy: req.session.adminUsername || "admin" });
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.put("/api/kas-rw/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const existing = await storage.getKasRwById(id);
+      if (!existing) return res.status(404).json({ message: "Transaksi tidak ditemukan" });
+      const parsed = insertKasRwSchema.partial().parse(req.body);
+      const result = await storage.updateKasRw(id, parsed);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/kas-rw/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const existing = await storage.getKasRwById(id);
+      if (!existing) return res.status(404).json({ message: "Transaksi tidak ditemukan" });
+      await storage.deleteKasRw(id);
+      res.json({ message: "Transaksi berhasil dihapus" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
   });
 
   return httpServer;
