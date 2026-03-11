@@ -1239,22 +1239,30 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
         }
       }
 
-      let successCount = 0;
-      for (const recipient of recipients) {
-        let personalizedMsg = parsed.pesan;
-        const gender = recipient.jenisKelamin === "Perempuan" ? "Ibu" : "Bapak";
-        const rtNum = recipient.rt ? `RT ${String(recipient.rt).padStart(2, "0")}` : "RT -";
-        personalizedMsg = personalizedMsg.replace(/\{gender\}/gi, gender);
-        personalizedMsg = personalizedMsg.replace(/\{warga\}/gi, recipient.namaLengkap || "Warga");
-        personalizedMsg = personalizedMsg.replace(/\{rtxx\}/gi, rtNum);
-        const success = await sendWhatsApp(recipient.nomorWhatsapp, personalizedMsg);
-        if (success) successCount++;
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
+      await storage.updateWaBlastStatus(blast.id, "mengirim", recipients.length, 0);
+      res.json({ message: "Blast sedang dikirim", total: recipients.length, blastId: blast.id });
 
-      await storage.updateWaBlastStatus(blast.id, "terkirim", recipients.length, successCount);
-      const updated = await storage.getAllWaBlast();
-      res.json({ sent: successCount, total: recipients.length, blast: updated[0] });
+      (async () => {
+        let successCount = 0;
+        try {
+          for (const recipient of recipients) {
+            let personalizedMsg = parsed.pesan;
+            const gender = recipient.jenisKelamin === "Perempuan" ? "Ibu" : "Bapak";
+            const rtNum = recipient.rt ? `RT ${String(recipient.rt).padStart(2, "0")}` : "RT -";
+            personalizedMsg = personalizedMsg.replace(/\{gender\}/gi, gender);
+            personalizedMsg = personalizedMsg.replace(/\{warga\}/gi, recipient.namaLengkap || "Warga");
+            personalizedMsg = personalizedMsg.replace(/\{rtxx\}/gi, rtNum);
+            const success = await sendWhatsApp(recipient.nomorWhatsapp, personalizedMsg);
+            if (success) successCount++;
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+          await storage.updateWaBlastStatus(blast.id, "terkirim", recipients.length, successCount);
+          console.log(`WA Blast #${blast.id} selesai: ${successCount}/${recipients.length} berhasil`);
+        } catch (err) {
+          await storage.updateWaBlastStatus(blast.id, "terkirim", recipients.length, successCount);
+          console.error(`WA Blast #${blast.id} error setelah ${successCount} terkirim:`, err);
+        }
+      })();
     } catch (error: any) {
       res.status(400).json({ message: error.message });
     }

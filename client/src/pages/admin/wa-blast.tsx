@@ -134,12 +134,16 @@ export default function AdminWaBlast() {
     },
     onSuccess: (data: any) => {
       toast({
-        title: "WA Blast Terkirim!",
-        description: `Berhasil terkirim ke ${data.sent}/${data.total} nomor`,
+        title: "WA Blast Sedang Dikirim",
+        description: `Mengirim ke ${data.total} penerima. Cek riwayat untuk progress.`,
       });
       setPesan("");
       setSelectedTemplate("");
       queryClient.invalidateQueries({ queryKey: ["/api/wa-blast"] });
+      const pollInterval = setInterval(async () => {
+        await queryClient.invalidateQueries({ queryKey: ["/api/wa-blast"] });
+      }, 5000);
+      setTimeout(() => clearInterval(pollInterval), data.total * 1500 + 10000);
     },
     onError: (err: any) => toast({ title: "Gagal", description: err.message, variant: "destructive" }),
   });
@@ -381,10 +385,10 @@ export default function AdminWaBlast() {
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <Badge className={`text-[10px] gap-0.5 ${
-                      b.status === "terkirim" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
+                      b.status === "terkirim" ? "bg-green-100 text-green-800" : b.status === "mengirim" ? "bg-blue-100 text-blue-800" : "bg-yellow-100 text-yellow-800"
                     }`}>
                       {b.status === "terkirim" ? <CheckCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                      {b.status}
+                      {b.status === "mengirim" ? "sedang mengirim..." : b.status}
                     </Badge>
                     {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
                   </div>
