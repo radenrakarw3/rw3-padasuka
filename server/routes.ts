@@ -1393,10 +1393,14 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
       return res.status(400).json({ message: "Status tidak valid" });
     }
     const donasiId = parseInt(req.params.id);
+    const existing = await storage.getDonasiById(donasiId);
+    if (!existing) return res.status(404).json({ message: "Donasi tidak ditemukan" });
+
+    const previousStatus = existing.status;
     const result = await storage.updateDonasiStatus(donasiId, status);
     if (!result) return res.status(404).json({ message: "Donasi tidak ditemukan" });
 
-    if (status === "dikonfirmasi") {
+    if (status === "dikonfirmasi" && previousStatus !== "dikonfirmasi") {
       try {
         const campaigns = await storage.getAllDonasiCampaigns();
         const campaign = campaigns.find(c => c.id === result.campaignId);
@@ -1410,6 +1414,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
           keterangan: `Donasi: ${judulCampaign}`,
           tanggal: today,
           createdBy: "sistem",
+          campaignId: result.campaignId,
         });
       } catch (err) {
         console.error("Gagal auto-create kas RW dari donasi:", err);
@@ -1427,6 +1432,15 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
   app.get("/api/donasi/terkumpul", requireAuth, async (_req, res) => {
     const terkumpul = await storage.getDonasiTerkumpulByCampaign();
     res.json(terkumpul);
+  });
+
+  app.get("/api/kas-rw/campaign-summary", requireAuth, async (_req, res) => {
+    try {
+      const summary = await storage.getKasRwCampaignSummary();
+      res.json(summary);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
   });
 
   app.get("/api/kas-rw/summary", requireAuth, async (_req, res) => {

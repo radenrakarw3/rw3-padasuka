@@ -153,6 +153,7 @@ export const kasRw = pgTable("kas_rw", {
   keterangan: text("keterangan").notNull(),
   tanggal: text("tanggal").notNull(),
   createdBy: text("created_by").notNull(),
+  campaignId: integer("campaign_id").references(() => donasiCampaign.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -176,6 +177,7 @@ export const insertKasRwSchema = createInsertSchema(kasRw).omit({ id: true, crea
   tanggal: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal harus YYYY-MM-DD"),
   kategori: z.string().min(1, "Kategori harus dipilih"),
   keterangan: z.string().min(1, "Keterangan tidak boleh kosong"),
+  campaignId: z.number().int().nullable().optional(),
 });
 
 export type KartuKeluarga = typeof kartuKeluarga.$inferSelect;

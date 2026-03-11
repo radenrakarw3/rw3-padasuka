@@ -44,7 +44,9 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
    - Admin creates donation campaigns (judul, deskripsi, target dana optional)
    - Warga donates via Bank Transfer BCA (1390997490 a.n. Raden Raka Abdul Kamal Syafaat), then reports donation (campaign, nama, jumlah)
    - Admin verifies payment and confirms/rejects
-   - Confirmed donations automatically create kas RW pemasukan entry (kategori "Donasi", keterangan = campaign title, createdBy "sistem") — no donor name in keuangan
+   - Confirmed donations automatically create kas RW pemasukan entry (kategori "Donasi", keterangan = campaign title, createdBy "sistem", campaignId linked) — no donor name in keuangan
+   - Each campaign has its own kas: pemasukan from donations, pengeluaran can be recorded by admin per campaign
+   - `kas_rw.campaignId` (nullable) links transactions to specific campaigns; null = kas umum RW
    - Confirmed donations appear on public leaderboard (aggregated by donatur name, sorted by total)
    - Tables: `donasi_campaign`, `donasi`
 

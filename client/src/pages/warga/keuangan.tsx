@@ -2,8 +2,8 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, TrendingDown, Wallet, Filter } from "lucide-react";
-import type { KasRw } from "@shared/schema";
+import { TrendingUp, TrendingDown, Wallet, Filter, Heart } from "lucide-react";
+import type { KasRw, DonasiCampaign } from "@shared/schema";
 
 function formatRupiah(num: number): string {
   return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(num);
@@ -35,6 +35,14 @@ export default function WargaKeuangan() {
 
   const { data, isLoading } = useQuery<{ transaksi: KasRw[]; summary: { totalPemasukan: number; totalPengeluaran: number; saldo: number } }>({
     queryKey: ["/api/kas-rw/laporan"],
+  });
+
+  const { data: campaigns } = useQuery<DonasiCampaign[]>({
+    queryKey: ["/api/donasi-campaign"],
+  });
+
+  const { data: campaignKas } = useQuery<Record<number, { pemasukan: number; pengeluaran: number; saldo: number }>>({
+    queryKey: ["/api/kas-rw/campaign-summary"],
   });
 
   const transaksi = data?.transaksi || [];
@@ -135,6 +143,41 @@ export default function WargaKeuangan() {
         )}
       </div>
 
+      {campaigns && campaigns.length > 0 && campaignKas && Object.keys(campaignKas).length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-1.5">
+              <Heart className="w-3.5 h-3.5 text-[hsl(163,55%,22%)]" />
+              Kas Campaign Donasi
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {campaigns.filter(c => campaignKas[c.id]).map((c) => {
+              const kas = campaignKas[c.id];
+              return (
+                <div key={c.id} className="rounded-lg border p-2.5" data-testid={`card-warga-campaign-kas-${c.id}`}>
+                  <p className="text-xs font-semibold mb-1.5">{c.judul}</p>
+                  <div className="grid grid-cols-3 gap-1 text-center">
+                    <div>
+                      <p className="text-[9px] text-muted-foreground">Masuk</p>
+                      <p className="text-[11px] font-bold text-green-600">{formatRupiah(kas.pemasukan)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[9px] text-muted-foreground">Keluar</p>
+                      <p className="text-[11px] font-bold text-red-600">{formatRupiah(kas.pengeluaran)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[9px] text-muted-foreground">Saldo</p>
+                      <p className={`text-[11px] font-bold ${kas.saldo >= 0 ? "text-blue-600" : "text-red-600"}`}>{formatRupiah(kas.saldo)}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
+
       {Object.keys(kategoriSummary).length > 0 && (
         <Card>
           <CardHeader className="pb-2">
@@ -219,7 +262,7 @@ export default function WargaKeuangan() {
                     </div>
                     <div className="min-w-0">
                       <p className="text-xs font-medium truncate">{t.keterangan}</p>
-                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                      <div className="flex items-center gap-1.5 flex-wrap text-[10px] text-muted-foreground">
                         <span className={`inline-flex items-center px-1 py-0.5 rounded text-[9px] font-medium ${
                           t.tipe === "pemasukan"
                             ? "bg-green-50 text-green-700"
@@ -227,6 +270,12 @@ export default function WargaKeuangan() {
                         }`}>
                           {t.kategori}
                         </span>
+                        {t.campaignId && campaigns && (
+                          <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-medium bg-purple-50 text-purple-700">
+                            <Heart className="w-2 h-2" />
+                            {campaigns.find(c => c.id === t.campaignId)?.judul || "Campaign"}
+                          </span>
+                        )}
                         <span>{formatTanggal(t.tanggal)}</span>
                       </div>
                     </div>

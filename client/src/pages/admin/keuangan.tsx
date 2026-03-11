@@ -8,9 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Plus, TrendingUp, TrendingDown, Wallet, Pencil, Trash2, X, Check, Filter
+  Plus, TrendingUp, TrendingDown, Wallet, Pencil, Trash2, X, Check, Filter, Heart
 } from "lucide-react";
-import type { KasRw } from "@shared/schema";
+import type { KasRw, DonasiCampaign } from "@shared/schema";
 
 const KATEGORI_PEMASUKAN = [
   "Iuran Warga",
@@ -50,6 +50,7 @@ export default function AdminKeuangan() {
   const [jumlah, setJumlah] = useState("");
   const [keterangan, setKeterangan] = useState("");
   const [tanggal, setTanggal] = useState(new Date().toISOString().split("T")[0]);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string>("");
 
   const [filterTipe, setFilterTipe] = useState<"semua" | "pemasukan" | "pengeluaran">("semua");
   const [filterKategori, setFilterKategori] = useState("");
@@ -62,24 +63,34 @@ export default function AdminKeuangan() {
     queryKey: ["/api/kas-rw/summary"],
   });
 
+  const { data: campaigns } = useQuery<DonasiCampaign[]>({
+    queryKey: ["/api/donasi-campaign"],
+  });
+
+  const { data: campaignKas } = useQuery<Record<number, { pemasukan: number; pengeluaran: number; saldo: number }>>({
+    queryKey: ["/api/kas-rw/campaign-summary"],
+  });
+
   const resetForm = () => {
     setTipe("pemasukan");
     setKategori("");
     setJumlah("");
     setKeterangan("");
     setTanggal(new Date().toISOString().split("T")[0]);
+    setSelectedCampaignId("");
     setEditId(null);
     setShowForm(false);
   };
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const body = {
+      const body: any = {
         tipe,
         kategori,
         jumlah: parseInt(jumlah),
         keterangan,
         tanggal,
+        campaignId: selectedCampaignId ? parseInt(selectedCampaignId) : null,
       };
       if (editId) {
         await apiRequest("PUT", `/api/kas-rw/${editId}`, body);
@@ -92,6 +103,7 @@ export default function AdminKeuangan() {
       resetForm();
       queryClient.invalidateQueries({ queryKey: ["/api/kas-rw"] });
       queryClient.invalidateQueries({ queryKey: ["/api/kas-rw/summary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/kas-rw/campaign-summary"] });
     },
     onError: (err: any) => {
       toast({ title: "Gagal menyimpan", description: err.message, variant: "destructive" });
@@ -107,6 +119,7 @@ export default function AdminKeuangan() {
       setDeleteConfirmId(null);
       queryClient.invalidateQueries({ queryKey: ["/api/kas-rw"] });
       queryClient.invalidateQueries({ queryKey: ["/api/kas-rw/summary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/kas-rw/campaign-summary"] });
     },
     onError: (err: any) => {
       toast({ title: "Gagal menghapus", description: err.message, variant: "destructive" });
@@ -120,6 +133,7 @@ export default function AdminKeuangan() {
     setJumlah(String(item.jumlah));
     setKeterangan(item.keterangan);
     setTanggal(item.tanggal);
+    setSelectedCampaignId(item.campaignId ? String(item.campaignId) : "");
     setShowForm(true);
   };
 
@@ -195,6 +209,49 @@ export default function AdminKeuangan() {
           </CardContent>
         </Card>
       </div>
+
+      {campaigns && campaigns.length > 0 && campaignKas && (
+        <div className="space-y-2">
+          <p className="text-sm font-bold flex items-center gap-1.5">
+            <Heart className="w-4 h-4 text-[hsl(163,55%,22%)]" />
+            Kas per Campaign Donasi
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {campaigns.map((c) => {
+              const kas = campaignKas[c.id] || { pemasukan: 0, pengeluaran: 0, saldo: 0 };
+              return (
+                <Card key={c.id} className="border" data-testid={`card-campaign-kas-${c.id}`}>
+                  <CardContent className="p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-7 h-7 rounded-lg bg-[hsl(163,55%,22%)]/10 flex items-center justify-center flex-shrink-0">
+                        <Heart className="w-3.5 h-3.5 text-[hsl(163,55%,22%)]" />
+                      </div>
+                      <p className="text-xs font-semibold truncate flex-1">{c.judul}</p>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${c.status === "aktif" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                        {c.status === "aktif" ? "Aktif" : "Selesai"}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1 text-center">
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">Masuk</p>
+                        <p className="text-xs font-bold text-green-600">{formatRupiah(kas.pemasukan)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">Keluar</p>
+                        <p className="text-xs font-bold text-red-600">{formatRupiah(kas.pengeluaran)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">Saldo</p>
+                        <p className={`text-xs font-bold ${kas.saldo >= 0 ? "text-blue-600" : "text-red-600"}`}>{formatRupiah(kas.saldo)}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {showForm && (
         <Card data-testid="card-form-transaksi">
@@ -276,6 +333,32 @@ export default function AdminKeuangan() {
               />
             </div>
 
+            {campaigns && campaigns.length > 0 && (
+              <div>
+                <Label className="text-xs">Kas Campaign (opsional)</Label>
+                <select
+                  value={selectedCampaignId}
+                  onChange={(e) => setSelectedCampaignId(e.target.value)}
+                  className="w-full mt-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  data-testid="select-campaign"
+                >
+                  <option value="">Kas Umum RW (tanpa campaign)</option>
+                  {campaigns.map((c) => {
+                    const kas = campaignKas?.[c.id];
+                    const saldo = kas ? kas.saldo : 0;
+                    return (
+                      <option key={c.id} value={String(c.id)}>
+                        {c.judul} (saldo: {formatRupiah(saldo)})
+                      </option>
+                    );
+                  })}
+                </select>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Pilih campaign untuk mencatat pemasukan/pengeluaran dari kas campaign tersebut
+                </p>
+              </div>
+            )}
+
             <div className="flex gap-2 pt-2">
               <Button
                 onClick={() => createMutation.mutate()}
@@ -356,7 +439,7 @@ export default function AdminKeuangan() {
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate">{t.keterangan}</p>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
                         <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
                           t.tipe === "pemasukan"
                             ? "bg-green-100 text-green-700"
@@ -364,6 +447,12 @@ export default function AdminKeuangan() {
                         }`}>
                           {t.kategori}
                         </span>
+                        {t.campaignId && campaigns && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">
+                            <Heart className="w-2.5 h-2.5" />
+                            {campaigns.find(c => c.id === t.campaignId)?.judul || "Campaign"}
+                          </span>
+                        )}
                         <span>{formatTanggal(t.tanggal)}</span>
                       </div>
                     </div>

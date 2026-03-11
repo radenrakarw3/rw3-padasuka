@@ -90,6 +90,7 @@ export interface IStorage {
   getAllDonasi(): Promise<(Donasi & { judulCampaign: string })[]>;
   getDonasiByKkId(kkId: number): Promise<(Donasi & { judulCampaign: string })[]>;
   createDonasi(data: InsertDonasi): Promise<Donasi>;
+  getDonasiById(id: number): Promise<Donasi | undefined>;
   updateDonasiStatus(id: number, status: string): Promise<Donasi | undefined>;
   getDonasiLeaderboard(): Promise<{ namaDonatur: string; total: number; count: number }[]>;
   getDonasiTerkumpulByCampaign(): Promise<Record<number, number>>;
@@ -100,6 +101,7 @@ export interface IStorage {
   updateKasRw(id: number, data: Partial<InsertKasRw>): Promise<KasRw | undefined>;
   deleteKasRw(id: number): Promise<void>;
   getKasRwSummary(): Promise<{ totalPemasukan: number; totalPengeluaran: number; saldo: number }>;
+  getKasRwCampaignSummary(): Promise<Record<number, { pemasukan: number; pengeluaran: number; saldo: number }>>;
 
   getDashboardStats(): Promise<DashboardStats>;
 }
@@ -502,6 +504,11 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
+  async getDonasiById(id: number): Promise<Donasi | undefined> {
+    const [result] = await db.select().from(donasi).where(eq(donasi.id, id));
+    return result;
+  }
+
   async updateDonasiStatus(id: number, status: string): Promise<Donasi | undefined> {
     const [result] = await db.update(donasi).set({ status }).where(eq(donasi.id, id)).returning();
     return result;
@@ -715,6 +722,24 @@ export class DatabaseStorage implements IStorage {
       else totalPengeluaran += Number(item.jumlah);
     }
     return { totalPemasukan, totalPengeluaran, saldo: totalPemasukan - totalPengeluaran };
+  }
+
+  async getKasRwCampaignSummary(): Promise<Record<number, { pemasukan: number; pengeluaran: number; saldo: number }>> {
+    const all = await db.select().from(kasRw);
+    const result: Record<number, { pemasukan: number; pengeluaran: number; saldo: number }> = {};
+    for (const item of all) {
+      if (item.campaignId == null) continue;
+      if (!result[item.campaignId]) {
+        result[item.campaignId] = { pemasukan: 0, pengeluaran: 0, saldo: 0 };
+      }
+      if (item.tipe === "pemasukan") {
+        result[item.campaignId].pemasukan += Number(item.jumlah);
+      } else {
+        result[item.campaignId].pengeluaran += Number(item.jumlah);
+      }
+      result[item.campaignId].saldo = result[item.campaignId].pemasukan - result[item.campaignId].pengeluaran;
+    }
+    return result;
   }
 }
 
