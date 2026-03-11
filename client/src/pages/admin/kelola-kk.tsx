@@ -232,6 +232,7 @@ export default function AdminKelolaKK() {
       setForm({ nomorKk: "", rt: "1", alamat: "", statusRumah: "Milik Sendiri", jumlahPenghuni: "1", kondisiBangunan: "Permanen", sumberAir: "PDAM", sanitasiWc: "Jamban Sendiri", listrik: "PLN 900 VA", penerimaBansos: false, jenisBansos: "" });
       clearFile();
       queryClient.invalidateQueries({ queryKey: ["/api/kk"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats/dashboard"] });
     },
     onError: (err: any) => toast({ title: "Gagal", description: err.message, variant: "destructive" }),
   });

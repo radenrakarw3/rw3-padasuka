@@ -651,6 +651,9 @@ Salam hangat dari pengurus RW 03 Padasuka`;
 
   app.patch("/api/laporan/:id/status", requireAdmin, async (req, res) => {
     const { status, tanggapan } = req.body;
+    if (!["diproses", "selesai", "ditolak"].includes(status)) {
+      return res.status(400).json({ message: "Status tidak valid" });
+    }
     const data = await storage.updateLaporanStatus(parseInt(req.params.id), status, tanggapan);
     if (!data) return res.status(404).json({ message: "Laporan tidak ditemukan" });
 
@@ -993,14 +996,11 @@ Buat surat dalam format teks biasa yang rapi dan profesional.`;
       if (!pengajuan) return res.status(404).json({ message: "Pengajuan tidak ditemukan" });
       if (pengajuan.status !== "pending") return res.status(400).json({ message: "Pengajuan sudah diproses" });
 
-      const updated = await storage.updatePengajuanBansosStatus(id, status);
-
+      let updated;
       if (status === "disetujui") {
-        if (pengajuan.jenisPengajuan === "rekomendasi_coret") {
-          await storage.updateKkBansos(pengajuan.kkId, false, null);
-        } else if (pengajuan.jenisPengajuan === "rekomendasi_penerima") {
-          await storage.updateKkBansos(pengajuan.kkId, true, pengajuan.jenisBansos);
-        }
+        updated = await storage.approvePengajuanBansos(id, pengajuan.kkId, pengajuan.jenisPengajuan, pengajuan.jenisBansos);
+      } else {
+        updated = await storage.updatePengajuanBansosStatus(id, status);
       }
 
       res.json(updated);
@@ -1066,7 +1066,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
         return res.status(400).json({ message: "Kategori tidak valid" });
       }
       const rt = req.query.rt ? parseInt(req.query.rt as string) : undefined;
-      if (kategori === "per_rt" && (!rt || rt < 1 || rt > 7 || isNaN(rt))) {
+      if (kategori === "per_rt" && (!rt || rt < 1 || isNaN(rt))) {
         return res.status(400).json({ message: "Nomor RT tidak valid" });
       }
 
@@ -1176,7 +1176,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
 
       if (kk.fotoKk) {
         const oldPath = path.join(uploadsDir, "kk", path.basename(kk.fotoKk));
-        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+        try { if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath); } catch {}
       }
 
       const filePath = `/uploads/kk/${req.file.filename}`;
@@ -1204,7 +1204,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
 
       if (w.fotoKtp) {
         const oldPath = path.join(uploadsDir, "ktp", path.basename(w.fotoKtp));
-        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+        try { if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath); } catch {}
       }
 
       const filePath = `/uploads/ktp/${req.file.filename}`;
@@ -1297,31 +1297,28 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
       return res.json(existing);
     }
 
-    const result = await storage.updateDonasiStatus(donasiId, status);
-    if (!result) return res.status(404).json({ message: "Donasi tidak ditemukan" });
-
     if (status === "dikonfirmasi") {
-      try {
-        const campaigns = await storage.getAllDonasiCampaigns();
-        const campaign = campaigns.find(c => c.id === result.campaignId);
-        const judulCampaign = campaign?.judul || "Donasi";
-        const today = new Date().toISOString().split("T")[0];
+      const campaigns = await storage.getAllDonasiCampaigns();
+      const campaign = campaigns.find(c => c.id === existing.campaignId);
+      const judulCampaign = campaign?.judul || "Donasi";
+      const today = new Date().toISOString().split("T")[0];
 
-        await storage.createKasRw({
-          tipe: "pemasukan",
-          kategori: "Donasi",
-          jumlah: result.jumlah,
-          keterangan: `Donasi: ${judulCampaign}`,
-          tanggal: today,
-          createdBy: "sistem",
-          campaignId: result.campaignId,
-        });
-      } catch (err) {
-        console.error("Gagal auto-create kas RW dari donasi:", err);
-      }
+      const result = await storage.confirmDonasiWithKas(donasiId, {
+        tipe: "pemasukan",
+        kategori: "Donasi",
+        jumlah: existing.jumlah,
+        keterangan: `Donasi: ${judulCampaign}`,
+        tanggal: today,
+        createdBy: "sistem",
+        campaignId: existing.campaignId,
+      });
+      if (!result) return res.status(404).json({ message: "Donasi tidak ditemukan" });
+      res.json(result);
+    } else {
+      const result = await storage.updateDonasiStatus(donasiId, status);
+      if (!result) return res.status(404).json({ message: "Donasi tidak ditemukan" });
+      res.json(result);
     }
-
-    res.json(result);
   });
 
   app.get("/api/donasi/leaderboard", async (_req, res) => {

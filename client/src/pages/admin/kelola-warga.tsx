@@ -188,6 +188,7 @@ export default function AdminKelolaWarga() {
       setEditingWargaId(null);
       queryClient.invalidateQueries({ queryKey: ["/api/warga-with-kk"] });
       queryClient.invalidateQueries({ queryKey: ["/api/warga"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats/dashboard"] });
     },
     onError: (err: any) => toast({ title: "Gagal", description: err.message, variant: "destructive" }),
   });

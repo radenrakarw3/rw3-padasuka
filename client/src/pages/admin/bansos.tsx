@@ -263,6 +263,7 @@ export default function AdminBansos() {
       setAddJenisBansos(["PKH"]);
       queryClient.invalidateQueries({ queryKey: ["/api/bansos/penerima"] });
       queryClient.invalidateQueries({ queryKey: ["/api/kk"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats/dashboard"] });
     },
     onError: (err: any) => toast({ title: "Gagal", description: err.message, variant: "destructive" }),
   });
@@ -277,6 +278,7 @@ export default function AdminBansos() {
       setRemovePenerima(null);
       queryClient.invalidateQueries({ queryKey: ["/api/bansos/penerima"] });
       queryClient.invalidateQueries({ queryKey: ["/api/kk"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats/dashboard"] });
     },
     onError: (err: any) => toast({ title: "Gagal", description: err.message, variant: "destructive" }),
   });

@@ -82,6 +82,7 @@ export interface IStorage {
   getAllPengajuanBansos(): Promise<(PengajuanBansos & { nomorKk: string; rt: number; kepalaKeluarga: string | null; alamat: string })[]>;
   createPengajuanBansos(data: InsertPengajuanBansos): Promise<PengajuanBansos>;
   updatePengajuanBansosStatus(id: number, status: string): Promise<PengajuanBansos | undefined>;
+  approvePengajuanBansos(id: number, kkId: number, jenisPengajuan: string, jenisBansos: string): Promise<PengajuanBansos | undefined>;
   getPengajuanBansosById(id: number): Promise<PengajuanBansos | undefined>;
   updateKkBansos(kkId: number, penerimaBansos: boolean, jenisBansos: string | null): Promise<KartuKeluarga | undefined>;
 
@@ -93,6 +94,7 @@ export interface IStorage {
   createDonasi(data: InsertDonasi): Promise<Donasi>;
   getDonasiById(id: number): Promise<Donasi | undefined>;
   updateDonasiStatus(id: number, status: string): Promise<Donasi | undefined>;
+  confirmDonasiWithKas(donasiId: number, kasData: InsertKasRw): Promise<Donasi | undefined>;
   getDonasiLeaderboard(): Promise<{ namaDonatur: string; total: number; count: number }[]>;
   getDonasiTerkumpulByCampaign(): Promise<Record<number, number>>;
 
@@ -487,6 +489,19 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
+  async approvePengajuanBansos(id: number, kkId: number, jenisPengajuan: string, jenisBansos: string): Promise<PengajuanBansos | undefined> {
+    return await db.transaction(async (tx) => {
+      const [result] = await tx.update(pengajuanBansos).set({ status: "disetujui" }).where(eq(pengajuanBansos.id, id)).returning();
+      if (!result) return undefined;
+      if (jenisPengajuan === "rekomendasi_coret") {
+        await tx.update(kartuKeluarga).set({ penerimaBansos: false, jenisBansos: null }).where(eq(kartuKeluarga.id, kkId));
+      } else if (jenisPengajuan === "rekomendasi_penerima") {
+        await tx.update(kartuKeluarga).set({ penerimaBansos: true, jenisBansos }).where(eq(kartuKeluarga.id, kkId));
+      }
+      return result;
+    });
+  }
+
   async getPengajuanBansosById(id: number): Promise<PengajuanBansos | undefined> {
     const [result] = await db.select().from(pengajuanBansos).where(eq(pengajuanBansos.id, id));
     return result;
@@ -540,6 +555,15 @@ export class DatabaseStorage implements IStorage {
   async updateDonasiStatus(id: number, status: string): Promise<Donasi | undefined> {
     const [result] = await db.update(donasi).set({ status }).where(eq(donasi.id, id)).returning();
     return result;
+  }
+
+  async confirmDonasiWithKas(donasiId: number, kasData: InsertKasRw): Promise<Donasi | undefined> {
+    return await db.transaction(async (tx) => {
+      const [result] = await tx.update(donasi).set({ status: "dikonfirmasi" }).where(eq(donasi.id, donasiId)).returning();
+      if (!result) return undefined;
+      await tx.insert(kasRw).values(kasData);
+      return result;
+    });
   }
 
   async getDonasiLeaderboard(): Promise<{ namaDonatur: string; total: number; count: number }[]> {
@@ -695,7 +719,8 @@ export class DatabaseStorage implements IStorage {
     };
 
     const kkRtMap = new Map(allKk.map(k => [k.id, k.rt]));
-    const rtSet = [1, 2, 3, 4, 5, 6, 7];
+    const allRt = await db.select().from(rtData).orderBy(rtData.nomorRt);
+    const rtSet = allRt.map(r => r.nomorRt);
     const perRt = rtSet.map(rt => {
       const kkInRt = allKk.filter(k => k.rt === rt);
       const wargaInRt = allWarga.filter(w => kkRtMap.get(w.kkId) === rt);
