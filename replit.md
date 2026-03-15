@@ -38,7 +38,7 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
 ## Key Features
 1. **Warga Pages**: Beranda, Profil (view/edit request), Layanan (merged: Surat + Laporan + Donasi tabs), Keuangan (laporan kas RW)
 2. **Warga Singgah Pages**: Beranda (contract countdown, personal info, kost info), Laporan (submit reports to admin)
-3. **Admin Pages**: Dashboard (comprehensive statistics + warga singgah stats), Kelola KK, Kelola Warga, Kelola Laporan, Kelola Surat, Surat RW (Surat Sakti), Arsip Surat, Edit Profil approval, Bansos Management, Donasi, Keuangan (Kas RW), WA Blast, Kelola Pemilik Kost, Kelola Warga Singgah
+3. **Admin Pages**: Dashboard (comprehensive statistics + warga singgah stats + usaha stats), Kelola KK, Kelola Warga, Kelola Laporan, Kelola Surat, Surat RW (Surat Sakti), Arsip Surat, Edit Profil approval, Bansos Management, Donasi, Keuangan (Kas RW), WA Blast, Kelola Pemilik Kost, Kelola Warga Singgah, Kelola Usaha
 3. **Gemini AI**: Auto-generates official RW letters (Surat Sakti) and WA Blast messages only. Surat warga is fully manual.
 4. **Star Sender**: WA Blast with category filters (semua, per RT, kepala keluarga, penerima bansos), preview recipient count, confirmation dialog, message templates, AI message generation, expandable history with sent/failed counts. Blast runs in background (no timeout) with auto-polling status updates.
    - **AI Message Generation**: Admin inputs a topic → Gemini generates personalized message as Ketua RW (Raden Raka, 23yo, friendly tone)
@@ -57,6 +57,21 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
    - Financial integrity: sistem-created kas entries (from donasi) cannot be edited/deleted; confirmed donations cannot be reverted; duplicate kas prevention via status transition checks
    - Confirmed donations appear on public leaderboard (aggregated by donatur name, sorted by total)
    - Tables: `donasi_campaign`, `donasi`
+
+## Pendataan Usaha (Business Registration)
+- **Tables**: `usaha`, `karyawan_usaha`, `izin_tetangga`, `survey_usaha`, `riwayat_stiker`
+- **Workflow**: Pendaftaran → Survey → Verifikasi → Disetujui/Ditolak
+- **Multi-step registration form**: Data Pemilik → Data Usaha → Data Karyawan → Izin Tetangga (4 posisi wajib: kiri, kanan, depan, belakang)
+- **Survey lapangan**: Admin records field survey (dampak lingkungan, kondisi, foto, rekomendasi layak/tidak layak)
+- **Stiker management**: Auto-generated stiker number format `STK-RW03/XXXX/YYYY`, valid 6 months, renewable
+- **Stiker numbering**: Collision-safe via DB transaction counting `riwayat_stiker` records
+- **WA notifications**: Approval/rejection/renewal notifications sent to business owner
+- **Stiker expiry scheduler**: H-30 and H-7 notifications for expiring stickers
+- **Dashboard stats**: Total usaha, stiker aktif, stiker mendekati expired, status breakdown
+- **All DB writes transactional**: Create/update usaha with karyawan and izin tetangga wrapped in transactions
+- **Admin only**: All endpoints protected by `requireAdmin` middleware
+- **File**: `client/src/pages/admin/kelola-usaha.tsx`
+- **Constants**: `jenisUsahaOptions`, `modalUsahaOptions`, `omsetBulananOptions`, `lamaUsahaOptions`, `posisiTetanggaOptions`, `jabatanKaryawanOptions` in `constants.ts`
 
 ## Letter System
 - **Surat Warga Flow (Manual)**: Warga fills detail form (jenis surat, perihal, keterangan detail) → WA notification to admin with full details → Admin processes surat manually → Admin inputs nomor surat manually → Approve/Reject → Admin uploads scanned surat file as arsip → Warga contacts admin via WA (085860604142) for pickup/info

@@ -187,3 +187,79 @@ export const keperluanTinggalOptions = [
 ];
 
 export const jumlahPintuOptions = Array.from({ length: 50 }, (_, i) => i + 1);
+
+export const jenisUsahaOptions = [
+  "Warung/Toko Kelontong",
+  "Rumah Makan/Restoran",
+  "Cafe/Kedai Kopi",
+  "Bengkel",
+  "Laundry",
+  "Salon/Barbershop",
+  "Konveksi/Jahit",
+  "Percetakan",
+  "Fotokopi",
+  "Apotek/Toko Obat",
+  "Toko Bangunan",
+  "Toko Elektronik",
+  "Toko Pakaian",
+  "Kios/Gerobak",
+  "Catering",
+  "Jasa Servis",
+  "Kontrakan/Kost",
+  "Usaha Online/E-Commerce",
+  "Peternakan",
+  "Pertanian",
+  "Industri Rumahan",
+  "Pendidikan/Kursus",
+  "Kesehatan/Klinik",
+  "Lainnya",
+];
+
+export const modalUsahaOptions = [
+  "< Rp 1.000.000",
+  "Rp 1.000.000 - Rp 5.000.000",
+  "Rp 5.000.000 - Rp 10.000.000",
+  "Rp 10.000.000 - Rp 50.000.000",
+  "Rp 50.000.000 - Rp 100.000.000",
+  "> Rp 100.000.000",
+];
+
+export const omsetBulananOptions = [
+  "< Rp 1.000.000",
+  "Rp 1.000.000 - Rp 5.000.000",
+  "Rp 5.000.000 - Rp 10.000.000",
+  "Rp 10.000.000 - Rp 25.000.000",
+  "Rp 25.000.000 - Rp 50.000.000",
+  "> Rp 50.000.000",
+];
+
+export const lamaUsahaOptions = [
+  "< 6 bulan",
+  "6 bulan - 1 tahun",
+  "1 - 2 tahun",
+  "2 - 5 tahun",
+  "5 - 10 tahun",
+  "> 10 tahun",
+];
+
+export const posisiTetanggaOptions = [
+  "Kiri",
+  "Kanan",
+  "Depan",
+  "Belakang",
+];
+
+export const jabatanKaryawanOptions = [
+  "Pemilik",
+  "Manager",
+  "Kasir",
+  "Karyawan",
+  "Sopir",
+  "Kurir",
+  "Tukang Masak",
+  "Pramusaji",
+  "Satpam",
+  "Cleaning Service",
+  "Teknisi",
+  "Lainnya",
+];

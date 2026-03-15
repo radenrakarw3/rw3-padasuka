@@ -27,6 +27,7 @@ import AdminDonasi from "@/pages/admin/donasi";
 import AdminKeuangan from "@/pages/admin/keuangan";
 import AdminPemilikKost from "@/pages/admin/kelola-pemilik-kost";
 import AdminWargaSinggah from "@/pages/admin/kelola-warga-singgah";
+import AdminKelolaUsaha from "@/pages/admin/kelola-usaha";
 import WargaKeuangan from "@/pages/warga/keuangan";
 import SinggahLayout from "@/components/singgah-layout";
 import SinggahBeranda from "@/pages/singgah/beranda";
@@ -138,6 +139,7 @@ function AdminRoutes() {
         <Route path="/admin/keuangan" component={AdminKeuangan} />
         <Route path="/admin/pemilik-kost" component={AdminPemilikKost} />
         <Route path="/admin/warga-singgah" component={AdminWargaSinggah} />
+        <Route path="/admin/usaha" component={AdminKelolaUsaha} />
         <Route>{() => <Redirect to="/admin" />}</Route>
       </Switch>
     </AdminLayout>

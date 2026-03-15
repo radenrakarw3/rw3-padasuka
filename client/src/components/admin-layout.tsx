@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import {
   LayoutDashboard, Users, FileText, ClipboardList, ScrollText,
-  MessageSquare, LogOut, Menu, X, Home as HomeIcon, Archive, HandCoins, Heart, Wallet, Building2, UserCheck
+  MessageSquare, LogOut, Menu, X, Home as HomeIcon, Archive, HandCoins, Heart, Wallet, Building2, UserCheck, Store
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import logoGold from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
@@ -23,6 +23,7 @@ const navItems = [
   { path: "/admin/wa-blast", icon: MessageSquare, label: "WA Blast" },
   { path: "/admin/pemilik-kost", icon: Building2, label: "Pemilik Kost" },
   { path: "/admin/warga-singgah", icon: UserCheck, label: "Warga Singgah" },
+  { path: "/admin/usaha", icon: Store, label: "Kelola Usaha" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

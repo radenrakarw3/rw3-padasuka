@@ -7,7 +7,7 @@ import path from "path";
 import fs from "fs";
 import express from "express";
 import { storage } from "./storage";
-import { insertKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertProfileEditSchema, insertWaBlastSchema, insertPengajuanBansosSchema, insertDonasiCampaignSchema, insertDonasiSchema, insertKasRwSchema, insertPemilikKostSchema, insertWargaSinggahSchema } from "@shared/schema";
+import { insertKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertProfileEditSchema, insertWaBlastSchema, insertPengajuanBansosSchema, insertDonasiCampaignSchema, insertDonasiSchema, insertKasRwSchema, insertPemilikKostSchema, insertWargaSinggahSchema, insertUsahaSchema, insertKaryawanUsahaSchema, insertIzinTetanggaSchema, insertSurveyUsahaSchema } from "@shared/schema";
 
 declare module "express-session" {
   interface SessionData {
@@ -1702,6 +1702,185 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
     }
   });
 
+  // === USAHA ===
+  app.get("/api/usaha", requireAdmin, async (req, res) => {
+    try {
+      const allUsaha = await storage.getAllUsaha();
+      res.json(allUsaha);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/usaha/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const u = await storage.getUsahaById(id);
+      if (!u) return res.status(404).json({ message: "Usaha tidak ditemukan" });
+      const karyawan = await storage.getKaryawanByUsahaId(id);
+      const izinTetangga = await storage.getIzinTetanggaByUsahaId(id);
+      const survey = await storage.getSurveyByUsahaId(id);
+      const riwayatStiker = await storage.getRiwayatStikerByUsahaId(id);
+      res.json({ ...u, karyawan, izinTetangga, survey, riwayatStiker });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/usaha", requireAdmin, async (req, res) => {
+    try {
+      const { karyawan, izinTetangga: izinList, ...usahaData } = req.body;
+      const parsed = insertUsahaSchema.parse(usahaData);
+      if (!izinList || izinList.length < 4) {
+        return res.status(400).json({ message: "Minimal 4 izin tetangga diperlukan (kiri, kanan, depan, belakang)" });
+      }
+      const requiredPositions = ["kiri", "kanan", "depan", "belakang"];
+      const givenPositions = izinList.map((i: any) => i.posisi?.toLowerCase());
+      for (const pos of requiredPositions) {
+        if (!givenPositions.includes(pos)) {
+          return res.status(400).json({ message: `Izin tetangga posisi "${pos}" belum diisi` });
+        }
+      }
+      for (const izin of izinList) {
+        if (!izin.namaWarga || !izin.posisi) {
+          return res.status(400).json({ message: "Nama warga dan posisi tetangga harus diisi" });
+        }
+      }
+      if (karyawan && Array.isArray(karyawan)) {
+        for (const k of karyawan) {
+          if (!k.namaLengkap || !k.nik || !k.alamat || !k.jabatan) {
+            return res.status(400).json({ message: "Nama, NIK, alamat, dan jabatan karyawan harus diisi" });
+          }
+        }
+      }
+      const created = await storage.createUsahaWithRelations(parsed, karyawan || [], izinList);
+      await notifyAdmin(`📋 *Pendaftaran Usaha Baru*\n\n🏪 Nama: ${created.namaUsaha}\n👤 Pemilik: ${created.namaPemilik}\n📍 RT ${created.rt}\n📄 NIB: ${created.nib || '-'}\n\nMenunggu survey lapangan.`);
+      res.json(created);
+    } catch (error: any) {
+      if (error.name === "ZodError") {
+        return res.status(400).json({ message: "Data tidak valid: " + error.errors.map((e: any) => e.message).join(", ") });
+      }
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.put("/api/usaha/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const existing = await storage.getUsahaById(id);
+      if (!existing) return res.status(404).json({ message: "Usaha tidak ditemukan" });
+      const { karyawan, izinTetangga: izinList, ...usahaData } = req.body;
+      const updated = await storage.updateUsahaWithRelations(id, usahaData, karyawan, izinList);
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/usaha/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const existing = await storage.getUsahaById(id);
+      if (!existing) return res.status(404).json({ message: "Usaha tidak ditemukan" });
+      await storage.deleteUsaha(id);
+      res.json({ message: "Usaha berhasil dihapus" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/usaha/:id/survey", requireAdmin, async (req, res) => {
+    try {
+      const usahaId = parseInt(req.params.id);
+      const existing = await storage.getUsahaById(usahaId);
+      if (!existing) return res.status(404).json({ message: "Usaha tidak ditemukan" });
+      if (existing.status !== "pendaftaran" && existing.status !== "survey") {
+        return res.status(400).json({ message: "Usaha tidak dalam tahap yang bisa disurvey" });
+      }
+      const surveyData = { ...req.body, usahaId };
+      const survey = await storage.createSurveyUsaha(surveyData);
+      await storage.updateUsahaStatus(usahaId, "survey");
+      res.json(survey);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  const surveyUpload = multer({
+    storage: multer.diskStorage({
+      destination: (req, file, cb) => {
+        const dir = path.join(process.cwd(), "uploads", "survey");
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        cb(null, dir);
+      },
+      filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname);
+        cb(null, `survey_${req.params.id}_${Date.now()}${ext}`);
+      },
+    }),
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+      const allowed = [".jpg", ".jpeg", ".png", ".pdf"];
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, allowed.includes(ext));
+    },
+  });
+
+  app.post("/api/usaha/:id/survey/upload", requireAdmin, surveyUpload.single("foto"), async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ message: "File tidak ditemukan" });
+      const filePath = `/uploads/survey/${req.file.filename}`;
+      res.json({ filePath });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/usaha/:id/verifikasi", requireAdmin, async (req, res) => {
+    try {
+      const usahaId = parseInt(req.params.id);
+      const existing = await storage.getUsahaById(usahaId);
+      if (!existing) return res.status(404).json({ message: "Usaha tidak ditemukan" });
+      if (existing.status !== "survey") {
+        return res.status(400).json({ message: "Usaha harus dalam tahap survey sebelum diverifikasi" });
+      }
+      const { keputusan, alasanPenolakan } = req.body;
+      if (!keputusan || !["disetujui", "ditolak"].includes(keputusan)) {
+        return res.status(400).json({ message: "Keputusan harus 'disetujui' atau 'ditolak'" });
+      }
+      if (keputusan === "disetujui") {
+        const result = await storage.approveUsahaWithStiker(usahaId);
+        await sendWhatsApp(existing.nomorWaPemilik, `Halo ${existing.namaPemilik},\n\nUsaha "${existing.namaUsaha}" Anda telah *DISETUJUI* oleh RW 03 Padasuka.\n\n📋 Nomor Stiker: ${result.nomorStiker}\n📅 Berlaku: ${result.tanggalTerbit} s/d ${result.tanggalExpired}\n\nStiker berlaku selama 6 bulan. Harap diperpanjang sebelum masa berlaku habis.\n\n🏘️ RW 03 Padasuka\n🌐 rw3padasukacimahi.org`);
+        res.json({ message: "Usaha disetujui dan stiker diterbitkan", nomorStiker: result.nomorStiker });
+      } else {
+        if (!alasanPenolakan || !alasanPenolakan.trim()) {
+          return res.status(400).json({ message: "Alasan penolakan harus diisi" });
+        }
+        await storage.updateUsahaStatus(usahaId, "ditolak", { alasanPenolakan });
+        await sendWhatsApp(existing.nomorWaPemilik, `Halo ${existing.namaPemilik},\n\nMohon maaf, usaha "${existing.namaUsaha}" Anda *TIDAK DISETUJUI* oleh RW 03 Padasuka.\n\nAlasan: ${alasanPenolakan || '-'}\n\nSilakan hubungi admin untuk informasi lebih lanjut.\n\n🏘️ RW 03 Padasuka`);
+        res.json({ message: "Usaha ditolak" });
+      }
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/usaha/:id/perpanjang-stiker", requireAdmin, async (req, res) => {
+    try {
+      const usahaId = parseInt(req.params.id);
+      const existing = await storage.getUsahaById(usahaId);
+      if (!existing) return res.status(404).json({ message: "Usaha tidak ditemukan" });
+      if (existing.status !== "disetujui") {
+        return res.status(400).json({ message: "Hanya usaha yang sudah disetujui yang bisa diperpanjang stikernya" });
+      }
+      const result = await storage.perpanjangStiker(usahaId, existing.tanggalStikerExpired);
+      await sendWhatsApp(existing.nomorWaPemilik, `Halo ${existing.namaPemilik},\n\nStiker usaha "${existing.namaUsaha}" telah *DIPERPANJANG*.\n\n📋 Nomor Stiker Baru: ${result.nomorStiker}\n📅 Berlaku: ${result.tanggalTerbit} s/d ${result.tanggalExpired}\n\n🏘️ RW 03 Padasuka\n🌐 rw3padasukacimahi.org`);
+      res.json({ message: "Stiker berhasil diperpanjang", nomorStiker: result.nomorStiker, tanggalExpired: result.tanggalExpired });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // === Scheduler: H-7 Kontrak Habis WA Notification ===
   async function checkKontrakMendekatiHabis() {
     try {
@@ -1726,6 +1905,29 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
 
   setInterval(checkKontrakMendekatiHabis, 24 * 60 * 60 * 1000);
   setTimeout(checkKontrakMendekatiHabis, 10000);
+
+  async function checkStikerMendekatiExpired() {
+    try {
+      const usahaH30 = await storage.getUsahaMendekatiExpired(30);
+      for (const u of usahaH30) {
+        await sendWhatsApp(u.nomorWaPemilik, `Halo ${u.namaPemilik},\n\nStiker usaha "${u.namaUsaha}" akan habis masa berlakunya pada ${u.tanggalStikerExpired} (30 hari lagi).\n\nSilakan hubungi admin RW untuk memperpanjang stiker.\n\n🏘️ RW 03 Padasuka\n🌐 rw3padasukacimahi.org`);
+        await notifyAdmin(`⚠️ *Stiker Usaha H-30*\n\n🏪 ${u.namaUsaha}\n👤 ${u.namaPemilik}\n📅 Expired: ${u.tanggalStikerExpired}`);
+      }
+      const usahaH7 = await storage.getUsahaMendekatiExpired(7);
+      for (const u of usahaH7) {
+        await sendWhatsApp(u.nomorWaPemilik, `Halo ${u.namaPemilik},\n\n⚠️ Stiker usaha "${u.namaUsaha}" akan habis masa berlakunya pada ${u.tanggalStikerExpired} (7 hari lagi).\n\nSegera hubungi admin RW untuk memperpanjang stiker sebelum masa berlaku habis.\n\n🏘️ RW 03 Padasuka\n🌐 rw3padasukacimahi.org`);
+        await notifyAdmin(`🚨 *Stiker Usaha H-7*\n\n🏪 ${u.namaUsaha}\n👤 ${u.namaPemilik}\n📅 Expired: ${u.tanggalStikerExpired}`);
+      }
+      if (usahaH30.length + usahaH7.length > 0) {
+        console.log(`[Scheduler] Sent stiker expiry notifications: H-30=${usahaH30.length}, H-7=${usahaH7.length}`);
+      }
+    } catch (error) {
+      console.error("[Scheduler] Error checking stiker expiry:", error);
+    }
+  }
+
+  setInterval(checkStikerMendekatiExpired, 24 * 60 * 60 * 1000);
+  setTimeout(checkStikerMendekatiExpired, 15000);
 
   function requireSinggahAuth(req: Request, res: Response, next: NextFunction) {
     if (!(req.session as any).isWargaSinggah) {

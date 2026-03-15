@@ -6,7 +6,7 @@ import {
   Users, Home, ClipboardList, FileText, UserCheck, UserX, UserMinus,
   Phone, PhoneOff, CreditCard, ImageOff, HandCoins, UserCog, ScrollText,
   Wallet, TrendingUp, TrendingDown, Heart, GraduationCap, Baby, BookOpen,
-  Briefcase, UsersRound, Building2, AlertTriangle, Clock
+  Briefcase, UsersRound, Building2, AlertTriangle, Clock, Store, Award
 } from "lucide-react";
 
 interface DashboardStats {
@@ -51,6 +51,15 @@ interface DashboardStats {
     sudahHabis: number;
     totalPemilikKost: number;
   };
+  usahaStats: {
+    totalUsaha: number;
+    pendaftaran: number;
+    survey: number;
+    disetujui: number;
+    ditolak: number;
+    stikerAktif: number;
+    stikerMendekatiExpired: number;
+  };
 }
 
 const COLORS = [
@@ -87,6 +96,8 @@ const STATUS_LABELS: Record<string, string> = {
   "approved": "Disetujui",
   "rejected": "Ditolak",
   "generated": "Digenerate",
+  "pendaftaran": "Pendaftaran",
+  "survey": "Survey",
 };
 
 const AGE_LABELS: Record<string, string> = {
@@ -422,6 +433,53 @@ export default function AdminDashboard() {
               </div>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card data-testid="card-usaha-stats">
+        <CardContent className="p-3">
+          <SectionTitle>Pendataan Usaha</SectionTitle>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
+              <Store className="w-4 h-4 text-[hsl(163,55%,22%)]" />
+              <div>
+                <p className="text-sm font-bold">{stats.usahaStats?.totalUsaha || 0}</p>
+                <p className="text-[9px] text-muted-foreground">Total Usaha</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
+              <Award className="w-4 h-4 text-[hsl(40,45%,50%)]" />
+              <div>
+                <p className="text-sm font-bold">{stats.usahaStats?.stikerAktif || 0}</p>
+                <p className="text-[9px] text-muted-foreground">Stiker Aktif</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
+              <AlertTriangle className="w-4 h-4 text-[hsl(348,55%,38%)]" />
+              <div>
+                <p className="text-sm font-bold">{stats.usahaStats?.stikerMendekatiExpired || 0}</p>
+                <p className="text-[9px] text-muted-foreground">Stiker Akan Expired</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
+              <ClipboardList className="w-4 h-4 text-[hsl(220,55%,35%)]" />
+              <div>
+                <p className="text-sm font-bold">{stats.usahaStats?.disetujui || 0}</p>
+                <p className="text-[9px] text-muted-foreground">Disetujui</p>
+              </div>
+            </div>
+          </div>
+          <StatusBar data={{
+            pendaftaran: stats.usahaStats?.pendaftaran || 0,
+            survey: stats.usahaStats?.survey || 0,
+            disetujui: stats.usahaStats?.disetujui || 0,
+            ditolak: stats.usahaStats?.ditolak || 0,
+          }} colorMap={{
+            pendaftaran: "hsl(220,55%,35%)",
+            survey: "hsl(40,45%,50%)",
+            disetujui: "hsl(163,55%,22%)",
+            ditolak: "hsl(348,55%,38%)",
+          }} />
         </CardContent>
       </Card>
 

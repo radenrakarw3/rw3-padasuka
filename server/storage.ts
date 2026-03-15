@@ -4,6 +4,7 @@ import {
   kartuKeluarga, warga, rtData, laporan, suratWarga, suratRw,
   profileEditRequest, adminUser, waBlast, pengajuanBansos, donasiCampaign, donasi, kasRw,
   pemilikKost, wargaSinggah, riwayatKontrak,
+  usaha, karyawanUsaha, izinTetangga, surveyUsaha, riwayatStiker,
   type KartuKeluarga, type InsertKartuKeluarga,
   type Warga, type InsertWarga,
   type RtData, type InsertRtData,
@@ -20,6 +21,11 @@ import {
   type PemilikKost, type InsertPemilikKost,
   type WargaSinggah, type InsertWargaSinggah,
   type RiwayatKontrak, type InsertRiwayatKontrak,
+  type Usaha, type InsertUsaha,
+  type KaryawanUsaha, type InsertKaryawanUsaha,
+  type IzinTetangga, type InsertIzinTetangga,
+  type SurveyUsaha, type InsertSurveyUsaha,
+  type RiwayatStiker, type InsertRiwayatStiker,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -128,6 +134,34 @@ export interface IStorage {
 
   getRiwayatKontrak(wargaSinggahId: number): Promise<RiwayatKontrak[]>;
 
+  getAllUsaha(): Promise<Usaha[]>;
+  getUsahaById(id: number): Promise<Usaha | undefined>;
+  createUsaha(data: InsertUsaha): Promise<Usaha>;
+  createUsahaWithRelations(data: InsertUsaha, karyawanData: any[], izinData: any[]): Promise<Usaha>;
+  updateUsaha(id: number, data: Partial<InsertUsaha>): Promise<Usaha | undefined>;
+  updateUsahaWithRelations(id: number, usahaData: any, karyawanData?: any[], izinData?: any[]): Promise<Usaha | undefined>;
+  updateUsahaStatus(id: number, status: string, extra?: Partial<{ nomorStiker: string; tanggalStikerTerbit: string; tanggalStikerExpired: string; alasanPenolakan: string }>): Promise<Usaha | undefined>;
+  approveUsahaWithStiker(usahaId: number): Promise<{ nomorStiker: string; tanggalTerbit: string; tanggalExpired: string }>;
+  perpanjangStiker(usahaId: number, currentExpired: string | null): Promise<{ nomorStiker: string; tanggalTerbit: string; tanggalExpired: string }>;
+  deleteUsaha(id: number): Promise<void>;
+
+  getKaryawanByUsahaId(usahaId: number): Promise<KaryawanUsaha[]>;
+  createKaryawanUsaha(data: InsertKaryawanUsaha): Promise<KaryawanUsaha>;
+  deleteKaryawanByUsahaId(usahaId: number): Promise<void>;
+
+  getIzinTetanggaByUsahaId(usahaId: number): Promise<IzinTetangga[]>;
+  createIzinTetangga(data: InsertIzinTetangga): Promise<IzinTetangga>;
+  updateIzinTetangga(id: number, data: Partial<InsertIzinTetangga>): Promise<IzinTetangga | undefined>;
+  deleteIzinTetanggaByUsahaId(usahaId: number): Promise<void>;
+
+  getSurveyByUsahaId(usahaId: number): Promise<SurveyUsaha | undefined>;
+  createSurveyUsaha(data: InsertSurveyUsaha): Promise<SurveyUsaha>;
+
+  getRiwayatStikerByUsahaId(usahaId: number): Promise<RiwayatStiker[]>;
+  createRiwayatStiker(data: InsertRiwayatStiker): Promise<RiwayatStiker>;
+
+  getUsahaMendekatiExpired(hari: number): Promise<Usaha[]>;
+
   getDashboardStats(): Promise<DashboardStats>;
 }
 
@@ -172,6 +206,15 @@ export interface DashboardStats {
     mendekatiHabis: number;
     sudahHabis: number;
     totalPemilikKost: number;
+  };
+  usahaStats: {
+    totalUsaha: number;
+    pendaftaran: number;
+    survey: number;
+    disetujui: number;
+    ditolak: number;
+    stikerAktif: number;
+    stikerMendekatiExpired: number;
   };
 }
 
@@ -807,6 +850,22 @@ export class DatabaseStorage implements IStorage {
           totalPemilikKost: allPemilikKostData.length,
         };
       })(),
+      usahaStats: await (async () => {
+        const allUsahaData = await db.select().from(usaha);
+        const todayStr3 = today.toISOString().split("T")[0];
+        const thirtyDaysLater = new Date(today);
+        thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
+        const thirtyDaysStr = thirtyDaysLater.toISOString().split("T")[0];
+        return {
+          totalUsaha: allUsahaData.length,
+          pendaftaran: allUsahaData.filter(u => u.status === "pendaftaran").length,
+          survey: allUsahaData.filter(u => u.status === "survey").length,
+          disetujui: allUsahaData.filter(u => u.status === "disetujui").length,
+          ditolak: allUsahaData.filter(u => u.status === "ditolak").length,
+          stikerAktif: allUsahaData.filter(u => u.status === "disetujui" && u.tanggalStikerExpired && u.tanggalStikerExpired >= todayStr3).length,
+          stikerMendekatiExpired: allUsahaData.filter(u => u.status === "disetujui" && u.tanggalStikerExpired && u.tanggalStikerExpired >= todayStr3 && u.tanggalStikerExpired <= thirtyDaysStr).length,
+        };
+      })(),
     };
   }
 
@@ -1004,6 +1063,186 @@ export class DatabaseStorage implements IStorage {
 
   async getRiwayatKontrak(wargaSinggahId: number): Promise<RiwayatKontrak[]> {
     return db.select().from(riwayatKontrak).where(eq(riwayatKontrak.wargaSinggahId, wargaSinggahId)).orderBy(desc(riwayatKontrak.createdAt));
+  }
+
+  async getAllUsaha(): Promise<Usaha[]> {
+    return db.select().from(usaha).orderBy(desc(usaha.createdAt));
+  }
+
+  async getUsahaById(id: number): Promise<Usaha | undefined> {
+    const [result] = await db.select().from(usaha).where(eq(usaha.id, id));
+    return result;
+  }
+
+  async createUsaha(data: InsertUsaha): Promise<Usaha> {
+    const [result] = await db.insert(usaha).values(data).returning();
+    return result;
+  }
+
+  async createUsahaWithRelations(data: InsertUsaha, karyawanData: any[], izinData: any[]): Promise<Usaha> {
+    return db.transaction(async (tx) => {
+      const [created] = await tx.insert(usaha).values(data).returning();
+      if (karyawanData && karyawanData.length > 0) {
+        for (const k of karyawanData) {
+          await tx.insert(karyawanUsaha).values({ ...k, usahaId: created.id });
+        }
+      }
+      for (const izin of izinData) {
+        await tx.insert(izinTetangga).values({ ...izin, usahaId: created.id });
+      }
+      return created;
+    });
+  }
+
+  async updateUsaha(id: number, data: Partial<InsertUsaha>): Promise<Usaha | undefined> {
+    const [result] = await db.update(usaha).set(data).where(eq(usaha.id, id)).returning();
+    return result;
+  }
+
+  async updateUsahaWithRelations(id: number, usahaData: any, karyawanData?: any[], izinData?: any[]): Promise<Usaha | undefined> {
+    return db.transaction(async (tx) => {
+      const [updated] = await tx.update(usaha).set(usahaData).where(eq(usaha.id, id)).returning();
+      if (karyawanData && Array.isArray(karyawanData)) {
+        await tx.delete(karyawanUsaha).where(eq(karyawanUsaha.usahaId, id));
+        for (const k of karyawanData) {
+          await tx.insert(karyawanUsaha).values({ ...k, usahaId: id });
+        }
+      }
+      if (izinData && Array.isArray(izinData)) {
+        await tx.delete(izinTetangga).where(eq(izinTetangga.usahaId, id));
+        for (const izin of izinData) {
+          await tx.insert(izinTetangga).values({ ...izin, usahaId: id });
+        }
+      }
+      return updated;
+    });
+  }
+
+  async updateUsahaStatus(id: number, status: string, extra?: Partial<{ nomorStiker: string; tanggalStikerTerbit: string; tanggalStikerExpired: string; alasanPenolakan: string }>): Promise<Usaha | undefined> {
+    const [result] = await db.update(usaha).set({ status, ...extra }).where(eq(usaha.id, id)).returning();
+    return result;
+  }
+
+  async approveUsahaWithStiker(usahaId: number): Promise<{ nomorStiker: string; tanggalTerbit: string; tanggalExpired: string }> {
+    return db.transaction(async (tx) => {
+      const today = new Date();
+      const expired = new Date(today);
+      expired.setMonth(expired.getMonth() + 6);
+      const tanggalTerbit = today.toISOString().split("T")[0];
+      const tanggalExpired = expired.toISOString().split("T")[0];
+      const [countResult] = await tx.select({ cnt: count() }).from(riwayatStiker);
+      const stikerNum = (countResult?.cnt || 0) + 1;
+      const nomorStiker = `STK-RW03/${String(stikerNum).padStart(4, "0")}/${today.getFullYear()}`;
+      await tx.update(usaha).set({
+        status: "disetujui",
+        nomorStiker,
+        tanggalStikerTerbit: tanggalTerbit,
+        tanggalStikerExpired: tanggalExpired,
+      }).where(eq(usaha.id, usahaId));
+      await tx.insert(riwayatStiker).values({
+        usahaId,
+        nomorStiker,
+        tanggalTerbit,
+        tanggalExpired,
+      });
+      return { nomorStiker, tanggalTerbit, tanggalExpired };
+    });
+  }
+
+  async perpanjangStiker(usahaId: number, currentExpired: string | null): Promise<{ nomorStiker: string; tanggalTerbit: string; tanggalExpired: string }> {
+    return db.transaction(async (tx) => {
+      const today = new Date();
+      const expiredDate = currentExpired ? new Date(currentExpired) : today;
+      const startFrom = expiredDate > today ? expiredDate : today;
+      const newExpired = new Date(startFrom);
+      newExpired.setMonth(newExpired.getMonth() + 6);
+      const tanggalTerbit = startFrom.toISOString().split("T")[0];
+      const tanggalExpired = newExpired.toISOString().split("T")[0];
+      const [countResult] = await tx.select({ cnt: count() }).from(riwayatStiker);
+      const stikerNum = (countResult?.cnt || 0) + 1;
+      const nomorStiker = `STK-RW03/${String(stikerNum).padStart(4, "0")}/${today.getFullYear()}`;
+      await tx.update(usaha).set({
+        nomorStiker,
+        tanggalStikerTerbit: tanggalTerbit,
+        tanggalStikerExpired: tanggalExpired,
+      }).where(eq(usaha.id, usahaId));
+      await tx.insert(riwayatStiker).values({
+        usahaId,
+        nomorStiker,
+        tanggalTerbit,
+        tanggalExpired,
+      });
+      return { nomorStiker, tanggalTerbit, tanggalExpired };
+    });
+  }
+
+  async deleteUsaha(id: number): Promise<void> {
+    await db.transaction(async (tx) => {
+      await tx.delete(riwayatStiker).where(eq(riwayatStiker.usahaId, id));
+      await tx.delete(surveyUsaha).where(eq(surveyUsaha.usahaId, id));
+      await tx.delete(izinTetangga).where(eq(izinTetangga.usahaId, id));
+      await tx.delete(karyawanUsaha).where(eq(karyawanUsaha.usahaId, id));
+      await tx.delete(usaha).where(eq(usaha.id, id));
+    });
+  }
+
+  async getKaryawanByUsahaId(usahaId: number): Promise<KaryawanUsaha[]> {
+    return db.select().from(karyawanUsaha).where(eq(karyawanUsaha.usahaId, usahaId)).orderBy(karyawanUsaha.id);
+  }
+
+  async createKaryawanUsaha(data: InsertKaryawanUsaha): Promise<KaryawanUsaha> {
+    const [result] = await db.insert(karyawanUsaha).values(data).returning();
+    return result;
+  }
+
+  async deleteKaryawanByUsahaId(usahaId: number): Promise<void> {
+    await db.delete(karyawanUsaha).where(eq(karyawanUsaha.usahaId, usahaId));
+  }
+
+  async getIzinTetanggaByUsahaId(usahaId: number): Promise<IzinTetangga[]> {
+    return db.select().from(izinTetangga).where(eq(izinTetangga.usahaId, usahaId)).orderBy(izinTetangga.id);
+  }
+
+  async createIzinTetangga(data: InsertIzinTetangga): Promise<IzinTetangga> {
+    const [result] = await db.insert(izinTetangga).values(data).returning();
+    return result;
+  }
+
+  async updateIzinTetangga(id: number, data: Partial<InsertIzinTetangga>): Promise<IzinTetangga | undefined> {
+    const [result] = await db.update(izinTetangga).set(data).where(eq(izinTetangga.id, id)).returning();
+    return result;
+  }
+
+  async deleteIzinTetanggaByUsahaId(usahaId: number): Promise<void> {
+    await db.delete(izinTetangga).where(eq(izinTetangga.usahaId, usahaId));
+  }
+
+  async getSurveyByUsahaId(usahaId: number): Promise<SurveyUsaha | undefined> {
+    const [result] = await db.select().from(surveyUsaha).where(eq(surveyUsaha.usahaId, usahaId));
+    return result;
+  }
+
+  async createSurveyUsaha(data: InsertSurveyUsaha): Promise<SurveyUsaha> {
+    const [result] = await db.insert(surveyUsaha).values(data).returning();
+    return result;
+  }
+
+  async getRiwayatStikerByUsahaId(usahaId: number): Promise<RiwayatStiker[]> {
+    return db.select().from(riwayatStiker).where(eq(riwayatStiker.usahaId, usahaId)).orderBy(desc(riwayatStiker.createdAt));
+  }
+
+  async createRiwayatStiker(data: InsertRiwayatStiker): Promise<RiwayatStiker> {
+    const [result] = await db.insert(riwayatStiker).values(data).returning();
+    return result;
+  }
+
+  async getUsahaMendekatiExpired(hari: number): Promise<Usaha[]> {
+    const today = new Date();
+    const target = new Date(today);
+    target.setDate(target.getDate() + hari);
+    const targetStr = target.toISOString().split("T")[0];
+    const allUsahaData = await db.select().from(usaha).where(eq(usaha.status, "disetujui"));
+    return allUsahaData.filter(u => u.tanggalStikerExpired === targetStr);
   }
 }
 
