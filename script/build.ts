@@ -1,12 +1,13 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
-import { rm, readFile } from "fs/promises";
+import { rm, readFile, cp } from "fs/promises";
+import { existsSync } from "fs";
+import path from "path";
 
-// server deps to bundle to reduce openat(2) syscalls
-// which helps cold start times
 const allowlist = [
   "@google/generative-ai",
   "axios",
+  "bcrypt",
   "connect-pg-simple",
   "cors",
   "date-fns",
@@ -14,8 +15,8 @@ const allowlist = [
   "drizzle-zod",
   "express",
   "express-rate-limit",
-  "form-data",
   "express-session",
+  "form-data",
   "jsonwebtoken",
   "memorystore",
   "multer",
@@ -25,6 +26,7 @@ const allowlist = [
   "passport",
   "passport-local",
   "pg",
+  "qrcode",
   "stripe",
   "uuid",
   "ws",
@@ -36,10 +38,10 @@ const allowlist = [
 async function buildAll() {
   await rm("dist", { recursive: true, force: true });
 
-  console.log("building client...");
+  console.log("Building client...");
   await viteBuild();
 
-  console.log("building server...");
+  console.log("Building server...");
   const pkg = JSON.parse(await readFile("package.json", "utf-8"));
   const allDeps = [
     ...Object.keys(pkg.dependencies || {}),
@@ -60,6 +62,14 @@ async function buildAll() {
     external: externals,
     logLevel: "info",
   });
+
+  if (existsSync("attached_assets")) {
+    console.log("Copying attached_assets...");
+    await cp("attached_assets", "dist/attached_assets", { recursive: true });
+  }
+
+  console.log("Build complete!");
+  console.log("Output: dist/index.cjs (server) + dist/public/ (client)");
 }
 
 buildAll().catch((err) => {
