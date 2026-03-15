@@ -28,6 +28,9 @@ import AdminKeuangan from "@/pages/admin/keuangan";
 import AdminPemilikKost from "@/pages/admin/kelola-pemilik-kost";
 import AdminWargaSinggah from "@/pages/admin/kelola-warga-singgah";
 import WargaKeuangan from "@/pages/warga/keuangan";
+import SinggahLayout from "@/components/singgah-layout";
+import SinggahBeranda from "@/pages/singgah/beranda";
+import SinggahLaporan from "@/pages/singgah/laporan";
 import { X } from "lucide-react";
 import goldLogo from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
 import radenRakaImg from "@assets/raden_raka_nobg.png";
@@ -141,6 +144,18 @@ function AdminRoutes() {
   );
 }
 
+function SinggahRoutes() {
+  return (
+    <SinggahLayout>
+      <Switch>
+        <Route path="/singgah" component={SinggahBeranda} />
+        <Route path="/singgah/laporan" component={SinggahLaporan} />
+        <Route>{() => <Redirect to="/singgah" />}</Route>
+      </Switch>
+    </SinggahLayout>
+  );
+}
+
 function AppContent() {
   const { user, loading } = useAuth();
 
@@ -161,6 +176,10 @@ function AppContent() {
 
   if (user.type === "admin" || user.isAdmin) {
     return <AdminRoutes />;
+  }
+
+  if (user.type === "warga_singgah") {
+    return <SinggahRoutes />;
   }
 
   return <WargaRoutes />;

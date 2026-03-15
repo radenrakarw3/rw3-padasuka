@@ -22,15 +22,23 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
   3. Warga enters OTP code → verified and logged in
   - OTP expires after 5 minutes, 60-second resend cooldown, max 5 attempts
   - In-memory OTP store (Map) on server
+- **Warga Singgah Login**: NIK-based OTP via WhatsApp
+  1. Warga singgah enters 16-digit NIK → system validates against warga_singgah table (must be aktif)
+  2. System sends 2-digit OTP to registered WhatsApp number
+  3. Warga singgah enters OTP → verified and logged in as type "warga_singgah"
+  - Separate OTP store (singgahOtpStore) and session fields (wargaSinggahId, wargaSinggahNik, isWargaSinggah)
+  - Routes: `/singgah` (beranda with countdown), `/singgah/laporan`
 - **Admin Login**: Multi-admin from `admin_user` table with bcrypt-hashed passwords
   - Admins: arnia23, emulawarman, radenraka, rezel123
   - Loaded from CSV (attached_assets/admin_1772993517793.csv)
+- **Login Page**: 3-tab selector (Warga / Singgah / Admin)
 - Session-based auth with express-session
-- Access control: warga can only access their own KK data, admin sees all
+- Access control: warga can only access their own KK data, warga singgah only their own data, admin sees all
 
 ## Key Features
 1. **Warga Pages**: Beranda, Profil (view/edit request), Layanan (merged: Surat + Laporan + Donasi tabs), Keuangan (laporan kas RW)
-2. **Admin Pages**: Dashboard (comprehensive statistics), Kelola KK, Kelola Warga, Kelola Laporan, Kelola Surat, Surat RW (Surat Sakti), Arsip Surat, Edit Profil approval, Bansos Management, Donasi, Keuangan (Kas RW), WA Blast
+2. **Warga Singgah Pages**: Beranda (contract countdown, personal info, kost info), Laporan (submit reports to admin)
+3. **Admin Pages**: Dashboard (comprehensive statistics + warga singgah stats), Kelola KK, Kelola Warga, Kelola Laporan, Kelola Surat, Surat RW (Surat Sakti), Arsip Surat, Edit Profil approval, Bansos Management, Donasi, Keuangan (Kas RW), WA Blast, Kelola Pemilik Kost, Kelola Warga Singgah
 3. **Gemini AI**: Auto-generates official RW letters (Surat Sakti) and WA Blast messages only. Surat warga is fully manual.
 4. **Star Sender**: WA Blast with category filters (semua, per RT, kepala keluarga, penerima bansos), preview recipient count, confirmation dialog, message templates, AI message generation, expandable history with sent/failed counts. Blast runs in background (no timeout) with auto-polling status updates.
    - **AI Message Generation**: Admin inputs a topic → Gemini generates personalized message as Ketua RW (Raden Raka, 23yo, friendly tone)
@@ -118,6 +126,19 @@ A mobile-first digital community management web app for RW 03 Padasuka, Cimahi. 
 - `donasi_campaign`: Donation campaigns created by admin (judul, deskripsi, targetDana, status aktif/selesai)
 - `donasi`: Donation records from warga (campaignId, kkId, namaDonatur, jumlah, status pending/dikonfirmasi/ditolak)
 - `kas_rw`: Financial transactions (tipe pemasukan/pengeluaran, kategori, jumlah, keterangan, tanggal, createdBy)
+- `pemilik_kost`: Boarding house owners (nama_kost, nama_pemilik, nomor_wa_pemilik, rt, alamat_lengkap, jumlah_pintu)
+- `warga_singgah`: Temporary residents (linked to pemilik_kost, nik unique, nomor_whatsapp, pekerjaan, tanggal_mulai/habis_kontrak, jumlah_penghuni, keperluan_tinggal, status aktif/nonaktif)
+- `riwayat_kontrak`: Contract extension history (old/new start/end dates per warga_singgah)
+
+## Warga Singgah System
+- **Admin**: Kelola Pemilik Kost (CRUD boarding house owners), Kelola Warga Singgah (CRUD temporary residents with contract management)
+  - Perpanjang kontrak: extend contract dates with history logging
+  - Riwayat kontrak: view all contract extensions per resident
+  - Search/filter by name, status
+- **H-7 Notification**: Daily scheduler checks contracts expiring within 7 days, sends WhatsApp to penghuni + pemilik + admin (085860604142) asking about renewal
+- **Warga Singgah Portal**: Beranda with contract countdown (days remaining, start/end dates, status badge green/amber/red), personal info, kost info; Laporan page for submitting reports
+- **Keperluan Tinggal Options**: Kerja, Kuliah, Usaha, Lainnya
+- **Dashboard Stats**: totalAktif, mendekatiHabis, sudahHabis, totalPemilikKost
 
 ## Keuangan Kas RW
 - **Admin**: Full CRUD management of kas RW transactions at `/admin/keuangan`

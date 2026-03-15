@@ -2,10 +2,12 @@ import { createContext, useContext, useState, useEffect, useCallback } from "rea
 import { apiRequest } from "./queryClient";
 
 interface AuthUser {
-  type: "warga" | "admin";
+  type: "warga" | "admin" | "warga_singgah";
   kkId?: number;
   nomorKk?: string;
   isAdmin?: boolean;
+  wargaSinggahId?: number;
+  nik?: string;
 }
 
 interface WaContact {
@@ -22,6 +24,9 @@ interface AuthContextType {
   checkKk: (nomorKk: string) => Promise<{ contacts: WaContact[] }>;
   requestOtp: (nomorKk: string, wargaId: number) => Promise<{ phone: string; nama: string }>;
   verifyOtp: (nomorKk: string, otp: string) => Promise<AuthUser>;
+  singgahCheckNik: (nik: string) => Promise<{ nama: string; phone: string }>;
+  singgahRequestOtp: (nik: string) => Promise<{ phone: string; nama: string }>;
+  singgahVerifyOtp: (nik: string, otp: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
 }
 
@@ -68,13 +73,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return data;
   }, []);
 
+  const singgahCheckNik = useCallback(async (nik: string) => {
+    const res = await apiRequest("POST", "/api/auth/singgah/check-nik", { nik });
+    return await res.json();
+  }, []);
+
+  const singgahRequestOtp = useCallback(async (nik: string) => {
+    const res = await apiRequest("POST", "/api/auth/singgah/request-otp", { nik });
+    return await res.json();
+  }, []);
+
+  const singgahVerifyOtp = useCallback(async (nik: string, otp: string) => {
+    const res = await apiRequest("POST", "/api/auth/singgah/verify-otp", { nik, otp });
+    const data = await res.json();
+    setUser(data);
+    return data;
+  }, []);
+
   const logout = useCallback(async () => {
     await apiRequest("POST", "/api/auth/logout");
     setUser(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, checkKk, requestOtp, verifyOtp, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, checkKk, requestOtp, verifyOtp, singgahCheckNik, singgahRequestOtp, singgahVerifyOtp, logout }}>
       {children}
     </AuthContext.Provider>
   );

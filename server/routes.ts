@@ -144,6 +144,7 @@ async function notifyAdmin(message: string) {
 }
 
 const otpStore = new Map<string, { otp: string; kkId: number; nomorKk: string; phone: string; expiresAt: number; attempts: number; lastRequestAt: number }>();
+const singgahOtpStore = new Map<string, { otp: string; wargaSinggahId: number; nik: string; phone: string; expiresAt: number; attempts: number; lastRequestAt: number }>();
 
 const uploadsDir = path.join(process.cwd(), "uploads");
 fs.mkdirSync(path.join(uploadsDir, "kk"), { recursive: true });
@@ -420,9 +421,93 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/auth/singgah/check-nik", async (req, res) => {
+    try {
+      const { nik } = req.body;
+      if (!nik || nik.length !== 16) {
+        return res.status(400).json({ message: "NIK harus 16 digit" });
+      }
+      const ws = await storage.getWargaSinggahByNik(nik);
+      if (!ws) {
+        return res.status(404).json({ message: "NIK tidak terdaftar sebagai warga singgah" });
+      }
+      if (ws.status !== "aktif") {
+        return res.status(400).json({ message: "Status kontrak Anda sudah tidak aktif. Hubungi admin RW." });
+      }
+      const maskedPhone = ws.nomorWhatsapp.replace(/(\d{4})(\d+)(\d{3})/, "$1****$3");
+      return res.json({ nama: ws.namaLengkap, phone: maskedPhone });
+    } catch (error: any) {
+      return res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/auth/singgah/request-otp", async (req, res) => {
+    try {
+      const { nik } = req.body;
+      if (!nik) {
+        return res.status(400).json({ message: "NIK harus diisi" });
+      }
+      const ws = await storage.getWargaSinggahByNik(nik);
+      if (!ws || ws.status !== "aktif") {
+        return res.status(404).json({ message: "NIK tidak ditemukan atau tidak aktif" });
+      }
+      const existing = singgahOtpStore.get(nik);
+      if (existing && (Date.now() - existing.lastRequestAt) < 60000) {
+        return res.status(429).json({ message: "Tunggu 60 detik sebelum meminta OTP lagi" });
+      }
+      const otp = String(Math.floor(Math.random() * 90) + 10);
+      const expiresAt = Date.now() + 5 * 60 * 1000;
+      singgahOtpStore.set(nik, { otp, wargaSinggahId: ws.id, nik: ws.nik, phone: ws.nomorWhatsapp, expiresAt, attempts: 0, lastRequestAt: Date.now() });
+      const message = `[RW 03 Padasuka]\n\nKode OTP login Warga Singgah: *${otp}*\nBerlaku 5 menit.\nJangan berikan kode ini ke siapapun ya.`;
+      const sent = await sendWhatsApp(ws.nomorWhatsapp, message);
+      if (!sent) {
+        return res.status(500).json({ message: "Gagal mengirim OTP. Coba lagi nanti." });
+      }
+      const maskedPhone = ws.nomorWhatsapp.replace(/(\d{4})(\d+)(\d{3})/, "$1****$3");
+      return res.json({ message: "OTP terkirim", phone: maskedPhone, nama: ws.namaLengkap });
+    } catch (error: any) {
+      return res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/auth/singgah/verify-otp", async (req, res) => {
+    try {
+      const { nik, otp } = req.body;
+      if (!nik || !otp) {
+        return res.status(400).json({ message: "NIK dan kode OTP harus diisi" });
+      }
+      const stored = singgahOtpStore.get(nik);
+      if (!stored) {
+        return res.status(400).json({ message: "Silakan minta OTP terlebih dahulu" });
+      }
+      if (Date.now() > stored.expiresAt) {
+        singgahOtpStore.delete(nik);
+        return res.status(400).json({ message: "Kode OTP sudah kadaluarsa. Silakan minta ulang." });
+      }
+      if (stored.attempts >= 5) {
+        singgahOtpStore.delete(nik);
+        return res.status(429).json({ message: "Terlalu banyak percobaan. Silakan minta OTP baru." });
+      }
+      if (stored.otp !== otp) {
+        stored.attempts++;
+        return res.status(401).json({ message: "Kode OTP salah" });
+      }
+      singgahOtpStore.delete(nik);
+      (req.session as any).wargaSinggahId = stored.wargaSinggahId;
+      (req.session as any).wargaSinggahNik = stored.nik;
+      (req.session as any).isWargaSinggah = true;
+      return res.json({ type: "warga_singgah", wargaSinggahId: stored.wargaSinggahId, nik: stored.nik, message: "Login berhasil" });
+    } catch (error: any) {
+      return res.status(500).json({ message: error.message });
+    }
+  });
+
   app.get("/api/auth/me", (req, res) => {
     if (req.session.isAdmin) {
       return res.json({ type: "admin", isAdmin: true, adminId: req.session.adminId, username: req.session.adminUsername, namaLengkap: req.session.adminNama });
+    }
+    if ((req.session as any).isWargaSinggah) {
+      return res.json({ type: "warga_singgah", wargaSinggahId: (req.session as any).wargaSinggahId, nik: (req.session as any).wargaSinggahNik });
     }
     if (req.session.kkId) {
       return res.json({ type: "warga", kkId: req.session.kkId, nomorKk: req.session.nomorKk });
@@ -1595,6 +1680,65 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
 
   setInterval(checkKontrakMendekatiHabis, 24 * 60 * 60 * 1000);
   setTimeout(checkKontrakMendekatiHabis, 10000);
+
+  function requireSinggahAuth(req: Request, res: Response, next: NextFunction) {
+    if (!(req.session as any).isWargaSinggah) {
+      return res.status(401).json({ message: "Belum login sebagai warga singgah" });
+    }
+    next();
+  }
+
+  app.get("/api/singgah/profil", requireSinggahAuth, async (req, res) => {
+    try {
+      const wsId = (req.session as any).wargaSinggahId;
+      const ws = await storage.getWargaSinggahById(wsId);
+      if (!ws) {
+        return res.status(404).json({ message: "Data tidak ditemukan" });
+      }
+      const pemilik = await storage.getPemilikKostById(ws.pemilikKostId);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStr = today.toISOString().split("T")[0];
+      const habis = new Date(ws.tanggalHabisKontrak + "T00:00:00");
+      const diffMs = habis.getTime() - today.getTime();
+      const sisaHari = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      return res.json({
+        ...ws,
+        namaKost: pemilik?.namaKost || "-",
+        namaPemilik: pemilik?.namaPemilik || "-",
+        alamatKost: pemilik?.alamatLengkap || "-",
+        sisaHari,
+        sudahHabis: ws.tanggalHabisKontrak < todayStr,
+      });
+    } catch (error: any) {
+      return res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/singgah/laporan", requireSinggahAuth, async (req, res) => {
+    try {
+      const wsId = (req.session as any).wargaSinggahId;
+      const ws = await storage.getWargaSinggahById(wsId);
+      if (!ws) {
+        return res.status(404).json({ message: "Data tidak ditemukan" });
+      }
+      const { jenisLaporan, judul, isi } = req.body;
+      if (!jenisLaporan || !judul || !isi) {
+        return res.status(400).json({ message: "Semua field harus diisi" });
+      }
+      const laporan = await storage.createLaporan({
+        wargaId: 0,
+        kkId: 0,
+        jenisLaporan,
+        judul: `[Warga Singgah - ${ws.namaLengkap}] ${judul}`,
+        isi: `Dari: ${ws.namaLengkap} (NIK: ${ws.nik})\nWA: ${ws.nomorWhatsapp}\n\n${isi}`,
+      });
+      await notifyAdmin(`Laporan baru dari warga singgah ${ws.namaLengkap}: ${judul}`);
+      return res.json(laporan);
+    } catch (error: any) {
+      return res.status(500).json({ message: error.message });
+    }
+  });
 
   return httpServer;
 }
