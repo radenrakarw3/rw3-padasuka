@@ -830,27 +830,36 @@ export class DatabaseStorage implements IStorage {
     });
 
     const PENGANGGURAN_KEYWORDS = ["tidak bekerja", "belum bekerja", "pengangguran", "belum/tidak bekerja", "tidak diketahui", ""];
+    const PELAJAR_KEYWORDS = ["pelajar", "mahasiswa", "pelajar/mahasiswa"];
     const kkRtMap = new Map(allKk.map(k => [k.id, k.rt]));
+
+    function calcAge(tanggalLahir: string | null): number | null {
+      if (!tanggalLahir) return null;
+      const birth = new Date(tanggalLahir);
+      if (isNaN(birth.getTime())) return null;
+      let age = today.getFullYear() - birth.getFullYear();
+      const m = today.getMonth() - birth.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+      return age;
+    }
+
     const pengangguranWarga = allWarga.filter(w => {
       const job = (w.pekerjaan || "").toLowerCase().trim();
-      return !job || PENGANGGURAN_KEYWORDS.some(k => job === k);
+      const isPelajar = PELAJAR_KEYWORDS.some(k => job.includes(k));
+      const isUnemployed = !job || PENGANGGURAN_KEYWORDS.some(k => job === k);
+      if (!isUnemployed) return false;
+      const age = calcAge(w.tanggalLahir);
+      if (age !== null && age < 18) return false;
+      if (isPelajar) return false;
+      return true;
     });
     const pengangguranPerUsia: Record<string, number> = {};
     const pengangguranDaftar: { nama: string; usia: number | null; rt: number | null }[] = [];
     for (const w of pengangguranWarga) {
-      let age: number | null = null;
-      if (w.tanggalLahir) {
-        const birth = new Date(w.tanggalLahir);
-        if (!isNaN(birth.getTime())) {
-          age = today.getFullYear() - birth.getFullYear();
-          const m = today.getMonth() - birth.getMonth();
-          if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
-        }
-      }
+      const age = calcAge(w.tanggalLahir);
       let ageGroup = "Tidak Diketahui";
       if (age !== null) {
-        if (age <= 17) ageGroup = "0-17";
-        else if (age <= 25) ageGroup = "18-25";
+        if (age <= 25) ageGroup = "18-25";
         else if (age <= 40) ageGroup = "26-40";
         else if (age <= 55) ageGroup = "41-55";
         else ageGroup = "56+";

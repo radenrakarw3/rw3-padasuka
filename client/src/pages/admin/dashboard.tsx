@@ -343,7 +343,7 @@ export default function AdminDashboard() {
 
   const highlights = [
     `Dari ${stats.totalWarga} warga, ${stats.capaian.waPercent}% sudah terhubung WhatsApp`,
-    `${stats.pengangguran.total} warga belum bekerja dari total ${stats.totalWarga} warga`,
+    `${stats.pengangguran.total} warga usia 18+ belum bekerja dari total ${stats.totalWarga} warga`,
     `${stats.capaian.totalUsahaBerizin} UMKM sudah berizin dari ${stats.capaian.totalUsahaTarget} usaha terdaftar`,
     stats.totalKk > 0 ? `${stats.capaian.kkFotoPercent}% dari ${stats.totalKk} KK sudah mengunggah foto KK` : null,
     stats.pendingLaporan > 0 ? `${stats.pendingLaporan} laporan warga menunggu ditindaklanjuti` : null,
@@ -435,7 +435,7 @@ export default function AdminDashboard() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-[#b54560]">{stats.pengangguran.total}</p>
-                <p className="text-xs text-muted-foreground">Warga Belum Bekerja</p>
+                <p className="text-xs text-muted-foreground">Usia 18+ Belum Bekerja</p>
                 <p className="text-[10px] text-muted-foreground">({stats.totalWarga > 0 ? Math.round((stats.pengangguran.total / stats.totalWarga) * 100) : 0}% dari total warga)</p>
               </div>
             </div>
@@ -1013,7 +1013,7 @@ export default function AdminDashboard() {
             {detailDialog.section === "Pengangguran" && (
               <>
                 <div className="bg-red-50 dark:bg-red-950/20 rounded-lg p-3">
-                  <p className="text-sm font-bold text-[#b54560]">{stats.pengangguran.total} warga belum bekerja</p>
+                  <p className="text-sm font-bold text-[#b54560]">{stats.pengangguran.total} warga usia 18+ belum bekerja</p>
                   <p className="text-xs text-muted-foreground">({stats.totalWarga > 0 ? Math.round((stats.pengangguran.total / stats.totalWarga) * 100) : 0}% dari total {stats.totalWarga} warga)</p>
                 </div>
                 <div>
