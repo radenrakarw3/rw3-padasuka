@@ -170,6 +170,8 @@ export default function AdminWaBlast() {
     kepala_keluarga: "Kepala Keluarga",
     per_rt: `RT ${filterRt.padStart(2, "0")}`,
     penerima_bansos: "Penerima Bansos",
+    pemilik_kost: "Pemilik Kostan/Kontrakan",
+    warga_singgah: "Warga Singgah",
   };
 
   return (
@@ -196,6 +198,8 @@ export default function AdminWaBlast() {
                 <SelectItem value="kepala_keluarga">Kepala Keluarga Saja</SelectItem>
                 <SelectItem value="per_rt">Per RT</SelectItem>
                 <SelectItem value="penerima_bansos">Penerima Bansos</SelectItem>
+                <SelectItem value="pemilik_kost">Pemilik Kostan/Kontrakan</SelectItem>
+                <SelectItem value="warga_singgah">Warga Singgah (Aktif)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -372,6 +376,8 @@ export default function AdminWaBlast() {
             kepala_keluarga: "Kepala Keluarga",
             per_rt: `RT ${b.filterRt?.toString().padStart(2, "0") || ""}`,
             penerima_bansos: "Penerima Bansos",
+            pemilik_kost: "Pemilik Kostan/Kontrakan",
+            warga_singgah: "Warga Singgah",
           };
           const isExpanded = expandedId === b.id;
           const gagal = (b.jumlahPenerima || 0) - (b.jumlahBerhasil || 0);

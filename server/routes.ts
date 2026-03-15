@@ -1146,13 +1146,31 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
   app.get("/api/wa-blast/preview", requireAdmin, async (req, res) => {
     try {
       const kategori = (req.query.kategori as string) || "semua";
-      const validKategori = ["semua", "per_rt", "kepala_keluarga", "penerima_bansos", "pemukiman", "perumahan"];
+      const validKategori = ["semua", "per_rt", "kepala_keluarga", "penerima_bansos", "pemukiman", "perumahan", "pemilik_kost", "warga_singgah"];
       if (!validKategori.includes(kategori)) {
         return res.status(400).json({ message: "Kategori tidak valid" });
       }
       const rt = req.query.rt ? parseInt(req.query.rt as string) : undefined;
       if (kategori === "per_rt" && (!rt || rt < 1 || isNaN(rt))) {
         return res.status(400).json({ message: "Nomor RT tidak valid" });
+      }
+
+      if (kategori === "pemilik_kost") {
+        const allPemilik = await storage.getAllPemilikKost();
+        const uniquePhones = new Set<string>();
+        for (const p of allPemilik) {
+          if (p.nomorWaPemilik) uniquePhones.add(p.nomorWaPemilik);
+        }
+        return res.json({ total: uniquePhones.size });
+      }
+
+      if (kategori === "warga_singgah") {
+        const allWs = await storage.getAllWargaSinggah();
+        const uniquePhones = new Set<string>();
+        for (const ws of allWs) {
+          if (ws.status === "aktif" && ws.nomorWhatsapp) uniquePhones.add(ws.nomorWhatsapp);
+        }
+        return res.json({ total: uniquePhones.size });
       }
 
       const pemukimanRt = [1, 2, 3, 4];
@@ -1202,7 +1220,30 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
       const pemukimanRt = [1, 2, 3, 4];
       const perumahanRt = [5, 6, 7];
 
-      if (parsed.kategoriFilter === "semua") {
+      let useCustomRecipients = false;
+      let customRecipients: { nomorWhatsapp: string; namaLengkap: string; jenisKelamin?: string; rt?: number }[] = [];
+
+      if (parsed.kategoriFilter === "pemilik_kost") {
+        const allPemilik = await storage.getAllPemilikKost();
+        const uniquePhones = new Set<string>();
+        for (const p of allPemilik) {
+          if (p.nomorWaPemilik && !uniquePhones.has(p.nomorWaPemilik)) {
+            uniquePhones.add(p.nomorWaPemilik);
+            customRecipients.push({ nomorWhatsapp: p.nomorWaPemilik, namaLengkap: p.namaPemilik, rt: p.rt });
+          }
+        }
+        useCustomRecipients = true;
+      } else if (parsed.kategoriFilter === "warga_singgah") {
+        const allWs = await storage.getAllWargaSinggah();
+        const uniquePhones = new Set<string>();
+        for (const ws of allWs) {
+          if (ws.status === "aktif" && ws.nomorWhatsapp && !uniquePhones.has(ws.nomorWhatsapp)) {
+            uniquePhones.add(ws.nomorWhatsapp);
+            customRecipients.push({ nomorWhatsapp: ws.nomorWhatsapp, namaLengkap: ws.namaLengkap });
+          }
+        }
+        useCustomRecipients = true;
+      } else if (parsed.kategoriFilter === "semua") {
         wargaList = await storage.getAllWargaWithKk();
       } else if (parsed.kategoriFilter === "per_rt" && parsed.filterRt) {
         wargaList = await storage.getWargaByRt(parsed.filterRt);
@@ -1224,12 +1265,17 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
         wargaList = await storage.getAllWargaWithKk();
       }
 
-      const uniquePhones = new Set<string>();
-      const recipients: any[] = [];
-      for (const w of wargaList) {
-        if (w.nomorWhatsapp && !uniquePhones.has(w.nomorWhatsapp)) {
-          uniquePhones.add(w.nomorWhatsapp);
-          recipients.push(w);
+      let recipients: any[];
+      if (useCustomRecipients) {
+        recipients = customRecipients;
+      } else {
+        const uniquePhones = new Set<string>();
+        recipients = [];
+        for (const w of wargaList) {
+          if (w.nomorWhatsapp && !uniquePhones.has(w.nomorWhatsapp)) {
+            uniquePhones.add(w.nomorWhatsapp);
+            recipients.push(w);
+          }
         }
       }
 
