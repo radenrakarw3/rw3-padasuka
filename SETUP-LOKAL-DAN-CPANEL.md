@@ -68,10 +68,19 @@ PORT=5000
 NODE_ENV=development
 ```
 
-### 5. Push Schema ke Database
+### 5. Import Data Production ke Database Lokal
+File `database-production.sql` sudah berisi semua data terbaru dari production (291 KK, 927 warga, admin users, dll).
+
 ```bash
-npx drizzle-kit push
+psql -U postgres -d rw03_padasuka -f database-production.sql
 ```
+
+Atau jika pakai user/password tertentu:
+```bash
+psql "postgresql://username:password@localhost:5432/rw03_padasuka" -f database-production.sql
+```
+
+> **Catatan**: File ini sudah berisi schema + data lengkap. Tidak perlu jalankan `drizzle-kit push` lagi jika sudah import file ini.
 
 ### 6. Jalankan Development Server
 ```bash
