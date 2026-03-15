@@ -578,6 +578,16 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
     }
   });
 
+  app.get("/api/stats/monthly", requireAdmin, async (req, res) => {
+    try {
+      await storage.captureCurrentSnapshot();
+      const snapshots = await storage.getMonthlySnapshots();
+      res.json(snapshots);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Gagal mengambil data bulanan" });
+    }
+  });
+
   app.get("/api/kk", requireAuth, async (req, res) => {
     if (req.session.isAdmin) {
       const data = await storage.getAllKk();

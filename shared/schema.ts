@@ -317,6 +317,34 @@ export const riwayatStiker = pgTable("riwayat_stiker", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const monthlySnapshot = pgTable("monthly_snapshot", {
+  id: serial("id").primaryKey(),
+  month: text("month").notNull().unique(),
+  totalKk: integer("total_kk").notNull().default(0),
+  totalWarga: integer("total_warga").notNull().default(0),
+  pengangguran: integer("pengangguran").notNull().default(0),
+  waRegistered: integer("wa_registered").notNull().default(0),
+  ktpUploaded: integer("ktp_uploaded").notNull().default(0),
+  kkFotoUploaded: integer("kk_foto_uploaded").notNull().default(0),
+  penerimaBansos: integer("penerima_bansos").notNull().default(0),
+  usahaBerizin: integer("usaha_berizin").notNull().default(0),
+  totalUsaha: integer("total_usaha").notNull().default(0),
+  laporanSelesai: integer("laporan_selesai").notNull().default(0),
+  totalLaporan: integer("total_laporan").notNull().default(0),
+  suratSelesai: integer("surat_selesai").notNull().default(0),
+  totalSurat: integer("total_surat").notNull().default(0),
+  pemasukan: integer("pemasukan").notNull().default(0),
+  pengeluaran: integer("pengeluaran_snapshot").notNull().default(0),
+  saldo: integer("saldo").notNull().default(0),
+  wargaSinggahAktif: integer("warga_singgah_aktif").notNull().default(0),
+  indeksKemajuan: integer("indeks_kemajuan").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertMonthlySnapshotSchema = createInsertSchema(monthlySnapshot).omit({ id: true, createdAt: true });
+export type MonthlySnapshot = typeof monthlySnapshot.$inferSelect;
+export type InsertMonthlySnapshot = z.infer<typeof insertMonthlySnapshotSchema>;
+
 export const insertPemilikKostSchema = createInsertSchema(pemilikKost).omit({ id: true, createdAt: true });
 export const insertWargaSinggahSchema = createInsertSchema(wargaSinggah).omit({ id: true, createdAt: true, status: true });
 export const insertRiwayatKontrakSchema = createInsertSchema(riwayatKontrak).omit({ id: true, createdAt: true });

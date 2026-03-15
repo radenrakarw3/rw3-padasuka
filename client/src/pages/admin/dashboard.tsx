@@ -16,7 +16,8 @@ import {
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
-  PieChart, Pie, Treemap, AreaChart, Area, CartesianGrid, Legend
+  PieChart, Pie, Treemap, AreaChart, Area, CartesianGrid, Legend,
+  LineChart, Line, ComposedChart,
 } from "recharts";
 
 interface DashboardStats {
@@ -86,6 +87,34 @@ interface DashboardStats {
   };
   rtList: number[];
 }
+
+interface MonthlySnapshotData {
+  id: number;
+  month: string;
+  totalKk: number;
+  totalWarga: number;
+  pengangguran: number;
+  waRegistered: number;
+  ktpUploaded: number;
+  kkFotoUploaded: number;
+  penerimaBansos: number;
+  usahaBerizin: number;
+  totalUsaha: number;
+  laporanSelesai: number;
+  totalLaporan: number;
+  suratSelesai: number;
+  totalSurat: number;
+  pemasukan: number;
+  pengeluaran: number;
+  saldo: number;
+  wargaSinggahAktif: number;
+  indeksKemajuan: number;
+}
+
+const MONTH_NAMES: Record<string, string> = {
+  "01": "Jan", "02": "Feb", "03": "Mar", "04": "Apr", "05": "Mei", "06": "Jun",
+  "07": "Jul", "08": "Agu", "09": "Sep", "10": "Okt", "11": "Nov", "12": "Des",
+};
 
 const COLORS = [
   "#2d7a5f", "#b8923e", "#3b6db5", "#b54560",
@@ -266,6 +295,18 @@ export default function AdminDashboard() {
     refetchInterval: 60000,
   });
 
+  const { data: monthlyData } = useQuery<MonthlySnapshotData[]>({
+    queryKey: ["/api/stats/monthly"],
+    queryFn: async () => {
+      const res = await fetch("/api/stats/monthly", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+    staleTime: 60000,
+  });
+
+  const [trendMetric, setTrendMetric] = useState<string>("indeksKemajuan");
+
   const openDetail = (title: string, section: string, data: any) => {
     setDetailDialog({ open: true, title, section, data });
   };
@@ -409,6 +450,165 @@ export default function AdminDashboard() {
           </div>
         </CardContent>
       </Card>
+
+      {monthlyData && monthlyData.length > 0 && (() => {
+        const fmtMonth = (m: string) => { const [y, mo] = m.split("-"); return `${MONTH_NAMES[mo] || mo} '${y.slice(2)}`; };
+        const chartData = monthlyData.map(s => ({
+          month: fmtMonth(s.month),
+          raw: s.month,
+          indeksKemajuan: s.indeksKemajuan,
+          totalWarga: s.totalWarga,
+          totalKk: s.totalKk,
+          pengangguran: s.pengangguran,
+          waRegistered: s.waRegistered,
+          ktpUploaded: s.ktpUploaded,
+          kkFotoUploaded: s.kkFotoUploaded,
+          penerimaBansos: s.penerimaBansos,
+          usahaBerizin: s.usahaBerizin,
+          laporanSelesai: s.laporanSelesai,
+          suratSelesai: s.suratSelesai,
+          pemasukan: s.pemasukan,
+          pengeluaran: s.pengeluaran,
+          saldo: s.saldo,
+          wargaSinggahAktif: s.wargaSinggahAktif,
+          waPct: s.totalWarga > 0 ? Math.round((s.waRegistered / s.totalWarga) * 100) : 0,
+          ktpPct: s.totalWarga > 0 ? Math.round((s.ktpUploaded / s.totalWarga) * 100) : 0,
+          pengangguranPct: s.totalWarga > 0 ? Math.round((s.pengangguran / s.totalWarga) * 100) : 0,
+        }));
+
+        const latest = monthlyData[monthlyData.length - 1];
+        const prev = monthlyData.length > 1 ? monthlyData[monthlyData.length - 2] : null;
+        const idxDiff = prev ? latest.indeksKemajuan - prev.indeksKemajuan : 0;
+
+        const trendMetrics = [
+          { key: "indeksKemajuan", label: "Indeks Kemajuan RW", color: "#2d7a5f", suffix: "%" },
+          { key: "pengangguran", label: "Pengangguran", color: "#b54560", suffix: " org" },
+          { key: "waPct", label: "% WhatsApp", color: "#2d7a5f", suffix: "%" },
+          { key: "ktpPct", label: "% KTP", color: "#3b6db5", suffix: "%" },
+          { key: "totalWarga", label: "Total Warga", color: "#b8923e", suffix: " org" },
+          { key: "usahaBerizin", label: "Usaha Berizin", color: "#d97730", suffix: "" },
+          { key: "laporanSelesai", label: "Laporan Selesai", color: "#4dab8a", suffix: "" },
+          { key: "saldo", label: "Saldo Kas", color: "#3b6db5", suffix: "" },
+          { key: "penerimaBansos", label: "Penerima Bansos", color: "#7a4dbf", suffix: " KK" },
+          { key: "wargaSinggahAktif", label: "Warga Singgah", color: "#3a8fa6", suffix: " org" },
+        ];
+        const activeTrend = trendMetrics.find(t => t.key === trendMetric) || trendMetrics[0];
+
+        return <>
+          <Card className="border-[#2d7a5f]/30 bg-gradient-to-br from-green-50/30 to-emerald-50/30 dark:from-green-950/10 dark:to-emerald-950/10">
+            <CardContent className="p-3">
+              <SectionTitle icon={<TrendingUp className="w-4 h-4" />} onDetailClick={() => openDetail("Detail Indeks Kemajuan", "Indeks Kemajuan", { snapshots: monthlyData })}>
+                Indeks Kemajuan RW
+              </SectionTitle>
+              <div className="flex items-center gap-4 mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-16 h-16 rounded-xl bg-[#2d7a5f] flex flex-col items-center justify-center">
+                    <p className="text-2xl font-bold text-white leading-none">{latest.indeksKemajuan}</p>
+                    <p className="text-[9px] text-white/70">/ 100</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">Skor Keseluruhan</p>
+                    <p className="text-[10px] text-muted-foreground">Gabungan 7 indikator capaian</p>
+                    {prev && (
+                      <div className={`flex items-center gap-1 mt-0.5 ${idxDiff >= 0 ? "text-[#2d7a5f]" : "text-[#b54560]"}`}>
+                        {idxDiff >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                        <span className="text-[10px] font-semibold">{idxDiff > 0 ? "+" : ""}{idxDiff} dari bulan lalu</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {chartData.length > 0 && (
+                <ResponsiveContainer width="100%" height={180}>
+                  <AreaChart data={chartData} margin={{ left: -10, right: 10, top: 5, bottom: 5 }}>
+                    <defs>
+                      <linearGradient id="gradIndeks" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#2d7a5f" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#2d7a5f" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                    <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                    <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} />
+                    <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
+                      <div className="bg-card border rounded-lg px-3 py-2 shadow-lg">
+                        <p className="text-xs font-semibold mb-1">{label}</p>
+                        <p className="text-xs text-[#2d7a5f] font-bold">Indeks: {payload[0].value}%</p>
+                      </div>
+                    ) : null} />
+                    <Area type="monotone" dataKey="indeksKemajuan" stroke="#2d7a5f" strokeWidth={2.5} fill="url(#gradIndeks)" dot={{ r: 4, fill: "#2d7a5f" }} activeDot={{ r: 6 }} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
+              <div className="mt-2 p-2 rounded-lg bg-white/60 dark:bg-card/60">
+                <p className="text-[10px] text-muted-foreground leading-relaxed">Indeks dihitung dari rata-rata 7 indikator: % WA terdaftar, % KTP terunggah, % foto KK terunggah, % penerima bansos, % usaha berizin, % warga bekerja, dan % laporan selesai. Semakin tinggi = semakin baik.</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-3">
+              <SectionTitle icon={<BarChart3 className="w-4 h-4" />} onDetailClick={() => openDetail("Detail Tren Bulanan", "Tren Bulanan", { snapshots: monthlyData })}>
+                Tren Bulanan
+              </SectionTitle>
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {trendMetrics.map(t => (
+                  <button
+                    key={t.key}
+                    className={`px-2 py-1 rounded-full text-[10px] font-medium transition-colors ${trendMetric === t.key ? "text-white" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
+                    style={trendMetric === t.key ? { backgroundColor: t.color } : undefined}
+                    onClick={() => setTrendMetric(t.key)}
+                    data-testid={`btn-trend-${t.key}`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+              {chartData.length > 0 && (
+                <ResponsiveContainer width="100%" height={200}>
+                  <ComposedChart data={chartData} margin={{ left: -10, right: 10, top: 5, bottom: 5 }}>
+                    <defs>
+                      <linearGradient id="gradTrend" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={activeTrend.color} stopOpacity={0.2} />
+                        <stop offset="95%" stopColor={activeTrend.color} stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                    <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 10 }} />
+                    <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
+                      <div className="bg-card border rounded-lg px-3 py-2 shadow-lg">
+                        <p className="text-xs font-semibold mb-1">{label}</p>
+                        <p className="text-xs font-bold" style={{ color: activeTrend.color }}>{activeTrend.label}: {activeTrend.key === "saldo" ? formatRupiah(Number(payload[0].value)) : `${payload[0].value}${activeTrend.suffix}`}</p>
+                      </div>
+                    ) : null} />
+                    <Area type="monotone" dataKey={activeTrend.key} stroke={activeTrend.color} strokeWidth={2} fill="url(#gradTrend)" dot={{ r: 3.5, fill: activeTrend.color }} activeDot={{ r: 5.5 }} />
+                    <Line type="monotone" dataKey={activeTrend.key} stroke={activeTrend.color} strokeWidth={0} dot={false} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              )}
+              {chartData.length > 1 && (() => {
+                const curr = chartData[chartData.length - 1];
+                const prevC = chartData[chartData.length - 2];
+                const currVal = (curr as any)[activeTrend.key];
+                const prevVal = (prevC as any)[activeTrend.key];
+                const diff = currVal - prevVal;
+                const isGood = activeTrend.key === "pengangguran" ? diff <= 0 : diff >= 0;
+                return (
+                  <div className={`mt-2 flex items-center gap-2 p-2 rounded-lg border ${isGood ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" : "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800"}`}>
+                    {isGood ? <TrendingUp className="w-4 h-4 text-[#2d7a5f]" /> : <TrendingDown className="w-4 h-4 text-[#b54560]" />}
+                    <p className="text-xs">
+                      <span className="font-semibold">{activeTrend.label}</span>: {activeTrend.key === "saldo" ? formatRupiah(currVal) : currVal}{activeTrend.suffix}
+                      {" "}({diff > 0 ? "+" : ""}{activeTrend.key === "saldo" ? formatRupiah(diff) : diff}{activeTrend.suffix} dari {prevC.month})
+                      {" — "}<span className={isGood ? "text-[#2d7a5f] font-semibold" : "text-[#b54560] font-semibold"}>{isGood ? "Membaik" : "Menurun"}</span>
+                    </p>
+                  </div>
+                );
+              })()}
+            </CardContent>
+          </Card>
+        </>;
+      })()}
 
       <Card>
         <CardContent className="p-3">
@@ -1574,6 +1774,78 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                   ))}
+                </div>
+              </>;
+            })()}
+            {(detailDialog.section === "Indeks Kemajuan" || detailDialog.section === "Tren Bulanan") && (() => {
+              const snaps = (detailDialog.data?.snapshots || []) as MonthlySnapshotData[];
+              if (snaps.length === 0) return <p className="text-xs text-muted-foreground">Belum ada data bulanan.</p>;
+              const fmtM = (m: string) => { const [y, mo] = m.split("-"); return `${MONTH_NAMES[mo] || mo} '${y.slice(2)}`; };
+              const latest = snaps[snaps.length - 1];
+              const prev = snaps.length > 1 ? snaps[snaps.length - 2] : null;
+              const pctSafe = (n: number, d: number, fallback = 100) => d > 0 ? Math.round((n / d) * 100) : fallback;
+              const indicators = [
+                { label: "WhatsApp Terdaftar", pct: pctSafe(latest.waRegistered, latest.totalWarga, 0), curr: latest.waRegistered, prev: prev?.waRegistered, color: "#2d7a5f" },
+                { label: "KTP Terunggah", pct: pctSafe(latest.ktpUploaded, latest.totalWarga, 0), curr: latest.ktpUploaded, prev: prev?.ktpUploaded, color: "#3b6db5" },
+                { label: "Foto KK Terunggah", pct: pctSafe(latest.kkFotoUploaded, latest.totalKk, 0), curr: latest.kkFotoUploaded, prev: prev?.kkFotoUploaded, color: "#7a4dbf" },
+                { label: "Penerima Bansos", pct: pctSafe(latest.penerimaBansos, latest.totalKk, 0), curr: latest.penerimaBansos, prev: prev?.penerimaBansos, color: "#b8923e" },
+                { label: "Usaha Berizin", pct: latest.totalUsaha > 0 ? Math.round((latest.usahaBerizin / latest.totalUsaha) * 100) : 100, curr: latest.usahaBerizin, prev: prev?.usahaBerizin, color: "#d97730" },
+                { label: "Warga Bekerja", pct: latest.totalWarga > 0 ? 100 - Math.round((latest.pengangguran / latest.totalWarga) * 100) : 100, curr: latest.totalWarga - latest.pengangguran, prev: prev ? prev.totalWarga - prev.pengangguran : undefined, color: "#4dab8a" },
+                { label: "Laporan Selesai", pct: latest.totalLaporan > 0 ? Math.round((latest.laporanSelesai / latest.totalLaporan) * 100) : 100, curr: latest.laporanSelesai, prev: prev?.laporanSelesai, color: "#c94d7a" },
+              ];
+              return <>
+                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 mb-2">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Indeks Saat Ini</p>
+                    <p className="text-3xl font-bold text-[#2d7a5f]">{latest.indeksKemajuan}<span className="text-base font-normal text-muted-foreground">/100</span></p>
+                  </div>
+                  {prev && (() => {
+                    const d = latest.indeksKemajuan - prev.indeksKemajuan;
+                    return <div className={`text-right ${d >= 0 ? "text-[#2d7a5f]" : "text-[#b54560]"}`}>
+                      <div className="flex items-center gap-1">{d >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}<span className="text-lg font-bold">{d > 0 ? "+" : ""}{d}</span></div>
+                      <p className="text-[10px]">vs bulan lalu</p>
+                    </div>;
+                  })()}
+                </div>
+                <div>
+                  <p className="text-xs font-semibold mb-2">7 Indikator Pembentuk</p>
+                  {indicators.map(ind => {
+                    const diff = ind.prev !== undefined ? ind.curr - ind.prev : null;
+                    return (
+                      <div key={ind.label} className="mb-2">
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="text-xs">{ind.label}</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold">{ind.pct}%</span>
+                            {diff !== null && <span className={`text-[10px] font-semibold ${diff >= 0 ? "text-[#2d7a5f]" : "text-[#b54560]"}`}>({diff > 0 ? "+" : ""}{diff})</span>}
+                          </div>
+                        </div>
+                        <div className="h-2 bg-muted rounded-full overflow-hidden"><div className="h-full rounded-full transition-all" style={{ width: `${ind.pct}%`, backgroundColor: ind.color }} /></div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {snaps.length > 1 && (
+                  <div>
+                    <p className="text-xs font-semibold mb-2">Riwayat Indeks per Bulan</p>
+                    {[...snaps].reverse().map((s, i) => {
+                      const prevS = snaps[snaps.length - 2 - i];
+                      const diff = prevS ? s.indeksKemajuan - prevS.indeksKemajuan : null;
+                      return (
+                        <div key={s.month} className="flex items-center justify-between py-1.5 border-b last:border-0">
+                          <span className="text-xs">{fmtM(s.month)}</span>
+                          <div className="flex items-center gap-2">
+                            <div className="w-16 h-2 bg-muted rounded-full overflow-hidden"><div className="h-full rounded-full bg-[#2d7a5f]" style={{ width: `${s.indeksKemajuan}%` }} /></div>
+                            <span className="text-xs font-bold w-8 text-right">{s.indeksKemajuan}</span>
+                            {diff !== null && <span className={`text-[10px] w-8 text-right font-semibold ${diff >= 0 ? "text-[#2d7a5f]" : "text-[#b54560]"}`}>{diff > 0 ? "+" : ""}{diff}</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
+                  <p className="text-[10px] leading-relaxed"><span className="font-semibold">Cara kerja:</span> Setiap kali data warga diubah, snapshot bulan ini otomatis ter-update. Data bulan lalu tersimpan permanen sebagai pembanding. Indeks 100 = semua indikator tercapai 100%.</p>
                 </div>
               </>;
             })()}

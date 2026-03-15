@@ -4,7 +4,7 @@ import {
   kartuKeluarga, warga, rtData, laporan, suratWarga, suratRw,
   profileEditRequest, adminUser, waBlast, pengajuanBansos, donasiCampaign, donasi, kasRw,
   pemilikKost, wargaSinggah, riwayatKontrak,
-  usaha, karyawanUsaha, izinTetangga, surveyUsaha, riwayatStiker,
+  usaha, karyawanUsaha, izinTetangga, surveyUsaha, riwayatStiker, monthlySnapshot,
   type KartuKeluarga, type InsertKartuKeluarga,
   type Warga, type InsertWarga,
   type RtData, type InsertRtData,
@@ -26,6 +26,7 @@ import {
   type IzinTetangga, type InsertIzinTetangga,
   type SurveyUsaha, type InsertSurveyUsaha,
   type RiwayatStiker, type InsertRiwayatStiker,
+  type MonthlySnapshot, type InsertMonthlySnapshot,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -163,6 +164,9 @@ export interface IStorage {
   getUsahaMendekatiExpired(hari: number): Promise<Usaha[]>;
 
   getDashboardStats(rtFilter?: number): Promise<DashboardStats>;
+  getMonthlySnapshots(): Promise<MonthlySnapshot[]>;
+  upsertMonthlySnapshot(data: InsertMonthlySnapshot): Promise<MonthlySnapshot>;
+  captureCurrentSnapshot(): Promise<MonthlySnapshot>;
 }
 
 export interface DashboardStats {
@@ -1321,6 +1325,98 @@ export class DatabaseStorage implements IStorage {
     const targetStr = target.toISOString().split("T")[0];
     const allUsahaData = await db.select().from(usaha).where(eq(usaha.status, "disetujui"));
     return allUsahaData.filter(u => u.tanggalStikerExpired === targetStr);
+  }
+
+  async getMonthlySnapshots(): Promise<MonthlySnapshot[]> {
+    return db.select().from(monthlySnapshot).orderBy(monthlySnapshot.month);
+  }
+
+  async upsertMonthlySnapshot(data: InsertMonthlySnapshot): Promise<MonthlySnapshot> {
+    const existing = await db.select().from(monthlySnapshot).where(eq(monthlySnapshot.month, data.month));
+    if (existing.length > 0) {
+      const [result] = await db.update(monthlySnapshot).set(data).where(eq(monthlySnapshot.month, data.month)).returning();
+      return result;
+    }
+    const [result] = await db.insert(monthlySnapshot).values(data).returning();
+    return result;
+  }
+
+  async captureCurrentSnapshot(): Promise<MonthlySnapshot> {
+    const today = new Date();
+    const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+
+    const allKk = await db.select().from(kartuKeluarga);
+    const allWarga = await db.select().from(warga);
+    const allLaporanData = await db.select().from(laporan);
+    const allSuratData = await db.select().from(suratWarga);
+    const allUsahaData = await db.select().from(usaha);
+    const allSinggah = await db.select().from(wargaSinggah);
+
+    const PENGANGGURAN_KEYWORDS = ["tidak bekerja", "belum bekerja", "pengangguran", "belum/tidak bekerja", "tidak diketahui", ""];
+    const pengangguranCount = allWarga.filter(w => {
+      const job = (w.pekerjaan || "").toLowerCase().trim();
+      const isUnemployed = !job || PENGANGGURAN_KEYWORDS.some(k => job === k);
+      if (!isUnemployed) return false;
+      if (w.tanggalLahir) {
+        const birth = new Date(w.tanggalLahir);
+        if (!isNaN(birth.getTime())) {
+          let age = today.getFullYear() - birth.getFullYear();
+          const m = today.getMonth() - birth.getMonth();
+          if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+          if (age < 18) return false;
+        }
+      }
+      return true;
+    }).length;
+
+    const waRegistered = allWarga.filter(w => w.nomorWhatsapp && w.nomorWhatsapp.trim() !== "").length;
+    const ktpUploaded = allWarga.filter(w => w.fotoKtp && w.fotoKtp.trim() !== "").length;
+    const kkFotoUploaded = allKk.filter(k => k.fotoKk && k.fotoKk.trim() !== "").length;
+    const penerimaBansos = allKk.filter(k => k.penerimaBansos).length;
+    const usahaBerizin = allUsahaData.filter(u => u.status === "disetujui").length;
+    const laporanSelesai = allLaporanData.filter(l => l.status === "selesai").length;
+    const suratSelesai = allSuratData.filter(s => s.status === "selesai" || s.status === "disetujui").length;
+    const singgahAktif = allSinggah.filter(s => s.status === "aktif").length;
+
+    const kasData = await db.select().from(kasRw);
+    const pemasukan = kasData.filter(k => k.tipe === "pemasukan").reduce((s, k) => s + k.jumlah, 0);
+    const pengeluaranVal = kasData.filter(k => k.tipe === "pengeluaran").reduce((s, k) => s + k.jumlah, 0);
+
+    const totalW = allWarga.length || 1;
+    const totalK = allKk.length || 1;
+    const waP = Math.round((waRegistered / totalW) * 100);
+    const ktpP = Math.round((ktpUploaded / totalW) * 100);
+    const kkP = Math.round((kkFotoUploaded / totalK) * 100);
+    const bansosP = Math.round((penerimaBansos / totalK) * 100);
+    const usahaP = allUsahaData.length > 0 ? Math.round((usahaBerizin / allUsahaData.length) * 100) : 0;
+    const pengangguranP = Math.max(0, 100 - Math.round((pengangguranCount / totalW) * 100));
+    const laporanP = allLaporanData.length > 0 ? Math.round((laporanSelesai / allLaporanData.length) * 100) : 100;
+
+    const indeks = Math.round((waP + ktpP + kkP + bansosP + usahaP + pengangguranP + laporanP) / 7);
+
+    const snapshotData: InsertMonthlySnapshot = {
+      month: currentMonth,
+      totalKk: allKk.length,
+      totalWarga: allWarga.length,
+      pengangguran: pengangguranCount,
+      waRegistered,
+      ktpUploaded,
+      kkFotoUploaded,
+      penerimaBansos,
+      usahaBerizin,
+      totalUsaha: allUsahaData.length,
+      laporanSelesai,
+      totalLaporan: allLaporanData.length,
+      suratSelesai,
+      totalSurat: allSuratData.length,
+      pemasukan,
+      pengeluaran: pengeluaranVal,
+      saldo: pemasukan - pengeluaranVal,
+      wargaSinggahAktif: singgahAktif,
+      indeksKemajuan: indeks,
+    };
+
+    return this.upsertMonthlySnapshot(snapshotData);
   }
 }
 
