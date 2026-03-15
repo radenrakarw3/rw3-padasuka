@@ -6,7 +6,7 @@ import {
   Users, Home, ClipboardList, FileText, UserCheck, UserX, UserMinus,
   Phone, PhoneOff, CreditCard, ImageOff, HandCoins, UserCog, ScrollText,
   Wallet, TrendingUp, TrendingDown, Heart, GraduationCap, Baby, BookOpen,
-  Briefcase, UsersRound
+  Briefcase, UsersRound, Building2, AlertTriangle, Clock
 } from "lucide-react";
 
 interface DashboardStats {
@@ -45,6 +45,12 @@ interface DashboardStats {
   keuangan: { totalPemasukan: number; totalPengeluaran: number; saldo: number };
   donasiSummary: { totalDonasiMasuk: number; totalDonasiPending: number; campaignAktif: number; campaignSelesai: number; totalDonatur: number };
   avgPenghuni: number;
+  wargaSinggahStats: {
+    totalAktif: number;
+    mendekatiHabis: number;
+    sudahHabis: number;
+    totalPemilikKost: number;
+  };
 }
 
 const COLORS = [
@@ -377,6 +383,42 @@ export default function AdminDashboard() {
               <div>
                 <p className="text-sm font-bold">{stats.donasiSummary?.totalDonasiPending || 0}</p>
                 <p className="text-[9px] text-muted-foreground">Donasi Pending</p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card data-testid="card-warga-singgah-stats">
+        <CardContent className="p-3">
+          <SectionTitle>Warga Singgah</SectionTitle>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
+              <UserCheck className="w-4 h-4 text-[hsl(163,55%,22%)]" />
+              <div>
+                <p className="text-sm font-bold">{stats.wargaSinggahStats?.totalAktif || 0}</p>
+                <p className="text-[9px] text-muted-foreground">Aktif</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
+              <AlertTriangle className="w-4 h-4 text-[hsl(40,45%,50%)]" />
+              <div>
+                <p className="text-sm font-bold">{stats.wargaSinggahStats?.mendekatiHabis || 0}</p>
+                <p className="text-[9px] text-muted-foreground">Mendekati Habis</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
+              <Clock className="w-4 h-4 text-[hsl(348,55%,38%)]" />
+              <div>
+                <p className="text-sm font-bold">{stats.wargaSinggahStats?.sudahHabis || 0}</p>
+                <p className="text-[9px] text-muted-foreground">Sudah Habis</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
+              <Building2 className="w-4 h-4 text-[hsl(220,55%,35%)]" />
+              <div>
+                <p className="text-sm font-bold">{stats.wargaSinggahStats?.totalPemilikKost || 0}</p>
+                <p className="text-[9px] text-muted-foreground">Pemilik Kost</p>
               </div>
             </div>
           </div>

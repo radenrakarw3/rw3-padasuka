@@ -159,6 +159,42 @@ export const kasRw = pgTable("kas_rw", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const pemilikKost = pgTable("pemilik_kost", {
+  id: serial("id").primaryKey(),
+  namaKost: text("nama_kost").notNull(),
+  namaPemilik: text("nama_pemilik").notNull(),
+  nomorWaPemilik: text("nomor_wa_pemilik").notNull(),
+  rt: integer("rt").notNull(),
+  alamatLengkap: text("alamat_lengkap").notNull(),
+  jumlahPintu: integer("jumlah_pintu").notNull().default(1),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const wargaSinggah = pgTable("warga_singgah", {
+  id: serial("id").primaryKey(),
+  pemilikKostId: integer("pemilik_kost_id").notNull().references(() => pemilikKost.id),
+  namaLengkap: text("nama_lengkap").notNull(),
+  nik: text("nik").notNull().unique(),
+  nomorWhatsapp: text("nomor_whatsapp").notNull(),
+  pekerjaan: text("pekerjaan").notNull(),
+  tanggalMulaiKontrak: text("tanggal_mulai_kontrak").notNull(),
+  tanggalHabisKontrak: text("tanggal_habis_kontrak").notNull(),
+  jumlahPenghuni: integer("jumlah_penghuni").notNull().default(1),
+  keperluanTinggal: text("keperluan_tinggal").notNull(),
+  status: text("status").notNull().default("aktif"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const riwayatKontrak = pgTable("riwayat_kontrak", {
+  id: serial("id").primaryKey(),
+  wargaSinggahId: integer("warga_singgah_id").notNull().references(() => wargaSinggah.id),
+  tanggalMulaiLama: text("tanggal_mulai_lama").notNull(),
+  tanggalHabisLama: text("tanggal_habis_lama").notNull(),
+  tanggalMulaiBaru: text("tanggal_mulai_baru").notNull(),
+  tanggalHabisBaru: text("tanggal_habis_baru").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const insertKkSchema = createInsertSchema(kartuKeluarga).omit({ id: true, createdAt: true });
 export const insertWargaSchema = createInsertSchema(warga).omit({ id: true, createdAt: true });
 export const insertRtSchema = createInsertSchema(rtData).omit({ id: true });
@@ -206,3 +242,14 @@ export type Donasi = typeof donasi.$inferSelect;
 export type InsertDonasi = z.infer<typeof insertDonasiSchema>;
 export type KasRw = typeof kasRw.$inferSelect;
 export type InsertKasRw = z.infer<typeof insertKasRwSchema>;
+
+export const insertPemilikKostSchema = createInsertSchema(pemilikKost).omit({ id: true, createdAt: true });
+export const insertWargaSinggahSchema = createInsertSchema(wargaSinggah).omit({ id: true, createdAt: true, status: true });
+export const insertRiwayatKontrakSchema = createInsertSchema(riwayatKontrak).omit({ id: true, createdAt: true });
+
+export type PemilikKost = typeof pemilikKost.$inferSelect;
+export type InsertPemilikKost = z.infer<typeof insertPemilikKostSchema>;
+export type WargaSinggah = typeof wargaSinggah.$inferSelect;
+export type InsertWargaSinggah = z.infer<typeof insertWargaSinggahSchema>;
+export type RiwayatKontrak = typeof riwayatKontrak.$inferSelect;
+export type InsertRiwayatKontrak = z.infer<typeof insertRiwayatKontrakSchema>;

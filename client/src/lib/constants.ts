@@ -178,3 +178,12 @@ export const jenisBansosOptions = [
   "RUTILAHU",
   "Lainnya",
 ];
+
+export const keperluanTinggalOptions = [
+  "Kerja",
+  "Kuliah",
+  "Usaha",
+  "Lainnya",
+];
+
+export const jumlahPintuOptions = Array.from({ length: 50 }, (_, i) => i + 1);

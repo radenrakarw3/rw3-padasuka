@@ -7,7 +7,7 @@ import path from "path";
 import fs from "fs";
 import express from "express";
 import { storage } from "./storage";
-import { insertKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertProfileEditSchema, insertWaBlastSchema, insertPengajuanBansosSchema, insertDonasiCampaignSchema, insertDonasiSchema, insertKasRwSchema } from "@shared/schema";
+import { insertKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertProfileEditSchema, insertWaBlastSchema, insertPengajuanBansosSchema, insertDonasiCampaignSchema, insertDonasiSchema, insertKasRwSchema, insertPemilikKostSchema, insertWargaSinggahSchema } from "@shared/schema";
 
 declare module "express-session" {
   interface SessionData {
@@ -1426,6 +1426,175 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
       res.status(500).json({ message: error.message });
     }
   });
+
+  // === Pemilik Kost Routes ===
+  app.get("/api/pemilik-kost", requireAdmin, async (_req, res) => {
+    try {
+      const data = await storage.getAllPemilikKost();
+      res.json(data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/pemilik-kost/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const data = await storage.getPemilikKostById(id);
+      if (!data) return res.status(404).json({ message: "Pemilik kost tidak ditemukan" });
+      res.json(data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/pemilik-kost", requireAdmin, async (req, res) => {
+    try {
+      const parsed = insertPemilikKostSchema.parse(req.body);
+      const result = await storage.createPemilikKost(parsed);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.put("/api/pemilik-kost/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const existing = await storage.getPemilikKostById(id);
+      if (!existing) return res.status(404).json({ message: "Pemilik kost tidak ditemukan" });
+      const parsed = insertPemilikKostSchema.partial().parse(req.body);
+      const result = await storage.updatePemilikKost(id, parsed);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/pemilik-kost/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const existing = await storage.getPemilikKostById(id);
+      if (!existing) return res.status(404).json({ message: "Pemilik kost tidak ditemukan" });
+      await storage.deletePemilikKost(id);
+      res.json({ message: "Pemilik kost berhasil dihapus" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // === Warga Singgah Routes ===
+  app.get("/api/warga-singgah", requireAdmin, async (_req, res) => {
+    try {
+      const data = await storage.getAllWargaSinggah();
+      res.json(data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/warga-singgah/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const data = await storage.getWargaSinggahById(id);
+      if (!data) return res.status(404).json({ message: "Warga singgah tidak ditemukan" });
+      res.json(data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/warga-singgah/:id/riwayat", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const data = await storage.getRiwayatKontrak(id);
+      res.json(data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/warga-singgah", requireAdmin, async (req, res) => {
+    try {
+      const parsed = insertWargaSinggahSchema.parse(req.body);
+      const result = await storage.createWargaSinggah(parsed);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.put("/api/warga-singgah/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const existing = await storage.getWargaSinggahById(id);
+      if (!existing) return res.status(404).json({ message: "Warga singgah tidak ditemukan" });
+      const parsed = insertWargaSinggahSchema.partial().parse(req.body);
+      const result = await storage.updateWargaSinggah(id, parsed);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/warga-singgah/:id/perpanjang", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { tanggalMulaiBaru, tanggalHabisBaru } = req.body;
+      if (!tanggalMulaiBaru || !tanggalHabisBaru) {
+        return res.status(400).json({ message: "Tanggal mulai dan habis baru harus diisi" });
+      }
+      const result = await storage.perpanjangKontrak(id, tanggalMulaiBaru, tanggalHabisBaru);
+      if (!result) return res.status(404).json({ message: "Warga singgah tidak ditemukan" });
+
+      try {
+        await sendWhatsApp(result.nomorWhatsapp,
+          `Halo ${result.namaLengkap},\n\nKontrak Anda telah diperpanjang.\n📅 Mulai: ${tanggalMulaiBaru}\n📅 Habis: ${tanggalHabisBaru}\n\nTerima kasih telah menjadi warga singgah di wilayah RW 03 Padasuka.\n\n🌐 rw3padasukacimahi.org`
+        );
+      } catch {}
+
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/warga-singgah/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const existing = await storage.getWargaSinggahById(id);
+      if (!existing) return res.status(404).json({ message: "Warga singgah tidak ditemukan" });
+      await storage.deleteWargaSinggah(id);
+      res.json({ message: "Warga singgah berhasil dihapus" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // === Scheduler: H-7 Kontrak Habis WA Notification ===
+  async function checkKontrakMendekatiHabis() {
+    try {
+      const wargaH7 = await storage.getWargaSinggahMendekatiHabis(7);
+      for (const ws of wargaH7) {
+        const pesanPenghuni = `Halo ${ws.namaLengkap},\n\nKontrak tinggal Anda di ${ws.namaKost} akan berakhir pada tanggal ${ws.tanggalHabisKontrak} (7 hari lagi).\n\nApakah Anda berencana memperpanjang kontrak? Silakan hubungi pemilik kost (${ws.namaPemilik}) atau sampaikan ke pengurus RW.\n\nTerima kasih.\n🏘️ RW 03 Padasuka\n🌐 rw3padasukacimahi.org`;
+        await sendWhatsApp(ws.nomorWhatsapp, pesanPenghuni);
+
+        const pesanAdmin = `⚠️ *Notifikasi Kontrak H-7*\n\nWarga singgah berikut kontraknya akan habis 7 hari lagi:\n👤 Nama: ${ws.namaLengkap}\n📍 Kost: ${ws.namaKost}\n👤 Pemilik: ${ws.namaPemilik}\n📅 Habis: ${ws.tanggalHabisKontrak}`;
+        await notifyAdmin(pesanAdmin);
+
+        const pesanPemilik = `Halo ${ws.namaPemilik},\n\nKontrak penghuni berikut di ${ws.namaKost} akan berakhir dalam 7 hari:\n👤 Nama: ${ws.namaLengkap}\n📅 Habis: ${ws.tanggalHabisKontrak}\n\nMohon konfirmasi apakah akan diperpanjang.\n\n🏘️ RW 03 Padasuka`;
+        await sendWhatsApp(ws.nomorWaPemilik, pesanPemilik);
+      }
+      if (wargaH7.length > 0) {
+        console.log(`[Scheduler] Sent H-7 notifications to ${wargaH7.length} warga singgah`);
+      }
+    } catch (error) {
+      console.error("[Scheduler] Error checking kontrak:", error);
+    }
+  }
+
+  setInterval(checkKontrakMendekatiHabis, 24 * 60 * 60 * 1000);
+  setTimeout(checkKontrakMendekatiHabis, 10000);
 
   return httpServer;
 }

@@ -3,6 +3,7 @@ import { db } from "./db";
 import {
   kartuKeluarga, warga, rtData, laporan, suratWarga, suratRw,
   profileEditRequest, adminUser, waBlast, pengajuanBansos, donasiCampaign, donasi, kasRw,
+  pemilikKost, wargaSinggah, riwayatKontrak,
   type KartuKeluarga, type InsertKartuKeluarga,
   type Warga, type InsertWarga,
   type RtData, type InsertRtData,
@@ -16,6 +17,9 @@ import {
   type DonasiCampaign, type InsertDonasiCampaign,
   type Donasi, type InsertDonasi,
   type KasRw, type InsertKasRw,
+  type PemilikKost, type InsertPemilikKost,
+  type WargaSinggah, type InsertWargaSinggah,
+  type RiwayatKontrak, type InsertRiwayatKontrak,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -106,6 +110,24 @@ export interface IStorage {
   getKasRwSummary(): Promise<{ totalPemasukan: number; totalPengeluaran: number; saldo: number }>;
   getKasRwCampaignSummary(): Promise<Record<number, { pemasukan: number; pengeluaran: number; saldo: number }>>;
 
+  getAllPemilikKost(): Promise<PemilikKost[]>;
+  getPemilikKostById(id: number): Promise<PemilikKost | undefined>;
+  createPemilikKost(data: InsertPemilikKost): Promise<PemilikKost>;
+  updatePemilikKost(id: number, data: Partial<InsertPemilikKost>): Promise<PemilikKost | undefined>;
+  deletePemilikKost(id: number): Promise<void>;
+
+  getAllWargaSinggah(): Promise<(WargaSinggah & { namaKost: string; namaPemilik: string; rtKost: number })[]>;
+  getWargaSinggahById(id: number): Promise<WargaSinggah | undefined>;
+  getWargaSinggahByNik(nik: string): Promise<WargaSinggah | undefined>;
+  getWargaSinggahByPemilikId(pemilikId: number): Promise<WargaSinggah[]>;
+  createWargaSinggah(data: InsertWargaSinggah): Promise<WargaSinggah>;
+  updateWargaSinggah(id: number, data: Partial<InsertWargaSinggah>): Promise<WargaSinggah | undefined>;
+  deleteWargaSinggah(id: number): Promise<void>;
+  perpanjangKontrak(id: number, tanggalMulaiBaru: string, tanggalHabisBaru: string): Promise<WargaSinggah | undefined>;
+  getWargaSinggahMendekatiHabis(hari: number): Promise<(WargaSinggah & { namaKost: string; namaPemilik: string; nomorWaPemilik: string })[]>;
+
+  getRiwayatKontrak(wargaSinggahId: number): Promise<RiwayatKontrak[]>;
+
   getDashboardStats(): Promise<DashboardStats>;
 }
 
@@ -145,6 +167,12 @@ export interface DashboardStats {
   keuangan: { totalPemasukan: number; totalPengeluaran: number; saldo: number };
   donasiSummary: { totalDonasiMasuk: number; totalDonasiPending: number; campaignAktif: number; campaignSelesai: number; totalDonatur: number };
   avgPenghuni: number;
+  wargaSinggahStats: {
+    totalAktif: number;
+    mendekatiHabis: number;
+    sudahHabis: number;
+    totalPemilikKost: number;
+  };
 }
 
 export class DatabaseStorage implements IStorage {
@@ -765,6 +793,20 @@ export class DatabaseStorage implements IStorage {
       statusRumah, kondisiBangunan, sumberAir, sanitasiWc, listrik,
       bansos, kkFotoOwnership, perRt,
       keuangan, donasiSummary, avgPenghuni,
+      wargaSinggahStats: await (async () => {
+        const allWargaSinggahData = await db.select().from(wargaSinggah);
+        const allPemilikKostData = await db.select().from(pemilikKost);
+        const todayStr2 = today.toISOString().split("T")[0];
+        const sevenDaysLater = new Date(today);
+        sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
+        const sevenDaysStr = sevenDaysLater.toISOString().split("T")[0];
+        return {
+          totalAktif: allWargaSinggahData.filter(ws => ws.status === "aktif").length,
+          mendekatiHabis: allWargaSinggahData.filter(ws => ws.status === "aktif" && ws.tanggalHabisKontrak >= todayStr2 && ws.tanggalHabisKontrak <= sevenDaysStr).length,
+          sudahHabis: allWargaSinggahData.filter(ws => ws.status === "aktif" && ws.tanggalHabisKontrak < todayStr2).length,
+          totalPemilikKost: allPemilikKostData.length,
+        };
+      })(),
     };
   }
 
@@ -818,6 +860,150 @@ export class DatabaseStorage implements IStorage {
       result[item.campaignId].saldo = result[item.campaignId].pemasukan - result[item.campaignId].pengeluaran;
     }
     return result;
+  }
+  async getAllPemilikKost(): Promise<PemilikKost[]> {
+    return db.select().from(pemilikKost).orderBy(pemilikKost.rt, pemilikKost.id);
+  }
+
+  async getPemilikKostById(id: number): Promise<PemilikKost | undefined> {
+    const [result] = await db.select().from(pemilikKost).where(eq(pemilikKost.id, id));
+    return result;
+  }
+
+  async createPemilikKost(data: InsertPemilikKost): Promise<PemilikKost> {
+    const [result] = await db.insert(pemilikKost).values(data).returning();
+    return result;
+  }
+
+  async updatePemilikKost(id: number, data: Partial<InsertPemilikKost>): Promise<PemilikKost | undefined> {
+    const [result] = await db.update(pemilikKost).set(data).where(eq(pemilikKost.id, id)).returning();
+    return result;
+  }
+
+  async deletePemilikKost(id: number): Promise<void> {
+    await db.transaction(async (tx) => {
+      const wsList = await tx.select({ id: wargaSinggah.id }).from(wargaSinggah).where(eq(wargaSinggah.pemilikKostId, id));
+      for (const ws of wsList) {
+        await tx.delete(riwayatKontrak).where(eq(riwayatKontrak.wargaSinggahId, ws.id));
+      }
+      await tx.delete(wargaSinggah).where(eq(wargaSinggah.pemilikKostId, id));
+      await tx.delete(pemilikKost).where(eq(pemilikKost.id, id));
+    });
+  }
+
+  async getAllWargaSinggah(): Promise<(WargaSinggah & { namaKost: string; namaPemilik: string; rtKost: number })[]> {
+    const results = await db.select({
+      id: wargaSinggah.id,
+      pemilikKostId: wargaSinggah.pemilikKostId,
+      namaLengkap: wargaSinggah.namaLengkap,
+      nik: wargaSinggah.nik,
+      nomorWhatsapp: wargaSinggah.nomorWhatsapp,
+      pekerjaan: wargaSinggah.pekerjaan,
+      tanggalMulaiKontrak: wargaSinggah.tanggalMulaiKontrak,
+      tanggalHabisKontrak: wargaSinggah.tanggalHabisKontrak,
+      jumlahPenghuni: wargaSinggah.jumlahPenghuni,
+      keperluanTinggal: wargaSinggah.keperluanTinggal,
+      status: wargaSinggah.status,
+      createdAt: wargaSinggah.createdAt,
+      namaKost: pemilikKost.namaKost,
+      namaPemilik: pemilikKost.namaPemilik,
+      rtKost: pemilikKost.rt,
+    })
+      .from(wargaSinggah)
+      .innerJoin(pemilikKost, eq(wargaSinggah.pemilikKostId, pemilikKost.id))
+      .orderBy(desc(wargaSinggah.createdAt));
+    return results;
+  }
+
+  async getWargaSinggahById(id: number): Promise<WargaSinggah | undefined> {
+    const [result] = await db.select().from(wargaSinggah).where(eq(wargaSinggah.id, id));
+    return result;
+  }
+
+  async getWargaSinggahByNik(nik: string): Promise<WargaSinggah | undefined> {
+    const [result] = await db.select().from(wargaSinggah).where(eq(wargaSinggah.nik, nik));
+    return result;
+  }
+
+  async getWargaSinggahByPemilikId(pemilikId: number): Promise<WargaSinggah[]> {
+    return db.select().from(wargaSinggah).where(eq(wargaSinggah.pemilikKostId, pemilikId)).orderBy(wargaSinggah.id);
+  }
+
+  async createWargaSinggah(data: InsertWargaSinggah): Promise<WargaSinggah> {
+    const [result] = await db.insert(wargaSinggah).values(data).returning();
+    return result;
+  }
+
+  async updateWargaSinggah(id: number, data: Partial<InsertWargaSinggah>): Promise<WargaSinggah | undefined> {
+    const [result] = await db.update(wargaSinggah).set(data).where(eq(wargaSinggah.id, id)).returning();
+    return result;
+  }
+
+  async deleteWargaSinggah(id: number): Promise<void> {
+    await db.transaction(async (tx) => {
+      await tx.delete(riwayatKontrak).where(eq(riwayatKontrak.wargaSinggahId, id));
+      await tx.delete(wargaSinggah).where(eq(wargaSinggah.id, id));
+    });
+  }
+
+  async perpanjangKontrak(id: number, tanggalMulaiBaru: string, tanggalHabisBaru: string): Promise<WargaSinggah | undefined> {
+    return db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(wargaSinggah).where(eq(wargaSinggah.id, id));
+      if (!existing) return undefined;
+
+      await tx.insert(riwayatKontrak).values({
+        wargaSinggahId: id,
+        tanggalMulaiLama: existing.tanggalMulaiKontrak,
+        tanggalHabisLama: existing.tanggalHabisKontrak,
+        tanggalMulaiBaru,
+        tanggalHabisBaru,
+      });
+
+      const [updated] = await tx.update(wargaSinggah).set({
+        tanggalMulaiKontrak: tanggalMulaiBaru,
+        tanggalHabisKontrak: tanggalHabisBaru,
+        status: "aktif",
+      }).where(eq(wargaSinggah.id, id)).returning();
+
+      return updated;
+    });
+  }
+
+  async getWargaSinggahMendekatiHabis(hari: number): Promise<(WargaSinggah & { namaKost: string; namaPemilik: string; nomorWaPemilik: string })[]> {
+    const today = new Date();
+    const target = new Date(today);
+    target.setDate(target.getDate() + hari);
+    const targetStr = target.toISOString().split("T")[0];
+
+    const results = await db.select({
+      id: wargaSinggah.id,
+      pemilikKostId: wargaSinggah.pemilikKostId,
+      namaLengkap: wargaSinggah.namaLengkap,
+      nik: wargaSinggah.nik,
+      nomorWhatsapp: wargaSinggah.nomorWhatsapp,
+      pekerjaan: wargaSinggah.pekerjaan,
+      tanggalMulaiKontrak: wargaSinggah.tanggalMulaiKontrak,
+      tanggalHabisKontrak: wargaSinggah.tanggalHabisKontrak,
+      jumlahPenghuni: wargaSinggah.jumlahPenghuni,
+      keperluanTinggal: wargaSinggah.keperluanTinggal,
+      status: wargaSinggah.status,
+      createdAt: wargaSinggah.createdAt,
+      namaKost: pemilikKost.namaKost,
+      namaPemilik: pemilikKost.namaPemilik,
+      nomorWaPemilik: pemilikKost.nomorWaPemilik,
+    })
+      .from(wargaSinggah)
+      .innerJoin(pemilikKost, eq(wargaSinggah.pemilikKostId, pemilikKost.id))
+      .where(and(
+        eq(wargaSinggah.status, "aktif"),
+        eq(wargaSinggah.tanggalHabisKontrak, targetStr)
+      ));
+
+    return results;
+  }
+
+  async getRiwayatKontrak(wargaSinggahId: number): Promise<RiwayatKontrak[]> {
+    return db.select().from(riwayatKontrak).where(eq(riwayatKontrak.wargaSinggahId, wargaSinggahId)).orderBy(desc(riwayatKontrak.createdAt));
   }
 }
 
