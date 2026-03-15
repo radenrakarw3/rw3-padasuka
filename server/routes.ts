@@ -521,12 +521,60 @@ export async function registerRoutes(
     });
   });
 
-  app.get("/api/stats/dashboard", requireAdmin, async (_req, res) => {
+  app.get("/api/stats/dashboard", requireAdmin, async (req, res) => {
     try {
-      const stats = await storage.getDashboardStats();
+      const rtParam = req.query.rt ? parseInt(req.query.rt as string) : undefined;
+      const rtFilter = rtParam && !isNaN(rtParam) ? rtParam : undefined;
+      const stats = await storage.getDashboardStats(rtFilter);
       res.json(stats);
     } catch (error) {
       res.status(500).json({ message: "Gagal mengambil statistik" });
+    }
+  });
+
+  app.post("/api/stats/dashboard/ai-insight", requireAdmin, async (req, res) => {
+    try {
+      const { section, data } = req.body;
+      if (!section || !data) {
+        return res.status(400).json({ message: "Section dan data diperlukan" });
+      }
+
+      function sanitizeData(input: any): any {
+        if (Array.isArray(input)) {
+          if (input.length > 0 && input[0]?.nama) {
+            return { totalOrang: input.length, catatan: "Daftar nama dihapus untuk privasi" };
+          }
+          return input.slice(0, 20).map(sanitizeData);
+        }
+        if (input && typeof input === "object") {
+          const sanitized: Record<string, any> = {};
+          for (const [key, val] of Object.entries(input)) {
+            if (["daftarNama", "nama", "namaLengkap", "nik", "nomorWhatsapp", "fotoKtp"].includes(key)) continue;
+            sanitized[key] = sanitizeData(val);
+          }
+          return sanitized;
+        }
+        return input;
+      }
+
+      const safeData = sanitizeData(data);
+      const safeDataStr = JSON.stringify(safeData).slice(0, 3000);
+
+      const prompt = `Kamu adalah analis data untuk RW 03 Padasuka, Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi. Berikan rekomendasi singkat dan actionable (maksimal 3 poin, masing-masing 1-2 kalimat) berdasarkan data berikut.
+
+Bagian: ${section}
+Data: ${safeDataStr}
+
+Berikan rekomendasi dalam format:
+1. [rekomendasi 1]
+2. [rekomendasi 2]
+3. [rekomendasi 3]
+
+Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan bahasa Indonesia yang ringkas dan mudah dipahami.`;
+      const result = await generateWithGemini(prompt);
+      res.json({ insight: result.trim() });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Gagal mendapatkan insight AI" });
     }
   });
 

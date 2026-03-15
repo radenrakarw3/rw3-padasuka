@@ -162,7 +162,7 @@ export interface IStorage {
 
   getUsahaMendekatiExpired(hari: number): Promise<Usaha[]>;
 
-  getDashboardStats(): Promise<DashboardStats>;
+  getDashboardStats(rtFilter?: number): Promise<DashboardStats>;
 }
 
 export interface DashboardStats {
@@ -216,6 +216,21 @@ export interface DashboardStats {
     stikerAktif: number;
     stikerMendekatiExpired: number;
   };
+  pengangguran: {
+    total: number;
+    perUsia: Record<string, number>;
+    daftarNama: { nama: string; usia: number | null; rt: number | null }[];
+  };
+  capaian: {
+    waPercent: number;
+    ktpPercent: number;
+    kkFotoPercent: number;
+    bansosPercent: number;
+    usahaBerizinPercent: number;
+    totalUsahaTarget: number;
+    totalUsahaBerizin: number;
+  };
+  rtList: number[];
 }
 
 export class DatabaseStorage implements IStorage {
@@ -659,9 +674,16 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async getDashboardStats(): Promise<DashboardStats> {
-    const allKk = await db.select().from(kartuKeluarga);
-    const allWarga = await db.select().from(warga);
+  async getDashboardStats(rtFilter?: number): Promise<DashboardStats> {
+    const allKkRaw = await db.select().from(kartuKeluarga);
+    const allWargaRaw = await db.select().from(warga);
+    const allRtData = await db.select().from(rtData).orderBy(rtData.nomorRt);
+    const rtList = allRtData.map(r => r.nomorRt);
+
+    const allKk = rtFilter ? allKkRaw.filter(k => k.rt === rtFilter) : allKkRaw;
+    const kkIds = new Set(allKk.map(k => k.id));
+    const allWarga = rtFilter ? allWargaRaw.filter(w => kkIds.has(w.kkId)) : allWargaRaw;
+
     const allLaporan = await db.select().from(laporan);
     const allSuratWarga = await db.select().from(suratWarga);
     const allSuratRw = await db.select().from(suratRw);
@@ -789,12 +811,14 @@ export class DatabaseStorage implements IStorage {
       belum: allKk.filter(k => !k.fotoKk).length,
     };
 
-    const kkRtMap = new Map(allKk.map(k => [k.id, k.rt]));
-    const allRt = await db.select().from(rtData).orderBy(rtData.nomorRt);
-    const rtSet = allRt.map(r => r.nomorRt);
-    const perRt = rtSet.map(rt => {
+    const kkRtMapAll = new Map(allKkRaw.map(k => [k.id, k.rt]));
+    const perRtSource = rtFilter ? rtList.filter(r => r === rtFilter) : rtList;
+    const perRt = perRtSource.map(rt => {
       const kkInRt = allKk.filter(k => k.rt === rt);
-      const wargaInRt = allWarga.filter(w => kkRtMap.get(w.kkId) === rt);
+      const wargaInRt = allWarga.filter(w => {
+        const wRt = kkRtMapAll.get(w.kkId);
+        return wRt === rt;
+      });
       return {
         rt,
         kk: kkInRt.length,
@@ -804,6 +828,49 @@ export class DatabaseStorage implements IStorage {
         perempuan: wargaInRt.filter(w => w.jenisKelamin === "Perempuan").length,
       };
     });
+
+    const PENGANGGURAN_KEYWORDS = ["tidak bekerja", "belum bekerja", "pengangguran", "belum/tidak bekerja", "tidak diketahui", ""];
+    const kkRtMap = new Map(allKk.map(k => [k.id, k.rt]));
+    const pengangguranWarga = allWarga.filter(w => {
+      const job = (w.pekerjaan || "").toLowerCase().trim();
+      return !job || PENGANGGURAN_KEYWORDS.some(k => job === k);
+    });
+    const pengangguranPerUsia: Record<string, number> = {};
+    const pengangguranDaftar: { nama: string; usia: number | null; rt: number | null }[] = [];
+    for (const w of pengangguranWarga) {
+      let age: number | null = null;
+      if (w.tanggalLahir) {
+        const birth = new Date(w.tanggalLahir);
+        if (!isNaN(birth.getTime())) {
+          age = today.getFullYear() - birth.getFullYear();
+          const m = today.getMonth() - birth.getMonth();
+          if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+        }
+      }
+      let ageGroup = "Tidak Diketahui";
+      if (age !== null) {
+        if (age <= 17) ageGroup = "0-17";
+        else if (age <= 25) ageGroup = "18-25";
+        else if (age <= 40) ageGroup = "26-40";
+        else if (age <= 55) ageGroup = "41-55";
+        else ageGroup = "56+";
+      }
+      pengangguranPerUsia[ageGroup] = (pengangguranPerUsia[ageGroup] || 0) + 1;
+      pengangguranDaftar.push({ nama: w.namaLengkap, usia: age, rt: kkRtMap.get(w.kkId) || null });
+    }
+
+    const allUsahaForCapaian = await db.select().from(usaha);
+    const filteredUsaha = rtFilter ? allUsahaForCapaian.filter(u => u.rt === rtFilter) : allUsahaForCapaian;
+    const totalUsahaBerizin = filteredUsaha.filter(u => u.status === "disetujui").length;
+    const capaian = {
+      waPercent: totalWarga > 0 ? Math.round((waOwnership.punya / totalWarga) * 100) : 0,
+      ktpPercent: totalWarga > 0 ? Math.round((ktpOwnership.punya / totalWarga) * 100) : 0,
+      kkFotoPercent: allKk.length > 0 ? Math.round((kkFotoOwnership.punya / allKk.length) * 100) : 0,
+      bansosPercent: allKk.length > 0 ? Math.round((bansos.penerima / allKk.length) * 100) : 0,
+      usahaBerizinPercent: filteredUsaha.length > 0 ? Math.round((totalUsahaBerizin / filteredUsaha.length) * 100) : 0,
+      totalUsahaTarget: filteredUsaha.length,
+      totalUsahaBerizin,
+    };
 
     let totalPemasukan = 0;
     let totalPengeluaran = 0;
@@ -836,6 +903,8 @@ export class DatabaseStorage implements IStorage {
       statusRumah, kondisiBangunan, sumberAir, sanitasiWc, listrik,
       bansos, kkFotoOwnership, perRt,
       keuangan, donasiSummary, avgPenghuni,
+      pengangguran: { total: pengangguranWarga.length, perUsia: pengangguranPerUsia, daftarNama: pengangguranDaftar },
+      capaian, rtList,
       wargaSinggahStats: await (async () => {
         const allWargaSinggahData = await db.select().from(wargaSinggah);
         const allPemilikKostData = await db.select().from(pemilikKost);
