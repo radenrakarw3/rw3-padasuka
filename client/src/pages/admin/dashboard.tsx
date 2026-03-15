@@ -1007,27 +1007,72 @@ export default function AdminDashboard() {
         </CardContent>
       </Card>
 
-      {detailDialog && (
+      {detailDialog && (() => {
+        const insightBadge = (level: "baik" | "perhatian" | "kritis", text: string) => {
+          const cls = level === "baik" ? "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400" : level === "perhatian" ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400" : "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400";
+          return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${cls}`}>{text}</span>;
+        };
+        const insightBox = (icon: React.ReactNode, text: string, type: "info" | "warning" | "success" = "info") => {
+          const cls = type === "warning" ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800" : type === "success" ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" : "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800";
+          return <div className={`flex items-start gap-2 p-2.5 rounded-lg border ${cls}`}>{icon}<p className="text-xs leading-relaxed">{text}</p></div>;
+        };
+        const pctLabel = (n: number, total: number) => total > 0 ? Math.round((n / total) * 100) : 0;
+
+        return (
         <DetailDialog open={detailDialog.open} onClose={() => setDetailDialog(null)} title={detailDialog.title}>
           <div className="space-y-3">
-            {detailDialog.section === "Pengangguran" && (
-              <>
-                <div className="bg-red-50 dark:bg-red-950/20 rounded-lg p-3">
-                  <p className="text-sm font-bold text-[#b54560]">{stats.pengangguran.total} warga usia 18+ belum bekerja</p>
-                  <p className="text-xs text-muted-foreground">({stats.totalWarga > 0 ? Math.round((stats.pengangguran.total / stats.totalWarga) * 100) : 0}% dari total {stats.totalWarga} warga)</p>
+            {detailDialog.section === "Pengangguran" && (() => {
+              const pct = pctLabel(stats.pengangguran.total, stats.totalWarga);
+              const sorted = Object.entries(stats.pengangguran.perUsia).sort((a,b) => b[1] - a[1]);
+              const topGroup = sorted[0];
+              const perRtCount: Record<number, number> = {};
+              stats.pengangguran.daftarNama.forEach(w => { if (w.rt) perRtCount[w.rt] = (perRtCount[w.rt] || 0) + 1; });
+              const rtSorted = Object.entries(perRtCount).sort((a,b) => b[1] - a[1]);
+              const topRt = rtSorted[0];
+              return <>
+                <div className="bg-red-50 dark:bg-red-950/20 rounded-lg p-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-bold text-[#b54560]">{stats.pengangguran.total} warga usia 18+ belum bekerja</p>
+                    <p className="text-xs text-muted-foreground">{pct}% dari total {stats.totalWarga} warga</p>
+                  </div>
+                  {insightBadge(pct > 15 ? "kritis" : pct > 8 ? "perhatian" : "baik", pct > 15 ? "Tinggi" : pct > 8 ? "Sedang" : "Rendah")}
                 </div>
+                {topGroup && insightBox(<AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />, `Kelompok usia ${topGroup[0]} paling banyak belum bekerja (${topGroup[1]} orang). ${topGroup[0] === "18-25" ? "Potensi untuk pelatihan kerja atau magang." : topGroup[0] === "56+" ? "Banyak di usia pra-pensiun — pertimbangkan program UMKM ringan." : "Targetkan program pelatihan keterampilan."}`, "warning")}
+                {topRt && rtSorted.length > 1 && insightBox(<Target className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />, `RT ${String(topRt[0]).padStart(2, "0")} paling banyak pengangguran (${topRt[1]} orang). Bisa jadi prioritas untuk sosialisasi lowongan kerja atau program berdaya.`, "info")}
                 <div>
-                  <p className="text-xs font-medium mb-2">Per Kelompok Usia:</p>
-                  {Object.entries(stats.pengangguran.perUsia).sort((a,b) => b[1] - a[1]).map(([group, count]) => (
-                    <div key={group} className="flex justify-between text-xs py-1 border-b last:border-0">
-                      <span>{group}</span>
-                      <span className="font-medium">{count} orang</span>
-                    </div>
-                  ))}
+                  <p className="text-xs font-semibold mb-2">Sebaran per Kelompok Usia</p>
+                  {sorted.map(([group, count]) => {
+                    const max = Math.max(...sorted.map(s => s[1]), 1);
+                    return (
+                      <div key={group} className="mb-1.5">
+                        <div className="flex justify-between text-xs mb-0.5">
+                          <span>{group} tahun</span>
+                          <span className="font-semibold">{count} orang ({pctLabel(count, stats.pengangguran.total)}%)</span>
+                        </div>
+                        <div className="h-2.5 bg-muted rounded-full overflow-hidden">
+                          <div className="h-full rounded-full bg-[#b54560] transition-all" style={{ width: `${(count / max) * 100}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
+                {rtSorted.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold mb-2">Sebaran per RT</p>
+                    {rtSorted.map(([rt, count]) => (
+                      <div key={rt} className="flex justify-between items-center text-xs py-1.5 px-2 rounded bg-muted/50 mb-1">
+                        <span className="font-medium">RT {String(rt).padStart(2, "0")}</span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-16 h-2 bg-muted rounded-full overflow-hidden"><div className="h-full rounded-full bg-[#b54560]" style={{ width: `${(count / Math.max(...rtSorted.map(r => r[1]), 1)) * 100}%` }} /></div>
+                          <span className="font-semibold w-12 text-right">{count} org</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div>
-                  <p className="text-xs font-medium mb-2">Daftar Warga:</p>
-                  <div className="max-h-[200px] overflow-y-auto space-y-1">
+                  <p className="text-xs font-semibold mb-2">Daftar Warga ({stats.pengangguran.daftarNama.length})</p>
+                  <div className="max-h-[180px] overflow-y-auto space-y-1">
                     {stats.pengangguran.daftarNama.map((w, i) => (
                       <div key={i} className="flex justify-between items-center text-xs py-1.5 px-2 rounded bg-muted/50">
                         <span>{w.nama}</span>
@@ -1039,186 +1084,504 @@ export default function AdminDashboard() {
                     ))}
                   </div>
                 </div>
-              </>
-            )}
-            {detailDialog.section === "Angka Capaian" && (
-              <>
-                {capaianItems.map(c => (
-                  <div key={c.label} className="flex items-center justify-between py-2 border-b last:border-0">
-                    <span className="text-xs">{c.label}</span>
-                    <div className="flex items-center gap-2">
-                      <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${c.value}%`, backgroundColor: c.color }} />
-                      </div>
-                      <span className="text-xs font-bold" style={{ color: c.color }}>{c.value}%</span>
-                    </div>
+              </>;
+            })()}
+            {detailDialog.section === "Angka Capaian" && (() => {
+              const avg = Math.round(capaianItems.reduce((s, c) => s + c.value, 0) / capaianItems.length);
+              const lowest = [...capaianItems].sort((a, b) => a.value - b.value)[0];
+              const highest = [...capaianItems].sort((a, b) => b.value - a.value)[0];
+              return <>
+                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Rata-rata Capaian</p>
+                    <p className="text-2xl font-bold">{avg}%</p>
                   </div>
-                ))}
-              </>
-            )}
-            {detailDialog.section.startsWith("RT ") && (
-              <>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { label: "Jumlah KK", value: detailDialog.data.kk },
-                    { label: "Total Warga", value: detailDialog.data.warga },
-                    { label: "Laki-laki", value: detailDialog.data.lakiLaki },
-                    { label: "Perempuan", value: detailDialog.data.perempuan },
-                    { label: "Penerima Bansos", value: detailDialog.data.bansos },
-                  ].map(item => (
-                    <div key={item.label} className="p-2 rounded-lg bg-muted/50 text-center">
-                      <p className="text-lg font-bold">{item.value}</p>
-                      <p className="text-[10px] text-muted-foreground">{item.label}</p>
+                  {insightBadge(avg >= 70 ? "baik" : avg >= 40 ? "perhatian" : "kritis", avg >= 70 ? "Baik" : avg >= 40 ? "Perlu Ditingkatkan" : "Perlu Perhatian Serius")}
+                </div>
+                {lowest && lowest.value < 50 && insightBox(<AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />, `"${lowest.label}" baru ${lowest.value}% — ini capaian terendah dan perlu jadi prioritas utama. ${lowest.label.includes("WhatsApp") ? "Sosialisasi WA blast tidak akan efektif jika banyak warga belum terdaftar." : lowest.label.includes("KTP") ? "Data KTP penting untuk validasi identitas warga." : lowest.label.includes("Usaha") ? "Usaha tanpa izin berisiko ditindak — bantu proses perizinannya." : "Perlu program khusus untuk meningkatkan angka ini."}`, "warning")}
+                {highest && insightBox(<Award className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />, `"${highest.label}" sudah ${highest.value}% — pencapaian terbaik! ${highest.value >= 80 ? "Pertahankan dan jadikan contoh untuk indikator lain." : "Masih bisa ditingkatkan lagi."}`, "success")}
+                <div>
+                  <p className="text-xs font-semibold mb-2">Detail Semua Indikator</p>
+                  {[...capaianItems].sort((a, b) => a.value - b.value).map(c => (
+                    <div key={c.label} className="mb-2">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-xs">{c.label}</span>
+                        <div className="flex items-center gap-1.5">
+                          {insightBadge(c.value >= 70 ? "baik" : c.value >= 40 ? "perhatian" : "kritis", `${c.value}%`)}
+                        </div>
+                      </div>
+                      <div className="w-full h-2.5 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full rounded-full transition-all" style={{ width: `${c.value}%`, backgroundColor: c.color }} />
+                      </div>
                     </div>
                   ))}
                 </div>
-              </>
-            )}
-            {detailDialog.section === "Demografi" && (
-              <div className="space-y-3">
-                {Object.entries(detailDialog.data).map(([key, val]) => (
-                  <div key={key}>
-                    <p className="text-xs font-medium mb-1 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</p>
-                    {typeof val === 'object' && val !== null && (
-                      <div className="space-y-1">
-                        {Object.entries(val as Record<string, number>).filter(([,v]) => v > 0).sort((a,b) => b[1] - a[1]).map(([label, value]) => (
-                          <div key={label} className="flex justify-between text-xs py-0.5">
-                            <span className="text-muted-foreground">{AGE_LABELS[label] || label}</span>
-                            <span className="font-medium">{value as number}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+              </>;
+            })()}
+            {detailDialog.section.startsWith("RT ") && (() => {
+              const d = detailDialog.data;
+              const avgWarga = stats.perRt.length > 0 ? Math.round(stats.perRt.reduce((s, r) => s + r.warga, 0) / stats.perRt.length) : 0;
+              const avgKk = stats.perRt.length > 0 ? Math.round(stats.perRt.reduce((s, r) => s + r.kk, 0) / stats.perRt.length) : 0;
+              const avgBansos = stats.perRt.length > 0 ? Math.round(stats.perRt.reduce((s, r) => s + r.bansos, 0) / stats.perRt.length) : 0;
+              const rankWarga = [...stats.perRt].sort((a, b) => b.warga - a.warga).findIndex(r => r.rt === d.rt) + 1;
+              const genderRatio = d.warga > 0 ? Math.round((d.lakiLaki / d.warga) * 100) : 50;
+              const avgPerKk = d.kk > 0 ? (d.warga / d.kk).toFixed(1) : "0";
+              const bansosPct = d.warga > 0 ? Math.round((d.bansos / d.warga) * 100) : 0;
+              return <>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { label: "Jumlah KK", value: d.kk, sub: `${d.kk > avgKk ? "↑" : "↓"} rata-rata RW: ${avgKk}` },
+                    { label: "Total Warga", value: d.warga, sub: `Peringkat #${rankWarga} dari ${stats.perRt.length} RT` },
+                    { label: "Laki-laki", value: d.lakiLaki, sub: `${genderRatio}% dari total warga` },
+                    { label: "Perempuan", value: d.perempuan, sub: `${100 - genderRatio}% dari total warga` },
+                  ].map(item => (
+                    <div key={item.label} className="p-2.5 rounded-lg bg-muted/50">
+                      <p className="text-lg font-bold">{item.value}</p>
+                      <p className="text-[10px] text-muted-foreground">{item.label}</p>
+                      <p className="text-[9px] text-muted-foreground/70 mt-0.5">{item.sub}</p>
+                    </div>
+                  ))}
+                </div>
+                {insightBox(<UsersRound className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />, `Rata-rata ${avgPerKk} orang per KK. ${Number(avgPerKk) > 4 ? "Kepadatan KK tinggi — perlu perhatian ruang tinggal." : "Ukuran keluarga normal."}`, "info")}
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-muted/50">
+                  <div>
+                    <p className="text-xs font-medium">Penerima Bansos</p>
+                    <p className="text-lg font-bold">{d.bansos} <span className="text-xs font-normal text-muted-foreground">({bansosPct}% warga RT)</span></p>
                   </div>
-                ))}
-              </div>
-            )}
-            {detailDialog.section === "Pendidikan" && (
-              <div className="space-y-1">
-                {Object.entries(detailDialog.data as Record<string, number>).filter(([,v]) => v > 0).sort((a,b) => b[1] - a[1]).map(([label, value]) => (
-                  <div key={label} className="flex justify-between text-xs py-1 border-b last:border-0">
-                    <span>{label}</span>
-                    <span className="font-medium">{value} orang</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {detailDialog.section === "Pekerjaan" && (
-              <div className="space-y-1">
-                {(detailDialog.data as { name: string; count: number }[]).map((p, i) => (
-                  <div key={i} className="flex justify-between text-xs py-1 border-b last:border-0">
-                    <span>{p.name}</span>
-                    <span className="font-medium">{p.count} orang</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {detailDialog.section === "Keuangan" && (
-              <div className="space-y-2">
+                  {insightBadge(d.bansos > avgBansos ? "perhatian" : "baik", d.bansos > avgBansos ? `Di atas rata-rata (${avgBansos})` : `Normal`)}
+                </div>
+                {d.warga > avgWarga * 1.3 && insightBox(<AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />, `RT ini memiliki ${Math.round(((d.warga - avgWarga) / avgWarga) * 100)}% lebih banyak warga dari rata-rata. Alokasi layanan dan perhatian sosial perlu lebih besar.`, "warning")}
+              </>;
+            })()}
+            {detailDialog.section === "Demografi" && (() => {
+              const genderData = detailDialog.data.jenisKelamin as Record<string, number>;
+              const totalG = Object.values(genderData).reduce((s, v) => s + v, 0);
+              const usiaData = detailDialog.data.kelompokUsia as Record<string, number>;
+              const totalU = Object.values(usiaData).reduce((s, v) => s + v, 0);
+              const usia017 = (usiaData["0-5"] || 0) + (usiaData["6-17"] || 0);
+              const usia65 = usiaData["65+"] || 0;
+              const usiaProduktif = totalU - usia017 - usia65;
+              const rasioKetergantungan = usiaProduktif > 0 ? Math.round(((usia017 + usia65) / usiaProduktif) * 100) : 0;
+              const agamaData = detailDialog.data.agama as Record<string, number>;
+              const topAgama = Object.entries(agamaData).sort((a, b) => b[1] - a[1])[0];
+              const statusKawin = detailDialog.data.statusPerkawinan as Record<string, number>;
+              const topGender = Object.entries(genderData).sort((a, b) => b[1] - a[1])[0];
+              return <>
                 <div className="grid grid-cols-3 gap-2">
-                  <div className="p-2 rounded-lg bg-muted/50 text-center">
-                    <p className="text-xs font-bold text-[#2d7a5f]">{formatRupiah(detailDialog.data.keuangan.totalPemasukan)}</p>
+                  <div className="p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/20 text-center">
+                    <p className="text-lg font-bold text-[#3b6db5]">{usiaProduktif}</p>
+                    <p className="text-[9px] text-muted-foreground">Usia Produktif</p>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/20 text-center">
+                    <p className="text-lg font-bold text-[#b8923e]">{usia017 + usia65}</p>
+                    <p className="text-[9px] text-muted-foreground">Tanggungan</p>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-muted/50 text-center">
+                    <p className="text-lg font-bold">{rasioKetergantungan}%</p>
+                    <p className="text-[9px] text-muted-foreground">Rasio Ketergantungan</p>
+                  </div>
+                </div>
+                {insightBox(<Users className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />, `Setiap 100 warga produktif menanggung ${rasioKetergantungan} warga non-produktif (anak & lansia). ${rasioKetergantungan > 60 ? "Rasio cukup tinggi — perlu program bantuan untuk keluarga." : "Rasio masih wajar."}`, rasioKetergantungan > 60 ? "warning" : "info")}
+                <div>
+                  <p className="text-xs font-semibold mb-2">Jenis Kelamin</p>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="flex-1 h-4 rounded-full overflow-hidden flex">
+                      {Object.entries(genderData).map(([name, val], i) => (
+                        <div key={name} className="h-full" style={{ width: `${pctLabel(val, totalG)}%`, backgroundColor: i === 0 ? "#3b6db5" : "#b54560" }} />
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    {Object.entries(genderData).map(([name, val], i) => (
+                      <span key={name} style={{ color: i === 0 ? "#3b6db5" : "#b54560" }} className="font-medium">{name}: {val} ({pctLabel(val, totalG)}%)</span>
+                    ))}
+                  </div>
+                  {topGender && Math.abs(pctLabel(topGender[1], totalG) - 50) > 10 && insightBox(<AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />, `Rasio gender tidak seimbang — ${topGender[0]} mendominasi ${pctLabel(topGender[1], totalG)}%.`, "warning")}
+                </div>
+                <div>
+                  <p className="text-xs font-semibold mb-2">Kelompok Usia</p>
+                  {Object.entries(usiaData).filter(([,v]) => v > 0).sort((a,b) => b[1] - a[1]).map(([key, val]) => (
+                    <div key={key} className="mb-1.5">
+                      <div className="flex justify-between text-xs mb-0.5">
+                        <span>{AGE_LABELS[key] || key}</span>
+                        <span className="font-semibold">{val} ({pctLabel(val, totalU)}%)</span>
+                      </div>
+                      <div className="h-2 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full rounded-full bg-[#2d7a5f]" style={{ width: `${pctLabel(val, totalU)}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <p className="text-xs font-semibold mb-2">Status Perkawinan</p>
+                  {Object.entries(statusKawin).filter(([,v]) => v > 0).sort((a,b) => b[1] - a[1]).map(([name, val]) => (
+                    <div key={name} className="flex justify-between text-xs py-1 border-b last:border-0">
+                      <span>{name}</span>
+                      <span className="font-medium">{val} ({pctLabel(val, totalU)}%)</span>
+                    </div>
+                  ))}
+                </div>
+                {topAgama && <div className="p-2 rounded-lg bg-muted/50"><p className="text-xs">Agama mayoritas: <span className="font-bold">{topAgama[0]}</span> ({pctLabel(topAgama[1], totalU)}%). {Object.keys(agamaData).filter(k => agamaData[k] > 0).length > 1 ? `Terdapat ${Object.keys(agamaData).filter(k => agamaData[k] > 0).length} agama — jaga kerukunan antarumat.` : ""}</p></div>}
+              </>;
+            })()}
+            {detailDialog.section === "Pendidikan" && (() => {
+              const sorted = Object.entries(detailDialog.data as Record<string, number>).filter(([,v]) => v > 0).sort((a,b) => b[1] - a[1]);
+              const total = sorted.reduce((s, [,v]) => s + v, 0);
+              const top = sorted[0];
+              const rendahKeys = ["Tidak/Belum Sekolah", "Tidak Tamat SD", "SD/Sederajat", "SLTP/Sederajat", "Tidak Diketahui"];
+              const rendah = sorted.filter(([k]) => rendahKeys.includes(k)).reduce((s, [,v]) => s + v, 0);
+              const sarjana = sorted.filter(([k]) => k.includes("S1") || k.includes("S2") || k.includes("S3") || k.includes("Diploma")).reduce((s, [,v]) => s + v, 0);
+              return <>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-2.5 rounded-lg bg-muted/50 text-center">
+                    <p className="text-lg font-bold text-[#b8923e]">{rendah}</p>
+                    <p className="text-[9px] text-muted-foreground">Pendidikan Rendah (≤SMP)</p>
+                    <p className="text-[9px] text-muted-foreground/70">{pctLabel(rendah, total)}% dari total</p>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-muted/50 text-center">
+                    <p className="text-lg font-bold text-[#2d7a5f]">{sarjana}</p>
+                    <p className="text-[9px] text-muted-foreground">Diploma/Sarjana+</p>
+                    <p className="text-[9px] text-muted-foreground/70">{pctLabel(sarjana, total)}% dari total</p>
+                  </div>
+                </div>
+                {rendah > total * 0.4 && insightBox(<AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />, `${pctLabel(rendah, total)}% warga berpendidikan rendah (≤SMP). Pertimbangkan program Kejar Paket atau pelatihan keterampilan vokasi.`, "warning")}
+                {top && insightBox(<GraduationCap className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />, `Mayoritas warga berpendidikan "${top[0]}" (${top[1]} orang, ${pctLabel(top[1], total)}%). ${top[0].includes("SMA") || top[0].includes("SLTA") ? "Banyak lulusan SMA — dorong akses ke pendidikan tinggi atau pelatihan skill." : ""}`, "info")}
+                <div>
+                  <p className="text-xs font-semibold mb-2">Rincian Lengkap</p>
+                  {sorted.map(([label, value]) => (
+                    <div key={label} className="mb-1.5">
+                      <div className="flex justify-between text-xs mb-0.5">
+                        <span>{label}</span>
+                        <span className="font-semibold">{value} ({pctLabel(value, total)}%)</span>
+                      </div>
+                      <div className="h-2 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full rounded-full bg-[#7a4dbf]" style={{ width: `${pctLabel(value, total)}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>;
+            })()}
+            {detailDialog.section === "Pekerjaan" && (() => {
+              const jobs = detailDialog.data as { name: string; count: number }[];
+              const total = jobs.reduce((s, j) => s + j.count, 0);
+              const top3 = jobs.slice(0, 3);
+              const tidakBekerja = jobs.filter(j => ["Belum/Tidak Bekerja", "Tidak Bekerja", "Pengangguran"].some(k => j.name.toLowerCase().includes(k.toLowerCase())));
+              const wiraswasta = jobs.filter(j => j.name.toLowerCase().includes("wiraswasta") || j.name.toLowerCase().includes("wirausaha"));
+              return <>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="p-2.5 rounded-lg bg-muted/50 text-center">
+                    <p className="text-lg font-bold">{jobs.length}</p>
+                    <p className="text-[9px] text-muted-foreground">Jenis Pekerjaan</p>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-muted/50 text-center">
+                    <p className="text-lg font-bold text-[#2d7a5f]">{total}</p>
+                    <p className="text-[9px] text-muted-foreground">Total Pekerja</p>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-muted/50 text-center">
+                    <p className="text-lg font-bold text-[#b8923e]">{wiraswasta.reduce((s, j) => s + j.count, 0)}</p>
+                    <p className="text-[9px] text-muted-foreground">Wiraswasta</p>
+                  </div>
+                </div>
+                {top3.length > 0 && insightBox(<Briefcase className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />, `3 pekerjaan terbanyak: ${top3.map(j => `${j.name} (${j.count})`).join(", ")}. ${top3[0].name.includes("Mengurus Rumah Tangga") ? "Banyak ibu rumah tangga — potensi untuk program pemberdayaan ekonomi perempuan." : `"${top3[0].name}" mendominasi ${pctLabel(top3[0].count, total)}% pekerjaan warga.`}`, "info")}
+                <div>
+                  <p className="text-xs font-semibold mb-2">Semua Jenis Pekerjaan</p>
+                  {jobs.map((p, i) => (
+                    <div key={i} className="mb-1.5">
+                      <div className="flex justify-between text-xs mb-0.5">
+                        <span>{p.name}</span>
+                        <span className="font-semibold">{p.count} ({pctLabel(p.count, total)}%)</span>
+                      </div>
+                      <div className="h-2 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${pctLabel(p.count, total)}%`, backgroundColor: COLORS[i % COLORS.length] }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>;
+            })()}
+            {detailDialog.section === "Keuangan" && (() => {
+              const k = detailDialog.data.keuangan;
+              const d = detailDialog.data.donasi;
+              const rasio = k.totalPemasukan > 0 ? Math.round((k.totalPengeluaran / k.totalPemasukan) * 100) : 0;
+              return <>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="p-2.5 rounded-lg bg-green-50 dark:bg-green-950/20 text-center">
+                    <TrendingUp className="w-4 h-4 text-[#2d7a5f] mx-auto mb-1" />
+                    <p className="text-xs font-bold text-[#2d7a5f]">{formatRupiah(k.totalPemasukan)}</p>
                     <p className="text-[9px] text-muted-foreground">Pemasukan</p>
                   </div>
-                  <div className="p-2 rounded-lg bg-muted/50 text-center">
-                    <p className="text-xs font-bold text-[#b54560]">{formatRupiah(detailDialog.data.keuangan.totalPengeluaran)}</p>
+                  <div className="p-2.5 rounded-lg bg-red-50 dark:bg-red-950/20 text-center">
+                    <TrendingDown className="w-4 h-4 text-[#b54560] mx-auto mb-1" />
+                    <p className="text-xs font-bold text-[#b54560]">{formatRupiah(k.totalPengeluaran)}</p>
                     <p className="text-[9px] text-muted-foreground">Pengeluaran</p>
                   </div>
-                  <div className="p-2 rounded-lg bg-muted/50 text-center">
-                    <p className={`text-xs font-bold ${detailDialog.data.keuangan.saldo >= 0 ? "text-[#2d7a5f]" : "text-[#b54560]"}`}>{formatRupiah(detailDialog.data.keuangan.saldo)}</p>
+                  <div className="p-2.5 rounded-lg bg-muted/50 text-center">
+                    <Wallet className="w-4 h-4 text-[#3b6db5] mx-auto mb-1" />
+                    <p className={`text-xs font-bold ${k.saldo >= 0 ? "text-[#2d7a5f]" : "text-[#b54560]"}`}>{formatRupiah(k.saldo)}</p>
                     <p className="text-[9px] text-muted-foreground">Saldo</p>
                   </div>
                 </div>
-              </div>
-            )}
-            {detailDialog.section === "Layanan" && (
-              <div className="space-y-3">
-                {[
-                  { label: "Laporan Warga", data: detailDialog.data.laporan },
-                  { label: "Surat Warga", data: detailDialog.data.surat },
-                  { label: "Pengajuan Bansos", data: detailDialog.data.bansos },
-                ].map(item => (
-                  <div key={item.label}>
-                    <p className="text-xs font-medium mb-1">{item.label}</p>
-                    <div className="space-y-0.5">
-                      {Object.entries(item.data || {}).filter(([,v]) => (v as number) > 0).map(([label, value]) => (
-                        <div key={label} className="flex justify-between text-xs py-0.5">
-                          <span className="text-muted-foreground">{STATUS_LABELS[label] || label}</span>
-                          <span className="font-medium">{value as number}</span>
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-muted/50">
+                  <span className="text-xs">Rasio Pengeluaran vs Pemasukan</span>
+                  {insightBadge(rasio > 90 ? "kritis" : rasio > 70 ? "perhatian" : "baik", `${rasio}%`)}
+                </div>
+                {rasio > 90 && insightBox(<AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />, `Pengeluaran sudah ${rasio}% dari pemasukan. ${k.saldo < 0 ? "Kas RW saat ini MINUS — perlu segera cari sumber pemasukan tambahan." : "Segera kendalikan pengeluaran atau cari pemasukan tambahan."}`, "warning")}
+                {rasio <= 70 && insightBox(<Award className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />, `Kondisi keuangan sehat — pengeluaran hanya ${rasio}% dari pemasukan. Saldo cukup untuk operasional.`, "success")}
+                {d && (
+                  <div>
+                    <p className="text-xs font-semibold mb-2">Donasi</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { label: "Total Donasi Masuk", value: formatRupiah(d.totalDonasiMasuk || 0) },
+                        { label: "Donatur", value: d.totalDonatur || 0 },
+                        { label: "Campaign Aktif", value: d.campaignAktif || 0 },
+                        { label: "Donasi Pending", value: d.totalDonasiPending || 0 },
+                      ].map(item => (
+                        <div key={item.label} className="p-2 rounded-lg bg-muted/50">
+                          <p className="text-xs font-bold">{item.value}</p>
+                          <p className="text-[9px] text-muted-foreground">{item.label}</p>
                         </div>
                       ))}
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-            {detailDialog.section === "Data Rumah & Fasilitas" && (
-              <div className="space-y-3">
-                {Object.entries(detailDialog.data).map(([key, val]) => {
-                  if (key === "bansos") {
-                    const b = val as { penerima: number; bukan: number };
-                    return (
-                      <div key={key}>
-                        <p className="text-xs font-medium mb-1">Penerima Bansos</p>
-                        <div className="flex justify-between text-xs">
-                          <span>Penerima: {b.penerima}</span>
-                          <span>Bukan: {b.bukan}</span>
-                        </div>
-                      </div>
-                    );
-                  }
+                )}
+              </>;
+            })()}
+            {detailDialog.section === "Layanan" && (() => {
+              const items = [
+                { label: "Laporan Warga", data: detailDialog.data.laporan, total: stats.totalLaporan },
+                { label: "Surat Warga", data: detailDialog.data.surat, total: stats.totalSuratWarga },
+                { label: "Pengajuan Bansos", data: detailDialog.data.bansos, total: stats.totalPengajuanBansos },
+              ];
+              const totalPending = (detailDialog.data.laporan?.pending || 0) + (detailDialog.data.surat?.pending || 0) + (detailDialog.data.bansos?.pending || 0);
+              const totalAll = items.reduce((s, i) => s + (i.total || 0), 0);
+              const totalSelesai = (detailDialog.data.laporan?.selesai || 0) + (detailDialog.data.surat?.selesai || 0) + (detailDialog.data.bansos?.disetujui || 0);
+              const resolveRate = totalAll > 0 ? Math.round((totalSelesai / totalAll) * 100) : 0;
+              return <>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="p-2.5 rounded-lg bg-muted/50 text-center">
+                    <p className="text-lg font-bold">{totalAll}</p>
+                    <p className="text-[9px] text-muted-foreground">Total Layanan</p>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/20 text-center">
+                    <p className="text-lg font-bold text-[#b8923e]">{totalPending}</p>
+                    <p className="text-[9px] text-muted-foreground">Menunggu</p>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-green-50 dark:bg-green-950/20 text-center">
+                    <p className="text-lg font-bold text-[#2d7a5f]">{resolveRate}%</p>
+                    <p className="text-[9px] text-muted-foreground">Tingkat Selesai</p>
+                  </div>
+                </div>
+                {totalPending > 5 && insightBox(<Clock className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />, `Ada ${totalPending} layanan yang masih menunggu. Warga mungkin merasa kurang direspon — prioritaskan penyelesaian untuk menjaga kepercayaan.`, "warning")}
+                {resolveRate >= 70 && insightBox(<Award className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />, `Tingkat penyelesaian ${resolveRate}% — responsivitas layanan cukup baik! Bisa dijadikan konten: "Dari ${totalAll} permintaan layanan, ${totalSelesai} sudah diselesaikan."`, "success")}
+                {items.map(item => {
+                  const entries = Object.entries(item.data || {}).filter(([,v]) => (v as number) > 0);
+                  const itemTotal = entries.reduce((s, [,v]) => s + (v as number), 0);
                   return (
-                    <div key={key}>
-                      <p className="text-xs font-medium mb-1 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</p>
-                      <div className="space-y-0.5">
-                        {Object.entries(val as Record<string, number>).filter(([,v]) => v > 0).sort((a,b) => b[1] - a[1]).map(([label, value]) => (
-                          <div key={label} className="flex justify-between text-xs py-0.5">
-                            <span className="text-muted-foreground">{label}</span>
-                            <span className="font-medium">{value as number}</span>
-                          </div>
-                        ))}
+                    <div key={item.label}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <p className="text-xs font-semibold">{item.label}</p>
+                        <span className="text-[10px] text-muted-foreground">{itemTotal} total</span>
                       </div>
+                      {itemTotal > 0 ? (
+                        <>
+                          <div className="h-3 bg-muted rounded-full overflow-hidden flex mb-1.5">
+                            {entries.map(([label, value]) => {
+                              const color = STATUS_COLORS[label] || "#999";
+                              return <div key={label} className="h-full" style={{ width: `${pctLabel(value as number, itemTotal)}%`, backgroundColor: color }} title={`${STATUS_LABELS[label] || label}: ${value}`} />;
+                            })}
+                          </div>
+                          <div className="flex flex-wrap gap-x-3 gap-y-1">
+                            {entries.map(([label, value]) => {
+                              const color = STATUS_COLORS[label] || "#999";
+                              return <div key={label} className="flex items-center gap-1"><div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} /><span className="text-[10px]">{STATUS_LABELS[label] || label}: {value as number}</span></div>;
+                            })}
+                          </div>
+                        </>
+                      ) : <p className="text-xs text-muted-foreground">Belum ada data</p>}
                     </div>
                   );
                 })}
-              </div>
-            )}
-            {detailDialog.section === "Data Keluarga" && (
-              <div className="space-y-3">
-                <div className="p-2 rounded-lg bg-muted/50">
-                  <p className="text-xs">Rata-rata anggota per KK: <span className="font-bold">{detailDialog.data.avgPenghuni} orang</span></p>
+              </>;
+            })()}
+            {detailDialog.section === "Data Rumah & Fasilitas" && (() => {
+              const d = detailDialog.data;
+              const bansosData = d.bansos as { penerima: number; bukan: number };
+              const totalBansos = bansosData.penerima + bansosData.bukan;
+              const bansosPct = totalBansos > 0 ? Math.round((bansosData.penerima / totalBansos) * 100) : 0;
+              const kondisi = d.kondisiBangunan as Record<string, number>;
+              const totalKondisi = Object.values(kondisi).reduce((s, v) => s + v, 0);
+              const baik = kondisi["Baik"] || kondisi["baik"] || 0;
+              const baikPct = totalKondisi > 0 ? Math.round((baik / totalKondisi) * 100) : 0;
+              const statusR = d.statusRumah as Record<string, number>;
+              const milikSendiri = statusR["Milik Sendiri"] || statusR["Hak Milik"] || 0;
+              const totalRumah = Object.values(statusR).reduce((s, v) => s + v, 0);
+              const sanitasi = d.sanitasiWc as Record<string, number>;
+              const airBersih = d.sumberAir as Record<string, number>;
+              return <>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="p-2.5 rounded-lg bg-muted/50 text-center">
+                    <p className="text-lg font-bold">{baikPct}%</p>
+                    <p className="text-[9px] text-muted-foreground">Bangunan Baik</p>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-muted/50 text-center">
+                    <p className="text-lg font-bold">{totalRumah > 0 ? Math.round((milikSendiri / totalRumah) * 100) : 0}%</p>
+                    <p className="text-[9px] text-muted-foreground">Milik Sendiri</p>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-muted/50 text-center">
+                    <p className="text-lg font-bold">{bansosPct}%</p>
+                    <p className="text-[9px] text-muted-foreground">Penerima Bansos</p>
+                  </div>
+                </div>
+                {baikPct < 60 && insightBox(<AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />, `Hanya ${baikPct}% bangunan berkondisi baik. Perlu program perbaikan rumah atau akses ke bantuan RTLH (Rumah Tidak Layak Huni).`, "warning")}
+                {Object.entries(kondisi).filter(([,v]) => v > 0).length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold mb-2">Kondisi Bangunan</p>
+                    {Object.entries(kondisi).filter(([,v]) => v > 0).sort((a,b) => b[1] - a[1]).map(([label, value], i) => (
+                      <div key={label} className="mb-1.5">
+                        <div className="flex justify-between text-xs mb-0.5"><span>{label}</span><span className="font-semibold">{value} ({pctLabel(value, totalKondisi)}%)</span></div>
+                        <div className="h-2 bg-muted rounded-full overflow-hidden"><div className="h-full rounded-full" style={{ width: `${pctLabel(value, totalKondisi)}%`, backgroundColor: COLORS[i % COLORS.length] }} /></div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {Object.entries(statusR).filter(([,v]) => v > 0).length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold mb-2">Status Rumah</p>
+                    {Object.entries(statusR).filter(([,v]) => v > 0).sort((a,b) => b[1] - a[1]).map(([label, value]) => (
+                      <div key={label} className="flex justify-between text-xs py-1 border-b last:border-0"><span>{label}</span><span className="font-medium">{value} ({pctLabel(value, totalRumah)}%)</span></div>
+                    ))}
+                  </div>
+                )}
+                {Object.entries(airBersih).filter(([,v]) => v > 0).length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold mb-2">Sumber Air</p>
+                    {Object.entries(airBersih).filter(([,v]) => v > 0).sort((a,b) => b[1] - a[1]).map(([label, value]) => {
+                      const tot = Object.values(airBersih).reduce((s, v) => s + v, 0);
+                      return <div key={label} className="flex justify-between text-xs py-1 border-b last:border-0"><span>{label}</span><span className="font-medium">{value} ({pctLabel(value, tot)}%)</span></div>;
+                    })}
+                  </div>
+                )}
+                {Object.entries(sanitasi).filter(([,v]) => v > 0).length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold mb-2">Sanitasi WC</p>
+                    {Object.entries(sanitasi).filter(([,v]) => v > 0).sort((a,b) => b[1] - a[1]).map(([label, value]) => {
+                      const tot = Object.values(sanitasi).reduce((s, v) => s + v, 0);
+                      return <div key={label} className="flex justify-between text-xs py-1 border-b last:border-0"><span>{label}</span><span className="font-medium">{value} ({pctLabel(value, tot)}%)</span></div>;
+                    })}
+                  </div>
+                )}
+                <div className="p-2.5 rounded-lg bg-muted/50">
+                  <p className="text-xs font-semibold mb-1">Penerima Bansos</p>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden"><div className="h-full bg-[#b8923e] rounded-full" style={{ width: `${bansosPct}%` }} /></div>
+                    <span className="text-xs font-bold">{bansosData.penerima} / {totalBansos}</span>
+                  </div>
+                </div>
+              </>;
+            })()}
+            {detailDialog.section === "Data Keluarga" && (() => {
+              const d = detailDialog.data;
+              const wa = d.waOwnership as { punya: number; belum: number };
+              const ktp = d.ktpOwnership as { punya: number; belum: number };
+              const totalWa = wa.punya + wa.belum;
+              const totalKtp = ktp.punya + ktp.belum;
+              const waPct = totalWa > 0 ? Math.round((wa.punya / totalWa) * 100) : 0;
+              const ktpPct = totalKtp > 0 ? Math.round((ktp.punya / totalKtp) * 100) : 0;
+              const kedudukan = d.kedudukanKeluarga as Record<string, number>;
+              const totalKed = Object.values(kedudukan).reduce((s, v) => s + v, 0);
+              return <>
+                <div className="p-3 rounded-lg bg-muted/50 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Rata-rata Anggota per KK</p>
+                    <p className="text-2xl font-bold">{d.avgPenghuni} <span className="text-sm font-normal text-muted-foreground">orang</span></p>
+                  </div>
+                  {insightBadge(Number(d.avgPenghuni) > 5 ? "perhatian" : "baik", Number(d.avgPenghuni) > 5 ? "Padat" : "Normal")}
                 </div>
                 <div>
-                  <p className="text-xs font-medium mb-1">Kedudukan dalam Keluarga</p>
-                  {Object.entries(detailDialog.data.kedudukanKeluarga || {}).filter(([,v]) => (v as number) > 0).sort((a,b) => (b[1] as number) - (a[1] as number)).map(([label, value]) => (
-                    <div key={label} className="flex justify-between text-xs py-0.5">
-                      <span className="text-muted-foreground">{label}</span>
-                      <span className="font-medium">{value as number}</span>
+                  <p className="text-xs font-semibold mb-2">Keterhubungan Digital</p>
+                  <div className="space-y-2">
+                    <div>
+                      <div className="flex justify-between text-xs mb-0.5"><span>WhatsApp Terdaftar</span>{insightBadge(waPct >= 70 ? "baik" : waPct >= 40 ? "perhatian" : "kritis", `${waPct}%`)}</div>
+                      <div className="h-2.5 bg-muted rounded-full overflow-hidden"><div className="h-full bg-[#2d7a5f] rounded-full" style={{ width: `${waPct}%` }} /></div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{wa.punya} punya, {wa.belum} belum</p>
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-xs mb-0.5"><span>Foto KTP Terunggah</span>{insightBadge(ktpPct >= 70 ? "baik" : ktpPct >= 40 ? "perhatian" : "kritis", `${ktpPct}%`)}</div>
+                      <div className="h-2.5 bg-muted rounded-full overflow-hidden"><div className="h-full bg-[#3b6db5] rounded-full" style={{ width: `${ktpPct}%` }} /></div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{ktp.punya} punya, {ktp.belum} belum</p>
+                    </div>
+                  </div>
+                </div>
+                {waPct < 50 && insightBox(<PhoneOff className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />, `Baru ${waPct}% warga yang terhubung WhatsApp. Jangkauan WA Blast tidak efektif — perlu jemput bola door-to-door untuk registrasi.`, "warning")}
+                {Object.keys(kedudukan).length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold mb-2">Kedudukan dalam Keluarga</p>
+                    {Object.entries(kedudukan).filter(([,v]) => v > 0).sort((a,b) => b[1] - a[1]).map(([label, value]) => (
+                      <div key={label} className="flex justify-between text-xs py-1 border-b last:border-0">
+                        <span>{label}</span>
+                        <span className="font-medium">{value} ({pctLabel(value, totalKed)}%)</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>;
+            })()}
+            {detailDialog.section === "Data per RT" && (() => {
+              const rtData = detailDialog.data as any[];
+              const avgWarga = rtData.length > 0 ? Math.round(rtData.reduce((s, r) => s + r.warga, 0) / rtData.length) : 0;
+              const avgKk = rtData.length > 0 ? Math.round(rtData.reduce((s, r) => s + r.kk, 0) / rtData.length) : 0;
+              const ranked = [...rtData].sort((a, b) => b.warga - a.warga);
+              const maxWarga = Math.max(...rtData.map(r => r.warga), 1);
+              const terbesar = ranked[0];
+              const terkecil = ranked[ranked.length - 1];
+              return <>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-2.5 rounded-lg bg-muted/50 text-center">
+                    <p className="text-lg font-bold">{avgKk}</p>
+                    <p className="text-[9px] text-muted-foreground">Rata-rata KK/RT</p>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-muted/50 text-center">
+                    <p className="text-lg font-bold">{avgWarga}</p>
+                    <p className="text-[9px] text-muted-foreground">Rata-rata Warga/RT</p>
+                  </div>
+                </div>
+                {terbesar && terkecil && terbesar.rt !== terkecil.rt && insightBox(
+                  <BarChart3 className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />,
+                  `RT ${String(terbesar.rt).padStart(2,"0")} paling padat (${terbesar.warga} warga), RT ${String(terkecil.rt).padStart(2,"0")} paling sedikit (${terkecil.warga} warga). Selisih ${terbesar.warga - terkecil.warga} orang — alokasi perhatian & sumber daya perlu proporsional.`,
+                  "info"
+                )}
+                <div>
+                  <p className="text-xs font-semibold mb-2">Ranking per RT (Jumlah Warga)</p>
+                  {ranked.map((r, idx) => (
+                    <div key={r.rt} className="mb-2 p-2.5 rounded-lg bg-muted/50">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white ${idx === 0 ? "bg-[#b8923e]" : idx === 1 ? "bg-[#8a8a8a]" : idx === 2 ? "bg-[#b87333]" : "bg-muted-foreground/50"}`}>{idx + 1}</span>
+                          <span className="text-xs font-semibold">RT {String(r.rt).padStart(2, "0")}</span>
+                        </div>
+                        <span className="text-xs font-bold">{r.warga} warga</span>
+                      </div>
+                      <div className="h-2 bg-muted rounded-full overflow-hidden mb-1.5">
+                        <div className="h-full rounded-full bg-[#2d7a5f]" style={{ width: `${(r.warga / maxWarga) * 100}%` }} />
+                      </div>
+                      <div className="grid grid-cols-4 gap-1 text-[10px] text-muted-foreground">
+                        <span>{r.kk} KK</span>
+                        <span>L: {r.lakiLaki}</span>
+                        <span>P: {r.perempuan}</span>
+                        <span>Bansos: {r.bansos}</span>
+                      </div>
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-            {detailDialog.section === "Data per RT" && (
-              <div className="space-y-2">
-                {(detailDialog.data as any[]).map((r: any) => (
-                  <div key={r.rt} className="p-2 rounded-lg bg-muted/50">
-                    <p className="text-xs font-medium mb-1">RT {String(r.rt).padStart(2, "0")}</p>
-                    <div className="grid grid-cols-3 gap-1 text-[10px]">
-                      <span>KK: {r.kk}</span>
-                      <span>Warga: {r.warga}</span>
-                      <span>Bansos: {r.bansos}</span>
-                      <span>L: {r.lakiLaki}</span>
-                      <span>P: {r.perempuan}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+              </>;
+            })()}
             <AiInsightButton section={detailDialog.section} data={detailDialog.data} />
           </div>
         </DetailDialog>
-      )}
+        );
+      })()}
     </div>
   );
 }
