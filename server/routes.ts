@@ -397,7 +397,10 @@ export async function registerRoutes(
       req.session.kkId = stored.kkId;
       req.session.nomorKk = stored.nomorKk;
       req.session.isAdmin = false;
-      return res.json({ type: "warga", kkId: stored.kkId, nomorKk: stored.nomorKk, message: "Login berhasil" });
+      return req.session.save((err) => {
+        if (err) return res.status(500).json({ message: "Gagal menyimpan session" });
+        return res.json({ type: "warga", kkId: stored.kkId, nomorKk: stored.nomorKk, message: "Login berhasil" });
+      });
     } catch (error: any) {
       return res.status(500).json({ message: error.message });
     }
@@ -419,7 +422,10 @@ export async function registerRoutes(
           req.session.adminUsername = adminAccount.username;
           req.session.adminNama = adminAccount.namaLengkap;
           req.session.kkId = undefined;
-          return res.json({ type: "admin", message: "Login admin berhasil", adminId: adminAccount.id, username: adminAccount.username, namaLengkap: adminAccount.namaLengkap });
+          return req.session.save((err) => {
+            if (err) return res.status(500).json({ message: "Gagal menyimpan session" });
+            return res.json({ type: "admin", message: "Login admin berhasil", adminId: adminAccount.id, username: adminAccount.username, namaLengkap: adminAccount.namaLengkap });
+          });
         }
       }
 
@@ -504,7 +510,10 @@ export async function registerRoutes(
       (req.session as any).wargaSinggahId = stored.wargaSinggahId;
       (req.session as any).wargaSinggahNik = stored.nik;
       (req.session as any).isWargaSinggah = true;
-      return res.json({ type: "warga_singgah", wargaSinggahId: stored.wargaSinggahId, nik: stored.nik, message: "Login berhasil" });
+      return req.session.save((err) => {
+        if (err) return res.status(500).json({ message: "Gagal menyimpan session" });
+        return res.json({ type: "warga_singgah", wargaSinggahId: stored.wargaSinggahId, nik: stored.nik, message: "Login berhasil" });
+      });
     } catch (error: any) {
       return res.status(500).json({ message: error.message });
     }
