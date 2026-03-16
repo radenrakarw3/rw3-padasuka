@@ -398,7 +398,7 @@ export async function registerRoutes(
       req.session.nomorKk = stored.nomorKk;
       req.session.isAdmin = false;
       return req.session.save((err) => {
-        if (err) return res.status(500).json({ message: "Gagal menyimpan session" });
+        if (err) { console.error("Session save error:", err); return res.status(500).json({ message: `Session error: ${err.message}` }); }
         return res.json({ type: "warga", kkId: stored.kkId, nomorKk: stored.nomorKk, message: "Login berhasil" });
       });
     } catch (error: any) {
@@ -423,7 +423,7 @@ export async function registerRoutes(
           req.session.adminNama = adminAccount.namaLengkap;
           req.session.kkId = undefined;
           return req.session.save((err) => {
-            if (err) return res.status(500).json({ message: "Gagal menyimpan session" });
+            if (err) { console.error("Session save error:", err); return res.status(500).json({ message: `Session error: ${err.message}` }); }
             return res.json({ type: "admin", message: "Login admin berhasil", adminId: adminAccount.id, username: adminAccount.username, namaLengkap: adminAccount.namaLengkap });
           });
         }
@@ -511,7 +511,7 @@ export async function registerRoutes(
       (req.session as any).wargaSinggahNik = stored.nik;
       (req.session as any).isWargaSinggah = true;
       return req.session.save((err) => {
-        if (err) return res.status(500).json({ message: "Gagal menyimpan session" });
+        if (err) { console.error("Session save error:", err); return res.status(500).json({ message: `Session error: ${err.message}` }); }
         return res.json({ type: "warga_singgah", wargaSinggahId: stored.wargaSinggahId, nik: stored.nik, message: "Login berhasil" });
       });
     } catch (error: any) {
