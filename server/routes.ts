@@ -877,15 +877,8 @@ Salam hangat dari pengurus RW 03 Padasuka`;
     }
   });
 
-  const suratUploadStorage = multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, path.join(uploadsDir, "surat")),
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase();
-      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
-    },
-  });
   const suratUpload = multer({
-    storage: suratUploadStorage,
+    storage: multer.memoryStorage(),
     limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: (_req, file, cb) => {
       const allowed = [".jpg", ".jpeg", ".png", ".pdf"];
@@ -901,9 +894,33 @@ Salam hangat dari pengurus RW 03 Padasuka`;
       if (!surat) return res.status(404).json({ message: "Surat tidak ditemukan" });
       if (!req.file) return res.status(400).json({ message: "File tidak ditemukan" });
 
-      const filePath = `/uploads/surat/${req.file.filename}`;
-      const updated = await storage.updateSuratWargaFileSurat(surat.id, filePath);
+      const base64Data = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+      const fileRef = `/api/surat-warga/${surat.id}/file`;
+      const updated = await storage.updateSuratWargaFileSurat(surat.id, fileRef, base64Data);
       res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/surat-warga/:id/file", async (req, res) => {
+    try {
+      if (!req.session?.kkId && !req.session?.isAdmin) {
+        return res.status(401).json({ message: "Silakan login terlebih dahulu" });
+      }
+      const id = parseInt(req.params.id as string);
+      const fileData = await storage.getSuratWargaFileData(id);
+      if (!fileData) return res.status(404).json({ message: "File tidak ditemukan" });
+
+      const commaIdx = fileData.indexOf(",");
+      const header = fileData.substring(0, commaIdx);
+      const mimeType = header.split(":")[1]?.split(";")[0] || "application/octet-stream";
+      const base64 = fileData.substring(commaIdx + 1);
+      const buffer = Buffer.from(base64, "base64");
+
+      res.setHeader("Content-Type", mimeType);
+      res.setHeader("Content-Disposition", `inline; filename="surat-${id}"`);
+      res.send(buffer);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

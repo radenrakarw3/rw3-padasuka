@@ -76,6 +76,7 @@ export const suratWarga = pgTable("surat_warga", {
   pdfCode: text("pdf_code"),
   pdfPath: text("pdf_path"),
   fileSurat: text("file_surat"),
+  fileSuratData: text("file_surat_data"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

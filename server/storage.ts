@@ -85,7 +85,8 @@ export interface IStorage {
   updateSuratWargaNomor(id: number, nomorSurat: string): Promise<SuratWarga | undefined>;
   updateSuratWargaPdf(id: number, pdfCode: string, pdfPath: string): Promise<SuratWarga | undefined>;
   getSuratWargaByPdfCode(code: string): Promise<SuratWarga | undefined>;
-  updateSuratWargaFileSurat(id: number, fileSurat: string): Promise<SuratWarga | undefined>;
+  updateSuratWargaFileSurat(id: number, fileSurat: string, fileSuratData?: string): Promise<SuratWarga | undefined>;
+  getSuratWargaFileData(id: number): Promise<string | null>;
   updateSuratRwNomor(id: number, nomorSurat: string): Promise<SuratRw | undefined>;
   updateSuratRwIsi(id: number, isiSurat: string): Promise<SuratRw | undefined>;
 
@@ -525,9 +526,16 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async updateSuratWargaFileSurat(id: number, fileSurat: string): Promise<SuratWarga | undefined> {
-    const [result] = await db.update(suratWarga).set({ fileSurat }).where(eq(suratWarga.id, id)).returning();
+  async updateSuratWargaFileSurat(id: number, fileSurat: string, fileSuratData?: string): Promise<SuratWarga | undefined> {
+    const updateData: { fileSurat: string; fileSuratData?: string } = { fileSurat };
+    if (fileSuratData !== undefined) updateData.fileSuratData = fileSuratData;
+    const [result] = await db.update(suratWarga).set(updateData).where(eq(suratWarga.id, id)).returning();
     return result;
+  }
+
+  async getSuratWargaFileData(id: number): Promise<string | null> {
+    const [result] = await db.select({ fileSuratData: suratWarga.fileSuratData }).from(suratWarga).where(eq(suratWarga.id, id));
+    return result?.fileSuratData ?? null;
   }
 
   async updateSuratRwNomor(id: number, nomorSurat: string): Promise<SuratRw | undefined> {
