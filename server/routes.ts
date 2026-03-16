@@ -1,12 +1,14 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
 import bcrypt from "bcryptjs";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
 import express from "express";
 import { storage } from "./storage";
+import { pool } from "./db";
 import { insertKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertProfileEditSchema, insertWaBlastSchema, insertPengajuanBansosSchema, insertDonasiCampaignSchema, insertDonasiSchema, insertKasRwSchema, insertPemilikKostSchema, insertWargaSinggahSchema, insertUsahaSchema, insertKaryawanUsahaSchema, insertIzinTetanggaSchema, insertSurveyUsahaSchema } from "@shared/schema";
 
 declare module "express-session" {
@@ -197,8 +199,14 @@ export async function registerRoutes(
   if (isProduction) {
     app.set("trust proxy", 1);
   }
+  const PgSession = connectPgSimple(session);
   app.use(
     session({
+      store: new PgSession({
+        pool,
+        tableName: "session",
+        createTableIfMissing: true,
+      }),
       secret: process.env.SESSION_SECRET!,
       resave: false,
       saveUninitialized: false,
@@ -206,7 +214,7 @@ export async function registerRoutes(
         secure: isProduction,
         httpOnly: true,
         sameSite: "lax",
-        maxAge: 24 * 60 * 60 * 1000,
+        maxAge: 7 * 24 * 60 * 60 * 1000,
       },
     })
   );
@@ -770,18 +778,22 @@ Salam hangat dari pengurus RW 03 Padasuka`;
         if (parsed.kkId !== req.session.kkId) {
           return res.status(403).json({ message: "Akses ditolak" });
         }
-        const w = await storage.getWargaById(parsed.wargaId);
-        if (!w || w.kkId !== req.session.kkId) {
-          return res.status(403).json({ message: "Warga bukan anggota KK Anda" });
+        if (parsed.wargaId) {
+          const w = await storage.getWargaById(parsed.wargaId);
+          if (!w || w.kkId !== req.session.kkId) {
+            return res.status(403).json({ message: "Warga bukan anggota KK Anda" });
+          }
         }
       }
       const data = await storage.createLaporan(parsed);
 
       const jenisLabel = jenisLaporanLabels[parsed.jenisLaporan] || parsed.jenisLaporan;
-      notifyWarga(parsed.wargaId, `[RW 03 Padasuka]\n\nLaporan Wargi berhasil dikirim ✅\n\nJudul: *${parsed.judul}*\nKategori: ${jenisLabel}\n\nLaporan akan segera ditinjau oleh pengurus RW.\n\nSekarang cek status laporan jadi gampang, langsung buka aja web kita di 👉 rw3padasukacimahi.org\n\nHatur nuhun Wargi! 🙏`);
+      if (parsed.wargaId) {
+        notifyWarga(parsed.wargaId, `[RW 03 Padasuka]\n\nLaporan Wargi berhasil dikirim ✅\n\nJudul: *${parsed.judul}*\nKategori: ${jenisLabel}\n\nLaporan akan segera ditinjau oleh pengurus RW.\n\nSekarang cek status laporan jadi gampang, langsung buka aja web kita di 👉 rw3padasukacimahi.org\n\nHatur nuhun Wargi! 🙏`);
+      }
 
       if (!req.session.isAdmin) {
-        const wargaInfo = await storage.getWargaById(parsed.wargaId);
+        const wargaInfo = parsed.wargaId ? await storage.getWargaById(parsed.wargaId) : null;
         const namaWarga = wargaInfo?.namaLengkap || "Warga";
         notifyAdmin(`[RW 03 Padasuka - Admin]\n\n📢 *Laporan Baru Masuk!*\n\nDari: *${namaWarga}*\nJudul: *${parsed.judul}*\nKategori: ${jenisLabel}\n\nSegera cek dan tindak lanjuti di 👉 rw3padasukacimahi.org`);
       }
@@ -810,7 +822,7 @@ Salam hangat dari pengurus RW 03 Padasuka`;
     if (tanggapan) waMsg += `\n\nTanggapan Admin:\n${tanggapan}`;
     if (status === "selesai") waMsg += `\n\nHatur nuhun atas laporannya Wargi, semoga lingkungan kita semakin baik! 🙏`;
     waMsg += `\n\nCek detail laporan langsung di web 👉 rw3padasukacimahi.org`;
-    notifyWarga(data.wargaId, waMsg);
+    if (data.wargaId) notifyWarga(data.wargaId, waMsg);
 
     res.json(data);
   });
@@ -2033,8 +2045,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
         return res.status(400).json({ message: "Semua field harus diisi" });
       }
       const laporan = await storage.createLaporan({
-        wargaId: 0,
-        kkId: 0,
+        wargaSinggahId: ws.id,
         jenisLaporan,
         judul: `[Warga Singgah - ${ws.namaLengkap}] ${judul}`,
         isi: `Dari: ${ws.namaLengkap} (NIK: ${ws.nik})\nWA: ${ws.nomorWhatsapp}\n\n${isi}`,

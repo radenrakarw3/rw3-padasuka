@@ -1,4 +1,4 @@
-import { eq, and, desc, sql, count } from "drizzle-orm";
+import { eq, and, or, desc, sql, count } from "drizzle-orm";
 import { db } from "./db";
 import {
   kartuKeluarga, warga, rtData, laporan, suratWarga, suratRw,
@@ -1112,9 +1112,12 @@ export class DatabaseStorage implements IStorage {
 
   async getWargaSinggahMendekatiHabis(hari: number): Promise<(WargaSinggah & { namaKost: string; namaPemilik: string; nomorWaPemilik: string })[]> {
     const today = new Date();
-    const target = new Date(today);
-    target.setDate(target.getDate() + hari);
-    const targetStr = target.toISOString().split("T")[0];
+    const lower = new Date(today);
+    lower.setDate(lower.getDate() + hari - 1);
+    const upper = new Date(today);
+    upper.setDate(upper.getDate() + hari);
+    const lowerStr = lower.toISOString().split("T")[0];
+    const upperStr = upper.toISOString().split("T")[0];
 
     const results = await db.select({
       id: wargaSinggah.id,
@@ -1137,7 +1140,10 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(pemilikKost, eq(wargaSinggah.pemilikKostId, pemilikKost.id))
       .where(and(
         eq(wargaSinggah.status, "aktif"),
-        eq(wargaSinggah.tanggalHabisKontrak, targetStr)
+        or(
+          eq(wargaSinggah.tanggalHabisKontrak, upperStr),
+          eq(wargaSinggah.tanggalHabisKontrak, lowerStr)
+        )
       ));
 
     return results;
@@ -1320,11 +1326,14 @@ export class DatabaseStorage implements IStorage {
 
   async getUsahaMendekatiExpired(hari: number): Promise<Usaha[]> {
     const today = new Date();
-    const target = new Date(today);
-    target.setDate(target.getDate() + hari);
-    const targetStr = target.toISOString().split("T")[0];
+    const lower = new Date(today);
+    lower.setDate(lower.getDate() + hari - 1);
+    const upper = new Date(today);
+    upper.setDate(upper.getDate() + hari);
+    const lowerStr = lower.toISOString().split("T")[0];
+    const upperStr = upper.toISOString().split("T")[0];
     const allUsahaData = await db.select().from(usaha).where(eq(usaha.status, "disetujui"));
-    return allUsahaData.filter(u => u.tanggalStikerExpired === targetStr);
+    return allUsahaData.filter(u => u.tanggalStikerExpired === upperStr || u.tanggalStikerExpired === lowerStr);
   }
 
   async getMonthlySnapshots(): Promise<MonthlySnapshot[]> {

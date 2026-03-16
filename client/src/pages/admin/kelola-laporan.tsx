@@ -28,7 +28,7 @@ export default function AdminKelolaLaporan() {
     onError: (err: any) => toast({ title: "Gagal", description: err.message, variant: "destructive" }),
   });
 
-  const getWargaName = (id: number) => wargaList?.find(w => w.id === id)?.namaLengkap || "Warga";
+  const getWargaName = (id: number | null | undefined) => id ? (wargaList?.find(w => w.id === id)?.namaLengkap || "Warga") : "Warga Singgah";
 
   const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
     pending: { label: "Menunggu", color: "bg-yellow-100 text-yellow-800", icon: Clock },

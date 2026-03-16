@@ -50,8 +50,9 @@ export const rtData = pgTable("rt_data", {
 
 export const laporan = pgTable("laporan", {
   id: serial("id").primaryKey(),
-  wargaId: integer("warga_id").notNull().references(() => warga.id),
-  kkId: integer("kk_id").notNull().references(() => kartuKeluarga.id),
+  wargaId: integer("warga_id").references(() => warga.id),
+  kkId: integer("kk_id").references(() => kartuKeluarga.id),
+  wargaSinggahId: integer("warga_singgah_id"),
   jenisLaporan: text("jenis_laporan").notNull().default("umum"),
   judul: text("judul").notNull(),
   isi: text("isi").notNull(),
