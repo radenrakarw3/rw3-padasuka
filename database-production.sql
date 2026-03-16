@@ -2,13 +2,15 @@
 -- PostgreSQL database dump
 --
 
+\restrict KTVLRwU9RnOFDGGRm0Jx0zKHBsnFfPUL71SaP9li4h6a1aXeMndVH9G9tXSw1D4
 
--- Dumped from database version 16.10
--- Dumped by pg_dump version 16.10
+-- Dumped from database version 17.8 (6108b59)
+-- Dumped by pg_dump version 17.9 (Homebrew)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
+SET transaction_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SELECT pg_catalog.set_config('search_path', '', false);
@@ -17,117 +19,20 @@ SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 
-ALTER TABLE IF EXISTS ONLY public.warga_singgah DROP CONSTRAINT IF EXISTS warga_singgah_pemilik_kost_id_pemilik_kost_id_fk;
-ALTER TABLE IF EXISTS ONLY public.warga DROP CONSTRAINT IF EXISTS warga_kk_id_kartu_keluarga_id_fk;
-ALTER TABLE IF EXISTS ONLY public.survey_usaha DROP CONSTRAINT IF EXISTS survey_usaha_usaha_id_usaha_id_fk;
-ALTER TABLE IF EXISTS ONLY public.surat_warga DROP CONSTRAINT IF EXISTS surat_warga_warga_id_warga_id_fk;
-ALTER TABLE IF EXISTS ONLY public.surat_warga DROP CONSTRAINT IF EXISTS surat_warga_kk_id_kartu_keluarga_id_fk;
-ALTER TABLE IF EXISTS ONLY public.riwayat_stiker DROP CONSTRAINT IF EXISTS riwayat_stiker_usaha_id_usaha_id_fk;
-ALTER TABLE IF EXISTS ONLY public.riwayat_kontrak DROP CONSTRAINT IF EXISTS riwayat_kontrak_warga_singgah_id_warga_singgah_id_fk;
-ALTER TABLE IF EXISTS ONLY public.profile_edit_request DROP CONSTRAINT IF EXISTS profile_edit_request_warga_id_warga_id_fk;
-ALTER TABLE IF EXISTS ONLY public.profile_edit_request DROP CONSTRAINT IF EXISTS profile_edit_request_kk_id_kartu_keluarga_id_fk;
-ALTER TABLE IF EXISTS ONLY public.pengajuan_bansos DROP CONSTRAINT IF EXISTS pengajuan_bansos_kk_id_kartu_keluarga_id_fk;
-ALTER TABLE IF EXISTS ONLY public.laporan DROP CONSTRAINT IF EXISTS laporan_warga_id_warga_id_fk;
-ALTER TABLE IF EXISTS ONLY public.laporan DROP CONSTRAINT IF EXISTS laporan_kk_id_kartu_keluarga_id_fk;
-ALTER TABLE IF EXISTS ONLY public.kas_rw DROP CONSTRAINT IF EXISTS kas_rw_campaign_id_donasi_campaign_id_fk;
-ALTER TABLE IF EXISTS ONLY public.karyawan_usaha DROP CONSTRAINT IF EXISTS karyawan_usaha_usaha_id_usaha_id_fk;
-ALTER TABLE IF EXISTS ONLY public.izin_tetangga DROP CONSTRAINT IF EXISTS izin_tetangga_usaha_id_usaha_id_fk;
-ALTER TABLE IF EXISTS ONLY public.donasi DROP CONSTRAINT IF EXISTS donasi_kk_id_kartu_keluarga_id_fk;
-ALTER TABLE IF EXISTS ONLY public.donasi DROP CONSTRAINT IF EXISTS donasi_campaign_id_donasi_campaign_id_fk;
-ALTER TABLE IF EXISTS ONLY public.warga_singgah DROP CONSTRAINT IF EXISTS warga_singgah_pkey;
-ALTER TABLE IF EXISTS ONLY public.warga_singgah DROP CONSTRAINT IF EXISTS warga_singgah_nik_unique;
-ALTER TABLE IF EXISTS ONLY public.warga DROP CONSTRAINT IF EXISTS warga_pkey;
-ALTER TABLE IF EXISTS ONLY public.warga DROP CONSTRAINT IF EXISTS warga_nik_unique;
-ALTER TABLE IF EXISTS ONLY public.wa_blast DROP CONSTRAINT IF EXISTS wa_blast_pkey;
-ALTER TABLE IF EXISTS ONLY public.usaha DROP CONSTRAINT IF EXISTS usaha_pkey;
-ALTER TABLE IF EXISTS ONLY public.survey_usaha DROP CONSTRAINT IF EXISTS survey_usaha_pkey;
-ALTER TABLE IF EXISTS ONLY public.surat_warga DROP CONSTRAINT IF EXISTS surat_warga_pkey;
-ALTER TABLE IF EXISTS ONLY public.surat_rw DROP CONSTRAINT IF EXISTS surat_rw_pkey;
-ALTER TABLE IF EXISTS ONLY public.rt_data DROP CONSTRAINT IF EXISTS rt_data_pkey;
-ALTER TABLE IF EXISTS ONLY public.rt_data DROP CONSTRAINT IF EXISTS rt_data_nomor_rt_unique;
-ALTER TABLE IF EXISTS ONLY public.riwayat_stiker DROP CONSTRAINT IF EXISTS riwayat_stiker_pkey;
-ALTER TABLE IF EXISTS ONLY public.riwayat_kontrak DROP CONSTRAINT IF EXISTS riwayat_kontrak_pkey;
-ALTER TABLE IF EXISTS ONLY public.profile_edit_request DROP CONSTRAINT IF EXISTS profile_edit_request_pkey;
-ALTER TABLE IF EXISTS ONLY public.pengajuan_bansos DROP CONSTRAINT IF EXISTS pengajuan_bansos_pkey;
-ALTER TABLE IF EXISTS ONLY public.pemilik_kost DROP CONSTRAINT IF EXISTS pemilik_kost_pkey;
-ALTER TABLE IF EXISTS ONLY public.monthly_snapshot DROP CONSTRAINT IF EXISTS monthly_snapshot_pkey;
-ALTER TABLE IF EXISTS ONLY public.monthly_snapshot DROP CONSTRAINT IF EXISTS monthly_snapshot_month_unique;
-ALTER TABLE IF EXISTS ONLY public.laporan DROP CONSTRAINT IF EXISTS laporan_pkey;
-ALTER TABLE IF EXISTS ONLY public.kas_rw DROP CONSTRAINT IF EXISTS kas_rw_pkey;
-ALTER TABLE IF EXISTS ONLY public.karyawan_usaha DROP CONSTRAINT IF EXISTS karyawan_usaha_pkey;
-ALTER TABLE IF EXISTS ONLY public.kartu_keluarga DROP CONSTRAINT IF EXISTS kartu_keluarga_pkey;
-ALTER TABLE IF EXISTS ONLY public.kartu_keluarga DROP CONSTRAINT IF EXISTS kartu_keluarga_nomor_kk_unique;
-ALTER TABLE IF EXISTS ONLY public.izin_tetangga DROP CONSTRAINT IF EXISTS izin_tetangga_pkey;
-ALTER TABLE IF EXISTS ONLY public.donasi DROP CONSTRAINT IF EXISTS donasi_pkey;
-ALTER TABLE IF EXISTS ONLY public.donasi_campaign DROP CONSTRAINT IF EXISTS donasi_campaign_pkey;
-ALTER TABLE IF EXISTS ONLY public.admin_user DROP CONSTRAINT IF EXISTS admin_user_username_unique;
-ALTER TABLE IF EXISTS ONLY public.admin_user DROP CONSTRAINT IF EXISTS admin_user_pkey;
-ALTER TABLE IF EXISTS public.warga_singgah ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.warga ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.wa_blast ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.usaha ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.survey_usaha ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.surat_warga ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.surat_rw ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.rt_data ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.riwayat_stiker ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.riwayat_kontrak ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.profile_edit_request ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.pengajuan_bansos ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.pemilik_kost ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.monthly_snapshot ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.laporan ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.kas_rw ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.karyawan_usaha ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.kartu_keluarga ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.izin_tetangga ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.donasi_campaign ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.donasi ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.admin_user ALTER COLUMN id DROP DEFAULT;
-DROP SEQUENCE IF EXISTS public.warga_singgah_id_seq;
-DROP TABLE IF EXISTS public.warga_singgah;
-DROP SEQUENCE IF EXISTS public.warga_id_seq;
-DROP TABLE IF EXISTS public.warga;
-DROP SEQUENCE IF EXISTS public.wa_blast_id_seq;
-DROP TABLE IF EXISTS public.wa_blast;
-DROP SEQUENCE IF EXISTS public.usaha_id_seq;
-DROP TABLE IF EXISTS public.usaha;
-DROP SEQUENCE IF EXISTS public.survey_usaha_id_seq;
-DROP TABLE IF EXISTS public.survey_usaha;
-DROP SEQUENCE IF EXISTS public.surat_warga_id_seq;
-DROP TABLE IF EXISTS public.surat_warga;
-DROP SEQUENCE IF EXISTS public.surat_rw_id_seq;
-DROP TABLE IF EXISTS public.surat_rw;
-DROP SEQUENCE IF EXISTS public.rt_data_id_seq;
-DROP TABLE IF EXISTS public.rt_data;
-DROP SEQUENCE IF EXISTS public.riwayat_stiker_id_seq;
-DROP TABLE IF EXISTS public.riwayat_stiker;
-DROP SEQUENCE IF EXISTS public.riwayat_kontrak_id_seq;
-DROP TABLE IF EXISTS public.riwayat_kontrak;
-DROP SEQUENCE IF EXISTS public.profile_edit_request_id_seq;
-DROP TABLE IF EXISTS public.profile_edit_request;
-DROP SEQUENCE IF EXISTS public.pengajuan_bansos_id_seq;
-DROP TABLE IF EXISTS public.pengajuan_bansos;
-DROP SEQUENCE IF EXISTS public.pemilik_kost_id_seq;
-DROP TABLE IF EXISTS public.pemilik_kost;
-DROP SEQUENCE IF EXISTS public.monthly_snapshot_id_seq;
-DROP TABLE IF EXISTS public.monthly_snapshot;
-DROP SEQUENCE IF EXISTS public.laporan_id_seq;
-DROP TABLE IF EXISTS public.laporan;
-DROP SEQUENCE IF EXISTS public.kas_rw_id_seq;
-DROP TABLE IF EXISTS public.kas_rw;
-DROP SEQUENCE IF EXISTS public.karyawan_usaha_id_seq;
-DROP TABLE IF EXISTS public.karyawan_usaha;
-DROP SEQUENCE IF EXISTS public.kartu_keluarga_id_seq;
-DROP TABLE IF EXISTS public.kartu_keluarga;
-DROP SEQUENCE IF EXISTS public.izin_tetangga_id_seq;
-DROP TABLE IF EXISTS public.izin_tetangga;
-DROP SEQUENCE IF EXISTS public.donasi_id_seq;
-DROP SEQUENCE IF EXISTS public.donasi_campaign_id_seq;
-DROP TABLE IF EXISTS public.donasi_campaign;
-DROP TABLE IF EXISTS public.donasi;
-DROP SEQUENCE IF EXISTS public.admin_user_id_seq;
-DROP TABLE IF EXISTS public.admin_user;
+--
+-- Name: public; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA public;
+
+
+--
+-- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: -
+--
+
+COMMENT ON SCHEMA public IS 'standard public schema';
+
+
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
@@ -1143,7 +1048,7 @@ COPY public.admin_user (id, username, password_hash, nama_lengkap, is_active, cr
 --
 
 COPY public.donasi (id, campaign_id, kk_id, nama_donatur, jumlah, status, created_at) FROM stdin;
-1	1	1	Raden Raka	20000	dikonfirmasi	2026-03-09 19:51:50.313044
+1	2	1	Buce	500000	dikonfirmasi	2026-03-12 09:44:01.323467
 \.
 
 
@@ -1152,8 +1057,10 @@ COPY public.donasi (id, campaign_id, kk_id, nama_donatur, jumlah, status, create
 --
 
 COPY public.donasi_campaign (id, judul, deskripsi, target_dana, status, created_at) FROM stdin;
-1	Pasang PJG RT 4	Untuk memasang PJU	3999998	aktif	2026-03-09 19:48:57.26033
-2	renovasi jalan titik rt 3	untuk beli bahan bangunan	5000	aktif	2026-03-09 19:58:25.513603
+2	Donasi Sosial	Untuk Kegiatan Sosial di RW03	50000	aktif	2026-03-11 01:13:45.626968
+1	Acara Pembersihan Sungai RW3	Untuk Alat dan Konsumsi dan juga kadedeuh ke warga yang bersihin sungai	2000000	selesai	2026-03-09 20:25:01.358578
+3	Donasi Keamanan	Untuk Kegiatan Ronda di RW03	50000000	aktif	2026-03-11 01:14:23.695869
+4	Donasi Posyandu Kesejahteraan	Untuk Kegiatan Posyandu dan Posbindu	\N	aktif	2026-03-12 06:54:03.329619
 \.
 
 
@@ -1162,10 +1069,6 @@ COPY public.donasi_campaign (id, judul, deskripsi, target_dana, status, created_
 --
 
 COPY public.izin_tetangga (id, usaha_id, posisi, nama_warga, nomor_whatsapp, status_persetujuan, alasan_penolakan, tanggal_persetujuan, created_at) FROM stdin;
-1	1	Kiri	Radad	2131231232	setuju		\N	2026-03-15 22:50:27.570669
-2	1	Kanan	opawjdpaojd	2112312312312	setuju		\N	2026-03-15 22:50:27.574278
-3	1	Depan	aiosdiaosdh	123123123	setuju		\N	2026-03-15 22:50:27.577363
-4	1	Belakang	sadokasod	21312312321	setuju		\N	2026-03-15 22:50:27.580006
 \.
 
 
@@ -1177,8 +1080,6 @@ COPY public.kartu_keluarga (id, nomor_kk, rt, alamat, status_rumah, jumlah_pengh
 2	3277021911061049	7	Komplek Nusa Cisangkan Permai Blok H No. 32	Milik Sendiri	3	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-08 17:47:12.276164	\N	\N
 3	3277022004210007	7	Komplek Nusa Cisangkan Permai Blok H No. 31	Milik Sendiri	3	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-08 17:47:12.278524	\N	\N
 4	3277021803110008	2	Jl. KH. Usman Dhomiri No. 30	Menumpang	4	Permanen	Sumur Gali	Jamban Sendiri	PLN 900 VA	f	https://maps.app.goo.gl/bj8y9PbJDvY2Hx2y5	-6.87145910	107.53410700	2026-03-08 17:47:12.280981	\N	\N
-5	3277022808180004	2	JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F	Menumpang	3	Permanen	Sumur Bor	Jamban Sendiri	PLN 1300 VA	f	https://maps.app.goo.gl/NBxnsSvtF7guV3dGA	-6.87181800	107.53418500	2026-03-08 17:47:12.284185	\N	\N
-6	3277021703070016	2	JL. KH Usman Dhomiri Gg. Bakti Baru II No. 15 A	Milik Sendiri	4	Permanen	Sumur Bor	Jamban Sendiri	PLN 1300 VA	f	https://maps.app.goo.gl/u5iu3e8yfkrgR7pk8	-6.87174300	107.53405900	2026-03-08 17:47:12.286921	\N	\N
 7	3277012211160014	1	JL. KH Usman Dhomiri Gg. Bakti I	Menumpang	2	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-08 17:47:12.290099	\N	\N
 8	3277022111060942	1	JL. KH Usman Dhomiri Gg. Bakti I	Milik Sendiri	2	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-08 17:47:12.292833	\N	\N
 10	3277020911061610	2	Jl. Kh. Usman Dhomiri No. 30	Kontrak/Sewa	3	Permanen	Sumur Gali	Jamban Sendiri	PLN 450 VA	f	https://maps.app.goo.gl/PLZqqqs1L8vkC6RZA	-6.87125200	107.53391100	2026-03-08 17:47:12.302959	\N	\N
@@ -1203,19 +1104,19 @@ COPY public.kartu_keluarga (id, nomor_kk, rt, alamat, status_rumah, jumlah_pengh
 29	3277022305230009	4	JL. KH Usman Dhomiri	Milik Sendiri	6	Permanen	PDAM	Jamban Sendiri	PLN 450 VA	f	\N	\N	\N	2026-03-08 17:47:12.364922	\N	\N
 30	3277021712080002	2	Jl. Kh. Usman Dhomiri No. 30	Milik Sendiri	5	Permanen	Sumur Gali	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-08 17:47:12.36893	\N	\N
 31	3277021911060546	1	Jl. Cisangkan Hilir no 22	Milik Sendiri	5	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	t	https://maps.app.goo.gl/Lb1y3mjkYF8ViMaDA	-6.87112400	107.53458000	2026-03-08 17:47:12.371833	\N	\N
-32	3277022904210004	6	Komplek Nusa Cisangkan Permai Blok H	Milik Sendiri	3	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-08 17:47:12.374547	\N	\N
 33	3277020406130126	3	JL. KH Usman Dhomiri	Milik Sendiri	3	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	f	https://maps.app.goo.gl/Q9ZXWnZo1v9ZQGE36	-6.87220600	107.53329000	2026-03-08 17:47:12.377821	\N	\N
 34	3277021908110001	3	JL. KH Usman Dhomiri	Kontrak/Sewa	4	Permanen	Sumur Bor	Jamban Sendiri	PLN 450 VA	t	https://maps.app.goo.gl/KvgsCG2NtxjtFcjK7	-6.87198730	107.53285190	2026-03-08 17:47:12.38018	\N	\N
 35	3277022202080048	2	JL. KH Usman Dhomiri Gg. Bakti II No. 34 B	Milik Sendiri	4	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	f	https://maps.app.goo.gl/wNqV8RvgAT6zuUJa8	-6.87134410	107.53329960	2026-03-08 17:47:12.383144	\N	\N
 36	3277021811061670	2	JL. KH Usman Dhomiri Gg. Bakti Baru I No. 16	Milik Sendiri	2	Permanen	Sumur Gali	Jamban Sendiri	PLN 900 VA	t	https://maps.app.goo.gl/bqootEsJXrPG8iet8	-6.87173500	107.53446600	2026-03-08 17:47:12.385669	\N	\N
 37	3277020707140001	4	JL. Cisangkan Hilir No. 03	Menumpang	4	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	t	https://maps.app.goo.gl/aRApzChm8abXLRC2A	-6.87243100	107.53168800	2026-03-08 17:47:12.388548	\N	\N
 38	3277020402110001	1	JL. KH Usman Dhomiri Gg. Bakti I No. 20	Milik Sendiri	4	Permanen	Sumur Gali	Jamban Sendiri	PLN 900 VA	f	https://maps.app.goo.gl/PyDUM4VKq4T8h2Uv5	-6.87097670	107.53449360	2026-03-08 17:47:12.390735	\N	\N
-39	3277031011080010	6	Komplek Nusa Cisangkan Permai Blok H No. 17	Milik Sendiri	2	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-08 17:47:12.39335	\N	\N
 40	3277022011060593	5	Komplek Nusa Cisangkan Permai Blok B No. 17	Milik Sendiri	3	Permanen	PDAM	Jamban Sendiri	PLN > 2200 VA	f	https://maps.app.goo.gl/1ws63u2G28Z5jmHVA	-6.87224800	107.53521400	2026-03-08 17:47:12.396425	\N	\N
 41	3277022211060195	4	JL. Cisangkan Hilir	Milik Sendiri	7	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-08 17:47:12.400074	\N	\N
 9	3277021811061910	2	Jl. Kh. Usman Dhomiri No. 30	Milik Sendiri	3	Permanen	Sumur Gali	Jamban Sendiri	PLN 900 VA	t	https://maps.app.goo.gl/kqFjFGLZH7r7X7Bs7	-6.87131200	107.53397100	2026-03-08 17:47:12.299503	\N	PKH
-42	3277022411060033	6	Komplek Nusa Cisangkan Permai Blok F No. 8	Milik Sendiri	4	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-08 17:47:12.402608	\N	\N
 43	3277021911060783	1	JL. KH Usman Dhomiri Gg. Bakti I No. 25	Milik Sendiri	3	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	t	\N	\N	\N	2026-03-08 17:47:12.406376	\N	\N
+6	3277021703070016	2	JL. KH Usman Dhomiri Gg. Bakti Baru II No. 15 A	Milik Sendiri	4	Permanen	Sumur Bor	Jamban Sendiri	PLN 1300 VA	f	https://maps.app.goo.gl/u5iu3e8yfkrgR7pk8	-6.87174300	107.53405900	2026-03-08 17:47:12.286921	/uploads/kk/1773017782508-asijhxlbobw.jpeg	\N
+42	3277022411060033	6	Komplek Nusa Cisangkan Permai Blok F No. 8	Milik Sendiri	4	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-08 17:47:12.402608	/uploads/kk/1773302836485-qk71kcsewcf.jpeg	\N
+32	3277022904210004	6	Komplek Nusa Cisangkan Permai Blok H	Milik Sendiri	3	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-08 17:47:12.374547	/uploads/kk/1773305333984-62ucsyt6gum.jpeg	\N
 44	3277021103120009	1	JL. KH Usman Dhomiri No.23	Milik Sendiri	4	Permanen	PDAM	Jamban Sendiri	PLN 450 VA	f	\N	\N	\N	2026-03-08 17:47:12.408972	\N	\N
 45	3277021911060447	1	JL. KH Usman Dhomiri Gg. Bakti I No. 6 B	Milik Sendiri	4	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-08 17:47:12.411702	\N	\N
 46	3277022311060365	2	JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F	Milik Sendiri	3	Permanen	Sumur Bor	Jamban Sendiri	PLN 1300 VA	f	https://maps.app.goo.gl/Zw9Ga749L4o8jb4F7	-6.87181500	107.53418000	2026-03-08 17:47:12.414123	\N	\N
@@ -1245,7 +1146,6 @@ COPY public.kartu_keluarga (id, nomor_kk, rt, alamat, status_rumah, jumlah_pengh
 70	3277020811100005	3	Jl. Kh. Usman Dhomiri Gg. Bakti III	Kontrak/Sewa	4	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-08 17:47:12.498999	\N	\N
 71	3205310901170002	3	Jl. Kh. Usman Dhomiri Gg. Bakti III	Kontrak/Sewa	4	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-08 17:47:12.505177	\N	\N
 72	3277022406150016	3	Jl. Kh. Usman Dhomiri	Milik Sendiri	4	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-08 17:47:12.508338	\N	\N
-73	3277021108160014	3	Jl. KH. Usman Dhomiri	Milik Sendiri	3	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	f	https://maps.app.goo.gl/sEjggLLMHGLxibar5	-6.87225570	107.53360560	2026-03-08 17:47:12.514205	\N	\N
 74	3309142811190002	2	JL. KH Usman Dhomiri Gg. Bakti Baru II	Milik Sendiri	2	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	f	https://maps.app.goo.gl/jQBN7tfZjtCwa6qU8	-6.87181900	107.53418000	2026-03-08 17:47:12.520281	\N	\N
 75	3201251007071357	2	JL. KH Usman Dhomiri Gg. Bakti Baru II	Menumpang	3	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	f	https://maps.app.goo.gl/jQBN7tfZjtCwa6qU8	-6.87181900	107.53418000	2026-03-08 17:47:12.525179	\N	\N
 76	3277022409090132	2	JL. KH Usman Dhomiri Gg. Bakti Baru II	Milik Sendiri	2	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	f	https://maps.app.goo.gl/jQBN7tfZjtCwa6qU8	-6.87181900	107.53418000	2026-03-08 17:47:12.528222	\N	\N
@@ -1445,15 +1345,8 @@ COPY public.kartu_keluarga (id, nomor_kk, rt, alamat, status_rumah, jumlah_pengh
 270	3277020907210021	1	JL. KH Usman Dhomiri	Menumpang	2	Semi Permanen	Sumur Bor	Jamban Bersama	PLN 450 VA	t	\N	\N	\N	2026-03-08 17:47:13.196586	\N	\N
 271	3277021603070114	1	JL. KH Usman Dhomiri No. 7	Menumpang	5	Semi Permanen	Sumur Bor	Jamban Bersama	PLN 450 VA	t	\N	\N	\N	2026-03-08 17:47:13.199952	\N	\N
 272	3204351605050032	3	JL KH USMAN DHOMIRI KEL PADASUKA KEC CIMAHI TENGAH	Kontrak/Sewa	6	Permanen	Sumur Bor	Jamban Sendiri	PLN 450 VA	f	\N	\N	\N	2026-03-08 17:47:13.202374	\N	\N
-273	3277021201070017	6	Komplek Nusa Cisangkan Permai Blok D No. 24	Milik Sendiri	1	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-08 17:47:13.204824	\N	\N
-274	3277022206230006	6	Komplek Nusa Cisangkan Permai Blok D No. 24	Milik Sendiri	3	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-08 17:47:13.207836	\N	\N
 275	3217062212210015	3	JL KHUSMAN DHOMIRI RT 03 RW 03 KEL PADASUKA KEC CIMAHI TENGAH	Menumpang	3	Permanen	Sumur Bor	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-08 17:47:13.210813	\N	\N
-276	3277020203230003	6	Komplek Nusa Cisangkan Permai Blok D No. 24	Menumpang	2	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-08 17:47:13.213332	\N	\N
-277	3277020801240010	6	Komplek Nusa Cisangkan Permai Blok D No. 24	Menumpang	3	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-08 17:47:13.215897	\N	\N
-278	3277022311061084	3	JL KH USMAN DHOMIRI RT 03 RW 03 KEL PADASUKA KEC CIMAHI TENGAH	Kontrak/Sewa	4	Semi Permanen	Sumur Bor	Jamban Sendiri	PLN 450 VA	t	\N	\N	\N	2026-03-08 17:47:13.218303	\N	\N
 279	3277022311060242	3	JL KH USMAN DHOMIRI RT 03 RW 03 KEL PADASUKA KEC CIMAHI TENGAH	Kontrak/Sewa	4	Semi Permanen	Sumur Bor	Jamban Sendiri	PLN 450 VA	t	\N	\N	\N	2026-03-08 17:47:13.220948	\N	\N
-280	3277022011060415	6	Perum Nusa Cisangkan Permai	Milik Sendiri	5	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-08 17:47:13.223353	\N	\N
-281	3277020612100001	6	Perum Nusa Cisangkan Permai Blok D No. 26	Milik Sendiri	3	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-08 17:47:13.225619	\N	\N
 282	3277021810170018	3	JL. KH Usman Dhomiri	Kontrak/Sewa	5	Permanen	Sumur Bor	Jamban Sendiri	PLN 450 VA	t	\N	\N	\N	2026-03-08 17:47:13.227809	\N	\N
 283	3277020805240001	3	JL. KHUsman Dhomiri	Milik Sendiri	3	Permanen	Sumur Bor	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-08 17:47:13.230898	\N	\N
 284	3277022311060215	3	JL. KH Usman Dhomiri	Milik Sendiri	2	Permanen	Sumur Bor	Jamban Sendiri	PLN 450 VA	f	\N	\N	\N	2026-03-08 17:47:13.233301	\N	\N
@@ -1464,7 +1357,127 @@ COPY public.kartu_keluarga (id, nomor_kk, rt, alamat, status_rumah, jumlah_pengh
 289	3273150704210011	3	JL. KH Usman Dhomiri	Menumpang	3	Permanen	Sumur Bor	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-08 17:47:13.247198	\N	\N
 290	3277020806230011	4	JL. KH Usman Dhomiri	Milik Sendiri	1	Permanen	Sumur Bor	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-08 17:47:13.250825	\N	\N
 291	3277020703080001	4	JL. KH Usman Dhomiri  No. 173	Milik Sendiri	1	Semi Permanen	Sumur Gali	Jamban Sendiri	PLN 450 VA	f	\N	\N	\N	2026-03-08 17:47:13.253905	\N	\N
-1	3277022211060211	4	Jln Kh Ushman dhomiri no 48A	Milik Sendiri	3	Permanen	PDAM	Jamban Sendiri	PLN > 2200 VA	f	https://www.google.com/maps/place/4GGM%2BR3W+dapur+bunda+yoel's,+Jl.+Kyai+H.+Usman+Dhomiri,+Padasuka,+Kec.+Cimahi+Tengah,+Kota+Cimahi,+Jawa+Barat+40526/@-6.8729249,107.5327072,20z/data=!4m6!3m5!1s0x2e68e5e8143a763f:0x599c09052e4e573e!8m2!3d-6.8728996!4d107.5327186!16s%2Fg%2F11r9b3cb84?utm_campaign=ml-sbr&g_ep=Eg1tbF8yMDI2MDIwNF8wIOC7DCoASAJQAg%3D%3D	-6.87292490	107.53270720	2026-03-08 17:47:12.271794	/uploads/kk/1773000540933-wjszk16hia.png	\N
+73	3277021108160014	3	Jl. KH. Usman Dhomiri	Milik Sendiri	3	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	f	https://maps.app.goo.gl/sEjggLLMHGLxibar5	-6.87225570	107.53360560	2026-03-08 17:47:12.514205	/uploads/kk/1773008681830-dreol3bhin.jpg	\N
+325	3277020904160006	1	JL. KH Usman Dhomiri  No. 5/685	Milik Sendiri	1	Permanen	Sumur Bor	Jamban Sendiri	PLN 2200 VA	f	\N	\N	\N	2026-03-09 00:57:17.173003	\N	\N
+5	3277022808180004	2	JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F	Menumpang	3	Permanen	Sumur Bor	Jamban Sendiri	PLN 1300 VA	f	https://maps.app.goo.gl/NBxnsSvtF7guV3dGA	-6.87181800	107.53418500	2026-03-08 17:47:12.284185	/uploads/kk/1773014083547-wy67yvmqk5.jpeg	\N
+372	3273092108101725	6	NUSA CISANGKAN PERMAI BLOK E NO . 17	Milik Sendiri	2	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-10 08:39:41.422082	\N	\N
+373	3277022011060450	6	Nusa Cisangkan Permai blok F No. 2	Milik Sendiri	4	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-10 08:56:38.759849	\N	\N
+276	3277020203230003	6	Komplek Nusa Cisangkan Permai Blok D No. 24	Menumpang	2	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-08 17:47:13.213332	/uploads/kk/1773303666760-ohgcjvpkq5.jpeg	\N
+277	3277020801240010	6	Komplek Nusa Cisangkan Permai Blok D No. 24	Menumpang	3	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-08 17:47:13.215897	/uploads/kk/1773304615200-nnslqqlqy1.jpeg	\N
+273	3277021201070017	6	Komplek Nusa Cisangkan Permai Blok D No. 24	Milik Sendiri	1	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-08 17:47:13.204824	/uploads/kk/1773305266555-1lf1l3u8yz2.jpeg	\N
+374	3273041008170017	6	Nusa Cisangkan Permai Blok E  No. 16	Milik Sendiri	4	Permanen	Sumur Bor	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-11 07:21:48.62285	/uploads/kk/1773388855822-0wcoveaxmmn.jpeg	\N
+370	3277021111062161	6	NUSA CISANGKAN PERMAI BLOK E NO.19	Menumpang	4	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-10 08:24:42.468117	/uploads/kk/1773388904827-v1wkxu6sqi.jpeg	\N
+281	3277020612100001	6	Perum Nusa Cisangkan Permai Blok D No. 26	Milik Sendiri	3	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-08 17:47:13.225619	/uploads/kk/1773389456921-aq2trc8d7k8.jpeg	\N
+1	3277022211060211	4	Jln Kh Ushman dhomiri no 48A	Milik Sendiri	3	Permanen	PDAM	Jamban Sendiri	PLN > 2200 VA	f	https://www.google.com/maps/place/4GGM%2BR3W+dapur+bunda+yoel's,+Jl.+Kyai+H.+Usman+Dhomiri,+Padasuka,+Kec.+Cimahi+Tengah,+Kota+Cimahi,+Jawa+Barat+40526/@-6.8729249,107.5327072,20z/data=!4m6!3m5!1s0x2e68e5e8143a763f:0x599c09052e4e573e!8m2!3d-6.8728996!4d107.5327186!16s%2Fg%2F11r9b3cb84?utm_campaign=ml-sbr&g_ep=Eg1tbF8yMDI2MDIwNF8wIOC7DCoASAJQAg%3D%3D	-6.87292490	107.53270720	2026-03-08 17:47:12.271794	/uploads/kk/1773024301303-papq1esfsff.pdf	\N
+326	3277021209240004	1	JL. KH Usman Dhomiri	Menumpang	2	Semi Permanen	Sumur Bor	Jamban Bersama	PLN 450 VA	f	\N	\N	\N	2026-03-09 04:46:14.03592	\N	\N
+327	3277021501100204	6	Komplek Nusa Cisangkan Permai Blok F No. 11	Milik Sendiri	4	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-09 05:55:51.863919	\N	\N
+422	3277021911060538	1	Jl. Cisangkan Hilir No. 3 Gg. Bakti Baru I	Menumpang	3	Permanen	Sumur Bor	Jamban Sendiri	PLN 1300 VA	t	\N	\N	\N	2026-03-13 07:29:36.451363	\N	BST, PKH, PIP
+329	3277022011060364	6	Nusa Cisangkan Permai Blok E No. 24	Milik Sendiri	4	Permanen	Sumur Bor	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-09 07:11:54.224891	/uploads/kk/1773040325546-dgds5lpkfit.jpg	\N
+328	3277022011060704	6	PERUM NUSA CISANGKAN PERMAI BLOK D NO 27	Milik Sendiri	7	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-09 07:11:53.033776	/uploads/kk/1773389714622-wznx4tf9ado.jpeg	\N
+331	3277022011060478	6	Komplek Nusa Cisangkan Permai Blok E No. 27	Menumpang	7	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-09 07:31:48.164602	\N	\N
+332	3277021912180008	6	Komplek Nusa Cisangkan Permai  Blok E No. 23	Milik Sendiri	4	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-09 07:36:59.178584	\N	\N
+330	3277021706200005	6	PERUM NUSA CISANGKAN PERMAI NO D . 26	Menumpang	3	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-09 07:27:31.805081	/uploads/kk/1773303885042-jucfcikhfh.jpeg	\N
+335	3277022011060424	6	Komplek Nusa Cisangkan Permai Blok F No. 12	Milik Sendiri	2	Permanen	PDAM	Jamban Sendiri	PLN > 2200 VA	f	\N	\N	\N	2026-03-09 08:12:56.330789	\N	\N
+336	3277022011060474	6	Nusa Cisangkan Permai Blok E No. 22	Milik Sendiri	4	Permanen	PDAM	Jamban Sendiri	PLN 2200 VA	f	\N	\N	\N	2026-03-09 08:14:46.375636	\N	\N
+337	3277022908170014	6	NUSA CISANGKAN PERMAIN BLOK E. NO .21	Menumpang	3	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-09 08:16:18.46467	\N	\N
+338	3277022512100005	6	Komplek Nusa Cisangkan Permai Blok F N0. 12	Menumpang	6	Permanen	PDAM	Jamban Sendiri	PLN > 2200 VA	f	\N	\N	\N	2026-03-09 08:20:09.634214	\N	\N
+339	3277022801080010	6	NUSA CISANGKAN PERMAI BLOK E NO.21	Milik Sendiri	2	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-09 08:22:17.691639	\N	\N
+340	32770216122080012	6	Nusa Cisangkan Permai Blok D No. 28	Milik Sendiri	2	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-09 08:22:41.892489	\N	\N
+344	3277022309150014	6	NUSA CISANGKAN PERMAI BLOK E NO . 19	Menumpang	3	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-09 08:29:03.301284	\N	\N
+345	3277022505210011	6	NUSA CISANGKAN PERMAI BLOK E NO 12 A	Milik Sendiri	1	Permanen	Sumur Bor	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-09 08:34:35.711165	\N	\N
+334	3277021505080004	7	Komplek Nusa Cisangkan Permai Blok G No. 10	Milik Sendiri	5	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-09 07:58:53.579429	\N	\N
+346	3277022505210004	4	JL. KH Usman Dhomiri No. 05	Menumpang	3	Permanen	Sumur Bor	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-09 14:11:15.056539	\N	\N
+347	3277021101140005	4	JL. KH Usman Dhomiri	Milik Sendiri	1	Permanen	Sumur Gali	Jamban Sendiri	PLN 1300 VA	t	\N	\N	\N	2026-03-10 04:28:10.071375	\N	BPNT/Sembako, Lainnya
+348	3277020207150025	4	JL. KH Usman Dhomiri 31/35	Menumpang	1	Permanen	Sumur Gali	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-10 04:32:09.967424	\N	\N
+349	3277021803190015	4	JL. KH Usman Dhomiri	Menumpang	2	Permanen	Sumur Bor	Jamban Sendiri	PLN 1300 VA	t	\N	\N	\N	2026-03-10 04:35:30.488701	\N	PBI-JKN
+350	3277022211060209	4	JL. KH Usman Dhomiri	Milik Sendiri	3	Permanen	Sumur Bor	Jamban Sendiri	PLN 450 VA	f	\N	\N	\N	2026-03-10 04:40:55.552352	\N	\N
+351	3277022111061252	4	JL. KH Usman Dhomiri	Kontrak/Sewa	3	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-10 04:47:08.159596	\N	\N
+352	3277022403250001	4	JL. KH Usman Dhomiri	Menumpang	3	Permanen	Sumur Bor	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-10 04:53:24.160505	\N	\N
+353	3277020209130002	4	JL. KH Usman Dhomiri	Menumpang	4	Permanen	Sumur Gali	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-10 05:00:36.821462	\N	\N
+356	3277020404110005	6	NUSA CISANGKAN PERMAI BLOK E NO.11	Milik Sendiri	6	Permanen	Sumur Bor	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-10 07:18:48.488325	\N	\N
+357	3277021303180007	6	NUSA CISANGKAN PERMAI E NO.10	Menumpang	2	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-10 07:31:56.600605	\N	\N
+358	3277020205080002	6	NUSA CISANGKAN PERMAI BLOK E NO.10	Milik Sendiri	3	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-10 07:37:06.176998	\N	\N
+360	3277020911060379	6	Komplek Nusa Cisangkan Permai Blok F No. 10	Milik Sendiri	3	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-10 07:51:10.381036	\N	\N
+364	3277021109110003	6	Nusa Cisangkan Permai Blok F No. 9	Milik Sendiri	3	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-10 08:08:53.490385	\N	\N
+365	3277022011060514	6	NUSA CISANGKAN PERMAI BLOK E NO.4	Milik Sendiri	3	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-10 08:12:40.087012	\N	\N
+367	3277022509140010	6	NUSA CISANGKAN PERMAI BLOK E NO.7	Milik Sendiri	4	Permanen	Sumur Bor	Jamban Sendiri	PLN 2200 VA	f	\N	\N	\N	2026-03-10 08:18:12.63963	\N	\N
+368	3217151905140005	6	Komplek Nusa Cisangkan Permai Blok F No. 7	Milik Sendiri	4	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-10 08:22:15.02841	\N	\N
+369	3277021403190004	6	Komplek Nusa Cisangkan Permai Blok F No. 1	Milik Sendiri	1	Permanen	PDAM	Jamban Sendiri	PLN 2200 VA	f	\N	\N	\N	2026-03-10 08:23:37.613382	\N	\N
+343	3277021612080012	6	Nusa Cisangkan Permai Blok D No. 28	Milik Sendiri	2	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-09 08:26:56.525702	/uploads/kk/1773303945326-ih5lv9oile.jpeg	\N
+342	3277020602090003	6	Nusa Cisangkan Permai Blok D No. 29	Milik Sendiri	6	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-09 08:24:44.391187	/uploads/kk/1773304191872-ux4f27h5a5g.jpeg	\N
+341	3277021904240012	6	Nusa Cisangkan Permai Blok D No. 28	Menumpang	3	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-09 08:23:55.482525	/uploads/kk/1773304939741-xsknpppc6ge.jpeg	\N
+355	3277020611160003	6	Komplek Nusa Cisangkan Permai Blok D No. 30	Menumpang	4	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-10 07:13:15.075005	/uploads/kk/1773305761924-0slz9rh4673.jpeg	\N
+362	3277021911080016	6	NUSA CISANGKAN PERMAI BLOK E NO.1	Milik Sendiri	5	Permanen	Sumur Bor	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-10 07:59:09.422125	/uploads/kk/1773306038922-sp6n8zzebc9.jpeg	\N
+363	3277020903230002	6	NUSA CISANGKAN PERMAI BLOK E NO.3	Milik Sendiri	2	Permanen	Sumur Bor	Jamban Sendiri	PLN 2200 VA	f	\N	\N	\N	2026-03-10 08:07:18.540903	/uploads/kk/1773306140460-qypsm6iael.jpeg	\N
+375	3277020103070009	6	NUSA CISANGKAN PERMAI BLOK F NO.6	Milik Sendiri	2	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	t	\N	\N	\N	2026-03-11 07:21:54.91872	\N	Lainnya
+376	3277021805100076	6	Nusa Cisangkan Permai Blok F No. 6	Menumpang	4	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-11 07:22:47.73491	\N	\N
+377	3277020611190005	6	Nusa Cisangkan Permai Blok F No. 3	Milik Sendiri	3	Permanen	PDAM	Jamban Sendiri	PLN 2200 VA	f	\N	\N	\N	2026-03-11 07:23:42.163256	\N	\N
+414	3277021601150004	1	Jl. Kh. Usman Dhomiri	Milik Sendiri	4	Permanen	Sumur Bor	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-12 08:37:09.858642	\N	\N
+410	3277021902070003	1	JL KH USMAN DHOMIRI NO 10	Milik Sendiri	4	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-12 08:06:21.022787	\N	\N
+387	3277020212250005	1	JL. KH Usman Dhomiri	Menumpang	1	Semi Permanen	Sumur Gali	Jamban Bersama	PLN 450 VA	t	\N	\N	\N	2026-03-11 08:12:47.053088	/uploads/kk/1773217521830-cf9ghtx9yoj.pdf	PBI-JKN
+393	3277022309250002	1	JL. KH Usman Dhomiri	Kontrak/Sewa	1	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-11 08:38:38.875391	/uploads/kk/1773218319452-0u7izs0d012f.pdf	\N
+395	3277020704080017	6	Nusa Cisangkan Permai Blok H No. 7	Milik Sendiri	2	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-11 08:42:12.243648	/uploads/kk/1773388791673-k7f3z0ry7r8.jpeg	\N
+278	3277020211090114	4	JL. KH Usman Dhomiri	Kontrak/Sewa	4	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-08 17:47:13.218303	\N	\N
+404	317405080109804	4	JL. KH  Usman Dhomiri No. 9	Menumpang	4	Permanen	Sumur Gali	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-12 05:16:27.827125	\N	\N
+405	3277021909160028	4	JL. KH Usman Dhomiri No. 14/46 A	Milik Sendiri	5	Permanen	Sumur Bor	Jamban Sendiri	PLN > 2200 VA	f	\N	\N	\N	2026-03-12 05:24:52.07211	\N	\N
+406	3277022004170012	4	JL. KH Usman Dhomiri	Kontrak/Sewa	6	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	t	\N	\N	\N	2026-03-12 05:34:20.171902	\N	BPNT/Sembako, Lainnya
+407	3277022211060186	4	JL. KH Usman Dhomiri	Milik Sendiri	5	Permanen	Sumur Gali	Jamban Sendiri	PLN 450 VA	f	\N	\N	\N	2026-03-12 05:42:53.783212	\N	\N
+408	3277020107200017	1	Jl. Kh. Usman Dhomiri No. 9/10	Milik Sendiri	4	Permanen	Sumur Bor	Jamban Sendiri	PLN 2200 VA	f	\N	\N	\N	2026-03-12 07:54:11.927639	\N	\N
+409	3277021405900005	1	JL CISANGKAN HILIR	Milik Sendiri	5	Permanen	Sumur Bor	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-12 07:56:11.780949	\N	\N
+394	3277023007180018	6	NUSA CISANGKAN PERMAI BLOK H NO.9	Menumpang	3	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-11 08:39:14.005868	/uploads/kk/1773303305601-plxrh667gs.jpeg	\N
+384	3277021903070050	6	NUSA CISANGKAN PERMAI BLOK H NO.12	Milik Sendiri	4	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-11 08:04:34.488164	/uploads/kk/1773303042186-os8xlo6hr0q.jpeg	\N
+354	3277021908068574	6	Komplek Nusa Cisangkan Permai Blok D No. 30	Milik Sendiri	5	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-10 07:12:14.249655	/uploads/kk/1773303104127-bo2upr2bn64.jpeg	\N
+411	3277022202160005	1	JL KH USMAN DHOMIRI NO 9/10	Milik Sendiri	5	Permanen	Sumur Bor	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-12 08:12:49.912071	\N	\N
+412	3277022905070006	1	Jl. Kh. Usman Dhomiri No. 9/10	Milik Sendiri	5	Permanen	Sumur Bor	Jamban Sendiri	PLN 2200 VA	f	\N	\N	\N	2026-03-12 08:13:20.800477	\N	\N
+280	3277022011060415	6	Perum Nusa Cisangkan Permai	Milik Sendiri	5	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-08 17:47:13.223353	/uploads/kk/1773303527117-a4i1a2wu4hw.jpeg	\N
+381	3277022011060463	6	Nusa Cisangkan Permai Blok H No.16	Milik Sendiri	3	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-11 07:49:25.909353	/uploads/kk/1773303262209-mpvx6ibpix.jpeg	\N
+415	3277021812230004	1	Jl. Cisangkan Hilir Gg. Bhakti I No. 10	Kontrak/Sewa	3	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-12 08:45:04.332164	\N	\N
+392	32770217042050006	6	NUSA CISANGKAN PERMAI BLOK H NO.10	Milik Sendiri	3	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-11 08:32:33.180682	/uploads/kk/1773303405113-ay3pxxlubb.jpeg	\N
+386	3277022809160019	6	Nusa Cisangkan Permai Blok H No. 18	Milik Sendiri	3	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-11 08:07:43.832543	/uploads/kk/1773303777885-zch8n396f4.jpeg	\N
+400	3277020909130011	6	Nusa Cisangkan Permai Blok H No. 8	Milik Sendiri	5	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-11 09:00:19.253872	/uploads/kk/1773303474058-dolh5vf821a.jpeg	\N
+413	3277022310070033	1	Jl. Cisangkan Hilir No. 10	Kontrak/Sewa	4	Semi Permanen	Sumur Bor	Jamban Bersama	PLN 450 VA	f	\N	\N	\N	2026-03-12 08:26:00.077384	\N	\N
+383	3277021606710009	6	NUSA CISANGKAN PERMAI BLOK H NO.14	Milik Sendiri	5	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-11 07:54:50.906656	/uploads/kk/1773304124412-qiutha34xc.jpeg	\N
+397	3277022504250007	6	Nusa Cisangkan Permai  Blok H No. 7	Menumpang	3	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-11 08:52:42.650601	/uploads/kk/1773304360808-e59mevwql39.jpeg	\N
+380	3277022011060486	6	NUSA CISANGKAN PERMAI BLOK E NO.15	Milik Sendiri	4	Permanen	PDAM	Jamban Sendiri	PLN 2200 VA	f	\N	\N	\N	2026-03-11 07:39:49.727499	/uploads/kk/1773304461134-nzaht2b6wld.jpeg	\N
+403	3277021903070055	6	Nusa Cisangkan Permai Blok H No. 2	Milik Sendiri	3	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-11 12:59:48.252456	/uploads/kk/1773304688808-u0f8ur1q6z.jpeg	\N
+388	3277020307130015	6	NUSA CISANGKAN PERMAI BLOK H NO.11	Menumpang	2	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-11 08:16:07.623708	/uploads/kk/1773304866053-7eupivb92bi.jpeg	\N
+390	3277022303540007	6	NUSA CISANGKAN PERMAI BLOK H NO.11	Milik Sendiri	2	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-11 08:28:29.549499	/uploads/kk/1773305144813-pb3roi0rbpf.jpeg	\N
+359	3277022011060370	6	NUSA CISANGKAN PERMAI BLOK E NO.2	Milik Sendiri	3	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-10 07:44:56.731558	/uploads/kk/1773305409076-zu0ctg9bl4n.jpeg	\N
+389	3277021609200002	6	NUSA CISANGKAN PERMAI BLOK H NO.11	Menumpang	4	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-11 08:20:37.08149	/uploads/kk/1773305514161-7euu8tcot6s.jpeg	\N
+401	3277023103160004	6	Nusa Cisangkan Permai Blok H No. 3	Milik Sendiri	4	Permanen	PDAM	Jamban Sendiri	PLN > 2200 VA	f	\N	\N	\N	2026-03-11 12:44:34.484353	/uploads/kk/1773305636761-mbfjjuuno6m.jpeg	\N
+378	3277031011090002	6	NUSA CISANGKAN PERMAI BLOK E NO.14	Milik Sendiri	6	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-11 07:27:12.623389	/uploads/kk/1773389347586-zycjexfcwtg.jpeg	\N
+391	3277021903070049	6	Nusa Cisangkan Permai Blok H No. 19	Milik Sendiri	6	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-11 08:31:15.841621	/uploads/kk/1773389621610-3c10z6palqj.jpeg	\N
+396	3277021903070052	6	NUSA CISANGKAN PERMAI BLOK H NO.6	Milik Sendiri	5	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-11 08:47:17.438463	/uploads/kk/1773389693514-8fmjbqi7vje.jpeg	\N
+382	3277022011060456	6	Nusa Cisangkan Permai Blok H No. 15	Milik Sendiri	2	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-11 07:50:27.909535	/uploads/kk/1773305471409-398fbe5w6yh.jpeg	\N
+417	3277020309180030	1	Jl. Kh. Usman Dhomiri Gg. Bhakti I	Milik Sendiri	4	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	t	\N	\N	\N	2026-03-12 08:52:49.7987	\N	BPNT/Sembako, PIP
+371	3277021906250002	6	NUSA CISANGKAN PERMAI BLOK E NO. 17	Menumpang	2	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-10 08:34:58.340359	/uploads/kk/1773305573524-7b9k8opbucp.jpeg	\N
+39	3277031011080010	6	Komplek Nusa Cisangkan Permai Blok H No. 17	Milik Sendiri	2	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-08 17:47:12.39335	/uploads/kk/1773305693723-uuq2t87m14q.jpeg	\N
+418	3277021911060679	1	Jln. Cisangkan Hilir No. 3 Gg. Bhakti I	Menumpang	5	Permanen	Sumur Bor	Jamban Sendiri	PLN 2200 VA	t	\N	\N	\N	2026-03-13 07:13:51.246551	\N	BPNT/Sembako, PKH, PIP
+419	32770106010010	1	CISANGKAN HILIR GG BAKTI I	Milik Sendiri	4	Permanen	Sumur Gali	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-13 07:15:46.830021	\N	\N
+420	3273071802160001	1	Jl. Kh. Usman Dhomiri Gg. Bhakti I No. 7 	Menumpang	3	Permanen	Sumur Bor	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-13 07:24:09.546177	\N	\N
+421	3277021911060433	1	JL KH USMAN DHOMIRI GANG BAKTI I NO 14	Milik Sendiri	3	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-13 07:25:50.494382	\N	\N
+423	3277021703070004	1	JL KH USMAN DHOMIRI NO . 15	Milik Sendiri	3	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-13 07:32:15.766373	\N	\N
+424	3277021911060558	1	JL USMAN DHOMIRI NO.18	Milik Sendiri	3	Permanen	Sumur Bor	Jamban Sendiri	PLN 2200 VA	f	\N	\N	\N	2026-03-13 07:40:51.111577	\N	\N
+425	3277021911060527	1	Jl. Kh. Usman Dhomiri No. 3 Gg. Bakti Baru I	Menumpang	3	Permanen	Sumur Bor	Jamban Sendiri	PLN 1300 VA	t	\N	\N	\N	2026-03-13 07:46:41.259126	\N	BPNT/Sembako, PIP
+426	3277021808200004	1	JL KH USMAN DHOMIRI NO.10	Milik Sendiri	4	Permanen	Sumur Bor	Jamban Sendiri	PLN 2200 VA	f	\N	\N	\N	2026-03-13 07:47:16.810593	\N	\N
+427	3277012711080034	1	Jl. Cisangkan Hilir Gg. Bakti I No. 5	Milik Sendiri	1	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	t	\N	\N	\N	2026-03-13 07:53:25.271629	\N	BPNT/Sembako
+428	3204092602140002	1	Jl. Kh. Usman Dhomiri No. 13 Gg. Bakti I	Menumpang	4	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-13 07:57:35.967808	\N	\N
+429	3277021811061796	1	JL CISANGKAN HILIR NO .12	Milik Sendiri	3	Permanen	Sumur Bor	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-13 07:59:19.447809	\N	\N
+431	3277021911060501	1	Jl. Kh. Usman Dhomiri No. 1 Gg. Bakti I	Milik Sendiri	4	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-13 08:05:50.117766	\N	\N
+361	3277021103200012	6	Komplek Nusa Cisangkan Permai Blok F No.9	Menumpang	3	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-10 07:52:40.68124	/uploads/kk/1773389381565-n9zgm14cwak.jpeg	\N
+433	3277021911060470	1	JL CISANGKAN HILIR GG BAKTI I NO.6	Milik Sendiri	4	Permanen	Sumur Bor	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-13 08:11:09.996691	\N	\N
+402	3277021812190009	6	Nusa Cisangkan Permai Blok H No. 2	Menumpang	4	Permanen	PDAM	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-11 12:52:12.687626	/uploads/kk/1773389580861-zyumc4sr7k.jpeg	\N
+434	3277022304190001	1	Jl. Cisangkan Hilir No. 5/685	Milik Sendiri	4	Permanen	Sumur Bor	Jamban Sendiri	PLN 2200 VA	f	\N	\N	\N	2026-03-13 08:13:51.361409	\N	\N
+274	3277022206230006	6	Komplek Nusa Cisangkan Permai Blok D No. 24	Milik Sendiri	3	Permanen	PDAM	Jamban Sendiri	PLN 1300 VA	f	\N	\N	\N	2026-03-08 17:47:13.207836	/uploads/kk/1773389654421-n7khfodxtgm.jpeg	\N
+435	3277022507180013	1	Jl. Kh. Usman Dhomiri No. 7	Menumpang	1	Semi Permanen	Sumur Bor	Jamban Sendiri	PLN 450 VA	f	\N	\N	\N	2026-03-13 08:21:26.06318	\N	\N
+436	3277020103210006	1	JL CISANGKAN HILIR NO 10	Menumpang	1	Permanen	Sumur Bor	Jamban Sendiri	PLN 2200 VA	f	\N	\N	\N	2026-03-13 08:22:48.483278	\N	\N
+437	3277031206070076	1	Jl. Kh. Usman Dhomiri No. 20 Gg. Bakti I 	Milik Sendiri	1	Permanen	Sumur Gali	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-13 08:25:12.588961	\N	\N
+438	3277020508210005	1	JL. KH Usman Dhomiri	Menumpang	1	Semi Permanen	Sumur Bor	Jamban Bersama	PLN 450 VA	f	\N	\N	\N	2026-03-13 08:25:29.970579	/uploads/kk/1773390330674-k321scr4amf.pdf	\N
+440	3277020902090014	1	Jl. Kh. Usman Dhomiri No.20	Milik Sendiri	2	Permanen	Sumur Gali	Jamban Sendiri	PLN 900 VA	t	\N	\N	\N	2026-03-13 08:28:08.921089	\N	BPNT/Sembako, PIP
+441	3277021911060442	1	JL KH USMAN DHOMIRI GG BAKTI NO 16	Milik Sendiri	3	Permanen	Sumur Bor	Jamban Sendiri	PLN 900 VA	f	\N	\N	\N	2026-03-13 08:33:46.937348	\N	\N
+443	3277021703070002	1	Jl. Cisangkan Hilir No.7	Menumpang	2	Permanen	Sumur Bor	Jamban Sendiri	PLN 450 VA	t	\N	\N	\N	2026-03-13 08:37:29.795445	\N	BPNT/Sembako
+444	3277022104250007	1	Jl. Usman Dhomiri 	Menumpang	4	Semi Permanen	PDAM	Jamban Bersama	PLN 450 VA	f	\N	\N	\N	2026-03-13 08:42:54.946395	\N	\N
+445	3277022510240009	1	JL KH USMAN DHOMIRI CISANGKAN HILIR DUSUN	Menumpang	5	Semi Permanen	Sumur Bor	Jamban Bersama	PLN 450 VA	t	\N	\N	\N	2026-03-13 08:44:34.143045	\N	PKH, PIP, BPNT/Sembako
 \.
 
 
@@ -1473,7 +1486,6 @@ COPY public.kartu_keluarga (id, nomor_kk, rt, alamat, status_rumah, jumlah_pengh
 --
 
 COPY public.karyawan_usaha (id, usaha_id, nama_lengkap, nik, alamat, nomor_whatsapp, jabatan, tanggal_mulai_kerja, created_at) FROM stdin;
-1	1	Wida	213123123123	jasdajsdjasd	082213421313	Karyawan	2022-12-22	2026-03-15 22:50:27.566763
 \.
 
 
@@ -1482,7 +1494,14 @@ COPY public.karyawan_usaha (id, usaha_id, nama_lengkap, nik, alamat, nomor_whats
 --
 
 COPY public.kas_rw (id, tipe, kategori, jumlah, keterangan, tanggal, created_by, created_at, campaign_id) FROM stdin;
-1	pengeluaran	Keamanan	100000	Ronda Linmas	2026-03-11	radenraka	2026-03-11 00:50:11.644852	\N
+1	pemasukan	Iuran Warga	250000	RT 02	2026-02-28	radenraka	2026-03-11 00:55:51.302914	\N
+2	pemasukan	Iuran Warga	250000	RT04	2026-02-28	radenraka	2026-03-11 00:56:15.489086	\N
+3	pengeluaran	Keamanan	100000	Ronda Linmas	2026-03-10	radenraka	2026-03-11 01:12:49.929866	\N
+4	pengeluaran	Keamanan	100000	Ronda Linmas	2026-03-07	radenraka	2026-03-11 01:39:20.0249	\N
+5	pemasukan	Sumbangan	5000000	Yayasan Berkaria Foundation ke Masjid al Jihad	2026-03-11	radenraka	2026-03-11 01:41:00.202912	\N
+6	pengeluaran	Lainnya	5000000	Penyerahan Kepada Masjid al Jihad	2026-03-11	radenraka	2026-03-11 01:41:35.883731	\N
+7	pemasukan	Iuran Warga	300000	RT01	2026-03-11	radenraka	2026-03-11 09:22:03.334469	\N
+8	pemasukan	Donasi	500000	Donasi: Donasi Sosial	2026-03-12	sistem	2026-03-12 09:51:09.598125	2
 \.
 
 
@@ -1492,6 +1511,9 @@ COPY public.kas_rw (id, tipe, kategori, jumlah, keterangan, tanggal, created_by,
 
 COPY public.laporan (id, warga_id, kk_id, jenis_laporan, judul, isi, status, tanggapan_admin, created_at) FROM stdin;
 1	16	1	keamanan	Laporan Kehilangan	saya kemalingan	selesai	akan kami laporkan ke polsek	2026-03-08 18:05:57.162446
+2	16	1	keamanan	Laporan Kehilangan Helm	Saya Kehilangan Helm Jam 2 siang ini	selesai	Baik akan saya evaluasi	2026-03-09 02:55:39.916429
+3	1060	354	umum	Kepengurusan DKM Al Jihad 2025 -2029	Saat ini Pembina td: Lurah, MUI Pdsuka, DMI Pdsuka, ketua RW 03, selama 1,5 tahun tidak berjalan efektif, kegiatan DKM tdk terpantau, buktinya khotib jumat dari da'i lokal tdk dilibatkan, pdhal selama ini mereka ikut berperan dalam membina jamaah, perlu diskusi dgn ketua RW selaku pembina Masjid Al Jihad, terima kasih	selesai	Baik Akan Segera Di Jadwalkan Pak Akhmad Syauqi🙏🏻	2026-03-10 12:06:26.524344
+4	573	182	infrastruktur	Perbaikan jalan gang dan jalan umum	Agar jalan GG Bhakti 1 RT 01 di aspal supaya tidak terus2an rusak dan supaya di bangun gapura Gang  agar supaya kelihatan asri dan gagah wilayah RT 01 karena mempunyai gang yg bisa masuk mobil di banding jalan gang RT yg lain serta supaya area jalan depan yg sering kebanjiran saya punya dua alternatif masukan \n1..adanya pengerukan solokan dari batas RW 03 atas sampai bawah dekat SD pasukan\n2. Untuk menghindari air masuk ke jalan agar ditinggikan pondasi pinggir solokan dari batas RW 03 atas sampai area dekat SD PADASUKA\nDEMIKIAN \nHATURNUHUN🙏🙏	selesai	Siap Kami Akan Tampung pak, karena kebetulan RT01 kebetulan diajukan oleh pokmas nya hanya drainase di Program PPM ini maka saya harus mencari program lain seperti pokir dan lain lain. semoga saran bapak ini bisa cepat terrealisasikan	2026-03-11 16:27:57.697038
 \.
 
 
@@ -1500,7 +1522,7 @@ COPY public.laporan (id, warga_id, kk_id, jenis_laporan, judul, isi, status, tan
 --
 
 COPY public.monthly_snapshot (id, month, total_kk, total_warga, pengangguran, wa_registered, ktp_uploaded, kk_foto_uploaded, penerima_bansos, usaha_berizin, total_usaha, laporan_selesai, total_laporan, surat_selesai, total_surat, pemasukan, pengeluaran_snapshot, saldo, warga_singgah_aktif, indeks_kemajuan, created_at) FROM stdin;
-1	2026-03	291	927	51	686	1	1	63	0	1	1	1	8	8	0	100000	-100000	1	41	2026-03-15 23:22:45.645844
+1	2026-03	401	1313	77	891	12	51	75	0	0	4	4	42	42	6300000	5200000	1100000	0	42	2026-03-15 23:28:08.822785
 \.
 
 
@@ -1509,7 +1531,6 @@ COPY public.monthly_snapshot (id, month, total_kk, total_warga, pengangguran, wa
 --
 
 COPY public.pemilik_kost (id, nama_kost, nama_pemilik, nomor_wa_pemilik, rt, alamat_lengkap, jumlah_pintu, created_at) FROM stdin;
-1	test	test	0895424577140	4	difubsi	1	2026-03-15 22:22:48.456891
 \.
 
 
@@ -1530,6 +1551,13 @@ COPY public.profile_edit_request (id, warga_id, kk_id, field_changes, status, cr
 1	1	1	{"pekerjaan": "Engineer", "namaLengkap": "Test Name"}	disetujui	2026-03-08 18:09:32.188571
 2	1	1	{"namaLengkap": "Buce Akhmad S"}	ditolak	2026-03-08 18:11:51.114338
 3	1	1	{"pekerjaan": "Pegawai Negeri Sipil (PNS)"}	disetujui	2026-03-08 21:35:02.266547
+4	1082	359	{"nomorWhatsapp": "0895619817050"}	disetujui	2026-03-10 09:24:05.09488
+7	1340	441	{"namaLengkap": "DIDIN ROSIDIN"}	disetujui	2026-03-14 05:30:19.405362
+6	765	240	{"nomorWhatsapp": "081905279136"}	disetujui	2026-03-13 22:59:55.228266
+5	767	240	{"pendidikan": "Diploma IV/Strata I"}	disetujui	2026-03-13 22:59:09.159701
+10	1023	344	{"pendidikan": "Tidak/Belum Tamat SD"}	disetujui	2026-03-14 12:11:51.010026
+9	1021	344	{"pendidikan": "Diploma IV/Strata I"}	disetujui	2026-03-14 12:11:36.471547
+8	1018	344	{"agama": "Kristen", "pendidikan": "Diploma IV/Strata I"}	disetujui	2026-03-14 12:11:24.771178
 \.
 
 
@@ -1538,7 +1566,6 @@ COPY public.profile_edit_request (id, warga_id, kk_id, field_changes, status, cr
 --
 
 COPY public.riwayat_kontrak (id, warga_singgah_id, tanggal_mulai_lama, tanggal_habis_lama, tanggal_mulai_baru, tanggal_habis_baru, created_at) FROM stdin;
-1	1	2025-03-06	2026-03-20	2026-03-20	2027-03-20	2026-03-15 22:24:44.948199
 \.
 
 
@@ -1572,6 +1599,7 @@ COPY public.rt_data (id, nomor_rt, nama_ketua, nomor_whatsapp) FROM stdin;
 COPY public.surat_rw (id, jenis_surat, perihal, tujuan, isi_surat, tanggal_surat, created_at, nomor_surat) FROM stdin;
 1	Surat Undangan	Undangan Rapat Pengkondisian zakat fitrah	Undangan Rapat	Nomor : 001/RW-03/SKRT/2026\nLampiran : -\nPerihal : Undangan Rapat Pengkondisian Zakat Fitrah\n\nCimahi, 25 Mei 2024\n\nYth. Bapak/Ibu/Saudara/i Undangan Rapat\nDi tempat\n\nDengan hormat,\n\nDalam rangka persiapan dan pengkondisian pelaksanaan zakat fitrah di lingkungan RW 03 Kelurahan Padasuka untuk tahun 1446 H/2025 M, kami mengundang Bapak/Ibu/Saudara/i untuk hadir dalam rapat yang akan diselenggarakan pada:\n\nHari/Tanggal : Sabtu, 8 Juni 2024\nWaktu         : Pukul 19.30 WIB (Ba'da Isya)\nTempat        : Balai Pertemuan RW 03\n                Jl. Padasuka Indah No. 15, Cimahi Tengah\nAcara         : Pengkondisian dan Pembentukan Panitia Zakat Fitrah 1446 H/2025 M\n\nMengingat pentingnya acara ini, kami sangat mengharapkan kehadiran Bapak/Ibu/Saudara/i tepat waktu. Kehadiran dan kontribusi pemikiran Bapak/Ibu/Saudara/i akan sangat berarti bagi kelancaran dan kesuksesan pelaksanaan zakat fitrah di lingkungan kita.\n\nAtas perhatian dan kehadiran Bapak/Ibu/Saudara/i, kami ucapkan terima kasih.\n\nHormat kami,\n\nKetua RW 03\nKelurahan Padasuka\n\n(Tanda Tangan)\n\nRaden Raka	\N	2026-03-08 18:44:04.760348	001/SK-RW/RW-03/03/2026
 2	Surat Permohonan Audiensi	Permohonan Penggunaan asset koni jabar di padasuka cimahi	KONI JAWA BARAT	Cimahi, 9 Maret 2026\n\nYth. Ketua Umum KONI Jawa Barat\ndi tempat\n\nPerihal: Permohonan Penggunaan asset koni jabar di padasuka cimahi\n\nDengan hormat,\n\nKami yang bertanda tangan di bawah ini, selaku perwakilan dari Rukun Warga (RW) 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini mengajukan permohonan audiensi kepada Bapak/Ibu Ketua Umum KONI Jawa Barat.\n\nAdapun maksud dan tujuan permohonan audiensi ini adalah untuk menyampaikan rencana kegiatan peringatan Hari Ulang Tahun Kemerdekaan Republik Indonesia ke-79 (17 Agustus) yang akan diselenggarakan oleh RW 03 bersama Karang Taruna RW 03 Kelurahan Padasuka. Kami berencana untuk mengadakan acara peringatan 17 Agustus yang termegah di Cimahi.\n\nSehubungan dengan hal tersebut, kami sangat berharap dapat berdiskusi mengenai kemungkinan penggunaan aset milik KONI Jawa Barat yang berlokasi luas di wilayah Padasuka, khususnya di area RW 03 kami, sebagai lokasi penyelenggaraan sebagian rangkaian acara tersebut.\n\nKami sangat mengharapkan kesediaan Bapak/Ibu Ketua Umum KONI Jawa Barat untuk menerima audiensi kami. Mengenai waktu dan tanggal pelaksanaan audiensi, kami sepenuhnya menyerahkan dan akan mengikuti jadwal yang dapat Bapak/Ibu berikan.\n\nDemikian surat permohonan ini kami sampaikan. Atas perhatian dan kesediaan Bapak/Ibu, kami mengucapkan terima kasih.\n\nHormat kami,\n\nKetua RW 03\nKelurahan Padasuka\n\n\n(Raden Raka)	\N	2026-03-08 20:17:42.24885	002/SK-RW/RW-03/03/2026
+3	Surat Permohonan Audiensi	Permohonan Penggunaan asset koni jabar di padasuka cimahi	KONI Jawa Barat	SURAT PERMOHONAN AUDIENSI\n\nPerihal: Permohonan Penggunaan asset koni jabar di padasuka cimahi\n\n9 Maret 2026\n\nYth. Ketua KONI Jawa Barat\ndi tempat\n\nDengan hormat,\n\nYang bertanda tangan di bawah ini:\nNama : Raden Raka\nJabatan : Ketua RW 03 Kelurahan Padasuka\nAlamat : Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi\n\nBersama surat ini, kami mewakili seluruh warga RW 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, bermaksud mengajukan permohonan audiensi dengan Bapak/Ibu Ketua KONI Jawa Barat.\n\nAdapun latar belakang dan tujuan permohonan audiensi ini adalah sebagai berikut:\nDalam rangka menyambut dan memeriahkan Hari Ulang Tahun Kemerdekaan Republik Indonesia pada tanggal 17 Agustus 2026, kami, selaku Ketua RW 03 dan juga Ketua Karang Taruna RW 03, memiliki rencana besar untuk menyelenggarakan perayaan 17 Agustus yang termegah di Kota Cimahi. Kami melihat potensi besar pada lapangan aset KONI Jawa Barat yang berlokasi di Kelurahan Padasuka untuk dijadikan lokasi utama penyelenggaraan acara, khususnya untuk membuat sebuah mini konser sebagai bagian dari rangkaian perayaan tersebut.\n\nOleh karena itu, kami sangat mengharapkan kesempatan untuk dapat berdiskusi langsung dengan Bapak/Ibu mengenai rencana penggunaan aset KONI Jawa Barat tersebut. Kami memohon kesediaan Bapak/Ibu untuk menerima audiensi kami pada:\nHari/Tanggal : Selasa, 17 Maret 2026\nWaktu : Pukul 10.00 Pagi\nTempat : (Menyesuaikan dengan kesediaan Bapak/Ibu)\n\nBesar harapan kami agar permohonan audiensi ini dapat dikabulkan. Atas perhatian dan waktu yang telah Bapak/Ibu luangkan, kami mengucapkan terima kasih.\n\nHormat kami,\n\nKetua RW 03\nKelurahan Padasuka\n\n\n(Raden Raka)	2026-03-09	2026-03-09 03:12:01.054982	003/SK-RW/RW-03/03/2026
 \.
 
 
@@ -1585,9 +1613,43 @@ COPY public.surat_warga (id, warga_id, kk_id, jenis_surat, perihal, keterangan, 
 3	16	1	surat_keterangan_domisili	Untuk kepentingan Kuliah	\N	SURAT KETERANGAN DOMISILI\n\nPerihal: Untuk kepentingan Kuliah\n\nYang bertanda tangan di bawah ini, Ketua Rukun Tetangga (RT) 04 dan Ketua Rukun Warga (RW) 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama                               : Raden raka abdul kamal syafaat\nNIK                                : 3277020603030019\nJenis Kelamin                      : Laki-laki\nAgama                              : Islam\nPekerjaan                          : Pelajar/Mahasiswa\nAlamat                             : Jln Kh Ushman dhomiri no 48A RT 04 / RW 03\n                                   Kelurahan Padasuka\n                                   Kecamatan Cimahi Tengah\n                                   Kota Cimahi\n\nBerdasarkan data dan pengamatan kami, nama tersebut di atas benar adalah warga kami yang berdomisili di alamat tersebut di atas.\n\nSurat keterangan domisili ini diberikan untuk keperluan Kuliah.\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 23 Mei 2024\n\nMengetahui,\nKetua RT 04\n\n\n(Eem Sulaeman)\n\n\nKetua RW 03\n\n\n(Raden Raka)	disetujui	4	2026-03-08 18:48:46.731995	001/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
 5	16	1	surat_keterangan_belum_menikah	untuk keperluan KUA	\N	Perihal: Surat Keterangan Belum Menikah\n\nSURAT KETERANGAN BELUM MENIKAH\n\nYang bertanda tangan di bawah ini:\n\nNama                 : Eem Sulaeman\nJabatan              : Ketua RT 04\n\nNama                 : Raden Raka\nJabatan              : Ketua RW 03\n\nKelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama                 : Raden raka abdul kamal syafaat\nNIK                  : 3277020603030019\nAlamat               : Jln Kh Ushman dhomiri no 48A\nRT/RW                : 04 / 03\nKelurahan            : Padasuka\nKecamatan            : Cimahi Tengah\nKota                 : Cimahi\nAgama                : Islam\nPekerjaan            : Pelajar/Mahasiswa\nJenis Kelamin        : Laki-laki\n\nBerdasarkan pengamatan dan data yang ada pada kami, nama tersebut di atas benar-benar belum pernah menikah dan berstatus belum menikah sampai surat keterangan ini diterbitkan.\n\nSurat keterangan ini dibuat untuk keperluan pengurusan pernikahan di Kantor Urusan Agama (KUA).\n\nDemikian surat keterangan ini dibuat dengan sebenarnya dan untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui,                                 Hormat kami,\nKetua RT 04                                Ketua RW 03\nKelurahan Padasuka                         Kelurahan Padasuka\n\n\n(Eem Sulaeman)                             (Raden Raka)	disetujui	4	2026-03-08 19:21:21.920627	003/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
 4	16	1	surat_keterangan_usaha	Untuk Bantuan UMKM	\N	Perihal: Surat Keterangan Usaha (Untuk Bantuan UMKM)\n\nYang bertanda tangan di bawah ini:\n\nNama               : Eem Sulaeman\nJabatan            : Ketua RT 04\nAlamat             : Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi\n\nNama               : Raden Raka\nJabatan            : Ketua RW 03\nAlamat             : Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi\n\nDengan ini menerangkan bahwa:\n\nNama               : Raden raka abdul kamal syafaat\nNIK                : 3277020603030019\nAlamat             : Jln Kh Ushman dhomiri no 48A RT 04 / RW 03\nKelurahan          : Padasuka\nKecamatan          : Cimahi Tengah\nKota               : Cimahi\nAgama              : Islam\nPekerjaan          : Pelajar/Mahasiswa\nJenis Kelamin      : Laki-laki\n\nAdalah benar warga kami yang berdomisili di alamat tersebut di atas dan berdasarkan pengamatan serta informasi yang kami terima, yang bersangkutan memiliki dan menjalankan usaha mikro/kecil di lingkungan kami.\n\nSurat keterangan ini dibuat sebagai kelengkapan persyaratan untuk pengajuan Bantuan Usaha Mikro, Kecil, dan Menengah (UMKM) serta untuk dipergunakan sebagaimana mestinya.\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui,                               Hormat kami,\nKetua RT 04                                Ketua RW 03\nKelurahan Padasuka                         Kelurahan Padasuka\n\n\n(Eem Sulaeman)                             (Raden Raka)	disetujui	4	2026-03-08 18:56:32.674213	002/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
-6	16	1	surat_pengantar_rt	Untuk Bansos	\N	SURAT PENGANTAR\nPerihal: Untuk Bansos\n\nYang bertanda tangan di bawah ini:\n\nNama                  : Eem Sulaeman\nJabatan               : Ketua RT 004\nAlamat                : Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi\n\nDengan ini menerangkan bahwa:\n\nNama                  : Raden raka abdul kamal syafaat\nNIK                   : 3277020603030019\nAlamat                : Jln Kh Ushman dhomiri no 48A RT 004 / RW 003\nKelurahan             : Padasuka\nKecamatan             : Cimahi Tengah\nKota                  : Cimahi\nAgama                 : Islam\nPekerjaan             : Pelajar/Mahasiswa\nJenis Kelamin         : Laki-laki\n\nAdalah benar warga kami yang berdomisili di alamat tersebut di atas. Surat pengantar ini dibuat untuk keperluan pengajuan Bantuan Sosial (Bansos).\n\nDemikian surat pengantar ini dibuat untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui, | Hormat kami,\nKetua RT 04 | Ketua RW 03\nKelurahan Padasuka | Kelurahan Padasuka\n|\n|\n(Eem Sulaeman) | (Raden Raka)	disetujui	4	2026-03-09 00:16:39.122913	004/SK-W/RW-03/03/2026	tau_beres	\N	\N	\N
-7	16	1	surat_keterangan_lainnya	Untuk Masuk Sekolah	\N	SURAT KETERANGAN\nPerihal: Untuk Masuk Sekolah\n\nYang bertanda tangan di bawah ini:\n\n1.  Nama           : Eem Sulaeman\n    Jabatan        : Ketua RT 04\n    Alamat         : Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi\n\n2.  Nama           : Raden Raka\n    Jabatan        : Ketua RW 03\n    Alamat         : Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi\n\nDengan ini menerangkan bahwa:\n\n    Nama           : Raden raka abdul kamal syafaat\n    NIK            : 3277020603030019\n    Alamat         : Jln Kh Ushman dhomiri no 48A RT 4 / RW 03\n    Kelurahan      : Padasuka\n    Kecamatan      : Cimahi Tengah\n    Kota           : Cimahi\n    Agama          : Islam\n    Pekerjaan      : Pelajar/Mahasiswa\n    Jenis Kelamin  : Laki-laki\n\nAdalah benar warga kami yang berdomisili di alamat tersebut di atas. Surat keterangan ini dibuat sebagai kelengkapan persyaratan untuk keperluan masuk sekolah.\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui,                                 Hormat kami,\nKetua RT 04                                Ketua RW 03\nKelurahan Padasuka                         Kelurahan Padasuka\n\n\n(Eem Sulaeman)                             (Raden Raka)	disetujui	4	2026-03-09 01:02:01.450037	005/SK-W/RW-03/03/2026	print_mandiri	mmih87qjwv63yr	uploads/surat-pdf/mmih87qjwv63yr.pdf	/uploads/surat/1773216454143-3h7nbe4m95c.pdf
-8	16	1	surat_keterangan_domisili	Untuk Beasiswa	\N	SURAT KETERANGAN DOMISILI\nPerihal: Untuk Beasiswa\n\nYang bertanda tangan di bawah ini, kami Ketua Rukun Tetangga (RT) 04 dan Ketua Rukun Warga (RW) 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama            : Raden raka abdul kamal syafaat\nNIK             : 3277020603030019\nJenis Kelamin   : Laki-laki\nAgama           : Islam\nPekerjaan       : Pelajar/Mahasiswa\nAlamat          : Jln Kh Ushman dhomiri no 48A RT 04 / RW 03,\n                  Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi\n\nAdalah benar-benar warga kami yang berdomisili di alamat tersebut di atas.\n\nSurat keterangan ini dibuat sebagai kelengkapan persyaratan pengajuan beasiswa.\n\nDemikian surat keterangan ini dibuat untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui,                                 Hormat kami,\nKetua RT 04                                 Ketua RW 03\nKelurahan Padasuka                          Kelurahan Padasuka\n\n\n(Eem Sulaeman)                              (Raden Raka)	disetujui	4	2026-03-09 02:27:23.835252	006/SK-W/RW-03/03/2026	print_mandiri	\N	\N	/uploads/surat/1773216389025-2af6he1z75t.pdf
+6	11	5	surat_keterangan_domisili	Melamar Pekerjaan	\N	Perihal: Surat Keterangan Domisili untuk Melamar Pekerjaan\n\nSURAT KETERANGAN DOMISILI\n\nYang bertanda tangan di bawah ini, Ketua Rukun Tetangga (RT) 02 dan Ketua Rukun Warga (RW) 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama                 : Ekariyanti Mulawarman\nNIK                  : 3277024906960010\nJenis Kelamin        : Perempuan\nAgama                : Islam\nPekerjaan            : Ibu Rumah Tangga\nAlamat               : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F\nRT/RW                : 02/03\nKelurahan            : Padasuka\nKecamatan            : Cimahi Tengah\nKota                 : Cimahi\n\nBerdasarkan data kependudukan dan pengamatan kami, nama tersebut di atas benar adalah warga kami yang berdomisili di alamat tersebut di atas.\nSurat keterangan ini dibuat sebagai kelengkapan administrasi yang bersangkutan untuk keperluan melamar pekerjaan.\n\nDemikian surat keterangan ini dibuat untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui,                                 Hormat kami,\nKetua RT 02                                 Ketua RW 03\nKelurahan Padasuka                          Kelurahan Padasuka\n\n\n(Jajang Kusmana)                            (Raden Raka)	disetujui	2	2026-03-09 00:00:54.775388	004/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+8	16	1	surat_keterangan_domisili	untuk beasiswa	\N	SURAT KETERANGAN DOMISILI\nPerihal: Untuk Beasiswa\n\nYang bertanda tangan di bawah ini, Ketua Rukun Tetangga (RT) 04 dan Ketua Rukun Warga (RW) 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama                 : Raden Raka Abdul Kamal Syafaat\nNIK                  : 3277020603030019\nJenis Kelamin        : Laki-laki\nAgama                : Islam\nPekerjaan            : Pelajar/Mahasiswa\nAlamat               : Jln Kh Ushman Dhomiri No 48A RT 04 RW 03\nKelurahan            : Padasuka\nKecamatan            : Cimahi Tengah\nKota                 : Cimahi\n\nMenerangkan bahwa nama tersebut di atas adalah benar warga kami yang berdomisili di alamat tersebut.\n\nSurat keterangan ini dibuat sebagai kelengkapan persyaratan untuk pengajuan beasiswa.\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui,                                          Hormat kami,\nKetua RT 04                                          Ketua RW 03\nKelurahan Padasuka                                   Kelurahan Padasuka\n\n\n(Eem Sulaeman)                                       (Raden Raka)	disetujui	4	2026-03-09 01:25:21.412715	006/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+7	16	1	surat_keterangan_domisili	untuk lomba	\N	SURAT KETERANGAN DOMISILI\n\nPerihal: Untuk lomba\n\nYang bertanda tangan di bawah ini, Ketua Rukun Tetangga (RT) 04 dan Ketua Rukun Warga (RW) 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama lengkap              : Raden raka abdul kamal syafaat\nNomor Induk Kependudukan  : 3277020603030019\nAlamat                    : Jln Kh Ushman dhomiri no 48A\nRT / RW                   : 04 / 03\nKelurahan                 : Padasuka\nKecamatan                 : Cimahi Tengah\nKota                      : Cimahi\nAgama                     : Islam\nPekerjaan                 : Pelajar/Mahasiswa\nJenis Kelamin             : Laki-laki\n\nBerdasarkan data kependudukan yang ada pada kami, nama tersebut di atas benar adalah warga kami yang berdomisili di alamat tersebut.\n\nSurat keterangan domisili ini dibuat untuk keperluan mengikuti lomba.\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui, | Hormat kami,\nKetua RT 04 | Ketua RW 03\nKelurahan Padasuka | Kelurahan Padasuka\n|\n|\n(Eem Sulaeman) | (Raden Raka)	disetujui	4	2026-03-09 01:07:57.37167	005/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+18	14	5	surat_keterangan_pindah	Pindah Rumah	\N	SURAT KETERANGAN PINDAH\n\nPerihal: Pindah Rumah\n\nYang bertanda tangan di bawah ini, kami Ketua Rukun Tetangga (RT) 02 dan Ketua Rukun Warga (RW) 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama                  : Rizky Syahrul Mubarok\nNIK                   : 3277021705190004\nAlamat                : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F\nRT / RW               : 02 / 03\nKelurahan             : Padasuka\nKecamatan             : Cimahi Tengah\nKota                  : Cimahi\nAgama                 : Islam\nPekerjaan             : Pelajar/Mahasiswa\nJenis Kelamin         : Laki-laki\n\nAdalah benar warga kami yang berdomisili di alamat tersebut di atas.\nSurat keterangan ini dibuat sebagai kelengkapan administrasi yang bersangkutan untuk keperluan Pindah Rumah ke alamat baru.\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui,                                 Hormat kami,\nKetua RT 02                                 Ketua RW 03\nKelurahan Padasuka                          Kelurahan Padasuka\n\n\n(Jajang Kusmana)                            (Raden Raka)	disetujui	2	2026-03-09 05:31:59.641539	016/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+13	11	5	surat_keterangan_tidak_mampu	Permohonan KIP Kuliah	\N	SURAT KETERANGAN TIDAK MAMPU\nPerihal: Permohonan KIP Kuliah\n\nYang bertanda tangan di bawah ini:\n\nNama                 : Jajang Kusmana\nJabatan              : Ketua RT 02\n\nNama                 : Raden Raka\nJabatan              : Ketua RW 03\n\nDengan ini menerangkan bahwa:\n\nNama                 : Ekariyanti Mulawarman\nNIK                  : 3277024906960010\nAlamat               : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F\nRT / RW              : 002 / 003\nKelurahan            : Padasuka\nKecamatan            : Cimahi Tengah\nKota                 : Cimahi\nAgama                : Islam\nPekerjaan            : Ibu Rumah Tangga\nJenis Kelamin        : Perempuan\n\nBerdasarkan pengamatan dan data yang ada pada kami, nama tersebut di atas adalah benar warga kami yang berdomisili di alamat tersebut dan tergolong dalam keluarga yang kurang mampu/prasejahtera.\n\nSurat keterangan ini dibuat untuk melengkapi persyaratan Permohonan KIP Kuliah.\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui,                                | Hormat kami,\nKetua RT 02                                | Ketua RW 03\nKelurahan Padasuka                         | Kelurahan Padasuka\n                                           |\n                                           |\n(Jajang Kusmana)                           | (Raden Raka)	disetujui	2	2026-03-09 05:23:59.315738	012/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+9	16	1	surat_keterangan_domisili	untuk melamar kerja	\N	SURAT KETERANGAN DOMISILI\nPerihal: Keterangan Domisili untuk Melamar Kerja\n\nYang bertanda tangan di bawah ini:\n\nNama                  : Eem Sulaeman\nJabatan               : Ketua RT 04\nAlamat                : Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi\n\nNama                  : Raden Raka\nJabatan               : Ketua RW 03\nAlamat                : Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi\n\nDengan ini menerangkan bahwa:\n\nNama                  : Raden raka abdul kamal syafaat\nNIK                   : 3277020603030019\nAlamat                : Jln Kh Ushman dhomiri no 48A\nRT/RW                 : 004/003\nKelurahan             : Padasuka\nKecamatan             : Cimahi Tengah\nKota                  : Cimahi\nAgama                 : Islam\nPekerjaan             : Pelajar/Mahasiswa\nJenis Kelamin         : Laki-laki\n\nBerdasarkan data dan pengamatan kami, nama tersebut di atas benar adalah warga kami yang berdomisili di alamat tersebut di atas. Surat keterangan ini dibuat untuk keperluan melamar kerja.\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui,                                 Hormat kami,\nKetua RT 04                                 Ketua RW 03\nKelurahan Padasuka                          Kelurahan Padasuka\n\n\n(Eem Sulaeman)                              (Raden Raka)	disetujui	4	2026-03-09 01:47:13.640058	007/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+17	14	5	surat_keterangan_pindah	Pindah Rumah	\N	SURAT KETERANGAN PINDAH\nPerihal: Pindah Rumah\n\nYang bertanda tangan di bawah ini, Ketua Rukun Tetangga (RT) 02 dan Ketua Rukun Warga (RW) 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama            : Rizky Syahrul Mubarok\nNIK             : 3277021705190004\nAlamat          : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F\nRT/RW           : 02/03\nKelurahan       : Padasuka\nKecamatan       : Cimahi Tengah\nKota            : Cimahi\nAgama           : Islam\nPekerjaan       : Pelajar/Mahasiswa\nJenis Kelamin   : Laki-laki\n\nBerdasarkan data yang ada pada kami, nama tersebut di atas adalah benar warga kami yang beralamat di JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F RT 02 RW 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi.\n\nSurat keterangan ini dibuat sebagai kelengkapan administrasi yang bersangkutan dalam rangka kepindahan domisili dari alamat tersebut di atas.\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui,                                 Hormat kami,\nKetua RT 02                                  Ketua RW 03\nKelurahan Padasuka                           Kelurahan Padasuka\n\n\n(Jajang Kusmana)                             (Raden Raka)	disetujui	2	2026-03-09 05:27:30.560225	009/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+12	11	5	surat_keterangan_tidak_mampu	Permohonan KIP Kuliah	\N	SURAT KETERANGAN TIDAK MAMPU\nPerihal: Permohonan KIP Kuliah\n\nYang bertanda tangan di bawah ini, Ketua Rukun Tetangga (RT) 02 dan Ketua Rukun Warga (RW) 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama lengkap       : Ekariyanti Mulawarman\nNIK                : 3277024906960010\nJenis Kelamin      : Perempuan\nAgama              : Islam\nPekerjaan          : Ibu Rumah Tangga\nAlamat             : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F RT 002 RW 003\n                     Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi\n\nBerdasarkan pengamatan dan data yang ada pada kami, nama tersebut di atas adalah benar warga kami yang tergolong dalam keluarga kurang mampu/prasejahtera.\n\nSurat keterangan ini dibuat sebagai kelengkapan persyaratan untuk pengajuan Permohonan KIP Kuliah.\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui,                                 Hormat kami,\nKetua RT 02                                Ketua RW 03\nKelurahan Padasuka                         Kelurahan Padasuka\n\n\n(Jajang Kusmana)                           (Raden Raka)	disetujui	2	2026-03-09 05:22:54.824504	011/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+10	11	5	surat_keterangan_tidak_mampu	Membuat BPJS PBI ( Pemerintah )	\N	SURAT KETERANGAN TIDAK MAMPU\nPerihal: Permohonan Pembuatan BPJS PBI (Pemerintah)\n\nYang bertanda tangan di bawah ini, kami Ketua Rukun Tetangga (RT) 02 dan Ketua Rukun Warga (RW) 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama                 : Ekariyanti Mulawarman\nNIK                  : 3277024906960010\nAlamat               : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F RT 02 / RW 03\n                       Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi\nAgama                : Islam\nPekerjaan            : Ibu Rumah Tangga\nJenis Kelamin        : Perempuan\n\nBerdasarkan pengamatan dan data yang ada pada kami, yang bersangkutan benar-benar tergolong keluarga tidak mampu dan layak untuk mendapatkan bantuan program BPJS PBI (Penerima Bantuan Iuran) dari Pemerintah.\n\nSurat keterangan ini dibuat sebagai kelengkapan persyaratan untuk pengajuan BPJS PBI (Pemerintah).\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui,                                 Hormat kami,\nKetua RT 02                                 Ketua RW 03\nKelurahan Padasuka                          Kelurahan Padasuka\n\n\n(Jajang Kusmana)                            (Raden Raka)	disetujui	2	2026-03-09 05:21:16.977267	008/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+11	11	5	surat_keterangan_tidak_mampu	Membuat BPJS PBI ( Pemerintah )	\N	SURAT KETERANGAN TIDAK MAMPU\n\nPerihal: Membuat BPJS PBI (Pemerintah)\n\nYang bertanda tangan di bawah ini adalah Ketua Rukun Tetangga (RT) 02 dan Ketua Rukun Warga (RW) 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama lengkap      : Ekariyanti Mulawarman\nNIK               : 3277024906960010\nAlamat            : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F\nRT/RW             : 2 / 03\nKelurahan         : Padasuka\nKecamatan         : Cimahi Tengah\nKota              : Cimahi\nAgama             : Islam\nPekerjaan         : Ibu Rumah Tangga\nJenis Kelamin     : Perempuan\n\nBerdasarkan pengamatan dan data yang ada pada kami, nama tersebut di atas adalah benar warga kami yang berdomisili di alamat tersebut dan termasuk dalam kategori keluarga tidak mampu.\n\nSurat keterangan ini dibuat sebagai kelengkapan persyaratan untuk pengajuan BPJS PBI (Penerima Bantuan Iuran) dari Pemerintah.\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui,                                 Hormat kami,\nKetua RT 02                                 Ketua RW 03\nKelurahan Padasuka                          Kelurahan Padasuka\n\n\n(Jajang Kusmana)                            (Raden Raka)	disetujui	2	2026-03-09 05:22:12.900975	010/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+14	14	5	surat_keterangan_tidak_mampu	Pengaktifan kembali BPJS PBI untuk ke Rumah Sakit	\N	SURAT KETERANGAN TIDAK MAMPU\n\nPerihal: Pengaktifan kembali BPJS PBI untuk ke Rumah Sakit\n\nYang bertanda tangan di bawah ini:\n\nNama                 : Jajang Kusmana\nJabatan              : Ketua RT 02 Kelurahan Padasuka\n\nNama                 : Raden Raka\nJabatan              : Ketua RW 03 Kelurahan Padasuka\n\nDengan ini menerangkan bahwa:\n\nNama                 : Rizky Syahrul Mubarok\nNIK                  : 3277021705190004\nAlamat               : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F\nRT/RW                : 02/03\nKelurahan            : Padasuka\nKecamatan            : Cimahi Tengah\nKota                 : Cimahi\nAgama                : Islam\nPekerjaan            : Pelajar/Mahasiswa\nJenis Kelamin        : Laki-laki\n\nAdalah benar warga kami yang berdomisili di alamat tersebut di atas dan berdasarkan pengamatan serta data yang ada pada kami, yang bersangkutan tergolong dalam keluarga tidak mampu.\n\nSurat keterangan ini dibuat untuk keperluan pengaktifan kembali kepesertaan BPJS PBI (Penerima Bantuan Iuran) agar dapat digunakan untuk pelayanan kesehatan di Rumah Sakit.\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui,                                 Hormat kami,\nKetua RT 02                                 Ketua RW 03\nKelurahan Padasuka                          Kelurahan Padasuka\n\n\n(Jajang Kusmana)                            (Raden Raka)	disetujui	2	2026-03-09 05:24:34.793706	013/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+15	11	5	surat_keterangan_kematian	Keterangan Kematian	\N	SURAT KETERANGAN KEMATIAN\nPerihal: Keterangan Kematian\n\nYang bertanda tangan di bawah ini, Ketua Rukun Tetangga (RT) 002 dan Ketua Rukun Warga (RW) 003 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama                 : Ekariyanti Mulawarman\nNIK                  : 3277024906960010\nAlamat               : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F RT 002 RW 003\nKelurahan            : Padasuka\nKecamatan            : Cimahi Tengah\nKota                 : Cimahi\nAgama                : Islam\nPekerjaan            : Ibu Rumah Tangga\nJenis Kelamin        : Perempuan\n\nBerdasarkan informasi dan data yang kami terima, nama tersebut di atas telah meninggal dunia pada:\nHari/Tanggal         : [Isi Hari/Tanggal Kematian]\nPukul                : [Isi Pukul Kematian]\nDi                   : [Isi Tempat Kematian]\nPenyebab Kematian    : [Isi Penyebab Kematian, jika diketahui]\n\nSurat keterangan ini dibuat sebagai kelengkapan administrasi dan dapat dipergunakan sebagaimana mestinya.\n\nDemikian surat keterangan ini kami buat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui,                                 Hormat kami,\nKetua RT 02                                 Ketua RW 03\nKelurahan Padasuka                          Kelurahan Padasuka\n\n\n(Jajang Kusmana)                            (Raden Raka)	disetujui	2	2026-03-09 05:25:53.47029	014/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+16	14	5	surat_keterangan_pindah	Pindah Rumah	\N	SURAT KETERANGAN PINDAH\nPerihal: Pindah Rumah\n\nYang bertanda tangan di bawah ini, Ketua Rukun Tetangga (RT) 02 dan Ketua Rukun Warga (RW) 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama                     : Rizky Syahrul Mubarok\nNIK                      : 3277021705190004\nAlamat                   : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F\nRT / RW                  : 02 / 03\nKelurahan                : Padasuka\nKecamatan                : Cimahi Tengah\nKota                     : Cimahi\nAgama                    : Islam\nPekerjaan                : Pelajar/Mahasiswa\nJenis Kelamin            : Laki-laki\n\nMenerangkan bahwa nama tersebut di atas adalah benar warga kami yang berdomisili di alamat tersebut dan saat ini yang bersangkutan akan pindah tempat tinggal dari alamat tersebut di atas.\n\nSurat keterangan ini dibuat sebagai kelengkapan administrasi yang diperlukan untuk proses kepindahan yang bersangkutan.\n\nDemikian surat keterangan ini dibuat untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui,                                 Hormat kami,\nKetua RT 02                                 Ketua RW 03\nKelurahan Padasuka                          Kelurahan Padasuka\n\n\n(Jajang Kusmana)                            (Raden Raka)	disetujui	2	2026-03-09 05:27:10.79621	015/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+20	14	5	surat_keterangan_kematian	Membuat Akta Kematian	\N	SURAT KETERANGAN KEMATIAN\nPerihal: Membuat Akta Kematian\n\nYang bertanda tangan di bawah ini, Ketua Rukun Tetangga (RT) 02 dan Ketua Rukun Warga (RW) 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nBerdasarkan data yang kami terima dan sepengetahuan kami, almarhum/almarhumah:\nNama                       : Rizky Syahrul Mubarok\nNIK                        : 3277021705190004\nAlamat                     : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F\nRT / RW                    : 02	disetujui	2	2026-03-09 05:33:18.685805	018/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+19	14	5	surat_keterangan_lainnya	Pengajuan Bansos	\N	SURAT KETERANGAN\nPerihal: Pengajuan Bansos\n\nYang bertanda tangan di bawah ini, Ketua Rukun Tetangga (RT) 02 dan Ketua Rukun Warga (RW) 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama                 : Rizky Syahrul Mubarok\nNIK                  : 3277021705190004\nJenis Kelamin        : Laki-laki\nAgama                : Islam\nPekerjaan            : Pelajar/Mahasiswa\nAlamat               : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F\nRT/RW                : 02/03\nKelurahan            : Padasuka\nKecamatan            : Cimahi Tengah\nKota                 : Cimahi\n\nBerdasarkan data kependudukan dan pengamatan kami di lingkungan, nama tersebut di atas adalah benar warga kami yang berdomisili di alamat tersebut.\nSurat keterangan ini dibuat sebagai kelengkapan persyaratan untuk pengajuan Bantuan Sosial (Bansos).\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui,                               | Hormat kami,\nKetua RT 02                                | Ketua RW 03\nKelurahan Padasuka                         | Kelurahan Padasuka\n                                           |\n                                           |\n(Jajang Kusmana)                           | (Raden Raka)	disetujui	2	2026-03-09 05:32:30.964547	017/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+21	14	5	surat_keterangan_tidak_mampu	KIP Kuliah	\N	SURAT KETERANGAN TIDAK MAMPU\n\nPerihal: KIP Kuliah\n\nYang bertanda tangan di bawah ini:\n\nNama                 : Jajang Kusmana\nJabatan              : Ketua RT 02\nAlamat               : Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi\n\nNama                 : Raden Raka\nJabatan              : Ketua RW 03\nAlamat               : Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi\n\nDengan ini menerangkan bahwa:\n\nNama                 : Rizky Syahrul Mubarok\nNIK                  : 3277021705190004\nAlamat               : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F RT 02 / RW 03\nKelurahan            : Padasuka\nKecamatan            : Cimahi Tengah\nKota                 : Cimahi\nAgama                : Islam\nPekerjaan            : Pelajar/Mahasiswa\nJenis Kelamin        : Laki-laki\n\nAdalah benar warga kami yang berdomisili di alamat tersebut di atas. Berdasarkan pengamatan dan data yang ada pada kami, yang bersangkutan beserta keluarganya tergolong dalam kategori keluarga tidak mampu.\n\nSurat keterangan ini dibuat sebagai salah satu persyaratan untuk pengajuan KIP Kuliah.\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui,                               Hormat kami,\nKetua RT 02                               Ketua RW 03\nKelurahan Padasuka                        Kelurahan Padasuka\n\n\n(Jajang Kusmana)                          (Raden Raka)	disetujui	2	2026-03-09 05:33:38.68432	019/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+22	14	5	surat_keterangan_tidak_mampu	KIP Kuliah	\N	SURAT KETERANGAN TIDAK MAMPU\nPerihal: KIP Kuliah\n\nYang bertanda tangan di bawah ini, Ketua Rukun Tetangga (RT) 002 dan Ketua Rukun Warga (RW) 003 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama                 : Rizky Syahrul Mubarok\nNIK                  : 3277021705190004\nJenis Kelamin        : Laki-laki\nAgama                : Islam\nPekerjaan            : Pelajar/Mahasiswa\nAlamat               : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F RT 002 RW 003\n                       Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi\n\nBerdasarkan pengamatan dan data yang ada di lingkungan kami, nama tersebut di atas benar-benar tergolong keluarga tidak mampu.\n\nSurat keterangan ini dibuat untuk melengkapi persyaratan pengajuan Kartu Indonesia Pintar (KIP) Kuliah.\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui, | Hormat kami,\nKetua RT 02 | Ketua RW 03\nKelurahan Padasuka | Kelurahan Padasuka\n|\n|\n(Jajang Kusmana) | (Raden Raka)	disetujui	2	2026-03-09 05:33:56.616497	020/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+23	14	5	surat_keterangan_tidak_mampu	KIP Kuliah	\N	SURAT KETERANGAN TIDAK MAMPU\n\nPerihal: KIP Kuliah\n\nYang bertanda tangan di bawah ini, Ketua Rukun Tetangga (RT) 02 dan Ketua Rukun Warga (RW) 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama                 : Rizky Syahrul Mubarok\nNIK                  : 3277021705190004\nAlamat               : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F\nRT / RW              : 02 / 03\nKelurahan            : Padasuka\nKecamatan            : Cimahi Tengah\nKota                 : Cimahi\nAgama                : Islam\nPekerjaan            : Pelajar/Mahasiswa\nJenis Kelamin        : Laki-laki\n\nBerdasarkan pengamatan dan data yang ada pada kami, serta informasi dari lingkungan sekitar, nama tersebut di atas adalah benar warga kami yang berdomisili di alamat tersebut dan berasal dari keluarga yang tergolong kurang mampu secara ekonomi.\n\nSurat keterangan ini dibuat sebagai salah satu persyaratan untuk pengajuan beasiswa KIP Kuliah.\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui, | Hormat kami,\nKetua RT 02 | Ketua RW 03\nKelurahan Padasuka | Kelurahan Padasuka\n|\n|\n(Jajang Kusmana) | (Raden Raka)	disetujui	2	2026-03-09 05:34:40.629722	021/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+24	14	5	surat_keterangan_tidak_mampu	KIP Kuliah	\N	SURAT KETERANGAN TIDAK MAMPU\nPerihal: KIP Kuliah\n\nYang bertanda tangan di bawah ini, kami Ketua Rukun Tetangga (RT) 002 dan Ketua Rukun Warga (RW) 003 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama               : Jajang Kusmana\nJabatan            : Ketua RT 002\n\nNama               : Raden Raka\nJabatan            : Ketua RW 003\n\nDengan ini menyatakan bahwa warga kami yang tersebut di bawah ini:\n\nNama               : Rizky Syahrul Mubarok\nNIK                : 3277021705190004\nAlamat             : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F RT 002 RW 003\nKelurahan          : Padasuka\nKecamatan          : Cimahi Tengah\nKota               : Cimahi\nAgama              : Islam\nPekerjaan          : Pelajar/Mahasiswa\nJenis Kelamin      : Laki-laki\n\nBerdasarkan pengamatan dan data yang ada pada kami, yang bersangkutan benar-benar warga kami yang tergolong dalam keluarga kurang mampu/tidak mampu.\n\nSurat keterangan ini dibuat sebagai salah satu syarat untuk pengajuan KIP Kuliah.\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui,                                 Hormat kami,\nKetua RT 02                                Ketua RW 03\nKelurahan Padasuka                         Kelurahan Padasuka\n\n\n(Jajang Kusmana)                           (Raden Raka)	disetujui	2	2026-03-09 05:34:57.462039	022/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+25	14	5	surat_keterangan_lainnya	Keterangan Penghasilan	\N	SURAT KETERANGAN PENGHASILAN\nPerihal: Keterangan Penghasilan\n\nYang bertanda tangan di bawah ini, kami Ketua Rukun Tetangga (RT) 002 dan Ketua Rukun Warga (RW) 003 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama        : Rizky Syahrul Mubarok\nNIK         : 3277021705190004\nAlamat      : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F RT 002 RW 003\nKelurahan   : Padasuka\nKecamatan   : Cimahi Tengah\nKota        : Cimahi\nAgama       : Islam\nPekerjaan   : Pelajar/Mahasiswa\nJenis Kelamin: Laki-laki\n\nBerdasarkan pengamatan dan informasi yang kami terima dari lingkungan sekitar, nama tersebut di atas adalah benar warga kami yang beralamat sebagaimana tercantum di atas.\n\nSehubungan dengan perihal tersebut, kami menerangkan bahwa yang bersangkutan, Rizky Syahrul Mubarok, adalah seorang Pelajar/Mahasiswa dan berdasarkan sepengetahuan kami, yang bersangkutan belum memiliki penghasilan tetap/sendiri dan masih dalam tanggungan orang tua/wali.\n\nSurat keterangan ini dibuat sebagai kelengkapan administrasi untuk keperluan pengajuan beasiswa atau bantuan pendidikan, atau keperluan lain yang membutuhkan keterangan penghasilan.\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui,                               Hormat kami,\nKetua RT 02                               Ketua RW 03\nKelurahan Padasuka                        Kelurahan Padasuka\n\n\n(Jajang Kusmana)                          (Raden Raka)	disetujui	2	2026-03-09 05:35:30.98564	023/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+26	14	5	surat_keterangan_lainnya	Keringanan Biaya Kuliah	\N	SURAT KETERANGAN\nPerihal: Keringanan Biaya Kuliah\n\nCimahi, 9 Maret 2026\n\nYang bertanda tangan di bawah ini, Ketua Rukun Tetangga (RT) 002 dan Ketua Rukun Warga (RW) 003 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama           : Rizky Syahrul Mubarok\nNIK            : 3277021705190004\nAlamat         : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F\nRT/RW          : 002/003\nKelurahan      : Padasuka\nKecamatan      : Cimahi Tengah\nKota           : Cimahi\nAgama          : Islam\nPekerjaan      : Pelajar/Mahasiswa\nJenis Kelamin  : Laki-laki\n\nAdalah benar warga kami yang berdomisili di alamat tersebut di atas.\n\nSurat keterangan ini dibuat sebagai kelengkapan persyaratan untuk pengajuan keringanan biaya kuliah.\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.\n\nMengetahui,                                 Hormat kami,\nKetua RT 02                                Ketua RW 03\nKelurahan Padasuka                         Kelurahan Padasuka\n\n\n(Jajang Kusmana)                           (Raden Raka)	disetujui	2	2026-03-09 05:35:55.962623	024/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+27	14	5	surat_keterangan_lainnya	Keterangan tidak berpenghasilan	\N	SURAT KETERANGAN TIDAK BERPENGHASILAN\nPerihal: Keterangan tidak berpenghasilan\n\nYang bertanda tangan di bawah ini, Ketua Rukun Tetangga (RT) 02 dan Ketua Rukun Warga (RW) 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama                 : Rizky Syahrul Mubarok\nNIK                  : 3277021705190004\nAlamat               : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F\nRT/RW                : 02/03\nKelurahan            : Padasuka\nKecamatan            : Cimahi Tengah\nKota                 : Cimahi\nAgama                : Islam\nPekerjaan            : Pelajar/Mahasiswa\nJenis Kelamin        : Laki-laki\n\nBerdasarkan pengamatan dan data yang ada pada kami, nama tersebut di atas benar-benar tidak memiliki penghasilan tetap atau tidak berpenghasilan. Surat keterangan ini dibuat berdasarkan permohonan yang bersangkutan dan untuk dipergunakan sebagai kelengkapan administrasi yang diperlukan.\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui,                                 Hormat kami,\nKetua RT 02                                Ketua RW 03\nKelurahan Padasuka                         Kelurahan Padasuka\n\n\n(Jajang Kusmana)                           (Raden Raka)	disetujui	2	2026-03-09 05:36:22.088226	025/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+28	14	5	surat_keterangan_lainnya	Membuat NA	\N	SURAT KETERANGAN LAINNYA\nPerihal: Membuat NA\n\nYang bertanda tangan di bawah ini, Ketua Rukun Tetangga (RT) 02 dan Ketua Rukun Warga (RW) 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama                  : Rizky Syahrul Mubarok\nNIK                   : 3277021705190004\nAlamat                : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F\nRT / RW               : 02 / 03\nKelurahan             : Padasuka\nKecamatan             : Cimahi Tengah\nKota                  : Cimahi\nAgama                 : Islam\nPekerjaan             : Pelajar/Mahasiswa\nJenis Kelamin         : Laki-laki\n\nBerdasarkan data kependudukan dan pengamatan kami, nama tersebut di atas adalah benar warga kami yang berdomisili di alamat tersebut dan berkelakuan baik di lingkungan masyarakat.\n\nSurat keterangan ini dibuat untuk keperluan Membuat NA.\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui,                               Hormat kami,\nKetua RT 02                               Ketua RW 03\nKelurahan Padasuka                        Kelurahan Padasuka\n\n\n(Jajang Kusmana)                          (Raden Raka)	disetujui	2	2026-03-09 05:37:00.568205	026/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+29	14	5	surat_keterangan_tidak_mampu	Pengaktifan BPJS PBI	\N	SURAT KETERANGAN TIDAK MAMPU\nPerihal: Pengaktifan BPJS PBI\n\nYang bertanda tangan di bawah ini, kami Ketua Rukun Tetangga (RT) 02 dan Ketua Rukun Warga (RW) 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama                  : Rizky Syahrul Mubarok\nNIK                   : 3277021705190004\nAlamat                : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F\nRT/RW                 : 02/03\nKelurahan             : Padasuka\nKecamatan             : Cimahi Tengah\nKota                  : Cimahi\nAgama                 : Islam\nPekerjaan             : Pelajar/Mahasiswa\nJenis Kelamin         : Laki-laki\n\nBerdasarkan pengamatan dan data yang ada pada kami, yang bersangkutan benar-benar tergolong keluarga tidak mampu dan layak mendapatkan bantuan. Surat keterangan ini dibuat untuk keperluan pengaktifan kembali kepesertaan BPJS PBI (Penerima Bantuan Iuran).\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya. Atas perhatian dan kerjasamanya, kami ucapkan terima kasih.\n\nCimahi, 9 Maret 2026\n\nMengetahui,             Hormat kami,\nKetua RT 02             Ketua RW 03\nKelurahan Padasuka      Kelurahan Padasuka\n\n\n(Jajang Kusmana)        (Raden Raka)	disetujui	2	2026-03-09 05:37:29.2888	027/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+31	14	5	surat_keterangan_tidak_mampu	Pengaktifan BPJS PBI	\N	SURAT KETERANGAN TIDAK MAMPU\nPerihal: Pengaktifan BPJS PBI\n\nYang bertanda tangan di bawah ini:\n\nNama                 : Jajang Kusmana\nJabatan              : Ketua RT 02\nAlamat               : Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi\n\nNama                 : Raden Raka\nJabatan              : Ketua RW 03\nAlamat               : Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi\n\nDengan ini menerangkan bahwa:\n\nNama                 : Rizky Syahrul Mubarok\nNIK                  : 3277021705190004\nAlamat               : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F\nRT/RW                : 002/003\nKelurahan            : Padasuka\nKecamatan            : Cimahi Tengah\nKota                 : Cimahi\nAgama                : Islam\nPekerjaan            : Pelajar/Mahasiswa\nJenis Kelamin        : Laki-laki\n\nBerdasarkan pengamatan dan data yang ada pada kami, nama tersebut di atas benar-benar warga kami yang berdomisili di alamat tersebut dan tergolong dalam keluarga tidak mampu.\n\nSurat keterangan ini dibuat sebagai persyaratan untuk pengaktifan kembali kepesertaan BPJS PBI (Penerima Bantuan Iuran) yang bersangkutan.\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui,                                 Hormat kami,\nKetua RT 02                                 Ketua RW 03\nKelurahan Padasuka                          Kelurahan Padasuka\n\n\n(Jajang Kusmana)                            (Raden Raka)	disetujui	2	2026-03-09 05:48:42.686281	029/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+30	14	5	surat_keterangan_tidak_mampu	Pengaktifan BPJS PBI	\N	SURAT KETERANGAN TIDAK MAMPU\n\nPerihal: Pengaktifan BPJS PBI\n\nYang bertanda tangan di bawah ini, Ketua Rukun Tetangga (RT) 02 dan Ketua Rukun Warga (RW) 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama lengkap : Rizky Syahrul Mubarok\nNIK          : 3277021705190004\nAlamat       : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F RT 02 / RW 03\nKelurahan    : Padasuka\nKecamatan    : Cimahi Tengah\nKota         : Cimahi\nAgama        : Islam\nPekerjaan    : Pelajar/Mahasiswa\nJenis Kelamin: Laki-laki\n\nBerdasarkan pengamatan dan data yang ada pada kami, nama tersebut di atas adalah benar warga kami yang berdomisili di alamat tersebut dan tergolong dalam keluarga yang tidak mampu secara ekonomi.\n\nSurat keterangan ini dibuat sebagai persyaratan untuk pengaktifan kembali kepesertaan BPJS PBI (Penerima Bantuan Iuran) atas nama yang bersangkutan.\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui,                                 Hormat kami,\nKetua RT 02                                 Ketua RW 03\nKelurahan Padasuka                          Kelurahan Padasuka\n\n\n(Jajang Kusmana)                            (Raden Raka)	disetujui	2	2026-03-09 05:48:19.33796	028/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+32	14	5	surat_keterangan_tidak_mampu	Pengaktifan BPJS PBI	\N	SURAT KETERANGAN TIDAK MAMPU\nPerihal: Pengaktifan BPJS PBI\n\nYang bertanda tangan di bawah ini, Ketua Rukun Tetangga (RT) 02 dan Ketua Rukun Warga (RW) 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama                 : Rizky Syahrul Mubarok\nNIK                  : 3277021705190004\nAlamat               : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F\nRT / RW              : 02 / 03\nKelurahan            : Padasuka\nKecamatan            : Cimahi Tengah\nKota                 : Cimahi\nAgama                : Islam\nPekerjaan            : Pelajar/Mahasiswa\nJenis Kelamin        : Laki-laki\n\nBerdasarkan pengamatan dan data yang ada pada kami, nama tersebut di atas benar-benar warga kami yang tergolong dalam keluarga tidak mampu.\n\nSurat keterangan ini dibuat sebagai salah satu persyaratan untuk pengaktifan kembali kepesertaan BPJS PBI (Penerima Bantuan Iuran) yang bersangkutan.\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 9 Maret 2026\n\nMengetahui,                                 Hormat kami,\nKetua RT 02                                  Ketua RW 03\nKelurahan Padasuka                           Kelurahan Padasuka\n\n\n(Jajang Kusmana)                             (Raden Raka)	disetujui	2	2026-03-09 05:50:19.320315	030/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+33	14	5	surat_keterangan_lainnya	keterangan janda untuk pemutihan pensiunan	\N	SURAT KETERANGAN\nPerihal: Keterangan Janda untuk Pemutihan Pensiunan\n\nYang bertanda tangan di bawah ini, Ketua Rukun Tetangga (RT) 02 dan Ketua Rukun Warga (RW) 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama        : Rizky Syahrul Mubarok\nNIK         : 3277021705190004\nAlamat      : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F\nRT / RW     : 02 / 03\nKelurahan   : Padasuka\nKecamatan   : Cimahi Tengah\nKota        : Cimahi\nAgama       : Islam\nPekerjaan   : Pelajar/Mahasiswa\nJenis Kelamin: Laki-laki\n\nAdalah benar warga kami yang berdomisili di alamat tersebut di atas.\n\nSurat keterangan ini dibuat untuk keperluan pengurusan keterangan janda dalam rangka pemutihan pensiunan.\n\nDemikian surat keterangan ini dibuat untuk dapat dipergunakan sebagaimana mestinya. Atas perhatian dan kerjasamanya, kami ucapkan terima kasih.\n\nCimahi, 10 Maret 2026\n\nMengetahui,                                | Hormat kami,\nKetua RT 02                                | Ketua RW 03\nKelurahan Padasuka                         | Kelurahan Padasuka\n                                           |\n                                           |\n(Jajang Kusmana)                           | (Raden Raka)	disetujui	2	2026-03-10 04:10:36.286662	031/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+34	14	5	surat_keterangan_tidak_mampu	pengaktifan kembali bpjs pbi (pemerintah)	\N	SURAT KETERANGAN TIDAK MAMPU\nPerihal: Pengaktifan Kembali BPJS PBI (Pemerintah)\n\nYang bertanda tangan di bawah ini, Ketua Rukun Tetangga (RT) 02 dan Ketua Rukun Warga (RW) 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama           : Rizky Syahrul Mubarok\nNIK            : 3277021705190004\nAlamat         : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F\nRT/RW          : 02/03\nKelurahan      : Padasuka\nKecamatan      : Cimahi Tengah\nKota           : Cimahi\nAgama          : Islam\nPekerjaan      : Pelajar/Mahasiswa\nJenis Kelamin  : Laki-laki\n\nBerdasarkan pengamatan dan data yang ada pada kami, nama tersebut di atas adalah benar warga kami yang berdomisili di alamat tersebut dan tergolong dalam keluarga tidak mampu secara ekonomi.\n\nSurat keterangan ini dibuat sebagai persyaratan untuk pengaktifan kembali kepesertaan BPJS PBI (Penerima Bantuan Iuran) Pemerintah atas nama yang bersangkutan.\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya. Atas perhatian dan kerjasamanya, kami ucapkan terima kasih.\n\nCimahi, 10 Maret 2026\n\nMengetahui,                                 Hormat kami,\nKetua RT 02                                Ketua RW 03\nKelurahan Padasuka                         Kelurahan Padasuka\n\n\n(Jajang Kusmana)                           (Raden Raka)	disetujui	2	2026-03-10 04:11:27.025342	032/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+35	14	5	surat_keterangan_tidak_mampu	pengaktifan kembali bpjs pbi (pemerintah)	\N	SURAT KETERANGAN TIDAK MAMPU\nPerihal: pengaktifan kembali bpjs pbi (pemerintah)\n\nYang bertanda tangan di bawah ini:\n\nNama                 : Jajang Kusmana\nJabatan              : Ketua RT 02 Kelurahan Padasuka\n\nNama                 : Raden Raka\nJabatan              : Ketua RW 03 Kelurahan Padasuka\n\nDengan ini menerangkan bahwa:\n\nNama                 : Rizky Syahrul Mubarok\nNIK                  : 3277021705190004\nAlamat               : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F RT 002 / RW 003\nKelurahan            : Padasuka\nKecamatan            : Cimahi Tengah\nKota                 : Cimahi\nAgama                : Islam\nPekerjaan            : Pelajar/Mahasiswa\nJenis Kelamin        : Laki-laki\n\nAdalah benar warga kami yang berdomisili di alamat tersebut di atas. Berdasarkan pengamatan dan data yang ada pada kami, yang bersangkutan benar-benar tergolong keluarga tidak mampu dan membutuhkan bantuan untuk pengaktifan kembali BPJS PBI (Pemerintah).\n\nSurat keterangan ini dibuat sebagai kelengkapan persyaratan untuk pengaktifan kembali BPJS PBI (Pemerintah) atas nama yang bersangkutan.\n\nDemikian surat keterangan ini dibuat untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 10 Maret 2026\n\nMengetahui,                                          Hormat kami,\nKetua RT 02                                          Ketua RW 03\nKelurahan Padasuka                                   Kelurahan Padasuka\n\n\n(Jajang Kusmana)                                     (Raden Raka)	disetujui	2	2026-03-10 04:11:49.233934	033/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+36	14	5	surat_keterangan_tidak_mampu	pengaktifan kembali bpjs pbi (pemerintah)	\N	SURAT KETERANGAN TIDAK MAMPU\nPerihal: Pengaktifan Kembali BPJS PBI (Pemerintah)\n\nYang bertanda tangan di bawah ini, Ketua Rukun Tetangga (RT) 02 dan Ketua Rukun Warga (RW) 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama           : Rizky Syahrul Mubarok\nNIK            : 3277021705190004\nAlamat         : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F\nRT/RW          : 002/003\nKelurahan      : Padasuka\nKecamatan      : Cimahi Tengah\nKota           : Cimahi\nAgama          : Islam\nPekerjaan      : Pelajar/Mahasiswa\nJenis Kelamin  : Laki-laki\n\nBerdasarkan data dan pengamatan kami, nama tersebut di atas adalah benar warga kami yang berdomisili di alamat tersebut di atas. Yang bersangkutan tergolong dalam kategori keluarga tidak mampu dan sangat membutuhkan bantuan untuk pengaktifan kembali kepesertaan BPJS PBI (Pemerintah).\n\nSurat keterangan ini dibuat sebagai kelengkapan persyaratan untuk pengaktifan kembali BPJS PBI (Pemerintah) yang bersangkutan.\n\nDemikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 10 Maret 2026\n\nMengetahui,                   | Hormat kami,\nKetua RT 02                   | Ketua RW 03\nKelurahan Padasuka            | Kelurahan Padasuka\n                              |\n                              |\n(Jajang Kusmana)              | (Raden Raka)	disetujui	2	2026-03-10 04:12:23.867591	034/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+37	14	5	surat_keterangan_tidak_mampu	pengaktifan kembali bpjs pbi (pemerintah)	\N	SURAT KETERANGAN TIDAK MAMPU\nPerihal: Pengaktifan Kembali BPJS PBI (Pemerintah)\n\nYang bertanda tangan di bawah ini, Ketua Rukun Tetangga (RT) 02 dan Ketua Rukun Warga (RW) 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menerangkan bahwa:\n\nNama                          : Rizky Syahrul Mubarok\nNIK                           : 3277021705190004\nAlamat                        : JL. KH Usman Dhomiri Gg. Bakti Baru II No. 13 F\nRT/RW                         : 02/03\nKelurahan                     : Padasuka\nKecamatan                     : Cimahi Tengah\nKota                          : Cimahi\nAgama                         : Islam\nPekerjaan                     : Pelajar/Mahasiswa\nJenis Kelamin                 : Laki-laki\n\nMenerangkan bahwa nama tersebut di atas adalah benar warga kami yang berdomisili di alamat tersebut dan berdasarkan pengamatan serta data yang ada pada kami, yang bersangkutan tergolong dalam kategori keluarga tidak mampu.\n\nSurat keterangan ini dibuat sebagai persyaratan untuk pengaktifan kembali kepesertaan BPJS PBI (Pemerintah) atas nama yang bersangkutan.\n\nDemikian surat keterangan ini dibuat untuk dapat dipergunakan sebagaimana mestinya.\n\nCimahi, 10 Maret 2026\n\nMengetahui,                               | Hormat kami,\nKetua RT 02                                | Ketua RW 03\nKelurahan Padasuka                         | Kelurahan Padasuka\n                                           |\n                                           |\n(Jajang Kusmana)                           | (Raden Raka)	disetujui	2	2026-03-10 04:15:31.421041	035/SK-W/RW-03/03/2026	print_mandiri	\N	\N	\N
+38	73	23	surat_keterangan_lainnya	Membut NA	-	\N	disetujui	4	2026-03-11 07:01:23.002117	038/RW03/03/2026	tau_beres	\N	\N	\N
+40	1131	378	surat_keterangan_tidak_mampu	Memperbaharui data DTKS	\N	\N	disetujui	6	2026-03-11 08:18:55.21542	037/RW03/03/2026	print_mandiri	\N	\N	/uploads/surat/1773264809664-jkrppak4kj.jpeg
+39	1131	378	surat_keterangan_domisili	Keterangan Domisili	\N	\N	disetujui	6	2026-03-11 08:07:28.3968	036/RW03/03/2026	tau_beres	\N	\N	/uploads/surat/1773264830106-jd6p9o03w.jpeg
+41	1201	401	surat_keterangan_usaha	Keperluan untuk Iklan	Kebutuhan untuk Iklan di google ads yang bisa ditampilkan di website 	\N	disetujui	6	2026-03-12 03:52:52.637705	039/RT-06/RW-03/03/2026	print_mandiri	\N	\N	/uploads/surat/1773388427601-dqmasesfub.pdf
+42	11	5	surat_keterangan_lainnya	Permohonan Pengaktifan kembali ASKES PNS	\N	\N	disetujui	2	2026-03-15 03:58:55.614239	040/RT-01/RW-03/03/2026	print_mandiri	\N	\N	/uploads/surat/1773547231509-jdgi8gm38of.jpeg
 \.
 
 
@@ -1604,7 +1666,6 @@ COPY public.survey_usaha (id, usaha_id, tanggal_survey, petugas_survey, kesesuai
 --
 
 COPY public.usaha (id, nama_pemilik, nik_pemilik, nomor_wa_pemilik, alamat_pemilik, nama_usaha, jenis_usaha, alamat_usaha, rt, nib, deskripsi_usaha, lama_usaha, jam_operasional_mulai, jam_operasional_selesai, modal_usaha, omset_bulanan, status, nomor_stiker, tanggal_stiker_terbit, tanggal_stiker_expired, alasan_penolakan, created_at) FROM stdin;
-1	yuliawati	281381238128312	081222245530	Kh Ushman Dhomiri no 48A	Dapur Bunda Yoels	Usaha Online/E-Commerce	Kh Ushman Dhomiri No 48 A	4		Kue dan batagor	5 - 10 tahun	12:00	18:00	Rp 1.000.000 - Rp 5.000.000	Rp 10.000.000 - Rp 25.000.000	pendaftaran	\N	\N	\N	\N	2026-03-15 22:50:27.518712
 \.
 
 
@@ -1616,6 +1677,13 @@ COPY public.wa_blast (id, pesan, kategori_filter, filter_rt, jumlah_penerima, st
 1	Test mohon di abaikan ini hanya test.	per_rt	7	2	terkirim	2026-03-08 20:31:51.80479	2
 2	Assalamu'alaikum Wr. Wb.\n{gender} {warga} Wargi {rtxx} yang terhormat,\n\nKumaha damang, Wargi sadayana? Semoga sehat selalu ya.\nRaden Raka di sini. Mohon maaf sebelumnya kalau WA ini masuk.\nSaya mau ngasih tau kalau ini lagi test WA blast.\nKemarin sempat error, jadi saya coba lagi biar nanti lancar.\nTujuannya biar info dari RW bisa sampai ke Wargi semua.\nMohon dimaklumi ya, Wargi.\n\nInfo lengkap bisa dicek di web kita 👉  rw3padasukacimahi.org\n\nHatur nuhun! 🙏\nRaden Raka - Ketua RW 03 Padasuka	per_rt	7	2	terkirim	2026-03-08 20:45:19.721196	2
 3	Assalamu'alaikum Wr. Wb.\n{gender} {warga} Wargi {rtxx} yang terhormat,\n\nPunten pisan nih, Wargi semua.\nRaden Raka mau ngasih kabar sebentar.\nIni saya lagi coba tes fitur WA blast kita.\nSoalnya kemarin sempat ada kendala teknis, jadi beberapa pesan nggak terkirim.\nAlhamdulillah, kalau pesan ini sampai ke {gender} {warga}, berarti tesnya berhasil!\nSemoga ke depannya komunikasi kita makin lancar ya.\n\nInfo lengkap bisa dicek di web kita 👉  rw3padasukacimahi.org\nHatur nuhun! 🙏\nRaden Raka - Ketua RW 03 Padasuka	semua	\N	403	terkirim	2026-03-08 20:46:23.034351	403
+4	Assalamu'alaikum Wr. Wb.\n{gender} {warga} Wargi {rtxx} yang terhormat,\n\nKumaha damang Wargi sadayana?\nSaya Raden Raka, Ketua RW 03, mau ngucapin selamat menjalankan ibadah puasa hari ini,\nSemoga puasa kita semua lancar, penuh berkah, dan diberikan kekuatan sampai waktu berbuka nanti.\nTetap semangat ya Wargi, jaga kesehatan!\n\nInfo lengkap bisa dicek di web kita 👉 rw3padasukacimahi.org\nHatur nuhun! 🙏\nRaden Raka - Ketua RW 03 Padasuka	semua	\N	438	terkirim	2026-03-09 21:47:17.847095	438
+5	Assalamu'alaikum Wr. Wb.\n{gender} {warga} Wargi {rtxx} yang terhormat,\nKumaha damang? Semoga sehat selalu ya, Wargi!\nAda info penting nih dari RW 03 soal kegiatan Posyandu & Posbindu.\nYuk, kita ramaikan layanan kesehatan untuk keluarga kita!\n🗓 Hari/Tanggal: [Jumat, 13 Maret 2026]\n⏰ Waktu: [08.30 - 10.30 WIB]\n📍 Tempat: [Balai RW 03]\nSasaran & Persyaratan:\n👶 Ibu, Bayi & Balita: Bawa Buku KIA/KMS.\n👴 Lansia & Pra-Lansia: Bawa KTP.\nKehadiran Wargi semua penting banget buat pantau kesehatan. Ditunggu pisan ya!\nInfo lengkap bisa dicek di web kita 👉 rw3padasukacimahi.org\nHatur nuhun! 🙏\nRaden Raka - Ketua RW 03 Padasuka	per_rt	1	75	terkirim	2026-03-11 07:04:40.404717	75
+7	Assalamu'alaikum Wr. Wb.\n{gender} {warga} Wargi {rtxx} yang terhormat,\nKumaha damang? Semoga sehat selalu ya, Wargi!\nAda info penting nih dari RW 03 soal kegiatan Posyandu & Posbindu.\nYuk, kita ramaikan layanan kesehatan untuk keluarga kita!\n🗓 Hari/Tanggal: [Jumat, 13 Maret 2026]\n⏰ Waktu: [08.30 - 10.30 WIB]\n📍 Tempat: [Balai RW 03]\nSasaran & Persyaratan:\n👶 Ibu, Bayi & Balita: Bawa Buku KIA/KMS.\n👴 Lansia & Pra-Lansia: Bawa KTP.\nKehadiran Wargi semua penting banget buat pantau kesehatan. Ditunggu pisan ya!\nInfo lengkap bisa dicek di web kita 👉 rw3padasukacimahi.org\nHatur nuhun! 🙏\nRaden Raka - Ketua RW 03 Padasuka	per_rt	3	114	terkirim	2026-03-11 07:10:00.954466	114
+6	Assalamu'alaikum Wr. Wb.\n{gender} {warga} Wargi {rtxx} yang terhormat,\nKumaha damang? Semoga sehat selalu ya, Wargi!\nAda info penting nih dari RW 03 soal kegiatan Posyandu & Posbindu.\nYuk, kita ramaikan layanan kesehatan untuk keluarga kita!\n🗓 Hari/Tanggal: [Jumat, 13 Maret 2026]\n⏰ Waktu: [08.30 - 10.30 WIB]\n📍 Tempat: [Balai RW 03]\nSasaran & Persyaratan:\n👶 Ibu, Bayi & Balita: Bawa Buku KIA/KMS.\n👴 Lansia & Pra-Lansia: Bawa KTP.\nKehadiran Wargi semua penting banget buat pantau kesehatan. Ditunggu pisan ya!\nInfo lengkap bisa dicek di web kita 👉 rw3padasukacimahi.org\nHatur nuhun! 🙏\nRaden Raka - Ketua RW 03 Padasuka	per_rt	2	120	terkirim	2026-03-11 07:06:57.6058	120
+8	\n📢 Info dari Ketua RW 03 Padasuka\n-\n{sapaan} {warga} Wargi {rtxx}, assalamu’alaikum 🙏\n-\nSaya mau cerita jujur soal tiang provider yang ada di wilayah kita.\nTiang udah lama berdiri dan izinnya udah beres dari pengurus RW sebelum sebelumnya. Tapi selama ini operatornya belum pernah masuk. Ini yang bahaya — kalau ada kejadian, ga ada yang bisa dimintai tanggung jawab, ga ada asuransi, warga yang rugi.\nBegitu saya menjabat, langsung saya urus.\n-\n⚠️ PAHAMI INI BAIK-BAIK\nSaya tau ada cerita kurang enak soal tiang ini di masa lalu. Tapi tolong dibedakan 👇\n-\nDulu → konflik soal pembangunan tiang\nSekarang → hanya pemasangan operator\n-\nIni dua hal yang sama sekali berbeda. Tidak ada pembangunan baru. Tidak ada izin baru dari warga yang diperlukan. Ini murni proses aktivasi operator yang memang sudah jadi hak mereka setelah izin prinsip keluar.\n-\n🏆 YANG BERHASIL SAYA PERJUANGKAN\n✅ Operator resmi sudah masuk & bertanggung jawab penuh\n✅ Warga terlindungi secara hukum\n✅ Kontribusi Rp 30 juta berhasil saya dapatkan\n✅ Asuransi Warga Sekitar Terjamin\n-\n💰 SOAL UANG 30 JUTA — SAYA MINTA DIPAHAMI\nIni bukan uang pembagian. Ini bukan hak warga per kepala. Kenapa?\nKarena ini bukan izin pembangunan tiang. Ini adalah kontribusi yang saya perjuangkan dari operator sebagai bentuk kontribusi ke wilayah kita — dan sebetulnya mereka tidak wajib memberikan ini.\nMaka uang ini masuk sebagai kas RW dan peruntukannya untuk kepentingan kita bersama:\n→ 🏘️ Fasilitas & infrastruktur warga (CCTV) (PJL PJG) \n→ 🎉 Kegiatan warga RW 03\n→ 🏦 Kas operasional RW\nBukan dibagi-bagi. Tapi dinikmati bersama.\n-\n🗓️ KAPAN UANGNYA CAIR?\nH+14 setelah operator resmi terpasang.\nDan saya akan lakukan ini secara terbuka & transparan — akan ada serah terima resmi dari perusahaan yang saya undang warga RW 03 Padasuka untuk menyaksikan langsung. Tidak ada yang disembunyikan. 🤝\n-\n📡 SOAL KEAMANAN?\nAman. Sinyal HP yang kita pegang tiap hari pun sama teknologinya. Sudah ada izin resmi Kominfo dan diakui aman oleh WHO. Dokumen bisa dilihat kapanpun.\nSaya lakukan ini semua untuk kepentingan kita bersama. Bukan untuk kepentingan pribadi.\n-\nMari kita dukung bersama dan nantikan undangan serah terima nya 🙏💪\nAda pertanyaan? Hubungi saya langsung 👇	pemukiman	\N	444	terkirim	2026-03-13 21:28:32.895165	444
+9	🌧️ INFO WASPADA CUACA RW 03 PADASUKA 🌧️\nSampurasun {gender} {nama} warga {rtxx},\n-\nMelihat kondisi saat ini wilayah kita sedang diguyur hujan yang cukup besar, saya ingin mengimbau warga semuanya untuk tetap waspada ya.\n-\n🏠 Bagi yang sedang di rumah:\nMohon tetap jaga kondisi, pastikan saluran air di sekitar rumah aman, dan perhatikan lingkungan sekitar.\n🛵 Bagi yang sedang berada di luar:\nHarap berhati-hati di jalan, tidak perlu memaksakan diri menembus hujan besar. Silakan cari tempat berteduh yang aman terlebih dahulu.\n-\n⚠️ WASPADA: Mohon kehati-hatian ekstranya untuk seluruh warga, karena pantauan saat ini ada banjir kiriman/aliran air yang cukup deras dari arah atas.\n-\nApabila terjadi genangan air yang mengkhawatirkan atau ada kondisi darurat di wilayah {rtxx}, mohon segera saling berkoordinasi dengan tetangga sekitar atau langsung hubungi layanan/WA RW 03 di nomor: 0895424577140.\n-\nSemoga hujan Malam ini membawa berkah dan lingkungan RW 03 kita dijauhkan dari musibah. Tetap aman dan sehat selalu semuanya!\nWassalamualaikum Warahmatullahi Wabarakatuh,\n-\nSalam hangat,\nRaden Raka\nKetua RW 03 Padasuka	semua	\N	585	terkirim	2026-03-14 12:00:19.065872	585
+10	Assalamu'alaikum Wr. Wb. Kepala Keluarga.\n{gender} {warga} Wargi {rtxx} yang terhormat,\n\nSemoga sehat selalu ya.\nSaya mau ingetin nih buat Wargi yang berencana *Mudik lebaran* .\nMohon lapor dulu ke Ketua {rtxx} ya, infokan tanggal berangkat dan kembalinya.\nIni penting banget biar rumah Wargi bisa kita prioritaskan keamanannya.\nJangan lupa juga tips biar mudik tenang:\n1. Matikan listrik yang tidak perlu & cabut colokan alat elektronik.\n2. Kunci semua pintu dan jendela dengan rapat.\n3. Buang sampah sebelum berangkat.\n4. Titip pesan ke tetangga terdekat kalau memungkinkan.\n\nHatur nuhun! 🙏\nRaden Raka - Ketua RW 03 Padasuka	kepala_keluarga	\N	316	terkirim	2026-03-15 21:08:33.547261	316
 \.
 
 
@@ -1632,16 +1700,12 @@ COPY public.warga (id, kk_id, nama_lengkap, nik, nomor_whatsapp, jenis_kelamin, 
 7	3	Shaquille Billal Achmad	3277020108210001	082179467973	Laki-laki	Belum Kawin	Islam	Anak	2021-08-01	Belum/Tidak Bekerja	Aktif	2026-03-08 17:47:13.282128	\N	\N
 8	4	Arnia Mayangsari	3277026303890009	08983629302	Perempuan	Kawin	Islam	Istri	1989-03-23	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:13.285119	\N	\N
 9	4	Zamroni	3277022506840017	089501821026	Laki-laki	Kawin	Islam	Kepala Keluarga	1984-06-25	Karyawan Swasta	Aktif	2026-03-08 17:47:13.287783	\N	\N
-10	5	Rendi Riswara	3217060608960013	083817981922	Laki-laki	Kawin	Islam	Kepala Keluarga	1996-08-06	Lainnya	Aktif	2026-03-08 17:47:13.290755	\N	\N
-11	5	Ekariyanti Mulawarman	3277024906960010	085860604142	Perempuan	Kawin	Islam	Istri	1996-06-09	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:13.29309	\N	\N
+1252	412	Ade Priatna	327702312780015	085295495495	Laki-laki	Kawin	Islam	Kepala Keluarga	1978-12-30	Wiraswasta	Aktif	2026-03-12 08:16:38.521977	\N	SLTA/Sederajat
 12	4	Azfar Safaroz Idhofi	3277022007120001	08983629302	Laki-laki	Belum Kawin	Islam	Anak	2012-07-20	Pelajar/Mahasiswa	Aktif	2026-03-08 17:47:13.295909	\N	\N
 13	4	Azhira Shaqila Azfania	3277024505150002	08983629302	Perempuan	Belum Kawin	Islam	Anak	2015-05-05	Pelajar/Mahasiswa	Aktif	2026-03-08 17:47:13.298909	\N	\N
-14	5	Rizky Syahrul Mubarok	3277021705190004	085860604142	Laki-laki	Belum Kawin	Islam	Anak	2019-05-17	Belum/Tidak Bekerja	Aktif	2026-03-08 17:47:13.302025	\N	\N
 15	1	Yuliawati	3277024403770020	081222245530	Perempuan	Kawin	Islam	Istri	1977-03-04	Wiraswasta	Aktif	2026-03-08 17:47:13.304718	\N	\N
-16	1	Raden raka abdul kamal syafaat	3277020603030019	081321133823	Laki-laki	Belum Kawin	Islam	Anak	2003-03-06	Pelajar/Mahasiswa	Aktif	2026-03-08 17:47:13.307734	\N	\N
 17	6	Jajang Kusmana	3277020607740001	081910038787	Laki-laki	Kawin	Islam	Kepala Keluarga	1974-07-06	Karyawan Swasta	Aktif	2026-03-08 17:47:13.310406	\N	\N
 18	6	Enung Kusmayati	3277026509730001	081809912021	Perempuan	Kawin	Islam	Istri	1973-09-25	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:13.342265	\N	\N
-19	7	Ari subahagia	3277010907990026	08996191182	Laki-laki	Kawin	Islam	Kepala Keluarga	1999-07-09	Buruh Harian Lepas	Aktif	2026-03-08 17:47:13.34542	\N	\N
 20	7	Aisya Fadya Haya	3277024605040003	083843222100	Perempuan	Kawin	Islam	Istri	2004-05-06	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:13.349031	\N	\N
 21	8	Dilah Umbari	3277026411740010	082118833719	Perempuan	Kawin	Islam	Istri	1974-11-24	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:13.353264	\N	\N
 22	8	Sobirin	3277020703720010	082115607098	Laki-laki	Kawin	Islam	Kepala Keluarga	1972-03-07	Buruh Harian Lepas	Aktif	2026-03-08 17:47:13.356149	\N	\N
@@ -1672,6 +1736,8 @@ COPY public.warga (id, kk_id, nama_lengkap, nik, nomor_whatsapp, jenis_kelamin, 
 47	15	Yuyu	3277024606710021	083817981716	Perempuan	Kawin	Islam	Istri	1975-06-06	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:13.451136	\N	\N
 48	15	Rizki Akmal Insani	3205172804040003	083817981716	Laki-laki	Belum Kawin	Islam	Anak	2004-04-28	Pelajar/Mahasiswa	Aktif	2026-03-08 17:47:13.453855	\N	\N
 49	16	Unah	3277025905590004	085798328764	Perempuan	Cerai Mati	Islam	Kepala Keluarga	1959-05-19	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:13.45855	\N	\N
+16	1	Raden raka abdul kamal syafaat	3277020603030019	081321133823	Laki-laki	Belum Kawin	Islam	Anak	2003-03-06	Pelajar/Mahasiswa	Aktif	2026-03-08 17:47:13.307734	/uploads/ktp/1773087727481-g746z5qwwlu.jpeg	\N
+19	7	Ari Subahagia	3277010907990026	08996191182	Laki-laki	Kawin	Islam	Kepala Keluarga	1999-07-09	Buruh Harian Lepas	Aktif	2026-03-08 17:47:13.34542	\N	\N
 50	16	Samsudin	3277022010900024	085798328764	Laki-laki	Belum Kawin	Islam	Anak	1990-10-20	Buruh Harian Lepas	Aktif	2026-03-08 17:47:13.461509	\N	\N
 51	17	Yudha Didiet Kristian	3217082608820015	085723033818	Laki-laki	Kawin	Islam	Kepala Keluarga	1982-08-26	Buruh Harian Lepas	Aktif	2026-03-08 17:47:13.463935	\N	\N
 52	17	Dewi Anggraeni	3273065303850011	085723033818	Perempuan	Kawin	Islam	Istri	1985-03-13	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:13.466909	\N	\N
@@ -1784,10 +1850,7 @@ COPY public.warga (id, kk_id, nama_lengkap, nik, nomor_whatsapp, jenis_kelamin, 
 159	45	Dina Radianti	3277026812710013	08996930094	Perempuan	Kawin	Islam	Istri	1971-12-28	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:13.858812	\N	\N
 160	45	Muhammad Iqbal Zulfikar	3277020309960014	08996930094	Laki-laki	Belum Kawin	Islam	Anak	1996-09-03	Lainnya	Aktif	2026-03-08 17:47:13.8629	\N	\N
 161	45	Muhammad Iqval Zulfansyah	3277021901080006	08996930094	Laki-laki	Belum Kawin	Islam	Anak	2008-01-19	Pelajar/Mahasiswa	Aktif	2026-03-08 17:47:13.866263	\N	\N
-162	46	Warman	3277021707710027	085724494507	Laki-laki	Kawin	Islam	Kepala Keluarga	1971-07-17	Belum/Tidak Bekerja	Aktif	2026-03-08 17:47:13.869901	\N	\N
-163	46	Cacah	3277024509760023	082130001843	Perempuan	Kawin	Islam	Istri	1976-09-05	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:13.873745	\N	\N
-164	46	Insani Nurul Qolbi	3277025601040003	085860068395	Perempuan	Belum Kawin	Islam	Anak	2004-01-16	Pelajar/Mahasiswa	Aktif	2026-03-08 17:47:13.877789	\N	\N
-165	47	Melinda Khaidir	3273104105020006	\N	Perempuan	Kawin	Islam	Anak	2002-05-01	Karyawan Swasta	Aktif	2026-03-08 17:47:13.881875	\N	\N
+1253	411	ADIBA SILMI KAMILA	3277026203160003	\N	Perempuan	Belum Kawin	Islam	Anak	2016-03-22	Pelajar/Mahasiswa	Aktif	2026-03-12 08:17:23.44317	\N	Tidak/Belum Tamat SD
 166	48	Raisya Khairunnisa	3277025910070003	\N	Perempuan	Belum Kawin	Islam	Anak	2007-10-19	Pelajar/Mahasiswa	Aktif	2026-03-08 17:47:13.885876	\N	\N
 167	48	Tatang Daud	3277021305670012	\N	Laki-laki	Kawin	Islam	Kepala Keluarga	1967-05-13	Buruh Harian Lepas	Aktif	2026-03-08 17:47:13.889847	\N	\N
 168	48	Siti Halimah	3277025212700028	\N	Perempuan	Kawin	Islam	Istri	1970-12-12	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:13.893301	\N	\N
@@ -1816,7 +1879,8 @@ COPY public.warga (id, kk_id, nama_lengkap, nik, nomor_whatsapp, jenis_kelamin, 
 191	56	Hatiwa Somantrie	3277022112460003	\N	Laki-laki	Kawin	Islam	Kepala Keluarga	1946-12-21	Pensiunan	Aktif	2026-03-08 17:47:13.988889	\N	\N
 192	56	Entjar Tjarmita	3277025108520005	\N	Perempuan	Kawin	Islam	Istri	1952-08-11	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:13.992347	\N	\N
 193	57	Dicky Hadian Somantrie	3277022608770012	\N	Laki-laki	Belum Kawin	Islam	Kepala Keluarga	1977-08-26	Belum/Tidak Bekerja	Aktif	2026-03-08 17:47:13.996048	\N	\N
-194	59	R. O. Ismail	3277022109300003	\N	Laki-laki	Cerai Mati	Islam	Kepala Keluarga	1930-09-21	Pensiunan	Aktif	2026-03-08 17:47:14.002239	\N	\N
+194	59	R. O. Ismail	3277022109300003	\N	Laki-laki	Cerai Mati	Islam	Kepala Keluarga	1930-09-21	Pensiunan	Meninggal	2026-03-08 17:47:14.002239	\N	\N
+163	46	Cacah	3277024509760023	082130001843	Perempuan	Kawin	Islam	Istri	1976-09-05	Mengurus Rumah Tangga	Aktif	2026-03-08 17:47:13.873745	/uploads/ktp/1773264878574-8cwfvps3i3o.jpeg	Tamat SD/Sederajat
 195	58	Reisa Firmansah	3277022607860012	087732020009	Laki-laki	Kawin	Islam	Kepala Keluarga	1986-07-26	Lainnya	Aktif	2026-03-08 17:47:14.008874	\N	\N
 196	58	Dini Anggraeni	3277025007840014	087732020009	Perempuan	Kawin	Islam	Istri	1984-07-10	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:14.011573	\N	\N
 197	58	Keisya Agiska Novia Indah	3277026911070002	087732020009	Perempuan	Belum Kawin	Islam	Anak	2007-11-29	Pelajar/Mahasiswa	Aktif	2026-03-08 17:47:14.015326	\N	\N
@@ -1864,7 +1928,7 @@ COPY public.warga (id, kk_id, nama_lengkap, nik, nomor_whatsapp, jenis_kelamin, 
 239	72	Firyaal Salsabila Ramadhani	3277025810060001	081322213328	Perempuan	Belum Kawin	Islam	Anak	2006-10-18	Pelajar/Mahasiswa	Aktif	2026-03-08 17:47:14.195833	\N	\N
 240	72	Fakhri Faadhillah Akbar	3277020707090004	081322213328	Laki-laki	Belum Kawin	Islam	Anak	2009-07-07	Pelajar/Mahasiswa	Aktif	2026-03-08 17:47:14.217019	\N	\N
 241	72	Muhammad Farhan Ibrahim	3277020301180005	081322213328	Laki-laki	Belum Kawin	Islam	Anak	2018-01-03	Pelajar/Mahasiswa	Aktif	2026-03-08 17:47:14.224533	\N	\N
-242	73	Andini Dewi Pratiwi	3277025703730012	082116415299	Perempuan	Kawin	Islam	Kepala Keluarga	1973-03-17	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:14.229101	\N	\N
+1254	412	Ratna Kumala Dewi	3277025209840009	\N	Perempuan	Kawin	Islam	Istri	1984-09-12	Mengurus Rumah Tangga	Aktif	2026-03-12 08:18:30.368042	\N	Diploma I/II
 243	73	Rylan Kahlil Nurqholby	3277022806100006	082116415299	Laki-laki	Belum Kawin	Islam	Anak	2010-06-28	Pelajar/Mahasiswa	Aktif	2026-03-08 17:47:14.23228	\N	\N
 244	74	Sugiyarto	3314171108810002	081918667654	Laki-laki	Kawin	Islam	Kepala Keluarga	1981-08-11	Buruh Harian Lepas	Aktif	2026-03-08 17:47:14.237632	\N	\N
 245	74	Suramti	3277025001780017	08562256551	Perempuan	Kawin	Islam	Istri	1978-01-10	Karyawan Swasta	Aktif	2026-03-08 17:47:14.240685	\N	\N
@@ -2059,11 +2123,7 @@ COPY public.warga (id, kk_id, nama_lengkap, nik, nomor_whatsapp, jenis_kelamin, 
 434	126	Muhammad Aqlauna Rambe	3277020403090004	085793966254	Laki-laki	Belum Kawin	Islam	Anak	2009-03-04	Pelajar/Mahasiswa	Aktif	2026-03-08 17:47:14.872353	\N	\N
 435	131	Ani Suhartini	3217064811690011	083176332465	Perempuan	Cerai Mati	Islam	Kepala Keluarga	1969-11-08	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:14.874931	\N	\N
 436	131	Kayla Nur Az Zahra	3277025511120002	083176332465	Perempuan	Belum Kawin	Islam	Anak	2012-11-15	Pelajar/Mahasiswa	Aktif	2026-03-08 17:47:14.877755	\N	\N
-437	132	Acih	3277024507420010	088971211715	Perempuan	Cerai Mati	Islam	Kepala Keluarga	1942-07-05	Belum/Tidak Bekerja	Aktif	2026-03-08 17:47:14.88022	\N	\N
-438	133	Agus Sutansyah	3277020506690034	088971211715	Laki-laki	Kawin	Islam	Kepala Keluarga	1969-06-05	Buruh Harian Lepas	Aktif	2026-03-08 17:47:14.883576	\N	\N
-439	133	Sadiah	3277025007750043	088971211715	Perempuan	Kawin	Islam	Istri	1975-07-10	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:14.887849	\N	\N
-440	133	Rian Permana	3277020803960007	088971211715	Laki-laki	Belum Kawin	Islam	Anak	1996-03-08	Karyawan Swasta	Aktif	2026-03-08 17:47:14.890642	\N	\N
-441	133	Adam Sobari	3277023110160002	088971211715	Laki-laki	Belum Kawin	Islam	Anak	2016-10-31	Pelajar/Mahasiswa	Aktif	2026-03-08 17:47:14.893126	\N	\N
+1170	390	MUHNANDAR	3277022303540007	087825030454	Laki-laki	Kawin	Islam	Kepala Keluarga	1954-03-23	Pensiunan	Aktif	2026-03-11 08:29:52.52275	\N	\N
 442	28	Resa Adriyana	3277022006950020	089661039491	Laki-laki	Belum Kawin	Islam	Anak	1995-06-20	Belum/Tidak Bekerja	Aktif	2026-03-08 17:47:14.895838	\N	\N
 443	134	Siti Khairani	3277024305730022	\N	Perempuan	Cerai Mati	Islam	Kepala Keluarga	1973-05-03	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:14.898271	\N	\N
 444	134	Nur Umi Khoerunisa	3277025609990006	\N	Perempuan	Belum Kawin	Islam	Anak	1999-09-15	Karyawan Swasta	Aktif	2026-03-08 17:47:14.900795	\N	\N
@@ -2106,6 +2166,10 @@ COPY public.warga (id, kk_id, nama_lengkap, nik, nomor_whatsapp, jenis_kelamin, 
 481	146	DADAN SOFYAN	3277022404760034	\N	Laki-laki	Kawin	Islam	Kepala Keluarga	1976-04-24	Karyawan Swasta	Aktif	2026-03-08 17:47:15.014601	\N	\N
 482	145	Septian Muhdiana Fajar	3277020609920008	0895332820334	Laki-laki	Belum Kawin	Islam	Anak	1992-09-06	Buruh Harian Lepas	Aktif	2026-03-08 17:47:15.020778	\N	\N
 483	146	ADINDA DELA SOFIANI	3277026303030004	089627051388	Perempuan	Belum Kawin	Islam	Anak	2003-03-23	Pelajar/Mahasiswa	Aktif	2026-03-08 17:47:15.023596	\N	\N
+439	133	Sadiah	3277025007750043	088971211715	Perempuan	Kawin	Islam	Istri	1975-07-10	Ibu Rumah Tangga	Pindah	2026-03-08 17:47:14.887849	\N	\N
+438	133	Agus Sutansyah	3277020506690034	088971211715	Laki-laki	Kawin	Islam	Kepala Keluarga	1969-06-05	Buruh Harian Lepas	Pindah	2026-03-08 17:47:14.883576	\N	\N
+440	133	Rian Permana	3277020803960007	088971211715	Laki-laki	Belum Kawin	Islam	Anak	1996-03-08	Karyawan Swasta	Pindah	2026-03-08 17:47:14.890642	\N	\N
+441	133	Adam Sobari	3277023110160002	088971211715	Laki-laki	Belum Kawin	Islam	Anak	2016-10-31	Pelajar/Mahasiswa	Pindah	2026-03-08 17:47:14.893126	\N	\N
 484	146	ADLIE FAIRUZ SOFYAN	3277021104150002	\N	Laki-laki	Belum Kawin	Islam	Anak	2015-04-11	Pelajar/Mahasiswa	Aktif	2026-03-08 17:47:15.026971	\N	\N
 485	148	Heri Rustiadji Abdullah	3277022604620005	087823537014	Laki-laki	Kawin	Islam	Kepala Keluarga	1962-04-26	Pensiunan	Aktif	2026-03-08 17:47:15.030116	\N	\N
 486	148	Rosmala	3277025508680001	085794556311	Perempuan	Kawin	Islam	Istri	1968-08-15	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:15.03309	\N	\N
@@ -2205,7 +2269,6 @@ COPY public.warga (id, kk_id, nama_lengkap, nik, nomor_whatsapp, jenis_kelamin, 
 580	184	Alfiyah Nahdah	3277024512040004	08986166807	Perempuan	Belum Kawin	Islam	Anak	2004-12-05	Karyawan Swasta	Aktif	2026-03-08 17:47:15.328814	\N	\N
 581	184	Salfina Oktavia	3277024510120002	089654048832	Perempuan	Belum Kawin	Islam	Anak	2011-10-05	Pelajar/Mahasiswa	Aktif	2026-03-08 17:47:15.333938	\N	\N
 582	185	Apan Suparman	3277021603590012	088224509802	Laki-laki	Kawin	Islam	Kepala Keluarga	1959-03-16	Belum/Tidak Bekerja	Aktif	2026-03-08 17:47:15.338902	\N	\N
-583	185	Enung Eni	3277027001610006	088224509802	Perempuan	Kawin	Islam	Istri	1961-01-30	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:15.344643	\N	\N
 584	185	Henny Agustiny Suparman	3277025208880009	085978005492	Perempuan	Belum Kawin	Islam	Anak	1988-08-18	Karyawan Swasta	Aktif	2026-03-08 17:47:15.348114	\N	\N
 585	186	Riky Sundawan Sukandar	3277022010700010	081321321515	Laki-laki	Kawin	Islam	Kepala Keluarga	1970-10-20	Karyawan BUMN	Aktif	2026-03-08 17:47:15.351642	\N	\N
 586	186	Iin Indriati	3277025209770023	085221564235	Perempuan	Kawin	Islam	Istri	1977-09-12	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:15.354548	\N	\N
@@ -2387,15 +2450,14 @@ COPY public.warga (id, kk_id, nama_lengkap, nik, nomor_whatsapp, jenis_kelamin, 
 762	238	A.Zahra	3277025103150003	\N	Perempuan	Belum Kawin	Islam	Anak	2015-03-11	Pelajar/Mahasiswa	Aktif	2026-03-08 17:47:15.97815	\N	\N
 763	238	Asti Humaira Dewi	3277025707210001	\N	Perempuan	Belum Kawin	Islam	Anak	2021-07-17	Belum/Tidak Bekerja	Aktif	2026-03-08 17:47:15.98075	\N	\N
 764	239	Darussalam	3217031012750003	085974960038	Laki-laki	Kawin	Islam	Kepala Keluarga	1975-12-10	Buruh Harian Lepas	Aktif	2026-03-08 17:47:15.98322	\N	\N
-765	240	Muchammad Hudri	3277021807750021	081221482968	Laki-laki	Kawin	Islam	Kepala Keluarga	1975-07-18	Karyawan Swasta	Aktif	2026-03-08 17:47:15.987815	\N	\N
 766	239	Elvina	3273066410830002	085797006185	Perempuan	Kawin	Islam	Istri	1983-10-24	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:15.990742	\N	\N
-767	240	Rita Sari Somantire	3277025810710019	081221482968	Perempuan	Kawin	Islam	Istri	1971-10-18	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:15.994105	\N	\N
 768	240	Hasna Andita Ramadhani	3277020506160003	\N	Perempuan	Belum Kawin	Islam	Anak	2016-06-05	Pelajar/Mahasiswa	Aktif	2026-03-08 17:47:15.998	\N	\N
 769	239	Aufa Nazwa Fatimah	3205026609140005	085797006185	Perempuan	Belum Kawin	Islam	Anak	2014-09-26	Pelajar/Mahasiswa	Aktif	2026-03-08 17:47:16.000344	\N	\N
 770	239	Muhammad Hikam Al Yamani	3205022810170005	085797006185	Laki-laki	Belum Kawin	Islam	Anak	2017-10-28	Pelajar/Mahasiswa	Aktif	2026-03-08 17:47:16.002861	\N	\N
 771	241	Uhay Suhaya	3277021908500006	\N	Laki-laki	Kawin	Islam	Kepala Keluarga	1950-08-19	Buruh Harian Lepas	Aktif	2026-03-08 17:47:16.005279	\N	\N
 772	242	Asep Sutisna	3277020508790016	089661949234	Laki-laki	Kawin	Islam	Kepala Keluarga	1979-08-05	Buruh Harian Lepas	Aktif	2026-03-08 17:47:16.008849	\N	\N
 773	243	SITI HOLIYAH	3277024408710020	085945232684	Perempuan	Cerai Mati	Islam	Kepala Keluarga	1969-08-04	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:16.012175	\N	\N
+767	240	Rita Sari Somantire	3277025810710019	081221482968	Perempuan	Kawin	Islam	Istri	1971-10-18	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:15.994105	\N	Diploma IV/Strata I
 774	242	Yuli Fitriani	3277024707870021	089661949234	Perempuan	Kawin	Islam	Istri	1987-07-07	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:16.015048	\N	\N
 775	243	LEONITA YULIANA	3277026407980005	\N	Perempuan	Belum Kawin	Islam	Anak	1998-07-24	Karyawan Swasta	Aktif	2026-03-08 17:47:16.017512	\N	\N
 776	242	Alfan Nugraha	3277020207100006	\N	Laki-laki	Belum Kawin	Islam	Anak	2010-07-02	Pelajar/Mahasiswa	Aktif	2026-03-08 17:47:16.019859	\N	\N
@@ -2549,8 +2611,400 @@ COPY public.warga (id, kk_id, nama_lengkap, nik, nomor_whatsapp, jenis_kelamin, 
 924	168	Budianto	3277022202600004	081222769898	Laki-laki	Kawin	Islam	Kepala Keluarga	1960-02-22	Belum/Tidak Bekerja	Aktif	2026-03-08 17:47:16.503583	\N	\N
 925	168	Lely Nurlely	3277026907600006	081222769898	Perempuan	Kawin	Islam	Istri	1976-07-29	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:16.506673	\N	\N
 926	290	Rohani Rosmini	3277024601710008	085150654366	Perempuan	Cerai Mati	Islam	Kepala Keluarga	1971-01-06	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:16.509143	\N	\N
-927	291	Iwan	3277020911750015	\N	Laki-laki	Kawin	Islam	Kepala Keluarga	1975-11-09	Lainnya	Aktif	2026-03-08 17:47:16.513149	\N	\N
 1	1	Buce Akhmad Syafaat	3277021205710023	085220412373	Laki-laki	Kawin	Islam	Kepala Keluarga	1971-05-12	Pegawai Negeri Sipil (PNS)	Aktif	2026-03-08 17:47:13.25925	/uploads/ktp/1773000559396-4p3ounzej8.png	\N
+242	73	Andini Dewi Pratiwi	3277025703730012	082116415299	Perempuan	Kawin	Islam	Kepala Keluarga	1973-03-17	Ibu Rumah Tangga	Aktif	2026-03-08 17:47:14.229101	/uploads/ktp/1773008796767-lqbxxre3dtp.jpg	\N
+961	325	Sumarsih Sri  Nalendro	3277024505470006	\N	Perempuan	Cerai Mati	Islam	Kepala Keluarga	1974-05-05	Ibu Rumah Tangga	Aktif	2026-03-09 00:59:38.989688	\N	\N
+962	326	Nani Karyani	3277026805630001	08999737947	Perempuan	Cerai Mati	Islam	Kepala Keluarga	1963-05-28	Ibu Rumah Tangga	Aktif	2026-03-09 04:48:10.512869	\N	\N
+963	326	Eni Nurminah	3277025007020023	0895351546495	Perempuan	Belum Kawin	Islam	Anak	2002-07-04	Belum/Tidak Bekerja	Aktif	2026-03-09 04:49:55.212216	\N	\N
+964	327	Taufik Hidayat	3277022302820009	085217811119	Laki-laki	Kawin	Islam	Kepala Keluarga	1982-02-23	Buruh Harian Lepas	Aktif	2026-03-09 05:57:49.416592	\N	\N
+965	327	Kus Suryati Ningrum	3277025710790027	085222112254	Perempuan	Kawin	Islam	Istri	1979-10-17	Mengurus Rumah Tangga	Aktif	2026-03-09 06:00:08.164936	\N	\N
+966	327	Keyla Hafiza Nur Hidayanti	3277024302100001	\N	Perempuan	Belum Kawin	Islam	Anak	2010-02-03	Pelajar/Mahasiswa	Aktif	2026-03-09 06:01:33.247463	\N	\N
+967	327	Arsyla Nazmi Nur Azizah	3277026509170001	\N	Perempuan	Belum Kawin	Islam	Anak	2017-09-25	Belum/Tidak Bekerja	Aktif	2026-03-09 06:04:13.132351	\N	\N
+165	47	Melinda Khaidir	3273104105020006	\N	Perempuan	Kawin	Islam	Anak	2002-05-01	Karyawan Swasta	Pindah	2026-03-08 17:47:13.881875	\N	\N
+437	132	Acih	3277024507420010	088971211715	Perempuan	Cerai Mati	Islam	Kepala Keluarga	1942-07-05	Belum/Tidak Bekerja	Pindah	2026-03-08 17:47:14.88022	\N	\N
+968	328	YUNALDI BUR	3277021107750022	081322353222	Laki-laki	Kawin	Islam	Kepala Keluarga	1975-07-11	Wiraswasta	Aktif	2026-03-09 07:14:16.725999	\N	\N
+969	328	MARLYANI SUCI HATI PUTRI	3277025803810001	081322353222	Perempuan	Kawin	Islam	Istri	1981-03-18	Mengurus Rumah Tangga	Aktif	2026-03-09 07:15:38.900214	\N	\N
+970	328	SAUSAN FATHIYAH	3277026102070003	081322353222	Perempuan	Belum Kawin	Islam	Anak	2007-02-21	Pelajar/Mahasiswa	Aktif	2026-03-09 07:17:42.453865	\N	\N
+971	328	MUMTAZAH FATHINAH	3277026402080002	081322353222	Perempuan	Belum Kawin	Islam	Anak	2008-02-24	Pelajar/Mahasiswa	Aktif	2026-03-09 07:19:42.250208	\N	\N
+972	328	NAWWAF FATHY RAMADHAN	3277020907130003	081322353222	Laki-laki	Belum Kawin	Islam	Anak	2013-07-09	Pelajar/Mahasiswa	Aktif	2026-03-09 07:21:06.61691	\N	\N
+973	328	KANISA ZHARFA FATHANIAH	3277025201160003	081322353222	Perempuan	Belum Kawin	Islam	Anak	2016-01-12	Pelajar/Mahasiswa	Aktif	2026-03-09 07:22:51.18799	\N	\N
+974	328	MUHAMMAD FATEH AYDAN	3277022809240006	081322353222	Laki-laki	Belum Kawin	Islam	Anak	2024-09-28	Belum/Tidak Bekerja	Aktif	2026-03-09 07:24:40.083152	\N	\N
+975	330	BRAMULIA TORANG NAEK HASUDUNGAN	3277020405890010	082112851255	Laki-laki	Kawin	Kristen	Kepala Keluarga	1989-05-04	Karyawan Swasta	Aktif	2026-03-09 07:31:53.91645	\N	\N
+976	331	Deni Hendra	3277021411760005	089655062525	Laki-laki	Belum Kawin	Islam	Anak	1976-11-14	\N	Aktif	2026-03-09 07:39:22.093542	\N	\N
+977	331	Dhina Indira Lilhawa	3277026202800028	089655062525	Perempuan	Kawin	Islam	Istri	1980-02-22	Guru	Aktif	2026-03-09 07:41:02.526853	\N	\N
+978	331	Zahra Muthia Salsabila	3277026107020014	\N	Perempuan	Belum Kawin	Islam	Anak	2002-07-21	Pelajar/Mahasiswa	Aktif	2026-03-09 07:43:53.412605	\N	\N
+979	331	Ahza Hafizh Rahmeka	3277021504050003	\N	Laki-laki	Belum Kawin	Islam	Anak	2005-04-15	Pelajar/Mahasiswa	Aktif	2026-03-09 07:47:52.200097	\N	\N
+980	330	ESRAWATI NOVALIANA	3204105011910008	082118251255	Perempuan	Kawin	Islam	Istri	1997-11-10	Karyawan Swasta	Aktif	2026-03-09 07:48:02.980899	\N	\N
+981	330	Nathanael Mangiring Bramesa	3277022609200001	082118251255	Laki-laki	Belum Kawin	Kristen	Anak	2020-09-26	Belum/Tidak Bekerja	Aktif	2026-03-09 07:50:49.270602	\N	\N
+982	331	Raisha Azalea Mikaila 	3277024806100004	\N	Perempuan	Belum Kawin	Islam	Anak	2010-08-03	Pelajar/Mahasiswa	Aktif	2026-03-09 07:51:14.033123	\N	\N
+983	331	Arshan Muhammad Ibrahim	3277021609160004	\N	Laki-laki	Belum Kawin	Islam	Anak	2016-09-16	Pelajar/Mahasiswa	Aktif	2026-03-09 07:52:32.395036	\N	\N
+984	331	Arham Zavian Ardavan	3277021406190003	\N	Laki-laki	Belum Kawin	Islam	Anak	2019-06-14	Pelajar/Mahasiswa	Aktif	2026-03-09 07:53:43.682437	\N	\N
+1255	411	FAIZ ALFATH MUSHAFFA	3277020705200004	\N	Laki-laki	Belum Kawin	Islam	Anak	2020-07-09	Pelajar/Mahasiswa	Aktif	2026-03-12 08:18:51.758772	\N	Tidak/Belum Tamat SD
+986	281	MELVA F.HASIBUAN	3277024802870006	082118251255	Perempuan	Belum Kawin	Kristen	Anak	1987-02-08	Karyawan Swasta	Aktif	2026-03-09 07:58:11.436031	\N	\N
+987	281	FRANKLIN B.T HASIBUAN	3277022401920019	082118251255	Laki-laki	Belum Kawin	Islam	Anak	1992-01-24	Belum/Tidak Bekerja	Aktif	2026-03-09 07:59:28.242761	\N	\N
+988	334	Bruri Pramono	3277020202800001	081329612550	Laki-laki	Kawin	Islam	Kepala Keluarga	1980-02-02	Karyawan Swasta	Aktif	2026-03-09 08:00:58.378675	\N	\N
+989	329	Kiki Mulyakin	3277022907680013	085220653983	Laki-laki	Kawin	Islam	Kepala Keluarga	1968-07-29	Wiraswasta	Aktif	2026-03-09 08:02:34.369085	\N	\N
+990	334	Suryani Pratiwi	3277025705800023	\N	Perempuan	Kawin	Islam	Istri	1980-05-17	Mengurus Rumah Tangga	Aktif	2026-03-09 08:03:32.965759	\N	\N
+991	329	Trianti Nugraheni	3277025603730010	\N	Perempuan	Kawin	Islam	Istri	1973-03-16	Dosen	Aktif	2026-03-09 08:03:57.968921	\N	\N
+992	334	Cheisya Mutiara Cahyaningtyas	3277025305080001	\N	Perempuan	Belum Kawin	Islam	Anak	2008-05-13	Pelajar/Mahasiswa	Aktif	2026-03-09 08:05:01.494619	\N	\N
+993	329	Mubdi Mulya Isfahami	3277021007960001	\N	Laki-laki	Belum Kawin	Islam	Anak	1996-07-01	Belum/Tidak Bekerja	Aktif	2026-03-09 08:05:05.282403	\N	\N
+994	329	Mugni Mulya Isfahaldi	3277021809020016	\N	Laki-laki	Belum Kawin	Islam	Anak	2002-09-18	Pelajar/Mahasiswa	Aktif	2026-03-09 08:06:23.578833	\N	\N
+927	291	Iwan	3277020911750015	\N	Laki-laki	Cerai Mati	Islam	Kepala Keluarga	1975-11-09	Tukang Kayu	Aktif	2026-03-08 17:47:16.513149	\N	\N
+11	5	Ekariyanti Mulawarman	3277024906960010	085860604142	Perempuan	Kawin	Islam	Istri	1996-06-09	Mengurus Rumah Tangga	Aktif	2026-03-08 17:47:13.29309	/uploads/ktp/1773014269613-o7s12m01hl.jpeg	SLTA/Sederajat
+995	334	Anindya Jasmine Rachmadhiyani	3277026107140003	\N	Perempuan	Belum Kawin	Islam	Anak	2014-07-21	Pelajar/Mahasiswa	Aktif	2026-03-09 08:06:37.298524	\N	\N
+996	332	Yulianto Nugraha	3273200207840001	081321848982	Laki-laki	Kawin	Kristen	Kepala Keluarga	1984-07-02	Karyawan Swasta	Aktif	2026-03-09 08:08:38.252601	\N	\N
+997	334	Arsyfa Salsabilla Putri	3277026007160001	\N	Perempuan	Belum Kawin	Islam	Anak	2016-07-20	Pelajar/Mahasiswa	Aktif	2026-03-09 08:10:06.963502	\N	\N
+998	332	Reni Novienna 	6271034911910005	\N	Perempuan	Kawin	Katolik	Istri	1991-11-08	Karyawan Swasta	Aktif	2026-03-09 08:10:29.610716	\N	\N
+999	332	Felicia Ivana Tovie	3273206812150001	\N	Perempuan	Belum Kawin	Kristen	Anak	2015-12-28	Pelajar/Mahasiswa	Aktif	2026-03-09 08:11:54.010985	\N	\N
+1000	332	Harvey Raphael Tovie	32770208072000003	\N	Laki-laki	Belum Kawin	Kristen	Anak	2020-07-08	Pelajar/Mahasiswa	Aktif	2026-03-09 08:12:58.387811	\N	\N
+1001	335	Dana Supriatna Kartaatmaja	3277022211550003	082117596900	Laki-laki	Kawin	Islam	Kepala Keluarga	1955-11-22	Pensiunan	Aktif	2026-03-09 08:15:46.347581	\N	\N
+1002	336	Handiyanto	3277020107730001	08112289087	Laki-laki	Kawin	Islam	Kepala Keluarga	1973-07-14	Karyawan Swasta	Aktif	2026-03-09 08:17:01.809479	\N	\N
+1003	335	Anna Suhana Said	3277025508550014	\N	Perempuan	Kawin	Islam	Istri	1955-08-15	Mengurus Rumah Tangga	Aktif	2026-03-09 08:17:41.260606	\N	\N
+1004	337	MUHAMMAD SADDAM HUSSEIN	3217082710910003	085721422455	Laki-laki	Kawin	Islam	Kepala Keluarga	1991-10-27	Karyawan BUMN	Aktif	2026-03-09 08:18:12.304095	\N	\N
+1005	336	Andriany	3277025203710022	08122359616	Perempuan	Kawin	Islam	Istri	1971-03-12	Mengurus Rumah Tangga	Aktif	2026-03-09 08:18:36.770198	\N	\N
+1006	336	Vania Levianna Putri	3277026207030002	\N	Perempuan	Belum Kawin	Islam	Anak	2003-07-22	Pelajar/Mahasiswa	Aktif	2026-03-09 08:19:38.959424	\N	\N
+1007	337	ADHIKA TANIA HARTANTO	3277025706920001	085220226062	Laki-laki	Kawin	Islam	Istri	1992-06-17	Mengurus Rumah Tangga	Aktif	2026-03-09 08:19:39.428369	\N	\N
+1008	336	Alvin Ferdinand Winata	3277021005140002	\N	Laki-laki	Belum Kawin	Islam	Anak	2014-05-10	Pelajar/Mahasiswa	Aktif	2026-03-09 08:20:39.296663	\N	\N
+1009	337	ALITA SHIDQIA HUSSEIN	3277024309200001	085220226062	Perempuan	Belum Kawin	Islam	Anak	2020-09-03	Pelajar/Mahasiswa	Aktif	2026-03-09 08:20:58.138626	\N	\N
+1010	338	Dicky Agus Priyana	3277020708810032	08126666133	Laki-laki	Kawin	Islam	Kepala Keluarga	1981-08-07	Wiraswasta	Aktif	2026-03-09 08:22:48.597686	\N	\N
+1011	339	EKO HARTANTO	3277021807600004	085321100530	Laki-laki	Kawin	Islam	Kepala Keluarga	1960-07-18	Belum/Tidak Bekerja	Aktif	2026-03-09 08:23:35.735877	\N	\N
+1012	338	Rani Koncarawati	3204405704820002	082218988982	Perempuan	Kawin	Islam	Istri	1982-04-17	Mengurus Rumah Tangga	Aktif	2026-03-09 08:24:25.003356	\N	\N
+1013	339	MILA GANESIA WATTY M	3277025511630007	085220818119	Perempuan	Kawin	Islam	Istri	1963-11-15	Mengurus Rumah Tangga	Aktif	2026-03-09 08:25:22.614872	\N	\N
+1014	338	Kirana Anandya Putri Setiawan	3204404501040001	085156401963	Perempuan	Kawin	Islam	Anak	2004-01-05	Mengurus Rumah Tangga	Aktif	2026-03-09 08:26:20.798475	\N	\N
+985	281	TUMPAL B. HASIBUAN	327702064530001	081322579034	Laki-laki	Cerai Mati	Kristen	Kepala Keluarga	1953-04-06	Belum/Tidak Bekerja	Aktif	2026-03-09 07:55:45.628193	\N	\N
+1015	338	Nayyara Gisselda Putri Setiawan	3204404305080002	082218988980	Perempuan	Belum Kawin	Islam	Anak	2008-05-03	Pelajar/Mahasiswa	Aktif	2026-03-09 08:28:10.902493	\N	\N
+1016	343	Budi Siswoyo	3277021004640012	082112544354	Laki-laki	Kawin	Islam	Kepala Keluarga	1964-04-10	Belum/Tidak Bekerja	Aktif	2026-03-09 08:28:56.269909	\N	\N
+1017	338	Danendra Malik Alfarizki	3277020502180003	\N	Laki-laki	Belum Kawin	Islam	Anak	2018-02-05	Pelajar/Mahasiswa	Aktif	2026-03-09 08:30:11.733969	\N	\N
+1019	343	Ike Fazriati	3277024601640006	087822622354	Perempuan	Kawin	Islam	Istri	1964-01-06	Ibu Rumah Tangga	Aktif	2026-03-09 08:30:21.197137	\N	\N
+1020	338	Dipta Magika Arashi	3277021401200003	\N	Laki-laki	Belum Kawin	Islam	Anak	2020-01-14	Pelajar/Mahasiswa	Aktif	2026-03-09 08:31:11.918905	\N	\N
+1022	341	Muhammad Rifqi Zulfa	3277021210970016	0895365054545	Laki-laki	Kawin	Islam	Kepala Keluarga	1997-10-12	Karyawan Swasta	Aktif	2026-03-09 08:32:03.941783	\N	\N
+1024	341	Saeah Jihan Qurrotu' ainii	3277024510970018	082115475972	Perempuan	Kawin	Islam	Istri	1997-10-05	Guru	Aktif	2026-03-09 08:33:43.571185	\N	\N
+1025	341	Kayshila Freya Arrumaisha	3277024412240001	\N	Perempuan	Belum Kawin	Islam	Anak	2024-12-04	Belum/Tidak Bekerja	Aktif	2026-03-09 08:35:16.145295	\N	\N
+1026	345	FAUZI SALEH SEFF	327703247680002	08122155647	Laki-laki	Kawin	Islam	Kepala Keluarga	1968-07-24	Wiraswasta	Aktif	2026-03-09 08:36:37.62921	\N	\N
+1027	342	Dadan Hadian	3277022708820016	081394606020	Laki-laki	Kawin	Islam	Kepala Keluarga	1982-08-27	Pegawai Negeri Sipil (PNS)	Aktif	2026-03-09 08:36:54.786911	\N	\N
+1028	345	NATHIA RAHMAH	3277036601830006	081212744420	Perempuan	Kawin	Islam	Istri	1983-01-26	Mengurus Rumah Tangga	Aktif	2026-03-09 08:37:50.607184	\N	\N
+1029	342	Irma Riksani Rahmah	3277026712790016	\N	Perempuan	Cerai Hidup	Islam	Istri	1979-12-17	Pegawai Negeri Sipil (PNS)	Aktif	2026-03-09 08:38:56.105144	\N	\N
+1030	345	MUHAMAD HAIKAL FAUZI SEEF	3277031807020001	087816762829	Laki-laki	Belum Kawin	Islam	Anak	2002-07-18	Pelajar/Mahasiswa	Aktif	2026-03-09 08:39:00.951213	\N	\N
+1031	342	Muhammad Zaki Arrasyid	3277021006090006	\N	Laki-laki	Belum Kawin	Islam	Anak	2009-06-10	Pelajar/Mahasiswa	Aktif	2026-03-09 08:40:00.211747	\N	\N
+1032	345	NABIL FAUZI SEEF	3277032605040002	085103002371	Laki-laki	Belum Kawin	Islam	Anak	2004-05-26	Pelajar/Mahasiswa	Aktif	2026-03-09 08:40:04.115133	\N	\N
+1033	345	FADHIL FAUZI SEEF	3277030607140002	081212744420	Laki-laki	Belum Kawin	Islam	Anak	2014-07-06	Pelajar/Mahasiswa	Aktif	2026-03-09 08:41:04.500307	\N	\N
+1034	342	Muhammqd Zaidan Arrafi	3277023009100001	\N	Laki-laki	Belum Kawin	Islam	Anak	2010-09-30	Pelajar/Mahasiswa	Aktif	2026-03-09 08:41:12.435784	\N	\N
+1035	342	Dzakiyah Kamilah Khairunnisa	3277025811120002	\N	Laki-laki	Belum Kawin	Islam	Anak	2012-11-18	Pelajar/Mahasiswa	Aktif	2026-03-09 08:42:24.360231	\N	\N
+1036	342	Fathimah Azzahra Sayyidatunnisa	3277026910160002	\N	Perempuan	Belum Kawin	Islam	Anak	2016-10-29	Pelajar/Mahasiswa	Aktif	2026-03-09 08:43:50.767206	\N	\N
+1037	291	Aldo Fatur Rizwan	3277022710010002	\N	Laki-laki	Belum Kawin	Islam	Anak	2001-10-27	Belum/Tidak Bekerja	Aktif	2026-03-09 13:57:35.859615	\N	\N
+1039	291	Alda Siti Qomara	3277025410110002	\N	Perempuan	Belum Kawin	Islam	Anak	2011-10-14	Pelajar/Mahasiswa	Aktif	2026-03-09 14:07:26.135032	\N	\N
+1038	291	Rivaldi Wira Guna	3277022404070003	\N	Laki-laki	Belum Kawin	Islam	Anak	2007-04-24	Pelajar/Mahasiswa	Aktif	2026-03-09 13:59:51.327424	\N	\N
+1040	291	Rizqi Wiradana	3277021611180005	\N	Laki-laki	Belum Kawin	Islam	Anak	2018-11-16	Pelajar/Mahasiswa	Aktif	2026-03-09 14:08:43.74239	\N	\N
+1041	346	M. Soleh	3277021012890014	\N	Laki-laki	Kawin	Islam	Kepala Keluarga	1989-12-10	Karyawan Swasta	Aktif	2026-03-09 14:12:38.371599	\N	\N
+1021	344	CINDY FEBRIAN	3277026302850005	081717170911	Perempuan	Kawin	Kristen	Istri	1985-02-23	Mengurus Rumah Tangga	Aktif	2026-03-09 08:31:33.354822	\N	Diploma IV/Strata I
+1018	344	YULIUS	3277010707840027	085221298888	Laki-laki	Kawin	Kristen	Kepala Keluarga	1984-07-07	Wiraswasta	Aktif	2026-03-09 08:30:18.726144	\N	Diploma IV/Strata I
+1042	346	Suci Budiyani	3277025302950013	085759061070	Perempuan	Kawin	Islam	Istri	1995-02-13	Mengurus Rumah Tangga	Aktif	2026-03-09 14:13:56.918477	\N	\N
+1043	346	Qiana Qalesya	3277026501220001	\N	Perempuan	Belum Kawin	Islam	Anak	2022-01-25	Belum/Tidak Bekerja	Aktif	2026-03-09 14:14:55.29551	\N	\N
+1044	347	Rohati	3277025606520002	\N	Perempuan	Cerai Mati	Islam	Kepala Keluarga	1952-06-16	Mengurus Rumah Tangga	Aktif	2026-03-10 04:29:17.627875	\N	\N
+1045	348	Ai Lili Cahyani	3277036312770007	08988190722	Perempuan	Cerai Hidup	Islam	Kepala Keluarga	1977-12-23	Belum/Tidak Bekerja	Aktif	2026-03-10 04:33:49.023634	\N	\N
+1046	349	Budi Sugiarto	3277022106680001	082116411080	Laki-laki	Cerai Mati	Islam	Kepala Keluarga	1968-06-21	Wiraswasta	Aktif	2026-03-10 04:37:08.258925	\N	\N
+1047	349	Phutreza Muzaqi	3277022903040002	\N	Laki-laki	Belum Kawin	Islam	Anak	2004-03-29	Pelajar/Mahasiswa	Aktif	2026-03-10 04:38:14.088032	\N	\N
+1048	350	Suhartono	3277021711800005	\N	Laki-laki	Kawin	Islam	Kepala Keluarga	1980-11-17	Karyawan Swasta	Aktif	2026-03-10 04:42:31.115061	\N	\N
+1049	350	Siti Karyati	3277026408780015	\N	Perempuan	Kawin	Islam	Istri	1978-08-24	Mengurus Rumah Tangga	Aktif	2026-03-10 04:43:39.228163	\N	\N
+1050	350	Shandrina Alaizya Putri	3277024302050002	\N	Perempuan	Belum Kawin	Islam	Anak	2005-02-03	Pelajar/Mahasiswa	Aktif	2026-03-10 04:44:57.628945	\N	\N
+1051	351	Imas Komariah	3277025303610006	\N	Perempuan	Cerai Mati	Islam	Kepala Keluarga	1961-03-13	Mengurus Rumah Tangga	Aktif	2026-03-10 04:49:32.680654	\N	\N
+1052	351	Sarah Musdalifah	3277025210990005	\N	Perempuan	Belum Kawin	Islam	Anak	1999-10-12	Belum/Tidak Bekerja	Aktif	2026-03-10 04:50:29.043735	\N	\N
+1053	352	Diar Maulana	3277020706010018	085155275022	Laki-laki	Kawin	Islam	Kepala Keluarga	2001-06-07	Wiraswasta	Aktif	2026-03-10 04:56:07.997734	\N	\N
+1054	352	Fenti Susanti	3217085101010003	081572958150	Perempuan	Kawin	Islam	Istri	2001-01-11	Mengurus Rumah Tangga	Aktif	2026-03-10 04:57:49.985296	\N	\N
+1055	352	Diajeng Sukma Ayu	3277024905250003	\N	Perempuan	Belum Kawin	Islam	Anak	2025-05-09	Belum/Tidak Bekerja	Aktif	2026-03-10 04:58:49.214031	\N	\N
+1056	353	Heri Nur Rahmat	3277032402860014	085798279924	Laki-laki	Kawin	Islam	Kepala Keluarga	1986-02-24	Karyawan Swasta	Aktif	2026-03-10 05:02:43.333169	\N	\N
+1057	353	Cucu Purnama	3277024106860034	085864233213	Perempuan	Kawin	Islam	Istri	1986-06-01	Mengurus Rumah Tangga	Aktif	2026-03-10 05:03:59.40401	\N	\N
+1058	353	Farannisa Alzena Badzlin	3277026106130006	\N	Perempuan	Belum Kawin	Islam	Anak	2013-06-21	Pelajar/Mahasiswa	Aktif	2026-03-10 05:05:28.851976	\N	\N
+1059	353	Fashania Allena Badzlin	3277026306200006	\N	Perempuan	Belum Kawin	Islam	Anak	2020-06-23	Belum/Tidak Bekerja	Aktif	2026-03-10 05:06:53.768275	\N	\N
+1060	354	Akhmad Syauqi	3277021912640005	081313413927	Laki-laki	Kawin	Islam	Kepala Keluarga	1964-12-19	Belum/Tidak Bekerja	Aktif	2026-03-10 07:15:02.351245	\N	\N
+1061	354	Sari Dewi	3277026912680013	085321377729	Perempuan	Kawin	Islam	Istri	1968-12-29	Mengurus Rumah Tangga	Aktif	2026-03-10 07:16:24.226693	\N	\N
+1062	354	Nahri Khadijah	3277026304920004	\N	Perempuan	Belum Kawin	Islam	Anak	1992-04-23	Karyawan Swasta	Aktif	2026-03-10 07:18:35.614667	\N	\N
+1063	354	Rayhan Muhammad	3277022810970009	\N	Laki-laki	Belum Kawin	Islam	Anak	1997-10-28	Karyawan Swasta	Aktif	2026-03-10 07:19:46.762834	\N	\N
+1064	354	Raiyan Niyaza Ghaus	3277020204080005	\N	Laki-laki	Belum Kawin	Islam	Anak	2008-04-02	Pelajar/Mahasiswa	Aktif	2026-03-10 07:21:16.867128	\N	\N
+1065	356	RANGGA MARANTIKA	3277022103840005	08112059666	Laki-laki	Kawin	Islam	Kepala Keluarga	1984-03-21	Karyawan Swasta	Aktif	2026-03-10 07:21:28.525307	\N	\N
+1066	356	ASTRI HASTRIANI	3277024809840019	08112275306	Perempuan	Kawin	Islam	Istri	1984-09-08	Guru	Aktif	2026-03-10 07:24:01.090287	\N	\N
+1067	356	KHANSA NABIHA NUR SABIYA	3277024702100002	08112275306	Perempuan	Belum Kawin	Islam	Anak	2010-02-07	Pelajar/Mahasiswa	Aktif	2026-03-10 07:26:08.357839	\N	\N
+1068	356	SOFIYA ADARA NUR XAVIERA	3277025905150003	08112275036	Laki-laki	Belum Kawin	Islam	Anak	2015-05-19	Pelajar/Mahasiswa	Aktif	2026-03-10 07:27:26.366834	\N	\N
+1069	356	RAFI AL FATIH ATHALLAH	3277020211190004	\N	Laki-laki	Belum Kawin	Islam	Anak	2019-11-02	Pelajar/Mahasiswa	Aktif	2026-03-10 07:29:23.025437	\N	\N
+1070	356	HENNY KUSTIANI	3277024608490002	\N	Laki-laki	Cerai Mati	Islam	Famili Lain	1949-08-06	Belum/Tidak Bekerja	Aktif	2026-03-10 07:30:49.441397	\N	\N
+1071	357	ALBERTUS WISNU NUGROHO	3277011611850029	08999278181	Laki-laki	Kawin	Hindu	Kepala Keluarga	1985-11-16	Karyawan Swasta	Aktif	2026-03-10 07:33:42.06674	\N	\N
+1072	357	NI PUTU ESTU PRANITI	3277026609890004	08999687009	Perempuan	Kawin	Hindu	Istri	1989-09-26	Karyawan Swasta	Aktif	2026-03-10 07:35:24.696469	\N	\N
+1073	358	NI NYOMAN RIDANI	3277025008630007	081802187211	Perempuan	Cerai Hidup	Hindu	Kepala Keluarga	1963-08-10	Pensiunan	Aktif	2026-03-10 07:39:45.3394	\N	\N
+1074	358	NI MADE DIASTI PUTRI	3277025309950020	081224601207	Perempuan	Belum Kawin	Hindu	Anak	1995-09-13	Karyawan BUMN	Aktif	2026-03-10 07:41:22.901888	\N	\N
+1075	358	NI KOMANG PRASTITI DEWI	327702430401009	089672687049	Perempuan	Belum Kawin	Hindu	Anak	2001-04-03	Belum/Tidak Bekerja	Aktif	2026-03-10 07:42:43.161568	\N	\N
+1076	355	Ryan Noveriand Rawhan 	3277021112890021	082119639986	Laki-laki	Kawin	Islam	Kepala Keluarga	1989-12-11	Karyawan Swasta	Aktif	2026-03-10 07:42:51.435592	\N	\N
+1077	355	Intan Cahya Ningrum	3204096900040006	\N	Perempuan	Kawin	Islam	Istri	1994-09-29	Guru	Aktif	2026-03-10 07:44:55.883346	\N	\N
+1078	355	Sarah Zehiya Muthmainnah	3277025408170002	\N	Perempuan	Belum Kawin	Islam	Anak	2017-08-14	Pelajar/Mahasiswa	Aktif	2026-03-10 07:46:25.905358	\N	\N
+1079	355	Ibrahim Ghazi Alp Arslan	3277020304200002	\N	Laki-laki	Belum Kawin	Islam	Anak	2020-04-03	Pelajar/Mahasiswa	Aktif	2026-03-10 07:48:09.097115	\N	\N
+1080	359	NUR KHALIQ AGUS PETERSON	3277020208680031	0895367341847	Laki-laki	Kawin	Islam	Kepala Keluarga	1968-08-02	Belum/Tidak Bekerja	Aktif	2026-03-10 07:54:21.830395	\N	\N
+1081	360	Nidyan Rayhan Warigalit	3277020906720016	08179228063	Laki-laki	Kawin	Islam	Kepala Keluarga	1972-06-09	Kepolisian RI (POLRI)	Aktif	2026-03-10 07:55:33.284663	\N	\N
+1083	359	MUHAMMAD RAFI NURFAIZI	3277021704010010	087891508502	Laki-laki	Belum Kawin	Islam	Anak	2001-04-17	Karyawan Swasta	Aktif	2026-03-10 07:57:14.303353	\N	\N
+1084	360	Talitha Aurelia Warigalit	3277024311020014	\N	Perempuan	Belum Kawin	Islam	Anak	2002-11-03	Pelajar/Mahasiswa	Aktif	2026-03-10 07:58:13.378478	\N	\N
+1085	360	Farras Budi Athari	3277025802110001	\N	Laki-laki	Belum Kawin	Islam	Anak	2011-02-18	Pelajar/Mahasiswa	Aktif	2026-03-10 07:59:27.706801	\N	\N
+1087	362	YULIANI HAREFA	3277025105870016	081320011766	Perempuan	Kawin	Kristen	Istri	1987-05-11	Mengurus Rumah Tangga	Aktif	2026-03-10 08:01:51.565017	\N	\N
+1088	361	Dwi Ariyanto	3276023105840001	\N	Laki-laki	Kawin	Islam	Kepala Keluarga	1984-05-31	Pegawai Negeri Sipil (PNS)	Aktif	2026-03-10 08:02:18.067074	\N	\N
+1089	362	YOBEDI BELIEF MIRACLE DAELI	3277020402090004	081320011766	Laki-laki	Belum Kawin	Kristen	Anak	2009-02-04	Pelajar/Mahasiswa	Aktif	2026-03-10 08:03:48.765559	\N	\N
+1090	361	Salma Fauziyah	3277024206950013	\N	Perempuan	Kawin	Islam	Istri	1995-06-02	Mengurus Rumah Tangga	Aktif	2026-03-10 08:04:30.07242	\N	\N
+1091	362	OPHELIA TRIXI DAELI	3277024207110004	\N	Perempuan	Belum Kawin	Kristen	Anak	2011-07-02	Pelajar/Mahasiswa	Aktif	2026-03-10 08:04:42.27357	\N	\N
+1092	362	JULIA HAGA COLEEN DAELI	3277027103170005	\N	Perempuan	Belum Kawin	Kristen	Anak	2017-03-31	Pelajar/Mahasiswa	Aktif	2026-03-10 08:06:02.417991	\N	\N
+1093	361	Razka Muhammad Arsyad 	3277020804200001	\N	Laki-laki	Belum Kawin	Islam	Anak	2020-04-08	Belum/Tidak Bekerja	Aktif	2026-03-10 08:06:17.775126	\N	\N
+1094	363	SANDRA PERMANA	3205311009890003	08570349318	Laki-laki	Kawin	Islam	Kepala Keluarga	1989-09-10	Wiraswasta	Aktif	2026-03-10 08:09:13.123229	\N	\N
+1095	363	TIKA TRISNAWATI	3273035810890015	085720349318	Perempuan	Kawin	Islam	Istri	1989-10-18	Karyawan Swasta	Aktif	2026-03-10 08:10:19.895321	\N	\N
+1096	364	Suhartoyo	3277021009690014	085794310994	Laki-laki	Kawin	Islam	Kepala Keluarga	1969-09-10	Pegawai Negeri Sipil (PNS)	Aktif	2026-03-10 08:10:31.286251	\N	\N
+1097	364	Sukmanawati	32770265011660001	\N	Perempuan	Kawin	Islam	Istri	1966-01-25	Mengurus Rumah Tangga	Aktif	2026-03-10 08:11:42.752428	\N	\N
+1098	364	Salman Fauzi 	3277020105010013	\N	Laki-laki	Belum Kawin	Islam	Anak	2001-05-01	Pelajar/Mahasiswa	Aktif	2026-03-10 08:13:24.697661	\N	\N
+1099	365	HENHEN SUHENDAR	3277020803660012	082130218319	Laki-laki	Cerai Hidup	Islam	Kepala Keluarga	1966-03-08	Pensiunan	Aktif	2026-03-10 08:14:36.165574	\N	\N
+1100	365	NAUFAL HISYAM	3277020202970013	082130218319	Laki-laki	Belum Kawin	Islam	Anak	1997-02-02	Belum/Tidak Bekerja	Aktif	2026-03-10 08:15:32.92468	\N	\N
+1101	365	VALISHA HANIFATI	3277026012030004	\N	Perempuan	Belum Kawin	Islam	Anak	2003-12-20	Pelajar/Mahasiswa	Aktif	2026-03-10 08:16:44.195607	\N	\N
+1256	411	MARDHIYAH MAISARO MUTHMAINNAH	3277027006210002	\N	Perempuan	Belum Kawin	Islam	Anak	2021-05-30	Pelajar/Mahasiswa	Aktif	2026-03-12 08:20:19.800958	\N	Tidak/Belum Tamat SD
+1103	367	DANIEL FAJAR PUSPITA	3306061307860006	085729927085	Laki-laki	Kawin	Kristen	Kepala Keluarga	1986-07-13	Pegawai Negeri Sipil (PNS)	Aktif	2026-03-10 08:19:28.112219	\N	\N
+1104	367	SEKAR AJI CAHYANINGTYAS	3306086510860005	085729927085	Perempuan	Kawin	Kristen	Istri	1986-10-25	Karyawan Swasta	Aktif	2026-03-10 08:21:05.823245	\N	\N
+1105	367	RAHAJENG PUTRI PUSPITA	3306065907120002	\N	Perempuan	Belum Kawin	Kristen	Anak	2012-07-19	Pelajar/Mahasiswa	Aktif	2026-03-10 08:22:24.922516	\N	\N
+1106	367	RAHARDIAN AJI PUSPITA	3277022807150001	\N	Laki-laki	Belum Kawin	Kristen	Anak	2015-07-28	Pelajar/Mahasiswa	Aktif	2026-03-10 08:23:19.340097	\N	\N
+1107	369	Sarimanah	3277025708650010	081387311701	Perempuan	Cerai Hidup	Islam	Kepala Keluarga	1965-08-17	Pegawai Negeri Sipil (PNS)	Aktif	2026-03-10 08:25:28.150864	\N	\N
+1108	370	SUDJONO MOCHTAR	3277020504530011	081573082523	Laki-laki	Kawin	Kristen	Kepala Keluarga	1953-04-05	Belum/Tidak Bekerja	Aktif	2026-03-10 08:26:20.014534	\N	\N
+1109	370	YANTI GUNAWAN	3277025512580010	087822151910	Perempuan	Belum Kawin	Kristen	Istri	1958-12-15	Mengurus Rumah Tangga	Aktif	2026-03-10 08:27:18.019301	\N	\N
+1110	368	Agus Hermawan	3217150205760032	081322788788	Laki-laki	Kawin	Islam	Kepala Keluarga	1976-05-02	Pegawai Negeri Sipil (PNS)	Aktif	2026-03-10 08:27:50.077853	\N	\N
+1111	370	EDO MARTIANO	3277022603820015	08122332086	Laki-laki	Belum Kawin	Kristen	Anak	1982-03-26	Karyawan Swasta	Aktif	2026-03-10 08:28:43.770981	\N	\N
+1112	370	ERWIN JUNIARDI	3277022406880001	087821728084	Laki-laki	Belum Kawin	Kristen	Anak	1988-06-24	Karyawan Swasta	Aktif	2026-03-10 08:30:15.258864	\N	\N
+1113	368	Lyna Meylina	3217155505780018	083829913311	Perempuan	Kawin	Islam	Istri	1978-05-15	Pegawai Negeri Sipil (PNS)	Aktif	2026-03-10 08:30:23.044416	\N	\N
+1114	368	Aryasatya Putra Hermawan	3217151802120001	\N	Laki-laki	Belum Kawin	Islam	Anak	2012-02-18	Pelajar/Mahasiswa	Aktif	2026-03-10 08:36:38.859727	\N	\N
+1115	371	RENDI KRESNA JULIAN	3204100107980005	087834475209	Laki-laki	Kawin	Islam	Kepala Keluarga	1998-07-01	Karyawan Swasta	Aktif	2026-03-10 08:36:47.159866	\N	\N
+1116	371	ANNISA CAHAYAWATI	3273095502980002	081220413055	Perempuan	Kawin	Islam	Istri	1998-02-15	Karyawan Swasta	Aktif	2026-03-10 08:38:04.518864	\N	\N
+1117	368	Rayya Ghaniya Putri Hermawan	3217154712140002	\N	Perempuan	Belum Kawin	Islam	Anak	2014-12-07	Pelajar/Mahasiswa	Aktif	2026-03-10 08:38:09.928786	\N	\N
+1118	372	E RATNA NINGSIH	3273096305600002	081394466900	Perempuan	Kawin	Islam	Istri	1960-05-23	Mengurus Rumah Tangga	Aktif	2026-03-10 08:42:39.91379	\N	\N
+1119	373	Nusro Prayitno	3277020705700022	081220901249	Laki-laki	Kawin	Islam	Kepala Keluarga	1970-05-07	Karyawan Swasta	Aktif	2026-03-10 08:58:25.521261	\N	\N
+1120	373	Siti Sarwiyah	3277026101730016	081321970094	Perempuan	Kawin	Islam	Istri	1973-01-21	Karyawan Swasta	Aktif	2026-03-10 09:00:14.367048	\N	\N
+1121	373	Ilham Syaeful Reza	3277020703980001	\N	Laki-laki	Belum Kawin	Islam	Anak	1998-03-07	Karyawan Swasta	Aktif	2026-03-10 09:01:52.919962	\N	\N
+1122	373	Raihan Mualana Firdaus	3277020110040006	\N	Laki-laki	Belum Kawin	Islam	Anak	2004-10-01	Pelajar/Mahasiswa	Aktif	2026-03-10 09:02:50.900425	\N	\N
+1082	359	KOMARIAH	3277027008690001	0895619817050	Perempuan	Kawin	Islam	Istri	1969-08-30	Mengurus Rumah Tangga	Aktif	2026-03-10 07:55:43.253603	\N	\N
+1123	375	BAY CHAERIYAH	3277024506570001	085176963003	Perempuan	Cerai Mati	Islam	Kepala Keluarga	1957-06-05	Mengurus Rumah Tangga	Aktif	2026-03-11 07:23:14.990952	\N	\N
+1124	377	Aries Hartanto	3201021904730007	087889905030	Laki-laki	Kawin	Islam	Kepala Keluarga	1973-04-19	Karyawan Swasta	Aktif	2026-03-11 07:26:12.587731	\N	\N
+1125	375	FAZRI ESPANDIARI CORRY	3277023103840007	085176963003	Laki-laki	Belum Kawin	Islam	Anak	1984-03-31	Karyawan Swasta	Aktif	2026-03-11 07:26:12.87911	\N	\N
+1126	377	Rulyana Kartikasary Ruchijat	3277024102720037	\N	Perempuan	Kawin	Islam	Istri	1972-01-02	Mengurus Rumah Tangga	Aktif	2026-03-11 07:27:35.280597	\N	\N
+1259	412	Fayza Rahmillah Priatna	3277025802150001	\N	Perempuan	Belum Kawin	Islam	Anak	2015-02-18	Pelajar/Mahasiswa	Aktif	2026-03-12 08:23:21.196725	\N	Tamat SD/Sederajat
+1128	377	Shazkia Melvabella Aprilia	3277026004030006	\N	Perempuan	Belum Kawin	Islam	Anak	2003-04-20	Perawat	Aktif	2026-03-11 07:29:09.128627	\N	\N
+1129	378	ADFENTRIA DAELI	3277036411830001	082258118895	Perempuan	Kawin	Kristen	Istri	1983-11-24	Mengurus Rumah Tangga	Aktif	2026-03-11 07:30:53.056727	\N	\N
+1130	376	Mochamad Arifin	3277020203770013	081321747714	Laki-laki	Kawin	Islam	Kepala Keluarga	1977-03-02	Karyawan Swasta	Aktif	2026-03-11 07:31:24.393575	\N	\N
+1131	378	KEFAS JANICE DAELI	3277032609090003	\N	Laki-laki	Belum Kawin	Kristen	Anak	2009-09-26	Pelajar/Mahasiswa	Aktif	2026-03-11 07:31:53.104891	\N	\N
+1132	376	Rina Arfiani Ulfah	3277024512840001	\N	Perempuan	Kawin	Islam	Istri	1981-12-05	Karyawan Swasta	Aktif	2026-03-11 07:32:38.131088	\N	\N
+1133	378	WINIFRED JOFITA DAELI	3277036210120004	\N	Perempuan	Belum Kawin	Kristen	Anak	2012-10-22	Pelajar/Mahasiswa	Aktif	2026-03-11 07:33:01.205689	\N	\N
+1134	376	Tristan Kenzie Rafif	3277020604100001	\N	Laki-laki	Belum Kawin	Islam	Anak	2010-04-06	Pelajar/Mahasiswa	Aktif	2026-03-11 07:33:39.585015	\N	\N
+1135	376	Alvis Raffasya Aqlan	3277021410110001	\N	Laki-laki	Belum Kawin	Islam	Anak	2011-10-14	Pelajar/Mahasiswa	Aktif	2026-03-11 07:34:46.719795	\N	\N
+1136	378	CELESTYN AVIGAEL DAELI	3277026405160003	\N	Perempuan	Belum Kawin	Kristen	Anak	2016-05-24	Pelajar/Mahasiswa	Aktif	2026-03-11 07:35:07.917259	\N	\N
+1137	378	GEONA JOEVANKA DAELI	3277025708200002	\N	Perempuan	Belum Kawin	Kristen	Anak	2020-08-17	Pelajar/Mahasiswa	Aktif	2026-03-11 07:36:06.568834	\N	\N
+1138	374	Sardi Naik	3273040701860001	085222357077	Laki-laki	Kawin	Katolik	Kepala Keluarga	1986-01-07	Wiraswasta	Aktif	2026-03-11 07:39:42.853829	\N	\N
+1139	374	Melia Sinaga 	1275044505890013	082364529966	Perempuan	Kawin	Katolik	Istri	1989-05-05	Pegawai Negeri Sipil (PNS)	Aktif	2026-03-11 07:41:19.786887	\N	\N
+1140	380	HENDRA GUNARA	3277022705730001	087821190987	Laki-laki	Kawin	Islam	Kepala Keluarga	1973-05-27	Wiraswasta	Aktif	2026-03-11 07:41:34.262108	\N	\N
+1141	380	SURANI	3277025402740013	087821730942	Perempuan	Kawin	Islam	Istri	21974-04-11	Pegawai Negeri Sipil (PNS)	Aktif	2026-03-11 07:42:34.342628	\N	\N
+1142	374	Andro Kenrick Habinsaran Limbong	3273040903170003	\N	Laki-laki	Belum Kawin	Katolik	Anak	2017-03-09	Pelajar/Mahasiswa	Aktif	2026-03-11 07:42:59.316193	\N	\N
+1143	374	Axelya Uliana Limbong	3273044907180005	\N	Perempuan	Belum Kawin	Katolik	Anak	2018-07-09	Pelajar/Mahasiswa	Aktif	2026-03-11 07:44:25.771069	\N	\N
+1144	380	AHLAM NAUVAL MAHENDRA	3277022209010013	088802322763	Laki-laki	Belum Kawin	Islam	Anak	2001-09-22	Belum/Tidak Bekerja	Aktif	2026-03-11 07:44:32.131511	\N	\N
+1145	380	NAURA KAMILIA MAHENDRA	3277025311060001	0882000538364	Perempuan	Belum Kawin	Islam	Anak	2006-11-13	Pelajar/Mahasiswa	Aktif	2026-03-11 07:45:32.900579	\N	\N
+1127	378	TELITI DAELI	3277031604850022	082258118895	Laki-laki	Kawin	Kristen	Kepala Keluarga	1985-04-16	Belum/Tidak Bekerja	Aktif	2026-03-11 07:29:05.165372	\N	\N
+1147	382	Mia Karmelita	3277026104910003	087849948965	Perempuan	Belum Kawin	Islam	Anak	1991-04-21	Karyawan Swasta	Aktif	2026-03-11 07:55:33.845457	\N	\N
+1146	382	Popi Supiati	3277026510550007	089512736676	Perempuan	Cerai Mati	Islam	Kepala Keluarga	1955-10-25	Mengurus Rumah Tangga	Aktif	2026-03-11 07:52:54.925748	\N	\N
+1148	383	CRISTIANTO WIBISONO	3277021606710009	081321105584	Laki-laki	Kawin	Islam	Kepala Keluarga	1971-06-14	Karyawan Swasta	Aktif	2026-03-11 07:56:57.322774	\N	\N
+1149	383	WAHYU NINGSIH	3277027003760010	\N	Perempuan	Kawin	Islam	Istri	1976-03-30	Mengurus Rumah Tangga	Aktif	2026-03-11 07:58:28.000095	\N	\N
+1150	381	Amirrudin	3277020105690001	087779194333	Laki-laki	Kawin	Islam	Kepala Keluarga	1969-05-01	Karyawan Swasta	Aktif	2026-03-11 07:58:48.856026	\N	\N
+1151	383	MUHAMMAD ALDIANSYAH WIBISONO	3277020107000119	\N	Laki-laki	Belum Kawin	Islam	Anak	\N	Karyawan Swasta	Aktif	2026-03-11 07:59:58.536956	\N	\N
+1152	383	FEBRIAN RIFQI ZUHAIR	3277020802040002	\N	Laki-laki	Belum Kawin	Islam	Anak	2004-02-08	Kepolisian RI (POLRI)	Aktif	2026-03-11 08:01:04.436989	\N	\N
+1153	381	Ernyati Anwar	3277024205670007	3277024205670007	Perempuan	Kawin	Islam	Istri	1967-05-02	Pensiunan	Aktif	2026-03-11 08:01:14.367457	\N	\N
+1154	383	FAIZA RIFA SABIRA RAMADHANI	3277024909080005	\N	Perempuan	Belum Kawin	Islam	Anak	2008-09-09	Pelajar/Mahasiswa	Aktif	2026-03-11 08:02:14.52475	\N	\N
+1155	381	Muhammad Daffa Haekal I'tisham	3277021312040001	081932948693	Laki-laki	Belum Kawin	Islam	Anak	2004-12-13	Pelajar/Mahasiswa	Aktif	2026-03-11 08:04:31.693946	\N	\N
+1156	384	AJI HANDOYO	3277022301720008	08112009525	Laki-laki	Kawin	Islam	Kepala Keluarga	1972-01-23	Karyawan Swasta	Aktif	2026-03-11 08:06:19.0754	\N	\N
+1157	384	LILIEK SAVITRI SULISTYOWATI	3277026103720009	0811213377	Perempuan	Kawin	Islam	Istri	1972-03-21	Mengurus Rumah Tangga	Aktif	2026-03-11 08:07:55.665116	\N	\N
+1158	384	INTAN SHAFA SULISTYO AJI	3277026109010014	081224777921	Perempuan	Belum Kawin	Islam	Anak	2001-09-21	Karyawan Swasta	Aktif	2026-03-11 08:13:15.743079	\N	\N
+1160	384	FARRELL AL GHIFARI BINTANG SULISTYOAJI	3277022303060006	081327343420	Laki-laki	Belum Kawin	Islam	Anak	2006-03-23	Pelajar/Mahasiswa	Aktif	2026-03-11 08:14:50.28259	\N	\N
+1161	388	LANA DWI TIFANNY	3277024210910015	087780691041	Perempuan	Cerai Hidup	Islam	Kepala Keluarga	1991-10-02	Mengurus Rumah Tangga	Aktif	2026-03-11 08:17:54.481301	\N	\N
+1162	386	Bram Hariartono	3573012901880004	081212677949	Laki-laki	Kawin	Islam	Kepala Keluarga	1988-01-29	Karyawan Swasta	Aktif	2026-03-11 08:18:41.443242	\N	\N
+1163	388	FIRLANDO BACHRUN	3277023008110001	087780691041	Laki-laki	Belum Kawin	Islam	Anak	2011-08-30	Pelajar/Mahasiswa	Aktif	2026-03-11 08:19:18.153738	\N	\N
+1164	386	Ayudyapasca Praharasti	35730346028700005	087859800939	Perempuan	Kawin	Islam	Istri	1987-02-06	Mengurus Rumah Tangga	Aktif	2026-03-11 08:20:32.783452	\N	\N
+1165	389	RADEN MUHAMMAD ANDY YUDAPRATAMA	3273281410910001	081288948101	Laki-laki	Kawin	Islam	Kepala Keluarga	1991-10-14	Karyawan BUMN	Aktif	2026-03-11 08:22:17.564318	\N	\N
+1166	386	Cantiqa Mazaya Zahra	3573034509140002	\N	Perempuan	Belum Kawin	Islam	Anak	2014-09-05	Pelajar/Mahasiswa	Aktif	2026-03-11 08:23:08.862026	\N	\N
+1167	389	RESSI FANDANI	3277025609890010	082258620524	Perempuan	Kawin	Islam	Istri	1989-09-16	Karyawan BUMN	Aktif	2026-03-11 08:23:50.4327	\N	\N
+1168	389	RAFA SAKHA MAHENDRA	3277020606200003	082258620524	Laki-laki	Belum Kawin	Islam	Anak	2020-06-06	Pelajar/Mahasiswa	Aktif	2026-03-11 08:24:57.466583	\N	\N
+1169	389	RAZKA ZAYN DAVIANDRA	3277022803250001	082258620524	Laki-laki	Belum Kawin	Islam	Anak	2025-03-28	Belum/Tidak Bekerja	Aktif	2026-03-11 08:25:57.693835	\N	\N
+1171	390	NIENA KENCANA SARI	3277024309640015	081214781904	Perempuan	Kawin	Islam	Istri	1964-09-03	Mengurus Rumah Tangga	Aktif	2026-03-11 08:30:55.916332	\N	\N
+1172	391	Wahjudi Sugiharto	3277023003670008	\N	Laki-laki	Belum Kawin	Islam	Kepala Keluarga	1967-03-30	Buruh Harian Lepas	Aktif	2026-03-11 08:34:01.607717	\N	\N
+1177	392	RIO DERMAWAN SAPTARI	3277031302020002	081904362700	Laki-laki	Belum Kawin	Islam	Anak	2002-02-13	Belum/Tidak Bekerja	Aktif	2026-03-11 08:37:13.60983	\N	\N
+1159	387	Manan Suherman	3277020407940008	085648362547	Laki-laki	Cerai Hidup	Islam	Kepala Keluarga	1994-07-04	Buruh Harian Lepas	Aktif	2026-03-11 08:14:34.579596	/uploads/ktp/1773218065831-kkx8bryr0w9.pdf	\N
+1173	392	ANI MASNI	3277024202750042	081221154323	Perempuan	Cerai Hidup	Islam	Kepala Keluarga	1975-02-18	Mengurus Rumah Tangga	Aktif	2026-03-11 08:34:42.801712	\N	\N
+1174	391	Ika Lovita	3277026009690018	0817207758	Perempuan	Kawin	Islam	Istri	1969-09-20	Mengurus Rumah Tangga	Aktif	2026-03-11 08:35:38.692339	\N	\N
+1175	392	DIKI DERMAWAN SAPTARI	3277032809960017	087733172507	Laki-laki	Belum Kawin	Islam	Anak	1996-09-28	Belum/Tidak Bekerja	Aktif	2026-03-11 08:35:58.790608	\N	\N
+1176	391	Nafan Rasyad	3277021403010011	\N	Laki-laki	Belum Kawin	Islam	Anak	2001-03-14	Karyawan Swasta	Aktif	2026-03-11 08:36:31.323598	\N	\N
+1178	391	Izzanu Abduh 	3277021001030015	\N	Laki-laki	Belum Kawin	Islam	Anak	2003-01-10	Pelajar/Mahasiswa	Aktif	2026-03-11 08:37:30.910774	\N	\N
+1179	391	Altair Arrazi	3277023108040003	\N	Laki-laki	Belum Kawin	Islam	Anak	2004-08-31	Pelajar/Mahasiswa	Aktif	2026-03-11 08:38:28.476038	\N	\N
+1180	391	Askana Sakhi	3277025410120001	\N	Perempuan	Belum Kawin	Islam	Anak	2012-10-14	Pelajar/Mahasiswa	Aktif	2026-03-11 08:39:23.452506	\N	\N
+1181	394	ANGGI NUR SETIAWAN	3204322408890006	081221869142	Laki-laki	Kawin	Islam	Kepala Keluarga	1989-08-24	Karyawan Swasta	Aktif	2026-03-11 08:40:52.786747	\N	\N
+1182	394	SHELLA APRIANI	3277024404900007	081321106718	Perempuan	Belum Kawin	Islam	Istri	1990-04-04	Karyawan Swasta	Aktif	2026-03-11 08:43:01.828605	\N	\N
+1257	412	Nailah Khairunnisa Priatna	3277025004070002	\N	Perempuan	Belum Kawin	Islam	Anak	2007-04-10	Pelajar/Mahasiswa	Aktif	2026-03-12 08:20:40.759288	\N	SLTA/Sederajat
+1183	393	Taufik Andriana	3217160202980003	083866331251	Laki-laki	Kawin	Islam	Kepala Keluarga	1998-02-02	Buruh Harian Lepas	Aktif	2026-03-11 08:43:28.324834	/uploads/ktp/1773218608881-ulep7yafspo.pdf	\N
+1185	394	MAHESWARI AGISHA QUR'ANI	3277027108180004	\N	Perempuan	Belum Kawin	Islam	Anak	2018-08-31	Pelajar/Mahasiswa	Aktif	2026-03-11 08:44:28.750044	\N	\N
+1186	393	Rika Hana Kartika	3277024301020012	089638998794	Perempuan	Kawin	Islam	Istri	2002-01-03	Mengurus Rumah Tangga	Aktif	2026-03-11 08:46:55.445144	/uploads/ktp/1773218815991-jl691gfrvh.pdf	\N
+1187	396	YUDI SUNARTO WIDJAJA	32770215087690010	0818620688	Laki-laki	Kawin	Kristen	Kepala Keluarga	1969-08-15	Karyawan Swasta	Aktif	2026-03-11 08:49:09.44006	\N	\N
+1188	395	Mellyana Liliandriani	3277024707810034	0895381761313	Perempuan	Kawin	Islam	Istri	1981-07-07	Mengurus Rumah Tangga	Aktif	2026-03-11 08:49:59.383226	\N	\N
+1189	396	SUSANTI	3277025703720018	\N	Perempuan	Kawin	Kristen	Istri	1972-03-17	Mengurus Rumah Tangga	Aktif	2026-03-11 08:50:12.758889	\N	\N
+1190	396	JANE JOSEPHINE WIDJAJA	3277026006020019	\N	Perempuan	Belum Kawin	Kristen	Anak	2002-06-20	Pelajar/Mahasiswa	Aktif	2026-03-11 08:51:16.265481	\N	\N
+1191	396	CINDY CAROLINE WIDJAJA	3277026709050001	\N	Perempuan	Belum Kawin	Kristen	Anak	2005-09-27	Pelajar/Mahasiswa	Aktif	2026-03-11 08:52:25.062343	\N	\N
+1192	396	AUDREY ADELINE	3277026705170001	\N	Perempuan	Belum Kawin	Kristen	Anak	2017-05-27	Pelajar/Mahasiswa	Aktif	2026-03-11 08:53:36.982965	\N	\N
+1193	397	Diki	3205210704010006	08976342370	Laki-laki	Kawin	Islam	Kepala Keluarga	2001-04-07	Karyawan Swasta	Aktif	2026-03-11 08:55:11.062893	\N	\N
+1194	397	Elsa Ratnasari Hermawan	3277025306010008	\N	Perempuan	Kawin	Islam	Istri	2001-06-13	Karyawan Swasta	Aktif	2026-03-11 08:56:24.568693	\N	\N
+1195	397	Muhammad Albian Dikifallah	3277021907240003	\N	Laki-laki	Belum Kawin	Islam	Anak	2024-07-19	Belum/Tidak Bekerja	Aktif	2026-03-11 08:57:29.549877	\N	\N
+1196	400	Asep Dandi 	3273300401750002	082119726313	Laki-laki	Kawin	Islam	Kepala Keluarga	1975-01-04	Buruh Harian Lepas	Aktif	2026-03-11 09:01:39.265364	\N	\N
+1197	400	Neneng Meta Rofiqoh	3273304902780001	082119726313	Laki-laki	Kawin	Islam	Anak	1978-02-09	Mengurus Rumah Tangga	Aktif	2026-03-11 10:02:17.761203	\N	\N
+1198	400	Friska Mafeesa Putri Danita	3277026701080008	085122166674	Perempuan	Belum Kawin	Islam	Anak	2008-01-27	Pelajar/Mahasiswa	Aktif	2026-03-11 10:03:50.510325	\N	\N
+1199	400	Zivanna Florina Putri Danita	3273306608090002	\N	Perempuan	Belum Kawin	Islam	Anak	2009-08-26	Pelajar/Mahasiswa	Aktif	2026-03-11 10:05:12.241829	\N	\N
+1200	400	Valisha Syamra Azzalea Putri Danita	3277025612180003	\N	Perempuan	Belum Kawin	Islam	Anak	2018-12-16	Pelajar/Mahasiswa	Aktif	2026-03-11 10:06:43.03588	\N	\N
+1201	401	Rifky Nurmansyah	3217060603880012	082140000698	Laki-laki	Kawin	Islam	Kepala Keluarga	1988-03-06	Karyawan Swasta	Aktif	2026-03-11 12:46:24.2408	\N	\N
+1202	401	Margianti	1810034110930001	085764469720	Perempuan	Kawin	Islam	Istri	1993-10-01	Mengurus Rumah Tangga	Aktif	2026-03-11 12:47:46.07757	\N	\N
+1203	401	Miqdam Setia Putra 	3217100301050008	\N	Laki-laki	Belum Kawin	Islam	Famili Lain	2005-01-03	Pelajar/Mahasiswa	Aktif	2026-03-11 12:49:43.831454	\N	\N
+1204	401	Shakira Anjoulie June	3217104706060011	\N	Perempuan	Belum Kawin	Islam	Famili Lain	2006-06-07	Pelajar/Mahasiswa	Aktif	2026-03-11 12:51:01.109479	\N	\N
+1206	402	Agisza Savitri	3277026007950008	\N	Perempuan	Kawin	Islam	Istri	1995-07-20	Karyawan Swasta	Aktif	2026-03-11 12:56:08.055529	\N	\N
+1205	402	Vicky Zulfiqar	3277020108930010	08122041144	Laki-laki	Kawin	Islam	Kepala Keluarga	1993-08-01	Wiraswasta	Aktif	2026-03-11 12:54:44.0741	\N	\N
+1207	402	Zhifara Adreena Mecca	3277027101200003	\N	Perempuan	Belum Kawin	Islam	Anak	2020-01-31	Pelajar/Mahasiswa	Aktif	2026-03-11 12:57:37.457749	\N	\N
+1208	402	Mafaza Kahfi Malik	3277022801210002	\N	Laki-laki	Belum Kawin	Islam	Anak	2021-01-28	Belum/Tidak Bekerja	Aktif	2026-03-11 12:58:41.285789	\N	\N
+1209	403	Ismiradi Oktavianto	3277020310670001	\N	Laki-laki	Kawin	Islam	Kepala Keluarga	1967-10-30	Karyawan Swasta	Aktif	2026-03-11 13:01:23.748385	\N	\N
+1210	403	Ratu Yayu Suhayati	3277026001680009	08122041144	Perempuan	Kawin	Islam	Istri	1968-01-20	Mengurus Rumah Tangga	Aktif	2026-03-11 13:02:32.515995	\N	\N
+1211	403	Rhamzy Fadhil Fauzan	3277021703990013	\N	Laki-laki	Belum Kawin	Islam	Anak	1999-03-17	Karyawan Swasta	Aktif	2026-03-11 13:03:39.012661	\N	\N
+1184	395	Sandy Hermawan 	3277020303650021	081322265168	Laki-laki	Kawin	Islam	Kepala Keluarga	1965-03-03	Karyawan Swasta	Aktif	2026-03-11 08:43:45.847632	\N	\N
+1212	278	Deni Andriyana	3277020407790021	\N	Laki-laki	Kawin	Islam	Kepala Keluarga	1979-07-04	Pedagang	Aktif	2026-03-12 05:10:27.373089	\N	\N
+1213	278	Dewi Ratnasari Pebrianti	3205026002900003	\N	Perempuan	Kawin	Islam	Istri	1991-02-20	Mengurus Rumah Tangga	Aktif	2026-03-12 05:12:07.156932	\N	\N
+1214	278	Fachrul A'inul Yaqin	3277020210090005	\N	Laki-laki	Belum Kawin	Islam	Anak	2009-10-02	Pelajar/Mahasiswa	Aktif	2026-03-12 05:13:12.358341	\N	\N
+1215	278	Fatimah Shakila Khairina	3277024808180002	\N	Perempuan	Belum Kawin	Islam	Anak	2018-08-08	Pelajar/Mahasiswa	Aktif	2026-03-12 05:14:13.862216	\N	\N
+1216	404	DR. IR. Redy Pryambada S, MBA	3174051510570002	0818757880	Laki-laki	Kawin	Islam	Kepala Keluarga	1957-10-15	Arsitek	Aktif	2026-03-12 05:18:06.220521	\N	\N
+1217	404	Heni Nurhaeni	3277026805830029	081363181983	Perempuan	Kawin	Islam	Istri	1983-05-28	Mengurus Rumah Tangga	Aktif	2026-03-12 05:19:30.091622	\N	\N
+1218	404	Zahran Satria Nugraha	3277021206090005	081363162009	Laki-laki	Belum Kawin	Islam	Anak	2009-06-12	Pelajar/Mahasiswa	Aktif	2026-03-12 05:20:42.083419	\N	\N
+1219	404	Rezva Zahrany Nachelle	3277024704200004	\N	Perempuan	Belum Kawin	Islam	Anak	2020-04-07	Belum/Tidak Bekerja	Aktif	2026-03-12 05:21:36.539682	\N	\N
+1220	405	Wedha Nibbanadhika	3273222401850001	\N	Laki-laki	Kawin	Islam	Kepala Keluarga	1985-01-24	Wiraswasta	Aktif	2026-03-12 05:26:41.010964	\N	\N
+1221	405	Dianingtyas Mira Agustiani	3273026208850011	\N	Perempuan	Kawin	Islam	Istri	1985-08-22	Wiraswasta	Aktif	2026-03-12 05:27:54.841607	\N	\N
+1222	405	Azzahra Indira Nayyarawedha	3273026007110004	\N	Perempuan	Belum Kawin	Islam	Anak	2011-07-20	Pelajar/Mahasiswa	Aktif	2026-03-12 05:29:07.578932	\N	\N
+1223	405	Albimo Abdulmalik Sakhawedha	3273023005140011	\N	Laki-laki	Belum Kawin	Islam	Anak	2014-05-23	Pelajar/Mahasiswa	Aktif	2026-03-12 05:30:05.267868	\N	\N
+1224	405	Aleeya Nadhira Naishawedha	3277026602190004	\N	Perempuan	Belum Kawin	Islam	Anak	2019-02-26	Pelajar/Mahasiswa	Aktif	2026-03-12 05:31:23.273004	\N	\N
+1225	406	Dewi Lisda Susanti	3278015501830004	\N	Perempuan	Kawin	Islam	Kepala Keluarga	1983-01-15	Mengurus Rumah Tangga	Aktif	2026-03-12 05:37:19.878347	\N	\N
+1226	406	Yusup Mulyadi	3278012403060004	\N	Laki-laki	Belum Kawin	Islam	Anak	2006-03-24	Buruh Harian Lepas	Aktif	2026-03-12 05:38:08.928567	\N	\N
+1227	406	Hersan Risnandar	3278011409100003	\N	Laki-laki	Belum Kawin	Islam	Anak	2010-09-14	Pelajar/Mahasiswa	Aktif	2026-03-12 05:39:07.911331	\N	\N
+1228	406	Herdiani Putri	3277024412110001	\N	Perempuan	Belum Kawin	Islam	Anak	2011-12-04	Pelajar/Mahasiswa	Aktif	2026-03-12 05:39:53.231651	\N	\N
+1229	406	Marsella Anjani	3277024803160006	\N	Perempuan	Belum Kawin	Islam	Anak	2016-03-08	Pelajar/Mahasiswa	Aktif	2026-03-12 05:40:45.465775	\N	\N
+1230	406	Niken Fuji Jayanti	3277026608190001	\N	Perempuan	Belum Kawin	Islam	Anak	2019-08-26	Pelajar/Mahasiswa	Aktif	2026-03-12 05:41:37.930442	\N	\N
+1231	407	Jimun	3277020808730035	085624071943	Laki-laki	Kawin	Islam	Kepala Keluarga	1973-08-08	Karyawan Swasta	Aktif	2026-03-12 05:44:06.974436	\N	\N
+1232	407	Jumilah	3277024302780015	0895346465589	Perempuan	Kawin	Islam	Istri	1978-02-03	Mengurus Rumah Tangga	Aktif	2026-03-12 05:45:11.195167	\N	\N
+1233	407	Panji Pratama	3277021208010024	081395282598	Laki-laki	Belum Kawin	Islam	Anak	2001-08-12	Pelajar/Mahasiswa	Aktif	2026-03-12 05:46:21.633019	\N	\N
+1234	407	Khayra Fayyola Nadhifa	3277024605160002	\N	Perempuan	Belum Kawin	Islam	Anak	2016-05-06	Pelajar/Mahasiswa	Aktif	2026-03-12 05:47:35.04087	\N	\N
+1235	407	Djoko Sugiri	3520140208990002	\N	Laki-laki	Belum Kawin	Islam	Famili Lain	1999-08-02	Belum/Tidak Bekerja	Aktif	2026-03-12 05:48:48.799658	\N	\N
+1236	409	RIAN NURDIANA	3277021405900005	085863500773	Laki-laki	Cerai Mati	Islam	Kepala Keluarga	1990-05-14	Karyawan Swasta	Aktif	2026-03-12 07:58:03.290616	\N	\N
+1237	409	KHALIL ZHAFRAN EL GHIFARI	3277022309160002	\N	Laki-laki	Belum Kawin	Islam	Anak	2016-09-23	Pelajar/Mahasiswa	Aktif	2026-03-12 07:59:11.144217	\N	\N
+1238	408	Muhamad Arbi Sulasmansyah	3207112505930003	085353294990	Laki-laki	Kawin	Islam	Kepala Keluarga	1993-05-25	Karyawan Swasta	Aktif	2026-03-12 08:00:17.529695	\N	Diploma IV/Strata I
+1239	409	KHALIF GHIBRAN ALFARIZKY	3277023011170006	\N	Laki-laki	Belum Kawin	Islam	Anak	\N	Pelajar/Mahasiswa	Aktif	2026-03-12 08:00:40.335038	\N	Tidak/Belum Tamat SD
+1240	408	Ranita Intan Sari	3277025004940023	085156044957	Perempuan	Kawin	Islam	Istri	1994-03-19	Mengurus Rumah Tangga	Aktif	2026-03-12 08:03:09.530418	\N	Akademi/Diploma III
+1241	409	ALMAIRA BAHIRA NURDIANA	3277024208200004	\N	Perempuan	Belum Kawin	Islam	Anak	2020-08-02	Pelajar/Mahasiswa	Aktif	2026-03-12 08:03:29.578122	\N	Tidak/Belum Tamat SD
+1242	409	KHABIB AMMAR ZAYN	3277020706240002	\N	Laki-laki	Belum Kawin	Islam	Anak	2024-06-07	Belum/Tidak Bekerja	Aktif	2026-03-12 08:04:16.645019	\N	Belum Sekolah
+1258	412	Khumaira Hanifah Priatna	3277026207100005	\N	Perempuan	Belum Kawin	Islam	Anak	2010-07-22	Pelajar/Mahasiswa	Aktif	2026-03-12 08:22:19.261839	\N	SLTP/Sederajat
+1260	410	ERIKA NUR AGUSTINA RAHMAN	3277024508960005	083818589580	Perempuan	Belum Kawin	Islam	Anak	1996-08-05	Karyawan Swasta	Aktif	2026-03-12 08:26:18.052434	\N	Diploma IV/Strata I
+1246	408	Salman El Ghazi Alfarizqi	3277021510230002	\N	Laki-laki	Belum Kawin	Islam	Anak	2023-10-15	Belum/Tidak Bekerja	Aktif	2026-03-12 08:08:01.95508	\N	Belum Sekolah
+1247	410	ASEP MUNANDAR	3277022901710015	08226872815	Laki-laki	Kawin	Islam	Kepala Keluarga	1971-10-29	Buruh Harian Lepas	Aktif	2026-03-12 08:08:31.963306	\N	SLTA/Sederajat
+1243	408	Maryam Azkiya Fathunnisa	3277024411200003	\N	Perempuan	Belum Kawin	Islam	Anak	2020-11-04	Belum/Tidak Bekerja	Aktif	2026-03-12 08:04:27.632298	\N	Belum Sekolah
+1261	410	RIFQII RAMADAN	3277020210040003	085173130210	Laki-laki	Belum Kawin	Islam	Anak	2004-10-02	Pelajar/Mahasiswa	Aktif	2026-03-12 08:27:47.782319	\N	SLTA/Sederajat
+1249	410	KOMARIAH	3277025806660010	083878185595	Perempuan	Kawin	Islam	Istri	1966-06-18	Mengurus Rumah Tangga	Aktif	2026-03-12 08:10:35.255231	\N	Diploma IV/Strata I
+1250	411	RANDI KURNIAWAN	3277021712860010	082118014543	Laki-laki	Kawin	Islam	Kepala Keluarga	1986-12-17	Karyawan Swasta	Aktif	2026-03-12 08:15:01.413937	\N	SLTA/Sederajat
+1251	411	NINA RIESMAYANTY	3207294402930001	081220901930	Perempuan	Kawin	Islam	Istri	1993-02-04	Mengurus Rumah Tangga	Aktif	2026-03-12 08:16:10.481521	\N	SLTA/Sederajat
+1262	413	Junaedi	3277021707820014	083833705107	Laki-laki	Kawin	Islam	Kepala Keluarga	1982-07-17	Buruh Harian Lepas	Aktif	2026-03-12 08:27:54.580823	\N	Tidak/Belum Tamat SD
+1263	413	Lastri	3277024708830031	\N	Perempuan	Belum Kawin	Islam	Istri	1983-11-07	Mengurus Rumah Tangga	Aktif	2026-03-12 08:29:14.027385	\N	SLTP/Sederajat
+1264	413	Muhamad Rafi Ramdani	3277021302080004	\N	Laki-laki	Belum Kawin	Islam	Anak	2008-02-13	Pelajar/Mahasiswa	Aktif	2026-03-12 08:30:39.671537	\N	SLTA/Sederajat
+1265	413	Muhammad Rafka Ramdani	3277021611180006	\N	Laki-laki	Belum Kawin	Islam	Anak	2018-11-16	Pelajar/Mahasiswa	Aktif	2026-03-12 08:32:11.838379	\N	SLTP/Sederajat
+1266	414	Sofian	3277020301890001	087739719075	Laki-laki	Kawin	Islam	Kepala Keluarga	1989-01-03	Karyawan Swasta	Aktif	2026-03-12 08:38:58.206423	\N	SLTA/Sederajat
+1267	414	Wida Yulia Ningsih	3217104809920009	081221530683	Perempuan	Kawin	Islam	Istri	1992-10-08	Mengurus Rumah Tangga	Aktif	2026-03-12 08:40:24.999515	\N	SLTA/Sederajat
+1268	414	Muhamad Hamzah Adhiyastha Anfield	3277022808160004	\N	Laki-laki	Belum Kawin	Islam	Anak	2016-08-28	Pensiunan	Aktif	2026-03-12 08:41:31.520735	\N	Tamat SD/Sederajat
+1269	414	Khalid Raffaza Gian Anfield	3277022910200003	\N	Laki-laki	Belum Kawin	Islam	Anak	2020-10-29	Pensiunan	Aktif	2026-03-12 08:42:47.367313	\N	Tidak/Belum Tamat SD
+1270	415	Alis Nuraeni	3277025708690017	088223650365	Perempuan	Cerai Mati	Islam	Istri	1969-08-17	Mengurus Rumah Tangga	Aktif	2026-03-12 08:47:19.299401	\N	SLTP/Sederajat
+1271	415	Yogi Ginanjar	3276020708910010	0895702952449	Laki-laki	Belum Kawin	Islam	Anak	1991-08-07	Buruh Tani/Perkebunan	Aktif	2026-03-12 08:48:56.958	\N	Diploma I/II
+1272	415	Yolla Fauziah	3277026910020001	\N	Laki-laki	Belum Kawin	Islam	Anak	2002-10-29	Belum/Tidak Bekerja	Aktif	2026-03-12 08:50:26.875096	\N	SLTA/Sederajat
+1273	417	Meka Wahyudi	3301061502860011	\N	Laki-laki	Kawin	Islam	Kepala Keluarga	1986-02-15	Perdagangan	Aktif	2026-03-12 08:54:47.41447	\N	Tamat SD/Sederajat
+1274	417	Sartini	3301066601860001	\N	Perempuan	Kawin	Islam	Istri	1988-06-13	Ibu Rumah Tangga	Aktif	2026-03-12 08:56:20.740769	\N	SLTP/Sederajat
+1275	417	Lisna Eka Saputri	3301064103090002	\N	Perempuan	Belum Kawin	Islam	Anak	2009-03-01	Pelajar/Mahasiswa	Aktif	2026-03-12 08:58:13.429869	\N	SLTA/Sederajat
+1276	417	Azril Syafiq Alfarizki	3277020203180003	\N	Laki-laki	Belum Kawin	Islam	Anak	2018-03-02	Pelajar/Mahasiswa	Aktif	2026-03-12 08:59:13.614805	\N	SLTP/Sederajat
+1086	362	SADERAKHI DAELI	3277022809810013	081320011766	Laki-laki	Kawin	Kristen	Kepala Keluarga	1981-09-28	Karyawan Swasta	Aktif	2026-03-10 08:00:25.875127	\N	\N
+10	5	Rendi Riswara	3217060608960013	083817981922	Laki-laki	Kawin	Islam	Kepala Keluarga	1996-08-06	Jasa	Aktif	2026-03-08 17:47:13.290755	/uploads/ktp/1773036672676-y7s9cshgm9.jpg	SLTA/Sederajat
+14	5	Rizky Syahrul Mubarok	3277021705190004	\N	Laki-laki	Belum Kawin	Islam	Anak	2019-05-17	Pelajar/Mahasiswa	Aktif	2026-03-08 17:47:13.302025	\N	Tidak/Belum Tamat SD
+162	46	Warman	3277021707710027	085724494507	Laki-laki	Kawin	Islam	Kepala Keluarga	1971-07-17	Wiraswasta	Aktif	2026-03-08 17:47:13.869901	/uploads/ktp/1773265183617-fvv45xosf0w.jpeg	SLTA/Sederajat
+164	46	Insani Nurul Qolbi	3277025601040003	085860068395	Perempuan	Belum Kawin	Islam	Anak	2004-01-16	Pelajar/Mahasiswa	Aktif	2026-03-08 17:47:13.877789	/uploads/ktp/1773264904841-20e2yos22j.jpeg	SLTA/Sederajat
+1277	418	Endan Dadan 	3277020810750018	\N	Laki-laki	Kawin	Islam	Kepala Keluarga	1975-10-09	Buruh Harian Lepas	Aktif	2026-03-13 07:15:40.097643	\N	SLTP/Sederajat
+1278	419	TANTAN RUSMANA	3277011107770036	08578478084	Laki-laki	Kawin	Islam	Kepala Keluarga	1977-07-11	Wiraswasta	Aktif	2026-03-13 07:17:12.990386	\N	SLTA/Sederajat
+1279	418	Yani Nuryani	3277026701820010	\N	Perempuan	Kawin	Islam	Istri	1982-01-27	Mengurus Rumah Tangga	Aktif	2026-03-13 07:17:14.808403	\N	SLTP/Sederajat
+1280	419	TITA LAELA SARI	3277024903770009	08996931651	Perempuan	Kawin	Islam	Istri	1977-03-09	Mengurus Rumah Tangga	Aktif	2026-03-13 07:18:56.262177	\N	SLTA/Sederajat
+1281	418	Arya Chandra Maulana	3277020104070001	\N	Laki-laki	Belum Kawin	Islam	Anak	2007-04-01	Pelajar/Mahasiswa	Aktif	2026-03-13 07:19:34.928201	\N	SLTA/Sederajat
+1282	418	Andrean Habibie Alrasid	3277022411100002	081993422144	Laki-laki	Belum Kawin	Islam	Anak	2010-10-24	Pelajar/Mahasiswa	Aktif	2026-03-13 07:21:20.03893	\N	SLTP/Sederajat
+1283	418	Attala Haikal Ramdhani	3277020605210005	\N	Laki-laki	Belum Kawin	Islam	Anak	2021-05-06	Belum/Tidak Bekerja	Aktif	2026-03-13 07:22:29.018228	\N	Tidak/Belum Tamat SD
+1284	419	FAUZIYAH NUR HASNA	3277026507010007	08986433664	Perempuan	Belum Kawin	Islam	Anak	2001-07-24	Lainnya	Aktif	2026-03-13 07:23:17.31698	\N	SLTA/Sederajat
+1285	419	FAUZAN DWIANSYAH	3277020406080002	083191354720	Laki-laki	Belum Kawin	Islam	Anak	2008-06-04	Pelajar/Mahasiswa	Aktif	2026-03-13 07:24:29.331557	\N	SLTA/Sederajat
+1286	420	Hendra Darmawan	3273071310940010	087874521864	Laki-laki	Kawin	Islam	Kepala Keluarga	1994-10-13	Buruh Harian Lepas	Aktif	2026-03-13 07:25:50.562397	\N	SLTA/Sederajat
+1287	420	Jihan Fitrilia	3277025304010001	08814595237	Perempuan	Kawin	Islam	Istri	2001-04-13	Ibu Rumah Tangga	Aktif	2026-03-13 07:27:04.650495	\N	SLTA/Sederajat
+1288	421	ADJA KAMALUDIN	3277021407530003	081394129505	Laki-laki	Kawin	Islam	Kepala Keluarga	1953-07-14	Wiraswasta	Aktif	2026-03-13 07:27:54.920853	\N	SLTA/Sederajat
+1289	420	Alana Faizah Salwa	3277026506240002	\N	Laki-laki	Belum Kawin	Islam	Anak	2024-06-25	Belum/Tidak Bekerja	Aktif	2026-03-13 07:27:56.773917	\N	Belum Sekolah
+1290	421	SITI SADIAH	3277026702610006	081395393861	Perempuan	Kawin	Islam	Istri	1961-02-27	Pensiunan	Aktif	2026-03-13 07:29:26.07052	\N	Diploma IV/Strata I
+1291	421	EKI AHMAD SATARI	3277022610960006	087823802927	Laki-laki	Belum Kawin	Islam	Anak	1996-10-26	Guru	Aktif	2026-03-13 07:30:38.506986	\N	Diploma IV/Strata I
+1292	422	Yeni Suminar	3277025202750016	085624185642	Perempuan	Cerai Hidup	Islam	Kepala Keluarga	1975-02-12	Mengurus Rumah Tangga	Aktif	2026-03-13 07:31:44.400936	\N	SLTP/Sederajat
+1294	423	ASEP SUTISNA	3277020101590058	082121247372	Laki-laki	Kawin	Islam	Kepala Keluarga	1959-01-01	Buruh Harian Lepas	Aktif	2026-03-13 07:34:01.05763	\N	SLTP/Sederajat
+1293	422	Muhamad Junsar	3277021306030006	\N	Laki-laki	Belum Kawin	Islam	Anak	2003-06-13	Belum/Tidak Bekerja	Aktif	2026-03-13 07:33:58.36217	\N	SLTP/Sederajat
+1295	423	SUTINAH	3277026404660013	081312832724	Perempuan	Kawin	Islam	Istri	1966-04-24	Mengurus Rumah Tangga	Aktif	2026-03-13 07:35:30.069168	\N	SLTP/Sederajat
+1296	422	Nendi Iskandar	3277021805090005	\N	Laki-laki	Belum Kawin	Islam	Anak	2009-05-18	Pelajar/Mahasiswa	Aktif	2026-03-13 07:36:20.375626	\N	Tidak/Belum Tamat SD
+1297	423	WINA HERLIANA	3277024601960015	089505059638	Perempuan	Belum Kawin	Islam	Anak	1996-01-06	Guru	Aktif	2026-03-13 07:36:57.320954	\N	Diploma IV/Strata I
+1298	424	YONNAFRI DAGUCI	3277020812630003	\N	Laki-laki	Kawin	Islam	Kepala Keluarga	1963-12-08	Wiraswasta	Aktif	2026-03-13 07:43:13.535057	\N	SLTA/Sederajat
+1299	424	NURASIAH	3277026604700016	085321863892	Perempuan	Kawin	Islam	Istri	1970-04-15	Ibu Rumah Tangga	Aktif	2026-03-13 07:44:33.240189	\N	SLTP/Sederajat
+1300	424	FAISAL MURFID D	3277021306480015	\N	Laki-laki	Belum Kawin	Islam	Anak	1998-06-13	Belum/Tidak Bekerja	Aktif	2026-03-13 07:45:42.537117	\N	SLTA/Sederajat
+1301	425	Eli Parlina	3277026212780025	082182450132	Perempuan	Cerai Hidup	Islam	Kepala Keluarga	1978-12-22	Belum/Tidak Bekerja	Aktif	2026-03-13 07:48:34.941171	\N	SLTA/Sederajat
+1302	425	Adi Arman Saputra	3277022601030003	\N	Laki-laki	Belum Kawin	Islam	Anak	2003-01-26	Buruh Harian Lepas	Aktif	2026-03-13 07:50:36.44923	\N	SLTA/Sederajat
+1303	425	Firly Aiman	3277022406050011	\N	Laki-laki	Belum Kawin	Islam	Anak	2005-06-24	Pelajar/Mahasiswa	Aktif	2026-03-13 07:51:38.468652	\N	SLTA/Sederajat
+1304	426	NENENG  IRA HARTATI	3277035602640014	081931341133	Perempuan	Belum Kawin	Islam	Kepala Keluarga	1984-02-16	Mengurus Rumah Tangga	Aktif	2026-03-13 07:53:08.844211	\N	SLTA/Sederajat
+1305	426	INTAN NAILA LESTARI	3277035307050001	\N	Perempuan	Belum Kawin	Islam	Anak	2005-07-12	Pelajar/Mahasiswa	Aktif	2026-03-13 07:54:13.228308	\N	SLTA/Sederajat
+1306	427	Yadi Suryadi	3277011205740030	083820755809	Laki-laki	Belum Kawin	Islam	Kepala Keluarga	1974-05-12	Karyawan Honorer	Aktif	2026-03-13 07:54:46.031026	\N	Akademi/Diploma III
+1307	426	PUTRI ZAHRA OKTAVIANI	3277036410110004	\N	Perempuan	Belum Kawin	Islam	Anak	2011-10-24	Pelajar/Mahasiswa	Aktif	2026-03-13 07:55:34.492919	\N	Tamat SD/Sederajat
+1308	426	MUHAMMAD RAYYAN MARINO PUTRA	3277022809230001	\N	Laki-laki	Belum Kawin	Islam	Anak	2023-09-28	Belum/Tidak Bekerja	Aktif	2026-03-13 07:56:42.447964	\N	Belum Sekolah
+1309	428	Rudi Gunawan Nur	3217083108840002	082217575655	Laki-laki	Kawin	Islam	Kepala Keluarga	1984-08-31	Karyawan Swasta	Aktif	2026-03-13 07:59:05.046211	\N	Akademi/Diploma III
+1310	428	Nurwita Widyastuti	3277015106880003	0895707699699	Perempuan	Kawin	Islam	Istri	1988-06-13	Mengurus Rumah Tangga	Aktif	2026-03-13 08:00:15.618905	\N	SLTA/Sederajat
+1311	429	HERTA SIMANJUNTAK	3277025503540002	085220281364	Perempuan	Cerai Mati	Kristen	Kepala Keluarga	1954-03-15	Mengurus Rumah Tangga	Aktif	2026-03-13 08:01:16.605603	\N	SLTA/Sederajat
+1312	428	Arsyila Romeesa Namuri	3276075712160002	\N	Perempuan	Belum Kawin	Islam	Anak	2016-12-17	Belum/Tidak Bekerja	Aktif	2026-03-13 08:01:38.10265	\N	Belum Sekolah
+1313	428	Aneira Nur Lathifa	3277025607230003	\N	Perempuan	Belum Kawin	Islam	Anak	2023-07-16	Mengurus Rumah Tangga	Aktif	2026-03-13 08:02:27.232577	\N	Belum Sekolah
+1314	429	JUNITA ROSIDA	3277026706820032	\N	Perempuan	Belum Kawin	Kristen	Anak	1982-06-27	Buruh Harian Lepas	Aktif	2026-03-13 08:02:30.760381	\N	Diploma IV/Strata I
+1315	429	MEIKHEL ANDRE BATARA	3277021705920005	\N	Laki-laki	Belum Kawin	Kristen	Anak	1992-05-17	Buruh Harian Lepas	Aktif	2026-03-13 08:03:48.396658	\N	Diploma IV/Strata I
+1319	431	Naufal Muhammad Iqbal	3277021606980019	\N	Laki-laki	Belum Kawin	Islam	Anak	1998-06-16	Karyawan Swasta	Aktif	2026-03-13 08:10:36.012532	\N	Diploma IV/Strata I
+1320	431	Iqlima Rahma Khairunnisa	3277024904050003	\N	Perempuan	Belum Kawin	Islam	Anak	2005-04-09	Pelajar/Mahasiswa	Aktif	2026-03-13 08:11:48.771996	\N	SLTA/Sederajat
+1316	431	Suwito	3277020706630016	\N	Laki-laki	Cerai Hidup	Islam	Kepala Keluarga	1963-06-07	Pensiunan	Aktif	2026-03-13 08:07:06.803635	\N	Diploma IV/Strata I
+1318	431	Ina Maemunah Hartiningsih	3277026705690017	\N	Perempuan	Kawin	Islam	Istri	1969-05-27	Pensiunan	Aktif	2026-03-13 08:09:00.780237	\N	Diploma IV/Strata I
+1323	434	Dudy Hartoyo	3277020410730010	085603238404	Laki-laki	Kawin	Islam	Kepala Keluarga	1973-10-04	Pelaut	Aktif	2026-03-13 08:16:09.336975	\N	Diploma I/II
+1325	434	Siti Patimah	3205115210960002	085703226321	Perempuan	Kawin	Islam	Istri	1996-10-12	Ibu Rumah Tangga	Aktif	2026-03-13 08:17:24.9136	\N	SLTP/Sederajat
+1326	434	Siti Nailah Gavaputri Hartoyo	3277026510190003	\N	Perempuan	Belum Kawin	Islam	Anak	2019-10-25	Belum/Tidak Bekerja	Aktif	2026-03-13 08:19:03.617785	\N	Tidak/Belum Tamat SD
+1327	434	Siti Nakhla Assyofa Hartoyo	3277026209230003	\N	Laki-laki	Belum Kawin	Islam	Anak	2023-09-22	Belum/Tidak Bekerja	Aktif	2026-03-13 08:19:50.043579	\N	Belum Sekolah
+1328	435	Ridwan Tirtana	3277021204890017	089505416655	Laki-laki	Cerai Hidup	Islam	Kepala Keluarga	1989-04-12	Karyawan Swasta	Aktif	2026-03-13 08:22:59.051437	\N	SLTA/Sederajat
+1329	436	KARMIATI	3277025301530001	\N	Perempuan	Cerai Mati	Islam	Kepala Keluarga	1953-01-13	Ibu Rumah Tangga	Aktif	2026-03-13 08:24:13.110685	\N	SLTA/Sederajat
+1330	437	Roni Hambali	3277031411790002	081320628059	Laki-laki	Cerai Hidup	Islam	Kepala Keluarga	1979-11-14	Karyawan Swasta	Aktif	2026-03-13 08:26:33.989766	\N	SLTA/Sederajat
+1331	438	Rosid Kurnia	3277020806810012	081211626523	Laki-laki	Belum Kawin	Islam	Kepala Keluarga	1981-06-08	Buruh Harian Lepas	Aktif	2026-03-13 08:27:18.874003	/uploads/ktp/1773390439209-0low6jze603.pdf	Tamat SD/Sederajat
+1332	433	JAJANG SUHERMAN	3277022512680019	0895338326492	Laki-laki	Kawin	Islam	Kepala Keluarga	1968-12-25	Karyawan Swasta	Aktif	2026-03-13 08:28:02.165251	\N	SLTA/Sederajat
+1333	440	Tatang Suhendar	3277020104730001	089527111865	Laki-laki	Kawin	Islam	Kepala Keluarga	1973-04-01	Buruh Harian Lepas	Aktif	2026-03-13 08:29:27.988888	\N	SLTP/Sederajat
+1334	433	ELIS ROHMAWATI	3277024809770001	0895338326494	Perempuan	Kawin	Islam	Istri	1977-09-08	Mengurus Rumah Tangga	Aktif	2026-03-13 08:29:51.506283	\N	SLTP/Sederajat
+1335	433	FAJAR JAIS HERMANDA	3277021405980017	085704222879	Laki-laki	Belum Kawin	Islam	Anak	1998-05-14	Kepolisian RI (POLRI)	Aktif	2026-03-13 08:31:02.980304	\N	SLTP/Sederajat
+1336	440	Evi  Soviantini	3277024204860001	\N	Perempuan	Kawin	Islam	Anak	1986-04-02	Mengurus Rumah Tangga	Aktif	2026-03-13 08:31:09.628712	\N	SLTA/Sederajat
+1337	440	Fardan Sovian Yusuf	32770227050900001	\N	Laki-laki	Belum Kawin	Islam	Anak	2009-05-27	Pelajar/Mahasiswa	Aktif	2026-03-13 08:32:27.985249	\N	Tamat SD/Sederajat
+1338	433	FAISAL AZHAR HERMANDA	3277020312090001	0895338326502	Laki-laki	Belum Kawin	Islam	Anak	2009-12-03	Pelajar/Mahasiswa	Aktif	2026-03-13 08:32:41.655298	\N	SLTP/Sederajat
+1339	440	Khaira Putri Khalifah	3277026211160002	\N	Laki-laki	Belum Kawin	Islam	Anak	2016-11-22	Pelajar/Mahasiswa	Aktif	2026-03-13 08:33:47.821186	\N	Tidak/Belum Tamat SD
+1341	441	LILIS NURLIANI	3277024702700017	085134893170	Perempuan	Kawin	Islam	Istri	1970-02-07	Ibu Rumah Tangga	Aktif	2026-03-13 08:36:11.452718	\N	SLTA/Sederajat
+1342	441	RAFI NURDIANSYAH	3277021007050002	0895708256555	Laki-laki	Belum Kawin	Islam	Anak	2005-07-10	Pelajar/Mahasiswa	Aktif	2026-03-13 08:37:47.557989	\N	SLTA/Sederajat
+1343	443	Yadi Mulyadi	3277021503770022	089763716647	Laki-laki	Belum Kawin	Islam	Anak	1977-03-15	Buruh Harian Lepas	Aktif	2026-03-13 08:39:26.988816	\N	Tamat SD/Sederajat
+1344	443	Entin Supartini	3277025105540001	\N	Perempuan	Cerai Mati	Islam	Kepala Keluarga	1954-05-11	Mengurus Rumah Tangga	Meninggal	2026-03-13 08:40:32.962854	\N	Tamat SD/Sederajat
+1345	443	Dani Ruswandi	3277021605880009	08522860689	Laki-laki	Belum Kawin	Islam	Anak	1988-05-16	Buruh Harian Lepas	Aktif	2026-03-13 08:41:37.077449	\N	SLTP/Sederajat
+1346	444	Yuyun ayulianti	3277026007900001	089673320044	Perempuan	Cerai Mati	Islam	Kepala Keluarga	1988-07-27	Mengurus Rumah Tangga	Aktif	2026-03-13 08:44:39.48956	\N	SLTA/Sederajat
+1347	445	ANI MULYANI	3277026001750001	0895378241454	Perempuan	Cerai Mati	Islam	Kepala Keluarga	1975-05-07	Ibu Rumah Tangga	Aktif	2026-03-13 08:48:00.8827	\N	Tamat SD/Sederajat
+1348	445	IRHAS MALIK KUSUMAH	3277020502000009	089517318513	Laki-laki	Belum Kawin	Islam	Anak	2020-02-05	Belum/Tidak Bekerja	Aktif	2026-03-13 08:49:08.299501	\N	SLTA/Sederajat
+1349	445	ALPI HADIANSAH	3277020704020013	0895378241426	Laki-laki	Belum Kawin	Islam	Anak	2002-04-07	\N	Aktif	2026-03-13 08:50:57.249747	\N	SLTA/Sederajat
+1350	445	AMAR IJRA WIGUNA	3277020412060006	089529435913	Laki-laki	Belum Kawin	Islam	Anak	2006-12-04	\N	Aktif	2026-03-13 08:52:02.410992	\N	SLTA/Sederajat
+1351	445	RAIHAN AHMAD HANAPI	3277022509140004	\N	Laki-laki	Belum Kawin	Islam	Anak	2014-09-25	Pelajar/Mahasiswa	Aktif	2026-03-13 08:53:02.05088	\N	Tidak/Belum Tamat SD
+1352	444	Aldhila Irgi Pratiwi	3277024605110002	\N	Perempuan	Belum Kawin	Islam	Anak	2011-05-06	Pelajar/Mahasiswa	Aktif	2026-03-13 08:58:44.21948	\N	SLTP/Sederajat
+1353	444	Nuri Oktaviani Putri	3277026310130002	\N	Perempuan	Belum Kawin	Islam	Anak	2013-10-23	Pelajar/Mahasiswa	Aktif	2026-03-13 09:00:12.376768	\N	Tidak/Belum Tamat SD
+1354	444	Muhammad Raid Syazani	32770210052200003	\N	Laki-laki	Belum Kawin	Islam	Anak	2022-05-10	Belum/Tidak Bekerja	Aktif	2026-03-13 09:01:17.199405	\N	Belum Sekolah
+1340	441	DIDIN ROSIDIN	3277021106750024	3277021106750024	Laki-laki	Kawin	Islam	Kepala Keluarga	1976-06-11	Karyawan Swasta	Aktif	2026-03-13 08:34:58.648833	\N	SLTP/Sederajat
+765	240	Muchammad Hudri	3277021807750021	081905279136	Laki-laki	Kawin	Islam	Kepala Keluarga	1975-07-18	Karyawan Swasta	Aktif	2026-03-08 17:47:15.987815	\N	\N
+583	185	Enung Eni	3277027001610006	088224509802	Perempuan	Kawin	Islam	Istri	1961-01-30	Pensiunan	Aktif	2026-03-08 17:47:15.344643	\N	SLTA/Sederajat
+1023	344	CATHLEEN ALICE	3277024512150004	081717170911	Perempuan	Belum Kawin	Katolik	Anak	2015-12-05	Pelajar/Mahasiswa	Aktif	2026-03-09 08:33:14.864598	\N	Tidak/Belum Tamat SD
 \.
 
 
@@ -2559,7 +3013,6 @@ COPY public.warga (id, kk_id, nama_lengkap, nik, nomor_whatsapp, jenis_kelamin, 
 --
 
 COPY public.warga_singgah (id, pemilik_kost_id, nama_lengkap, nik, nomor_whatsapp, pekerjaan, tanggal_mulai_kontrak, tanggal_habis_kontrak, jumlah_penghuni, keperluan_tinggal, status, created_at) FROM stdin;
-1	1	Raden	3277020603030018	081321133823	Peternak	2026-03-20	2027-03-20	1	Lainnya	aktif	2026-03-15 22:23:32.141308
 \.
 
 
@@ -2567,14 +3020,14 @@ COPY public.warga_singgah (id, pemilik_kost_id, nama_lengkap, nik, nomor_whatsap
 -- Name: admin_user_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.admin_user_id_seq', 5, true);
+SELECT pg_catalog.setval('public.admin_user_id_seq', 37, true);
 
 
 --
 -- Name: donasi_campaign_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.donasi_campaign_id_seq', 2, true);
+SELECT pg_catalog.setval('public.donasi_campaign_id_seq', 4, true);
 
 
 --
@@ -2588,35 +3041,35 @@ SELECT pg_catalog.setval('public.donasi_id_seq', 1, true);
 -- Name: izin_tetangga_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.izin_tetangga_id_seq', 4, true);
+SELECT pg_catalog.setval('public.izin_tetangga_id_seq', 1, false);
 
 
 --
 -- Name: kartu_keluarga_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.kartu_keluarga_id_seq', 292, true);
+SELECT pg_catalog.setval('public.kartu_keluarga_id_seq', 445, true);
 
 
 --
 -- Name: karyawan_usaha_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.karyawan_usaha_id_seq', 1, true);
+SELECT pg_catalog.setval('public.karyawan_usaha_id_seq', 1, false);
 
 
 --
 -- Name: kas_rw_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.kas_rw_id_seq', 1, true);
+SELECT pg_catalog.setval('public.kas_rw_id_seq', 8, true);
 
 
 --
 -- Name: laporan_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.laporan_id_seq', 1, true);
+SELECT pg_catalog.setval('public.laporan_id_seq', 4, true);
 
 
 --
@@ -2630,7 +3083,7 @@ SELECT pg_catalog.setval('public.monthly_snapshot_id_seq', 1, true);
 -- Name: pemilik_kost_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.pemilik_kost_id_seq', 1, true);
+SELECT pg_catalog.setval('public.pemilik_kost_id_seq', 1, false);
 
 
 --
@@ -2644,14 +3097,14 @@ SELECT pg_catalog.setval('public.pengajuan_bansos_id_seq', 1, true);
 -- Name: profile_edit_request_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.profile_edit_request_id_seq', 3, true);
+SELECT pg_catalog.setval('public.profile_edit_request_id_seq', 10, true);
 
 
 --
 -- Name: riwayat_kontrak_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.riwayat_kontrak_id_seq', 1, true);
+SELECT pg_catalog.setval('public.riwayat_kontrak_id_seq', 1, false);
 
 
 --
@@ -2672,14 +3125,14 @@ SELECT pg_catalog.setval('public.rt_data_id_seq', 7, true);
 -- Name: surat_rw_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.surat_rw_id_seq', 2, true);
+SELECT pg_catalog.setval('public.surat_rw_id_seq', 3, true);
 
 
 --
 -- Name: surat_warga_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.surat_warga_id_seq', 8, true);
+SELECT pg_catalog.setval('public.surat_warga_id_seq', 42, true);
 
 
 --
@@ -2693,28 +3146,28 @@ SELECT pg_catalog.setval('public.survey_usaha_id_seq', 1, false);
 -- Name: usaha_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.usaha_id_seq', 1, true);
+SELECT pg_catalog.setval('public.usaha_id_seq', 1, false);
 
 
 --
 -- Name: wa_blast_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.wa_blast_id_seq', 3, true);
+SELECT pg_catalog.setval('public.wa_blast_id_seq', 10, true);
 
 
 --
 -- Name: warga_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.warga_id_seq', 928, true);
+SELECT pg_catalog.setval('public.warga_id_seq', 1354, true);
 
 
 --
 -- Name: warga_singgah_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.warga_singgah_id_seq', 1, true);
+SELECT pg_catalog.setval('public.warga_singgah_id_seq', 1, false);
 
 
 --
@@ -3081,5 +3534,5 @@ ALTER TABLE ONLY public.warga_singgah
 -- PostgreSQL database dump complete
 --
 
-\unrestrict WRznlRNP1qd84nePbIpQzCI4Bmok1d9RbaLEksbtDbghuwW82ED9eIoqhg0Cd2i
+\unrestrict KTVLRwU9RnOFDGGRm0Jx0zKHBsnFfPUL71SaP9li4h6a1aXeMndVH9G9tXSw1D4
 
