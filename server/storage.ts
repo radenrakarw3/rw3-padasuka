@@ -434,6 +434,7 @@ export class DatabaseStorage implements IStorage {
       pekerjaan: warga.pekerjaan,
       pendidikan: warga.pendidikan,
       statusKependudukan: warga.statusKependudukan,
+      fotoKtp: warga.fotoKtp,
       createdAt: warga.createdAt,
       nomorKk: kartuKeluarga.nomorKk,
       rt: kartuKeluarga.rt,
@@ -551,7 +552,7 @@ export class DatabaseStorage implements IStorage {
 
   async getAllPengajuanBansos(): Promise<(PengajuanBansos & { nomorKk: string; rt: number; kepalaKeluarga: string | null; alamat: string })[]> {
     const allPengajuan = await db.select().from(pengajuanBansos).orderBy(desc(pengajuanBansos.createdAt));
-    const kkIds = [...new Set(allPengajuan.map(p => p.kkId))];
+    const kkIds = Array.from(new Set(allPengajuan.map(p => p.kkId)));
     const allKk = await db.select().from(kartuKeluarga);
     const allWarga = await db.select().from(warga);
     const kkMap: Record<number, KartuKeluarga> = {};

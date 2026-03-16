@@ -242,7 +242,7 @@ export type InsertDonasiCampaign = z.infer<typeof insertDonasiCampaignSchema>;
 export type Donasi = typeof donasi.$inferSelect;
 export type InsertDonasi = z.infer<typeof insertDonasiSchema>;
 export type KasRw = typeof kasRw.$inferSelect;
-export type InsertKasRw = z.infer<typeof insertKasRwSchema>;
+export type InsertKasRw = typeof kasRw.$inferInsert;
 
 export const usaha = pgTable("usaha", {
   id: serial("id").primaryKey(),

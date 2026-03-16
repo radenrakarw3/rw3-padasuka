@@ -911,7 +911,7 @@ export default function AdminDashboard() {
             </SectionTitle>
             {pendidikanTreemap.length > 0 ? (
               <ResponsiveContainer width="100%" height={200}>
-                <Treemap data={pendidikanTreemap} dataKey="size" nameKey="name" aspectRatio={4 / 3} stroke="#fff" content={({ x, y, width, height, name, size, fill }: any) => {
+                <Treemap data={pendidikanTreemap} dataKey="size" nameKey="name" aspectRatio={4 / 3} stroke="#fff" content={(({ x, y, width, height, name, size, fill }: any) => {
                   if (width < 30 || height < 25) return <rect x={x} y={y} width={width} height={height} fill={fill} stroke="#fff" />;
                   return (
                     <g>
@@ -920,7 +920,7 @@ export default function AdminDashboard() {
                       <text x={x + width / 2} y={y + height / 2 + 8} textAnchor="middle" fill="rgba(255,255,255,0.8)" fontSize={9}>{size}</text>
                     </g>
                   );
-                }} />
+                }) as any} />
               </ResponsiveContainer>
             ) : <p className="text-xs text-muted-foreground">Belum ada data</p>}
           </CardContent>

@@ -1,4 +1,4 @@
-import type { Express, Request, Response } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
@@ -260,7 +260,7 @@ export async function registerRoutes(
   });
 
   app.get("/api/pdf/download/:id", requireAuth, (req: Request, res: Response) => {
-    const id = req.params.id.replace(/[^a-zA-Z0-9\-_]/g, "");
+    const id = (req.params.id as string).replace(/[^a-zA-Z0-9\-_]/g, "");
     const filePath = path.join(pdfTempDir, `${id}.pdf`);
     if (!fs.existsSync(filePath)) return res.status(404).json({ message: "File not found or expired" });
     const downloadName = (req.query.name as string) || "surat.pdf";
@@ -556,7 +556,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Section dan data diperlukan" });
       }
 
-      function sanitizeData(input: any): any {
+      const sanitizeData = (input: any): any => {
         if (Array.isArray(input)) {
           if (input.length > 0 && input[0]?.nama) {
             return { totalOrang: input.length, catatan: "Daftar nama dihapus untuk privasi" };
@@ -615,7 +615,7 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
   });
 
   app.get("/api/kk/:id", requireAuth, async (req, res) => {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     if (!req.session.isAdmin && req.session.kkId !== id) {
       return res.status(403).json({ message: "Akses ditolak" });
     }
@@ -637,7 +637,7 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
   app.patch("/api/kk/:id", requireAdmin, async (req, res) => {
     try {
       const parsed = insertKkSchema.partial().parse(req.body);
-      const data = await storage.updateKk(parseInt(req.params.id), parsed);
+      const data = await storage.updateKk(parseInt(req.params.id as string), parsed);
       if (!data) return res.status(404).json({ message: "KK tidak ditemukan" });
       res.json(data);
     } catch (error: any) {
@@ -647,7 +647,7 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
 
   app.delete("/api/kk/:id", requireAdmin, async (req, res) => {
     try {
-      const kk = await storage.getKkById(parseInt(req.params.id));
+      const kk = await storage.getKkById(parseInt(req.params.id as string));
       if (!kk) return res.status(404).json({ message: "KK tidak ditemukan" });
       await storage.deleteKk(kk.id);
       res.json({ message: "KK dan semua data terkait berhasil dihapus" });
@@ -662,7 +662,7 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
   });
 
   app.get("/api/warga/kk/:kkId", requireAuth, async (req, res) => {
-    const kkId = parseInt(req.params.kkId);
+    const kkId = parseInt(req.params.kkId as string);
     if (!req.session.isAdmin && req.session.kkId !== kkId) {
       return res.status(403).json({ message: "Akses ditolak" });
     }
@@ -671,7 +671,7 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
   });
 
   app.get("/api/warga/:id", requireAuth, async (req, res) => {
-    const data = await storage.getWargaById(parseInt(req.params.id));
+    const data = await storage.getWargaById(parseInt(req.params.id as string));
     if (!data) return res.status(404).json({ message: "Warga tidak ditemukan" });
     if (!req.session.isAdmin && data.kkId !== req.session.kkId) {
       return res.status(403).json({ message: "Akses ditolak" });
@@ -722,7 +722,7 @@ Jika ada kendala, silakan hubungi pengurus RT ${rtNum} atau pengurus RW 03.
 Hatur nuhun! 🙏
 Salam hangat dari pengurus RW 03 Padasuka`;
 
-            await sendWhatsApp(data.nomorWhatsapp, waMessage);
+            await sendWhatsApp(data.nomorWhatsapp!, waMessage);
           } catch (err) {
             console.error("Notif WA warga baru gagal:", err);
           }
@@ -736,7 +736,7 @@ Salam hangat dari pengurus RW 03 Padasuka`;
   app.patch("/api/warga/:id", requireAdmin, async (req, res) => {
     try {
       const parsed = insertWargaSchema.partial().parse(req.body);
-      const data = await storage.updateWarga(parseInt(req.params.id), parsed);
+      const data = await storage.updateWarga(parseInt(req.params.id as string), parsed);
       if (!data) return res.status(404).json({ message: "Warga tidak ditemukan" });
       res.json(data);
     } catch (error: any) {
@@ -746,7 +746,7 @@ Salam hangat dari pengurus RW 03 Padasuka`;
 
   app.delete("/api/warga/:id", requireAdmin, async (req, res) => {
     try {
-      const w = await storage.getWargaById(parseInt(req.params.id));
+      const w = await storage.getWargaById(parseInt(req.params.id as string));
       if (!w) return res.status(404).json({ message: "Warga tidak ditemukan" });
       await storage.deleteWarga(w.id);
       res.json({ message: "Warga dan semua data terkait berhasil dihapus" });
@@ -766,7 +766,7 @@ Salam hangat dari pengurus RW 03 Padasuka`;
   });
 
   app.patch("/api/rt/:id", requireAdmin, async (req, res) => {
-    const data = await storage.updateRt(parseInt(req.params.id), req.body);
+    const data = await storage.updateRt(parseInt(req.params.id as string), req.body);
     if (!data) return res.status(404).json({ message: "RT tidak ditemukan" });
     res.json(data);
   });
@@ -796,7 +796,7 @@ Salam hangat dari pengurus RW 03 Padasuka`;
       }
       const data = await storage.createLaporan(parsed);
 
-      const jenisLabel = jenisLaporanLabels[parsed.jenisLaporan] || parsed.jenisLaporan;
+      const jenisLabel = jenisLaporanLabels[parsed.jenisLaporan ?? ""] || parsed.jenisLaporan;
       if (parsed.wargaId) {
         notifyWarga(parsed.wargaId, `[RW 03 Padasuka]\n\nLaporan Wargi berhasil dikirim ✅\n\nJudul: *${parsed.judul}*\nKategori: ${jenisLabel}\n\nLaporan akan segera ditinjau oleh pengurus RW.\n\nSekarang cek status laporan jadi gampang, langsung buka aja web kita di 👉 rw3padasukacimahi.org\n\nHatur nuhun Wargi! 🙏`);
       }
@@ -818,7 +818,7 @@ Salam hangat dari pengurus RW 03 Padasuka`;
     if (!["diproses", "selesai", "ditolak"].includes(status)) {
       return res.status(400).json({ message: "Status tidak valid" });
     }
-    const data = await storage.updateLaporanStatus(parseInt(req.params.id), status, tanggapan);
+    const data = await storage.updateLaporanStatus(parseInt(req.params.id as string), status, tanggapan);
     if (!data) return res.status(404).json({ message: "Laporan tidak ditemukan" });
 
     const statusLabels: Record<string, string> = {
@@ -897,7 +897,7 @@ Salam hangat dari pengurus RW 03 Padasuka`;
 
   app.post("/api/surat-warga/:id/upload", requireAdmin, suratUpload.single("file"), async (req, res) => {
     try {
-      const surat = await storage.getSuratWargaById(parseInt(req.params.id));
+      const surat = await storage.getSuratWargaById(parseInt(req.params.id as string));
       if (!surat) return res.status(404).json({ message: "Surat tidak ditemukan" });
       if (!req.file) return res.status(400).json({ message: "File tidak ditemukan" });
 
@@ -915,7 +915,7 @@ Salam hangat dari pengurus RW 03 Padasuka`;
       if (!["disetujui", "ditolak"].includes(status)) {
         return res.status(400).json({ message: "Status tidak valid. Gunakan 'disetujui' atau 'ditolak'." });
       }
-      const surat = await storage.getSuratWargaById(parseInt(req.params.id));
+      const surat = await storage.getSuratWargaById(parseInt(req.params.id as string));
       if (!surat) return res.status(404).json({ message: "Surat tidak ditemukan" });
       if (surat.status !== "pending") {
         return res.status(400).json({ message: "Hanya surat dengan status pending yang bisa diubah." });
@@ -1059,7 +1059,7 @@ Buat surat dalam format teks biasa yang rapi dan profesional.`;
 
   app.patch("/api/profile-edits/:id/status", requireAdmin, async (req, res) => {
     const { status } = req.body;
-    const edit = await storage.updateProfileEditStatus(parseInt(req.params.id), status);
+    const edit = await storage.updateProfileEditStatus(parseInt(req.params.id as string), status);
     if (!edit) return res.status(404).json({ message: "Edit request tidak ditemukan" });
 
     if (status === "disetujui") {
@@ -1081,7 +1081,7 @@ Buat surat dalam format teks biasa yang rapi dan profesional.`;
 
   app.patch("/api/bansos/penerima/:kkId/jenis", requireAdmin, async (req, res) => {
     try {
-      const kkId = parseInt(req.params.kkId);
+      const kkId = parseInt(req.params.kkId as string);
       const { jenisBansos } = req.body;
       if (!jenisBansos || typeof jenisBansos !== "string") return res.status(400).json({ message: "Jenis bansos harus diisi" });
       const kk = await storage.getKkById(kkId);
@@ -1150,7 +1150,7 @@ Buat surat dalam format teks biasa yang rapi dan profesional.`;
 
   app.patch("/api/bansos/pengajuan/:id/status", requireAdmin, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseInt(req.params.id as string);
       const { status } = req.body;
       if (!["disetujui", "ditolak"].includes(status)) {
         return res.status(400).json({ message: "Status tidak valid" });
@@ -1392,7 +1392,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
     next();
   }, upload.single("file"), async (req: Request, res: Response) => {
     try {
-      const kkId = parseInt(req.params.kkId);
+      const kkId = parseInt(req.params.kkId as string);
       if (!req.file) return res.status(400).json({ message: "File harus diunggah" });
 
       const kk = await storage.getKkById(kkId);
@@ -1420,7 +1420,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
     next();
   }, upload.single("file"), async (req: Request, res: Response) => {
     try {
-      const wargaId = parseInt(req.params.wargaId);
+      const wargaId = parseInt(req.params.wargaId as string);
       if (!req.file) return res.status(400).json({ message: "File harus diunggah" });
 
       const w = await storage.getWargaById(wargaId);
@@ -1463,7 +1463,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
     if (!["aktif", "selesai"].includes(status)) {
       return res.status(400).json({ message: "Status tidak valid" });
     }
-    const result = await storage.updateDonasiCampaignStatus(parseInt(req.params.id), status);
+    const result = await storage.updateDonasiCampaignStatus(parseInt(req.params.id as string), status);
     if (!result) return res.status(404).json({ message: "Campaign tidak ditemukan" });
     res.json(result);
   });
@@ -1511,7 +1511,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
     if (!["pending", "dikonfirmasi", "ditolak"].includes(status)) {
       return res.status(400).json({ message: "Status tidak valid" });
     }
-    const donasiId = parseInt(req.params.id);
+    const donasiId = parseInt(req.params.id as string);
     const existing = await storage.getDonasiById(donasiId);
     if (!existing) return res.status(404).json({ message: "Donasi tidak ditemukan" });
 
@@ -1608,7 +1608,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
 
   app.put("/api/kas-rw/:id", requireAdmin, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseInt(req.params.id as string);
       const existing = await storage.getKasRwById(id);
       if (!existing) return res.status(404).json({ message: "Transaksi tidak ditemukan" });
       if (existing.createdBy === "sistem") {
@@ -1624,7 +1624,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
 
   app.delete("/api/kas-rw/:id", requireAdmin, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseInt(req.params.id as string);
       const existing = await storage.getKasRwById(id);
       if (!existing) return res.status(404).json({ message: "Transaksi tidak ditemukan" });
       if (existing.createdBy === "sistem") {
@@ -1649,7 +1649,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
 
   app.get("/api/pemilik-kost/:id", requireAdmin, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseInt(req.params.id as string);
       const data = await storage.getPemilikKostById(id);
       if (!data) return res.status(404).json({ message: "Pemilik kost tidak ditemukan" });
       res.json(data);
@@ -1670,7 +1670,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
 
   app.put("/api/pemilik-kost/:id", requireAdmin, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseInt(req.params.id as string);
       const existing = await storage.getPemilikKostById(id);
       if (!existing) return res.status(404).json({ message: "Pemilik kost tidak ditemukan" });
       const parsed = insertPemilikKostSchema.partial().parse(req.body);
@@ -1683,7 +1683,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
 
   app.delete("/api/pemilik-kost/:id", requireAdmin, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseInt(req.params.id as string);
       const existing = await storage.getPemilikKostById(id);
       if (!existing) return res.status(404).json({ message: "Pemilik kost tidak ditemukan" });
       await storage.deletePemilikKost(id);
@@ -1705,7 +1705,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
 
   app.get("/api/warga-singgah/:id", requireAdmin, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseInt(req.params.id as string);
       const data = await storage.getWargaSinggahById(id);
       if (!data) return res.status(404).json({ message: "Warga singgah tidak ditemukan" });
       res.json(data);
@@ -1716,7 +1716,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
 
   app.get("/api/warga-singgah/:id/riwayat", requireAdmin, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseInt(req.params.id as string);
       const data = await storage.getRiwayatKontrak(id);
       res.json(data);
     } catch (error: any) {
@@ -1736,7 +1736,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
 
   app.put("/api/warga-singgah/:id", requireAdmin, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseInt(req.params.id as string);
       const existing = await storage.getWargaSinggahById(id);
       if (!existing) return res.status(404).json({ message: "Warga singgah tidak ditemukan" });
       const parsed = insertWargaSinggahSchema.partial().parse(req.body);
@@ -1749,7 +1749,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
 
   app.patch("/api/warga-singgah/:id/perpanjang", requireAdmin, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseInt(req.params.id as string);
       const { tanggalMulaiBaru, tanggalHabisBaru } = req.body;
       if (!tanggalMulaiBaru || !tanggalHabisBaru) {
         return res.status(400).json({ message: "Tanggal mulai dan habis baru harus diisi" });
@@ -1771,7 +1771,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
 
   app.delete("/api/warga-singgah/:id", requireAdmin, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseInt(req.params.id as string);
       const existing = await storage.getWargaSinggahById(id);
       if (!existing) return res.status(404).json({ message: "Warga singgah tidak ditemukan" });
       await storage.deleteWargaSinggah(id);
@@ -1793,7 +1793,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
 
   app.get("/api/usaha/:id", requireAdmin, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseInt(req.params.id as string);
       const u = await storage.getUsahaById(id);
       if (!u) return res.status(404).json({ message: "Usaha tidak ditemukan" });
       const karyawan = await storage.getKaryawanByUsahaId(id);
@@ -1845,7 +1845,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
 
   app.put("/api/usaha/:id", requireAdmin, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseInt(req.params.id as string);
       const existing = await storage.getUsahaById(id);
       if (!existing) return res.status(404).json({ message: "Usaha tidak ditemukan" });
       const { karyawan, izinTetangga: izinList, ...usahaData } = req.body;
@@ -1858,7 +1858,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
 
   app.delete("/api/usaha/:id", requireAdmin, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseInt(req.params.id as string);
       const existing = await storage.getUsahaById(id);
       if (!existing) return res.status(404).json({ message: "Usaha tidak ditemukan" });
       await storage.deleteUsaha(id);
@@ -1870,7 +1870,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
 
   app.post("/api/usaha/:id/survey", requireAdmin, async (req, res) => {
     try {
-      const usahaId = parseInt(req.params.id);
+      const usahaId = parseInt(req.params.id as string);
       const existing = await storage.getUsahaById(usahaId);
       if (!existing) return res.status(404).json({ message: "Usaha tidak ditemukan" });
       if (existing.status !== "pendaftaran" && existing.status !== "survey") {
@@ -1917,7 +1917,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
 
   app.post("/api/usaha/:id/verifikasi", requireAdmin, async (req, res) => {
     try {
-      const usahaId = parseInt(req.params.id);
+      const usahaId = parseInt(req.params.id as string);
       const existing = await storage.getUsahaById(usahaId);
       if (!existing) return res.status(404).json({ message: "Usaha tidak ditemukan" });
       if (existing.status !== "survey") {
@@ -1946,7 +1946,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
 
   app.post("/api/usaha/:id/perpanjang-stiker", requireAdmin, async (req, res) => {
     try {
-      const usahaId = parseInt(req.params.id);
+      const usahaId = parseInt(req.params.id as string);
       const existing = await storage.getUsahaById(usahaId);
       if (!existing) return res.status(404).json({ message: "Usaha tidak ditemukan" });
       if (existing.status !== "disetujui") {
