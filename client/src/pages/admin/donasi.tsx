@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import {
   Plus, Heart, Trophy, CheckCircle, XCircle, Clock,
-  Target, Pause, Play
+  Target, Pause, Play, Pencil, X
 } from "lucide-react";
 import type { DonasiCampaign, Donasi } from "@shared/schema";
 
@@ -21,6 +21,10 @@ export default function AdminDonasi() {
   const [judul, setJudul] = useState("");
   const [deskripsi, setDeskripsi] = useState("");
   const [targetDana, setTargetDana] = useState("");
+  const [editingCampaign, setEditingCampaign] = useState<DonasiCampaign | null>(null);
+  const [editJudul, setEditJudul] = useState("");
+  const [editDeskripsi, setEditDeskripsi] = useState("");
+  const [editTargetDana, setEditTargetDana] = useState("");
 
   const { data: campaigns, isLoading: loadingCampaigns } = useQuery<DonasiCampaign[]>({
     queryKey: ["/api/donasi-campaign"],
@@ -52,6 +56,24 @@ export default function AdminDonasi() {
     },
     onError: (err: any) => {
       toast({ title: "Gagal membuat campaign", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const editCampaignMutation = useMutation({
+    mutationFn: async ({ id, judul, deskripsi, targetDana }: { id: number; judul: string; deskripsi: string; targetDana: string }) => {
+      await apiRequest("PATCH", `/api/donasi-campaign/${id}`, {
+        judul,
+        deskripsi,
+        targetDana: targetDana ? parseInt(targetDana) : null,
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Campaign berhasil diperbarui!" });
+      setEditingCampaign(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/donasi-campaign"] });
+    },
+    onError: (err: any) => {
+      toast({ title: "Gagal memperbarui campaign", description: err.message, variant: "destructive" });
     },
   });
 
@@ -200,51 +222,104 @@ export default function AdminDonasi() {
           {campaigns.map((c) => {
             const campaignDonasi = allDonasi?.filter(d => d.campaignId === c.id && d.status === "dikonfirmasi") || [];
             const collected = campaignDonasi.reduce((s, d) => s + Number(d.jumlah), 0);
+            const isEditing = editingCampaign?.id === c.id;
             return (
               <Card key={c.id} data-testid={`card-admin-campaign-${c.id}`}>
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="font-semibold text-sm truncate">{c.judul}</p>
-                        <Badge variant={c.status === "aktif" ? "default" : "secondary"} className="text-[10px]">
-                          {c.status === "aktif" ? "Aktif" : "Selesai"}
-                        </Badge>
+                <CardContent className="p-4 space-y-3">
+                  {isEditing ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold">Edit Campaign</p>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setEditingCampaign(null)}>
+                          <X className="w-4 h-4" />
+                        </Button>
                       </div>
-                      <p className="text-xs text-muted-foreground">{c.deskripsi}</p>
-                      <div className="flex items-center gap-3 mt-2">
-                        <p className="text-xs">
-                          Terkumpul: <span className="font-bold text-[hsl(163,55%,22%)]">{formatRupiah(collected)}</span>
-                        </p>
-                        {c.targetDana && Number(c.targetDana) > 0 && (
-                          <>
-                            <p className="text-xs text-muted-foreground">Target: {formatRupiah(Number(c.targetDana))}</p>
-                            <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden max-w-[120px]">
-                              <div
-                                className="h-full bg-[hsl(163,55%,22%)] rounded-full transition-all"
-                                style={{ width: `${Math.min(100, (collected / Number(c.targetDana)) * 100)}%` }}
-                              />
-                            </div>
-                          </>
-                        )}
+                      <div className="space-y-2">
+                        <Label className="text-xs">Judul Campaign</Label>
+                        <Input value={editJudul} onChange={e => setEditJudul(e.target.value)} className="h-9 text-sm" data-testid={`input-edit-judul-${c.id}`} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs">Deskripsi</Label>
+                        <Textarea value={editDeskripsi} onChange={e => setEditDeskripsi(e.target.value)} rows={3} className="text-sm" data-testid={`input-edit-deskripsi-${c.id}`} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs">Target Dana (opsional)</Label>
+                        <Input type="number" value={editTargetDana} onChange={e => setEditTargetDana(e.target.value)} placeholder="Kosongkan jika tidak ada target" className="h-9 text-sm" data-testid={`input-edit-target-${c.id}`} />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => editCampaignMutation.mutate({ id: c.id, judul: editJudul, deskripsi: editDeskripsi, targetDana: editTargetDana })}
+                          disabled={!editJudul || !editDeskripsi || editCampaignMutation.isPending}
+                          data-testid={`button-save-edit-${c.id}`}
+                        >
+                          {editCampaignMutation.isPending ? "Menyimpan..." : "Simpan"}
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setEditingCampaign(null)} data-testid={`button-cancel-edit-${c.id}`}>
+                          Batal
+                        </Button>
                       </div>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => toggleCampaignMutation.mutate({
-                        id: c.id,
-                        status: c.status === "aktif" ? "selesai" : "aktif",
-                      })}
-                      data-testid={`button-toggle-campaign-${c.id}`}
-                    >
-                      {c.status === "aktif" ? (
-                        <><Pause className="w-3 h-3 mr-1" /> Akhiri</>
-                      ) : (
-                        <><Play className="w-3 h-3 mr-1" /> Aktifkan</>
-                      )}
-                    </Button>
-                  </div>
+                  ) : (
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <p className="font-semibold text-sm truncate">{c.judul}</p>
+                          <Badge variant={c.status === "aktif" ? "default" : "secondary"} className="text-[10px]">
+                            {c.status === "aktif" ? "Aktif" : "Selesai"}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{c.deskripsi}</p>
+                        <div className="flex items-center gap-3 mt-2">
+                          <p className="text-xs">
+                            Terkumpul: <span className="font-bold text-[hsl(163,55%,22%)]">{formatRupiah(collected)}</span>
+                          </p>
+                          {c.targetDana && Number(c.targetDana) > 0 && (
+                            <>
+                              <p className="text-xs text-muted-foreground">Target: {formatRupiah(Number(c.targetDana))}</p>
+                              <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden max-w-[120px]">
+                                <div
+                                  className="h-full bg-[hsl(163,55%,22%)] rounded-full transition-all"
+                                  style={{ width: `${Math.min(100, (collected / Number(c.targetDana)) * 100)}%` }}
+                                />
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-1 flex-shrink-0">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 w-8 p-0"
+                          onClick={() => {
+                            setEditingCampaign(c);
+                            setEditJudul(c.judul);
+                            setEditDeskripsi(c.deskripsi);
+                            setEditTargetDana(c.targetDana ? String(c.targetDana) : "");
+                          }}
+                          data-testid={`button-edit-campaign-${c.id}`}
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => toggleCampaignMutation.mutate({
+                            id: c.id,
+                            status: c.status === "aktif" ? "selesai" : "aktif",
+                          })}
+                          data-testid={`button-toggle-campaign-${c.id}`}
+                        >
+                          {c.status === "aktif" ? (
+                            <><Pause className="w-3 h-3 mr-1" /> Akhiri</>
+                          ) : (
+                            <><Play className="w-3 h-3 mr-1" /> Aktifkan</>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );

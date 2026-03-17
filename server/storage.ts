@@ -101,6 +101,7 @@ export interface IStorage {
   getAllDonasiCampaigns(): Promise<DonasiCampaign[]>;
   createDonasiCampaign(data: InsertDonasiCampaign): Promise<DonasiCampaign>;
   updateDonasiCampaignStatus(id: number, status: string): Promise<DonasiCampaign | undefined>;
+  updateDonasiCampaign(id: number, data: Partial<InsertDonasiCampaign>): Promise<DonasiCampaign | undefined>;
   getAllDonasi(): Promise<(Donasi & { judulCampaign: string })[]>;
   getDonasiByKkId(kkId: number): Promise<(Donasi & { judulCampaign: string })[]>;
   createDonasi(data: InsertDonasi): Promise<Donasi>;
@@ -622,6 +623,11 @@ export class DatabaseStorage implements IStorage {
 
   async updateDonasiCampaignStatus(id: number, status: string): Promise<DonasiCampaign | undefined> {
     const [result] = await db.update(donasiCampaign).set({ status }).where(eq(donasiCampaign.id, id)).returning();
+    return result;
+  }
+
+  async updateDonasiCampaign(id: number, data: Partial<InsertDonasiCampaign>): Promise<DonasiCampaign | undefined> {
+    const [result] = await db.update(donasiCampaign).set(data).where(eq(donasiCampaign.id, id)).returning();
     return result;
   }
 

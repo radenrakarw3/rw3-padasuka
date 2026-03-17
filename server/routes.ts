@@ -1520,6 +1520,24 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
     res.json(result);
   });
 
+  app.patch("/api/donasi-campaign/:id", requireAdmin, async (req, res) => {
+    try {
+      const { judul, deskripsi, targetDana } = req.body;
+      if (!judul || !deskripsi) {
+        return res.status(400).json({ message: "Judul dan deskripsi harus diisi" });
+      }
+      const result = await storage.updateDonasiCampaign(parseInt(req.params.id as string), {
+        judul,
+        deskripsi,
+        targetDana: targetDana ? parseInt(targetDana) : null,
+      });
+      if (!result) return res.status(404).json({ message: "Campaign tidak ditemukan" });
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
   app.get("/api/donasi", requireAuth, async (req, res) => {
     if (req.session.isAdmin) {
       const all = await storage.getAllDonasi();
