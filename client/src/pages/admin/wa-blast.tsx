@@ -172,9 +172,10 @@ export default function AdminWaBlast() {
     penerima_bansos: "Penerima Bansos",
     pemilik_kost: "Pemilik Kostan/Kontrakan",
     warga_singgah: "Warga Singgah",
-    pemuda: "Pemuda (17-35 Tahun)",
-    dewasa: "Dewasa (36-59 Tahun)",
-    lansia: "Lansia (60+ Tahun)",
+    anak: "Anak-anak (< 18 Tahun)",
+    remaja: "Remaja (18-29 Tahun)",
+    dewasa: "Dewasa (30-60 Tahun)",
+    lansia: "Lansia (> 60 Tahun)",
   };
 
   return (
@@ -203,9 +204,10 @@ export default function AdminWaBlast() {
                 <SelectItem value="penerima_bansos">Penerima Bansos</SelectItem>
                 <SelectItem value="pemilik_kost">Pemilik Kostan/Kontrakan</SelectItem>
                 <SelectItem value="warga_singgah">Warga Singgah (Aktif)</SelectItem>
-                <SelectItem value="pemuda">Kategori Umur: Pemuda (17-35 Tahun)</SelectItem>
-                <SelectItem value="dewasa">Kategori Umur: Dewasa (36-59 Tahun)</SelectItem>
-                <SelectItem value="lansia">Kategori Umur: Lansia (60+ Tahun)</SelectItem>
+                <SelectItem value="anak">Kategori Umur: Anak-anak (di bawah 18 tahun)</SelectItem>
+                <SelectItem value="remaja">Kategori Umur: Remaja (18–29 tahun)</SelectItem>
+                <SelectItem value="dewasa">Kategori Umur: Dewasa (30–60 tahun)</SelectItem>
+                <SelectItem value="lansia">Kategori Umur: Lansia (di atas 60 tahun)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -384,9 +386,10 @@ export default function AdminWaBlast() {
             penerima_bansos: "Penerima Bansos",
             pemilik_kost: "Pemilik Kostan/Kontrakan",
             warga_singgah: "Warga Singgah",
-            pemuda: "Pemuda (17-35 Tahun)",
-            dewasa: "Dewasa (36-59 Tahun)",
-            lansia: "Lansia (60+ Tahun)",
+            anak: "Anak-anak (< 18 Tahun)",
+            remaja: "Remaja (18-29 Tahun)",
+            dewasa: "Dewasa (30-60 Tahun)",
+            lansia: "Lansia (> 60 Tahun)",
           };
           const isExpanded = expandedId === b.id;
           const gagal = (b.jumlahPenerima || 0) - (b.jumlahBerhasil || 0);

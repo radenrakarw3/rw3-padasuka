@@ -1253,7 +1253,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
   app.get("/api/wa-blast/preview", requireAdmin, async (req, res) => {
     try {
       const kategori = (req.query.kategori as string) || "semua";
-      const validKategori = ["semua", "per_rt", "kepala_keluarga", "penerima_bansos", "pemukiman", "perumahan", "pemilik_kost", "warga_singgah", "pemuda", "dewasa", "lansia"];
+      const validKategori = ["semua", "per_rt", "kepala_keluarga", "penerima_bansos", "pemukiman", "perumahan", "pemilik_kost", "warga_singgah", "anak", "remaja", "dewasa", "lansia"];
       if (!validKategori.includes(kategori)) {
         return res.status(400).json({ message: "Kategori tidak valid" });
       }
@@ -1302,15 +1302,18 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
         const bansosKkIds = allKk.filter(k => k.penerimaBansos).map(k => k.id);
         const all = await storage.getAllWargaWithKk();
         wargaList = all.filter(w => bansosKkIds.includes(w.kkId) && w.kedudukanKeluarga === "Kepala Keluarga");
-      } else if (kategori === "pemuda") {
+      } else if (kategori === "anak") {
         const all = await storage.getAllWargaWithKk();
-        wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age >= 17 && age <= 35; });
+        wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age < 18; });
+      } else if (kategori === "remaja") {
+        const all = await storage.getAllWargaWithKk();
+        wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age >= 18 && age < 30; });
       } else if (kategori === "dewasa") {
         const all = await storage.getAllWargaWithKk();
-        wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age >= 36 && age <= 59; });
+        wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age >= 30 && age <= 60; });
       } else if (kategori === "lansia") {
         const all = await storage.getAllWargaWithKk();
-        wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age >= 60; });
+        wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age > 60; });
       } else {
         wargaList = await storage.getAllWargaWithKk();
       }
@@ -1377,15 +1380,18 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
         const bansosKkIds = allKk.filter(k => k.penerimaBansos).map(k => k.id);
         const all = await storage.getAllWargaWithKk();
         wargaList = all.filter(w => bansosKkIds.includes(w.kkId) && w.kedudukanKeluarga === "Kepala Keluarga");
-      } else if (parsed.kategoriFilter === "pemuda") {
+      } else if (parsed.kategoriFilter === "anak") {
         const all = await storage.getAllWargaWithKk();
-        wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age >= 17 && age <= 35; });
+        wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age < 18; });
+      } else if (parsed.kategoriFilter === "remaja") {
+        const all = await storage.getAllWargaWithKk();
+        wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age >= 18 && age < 30; });
       } else if (parsed.kategoriFilter === "dewasa") {
         const all = await storage.getAllWargaWithKk();
-        wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age >= 36 && age <= 59; });
+        wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age >= 30 && age <= 60; });
       } else if (parsed.kategoriFilter === "lansia") {
         const all = await storage.getAllWargaWithKk();
-        wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age >= 60; });
+        wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age > 60; });
       } else {
         wargaList = await storage.getAllWargaWithKk();
       }
