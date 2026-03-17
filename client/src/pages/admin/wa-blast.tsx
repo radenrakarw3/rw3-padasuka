@@ -17,7 +17,7 @@ import { rtOptions } from "@/lib/constants";
 import { Input } from "@/components/ui/input";
 import {
   Send, MessageSquare, Users, CheckCircle, Clock, ChevronDown, ChevronUp,
-  FileText, XCircle, Sparkles, Loader2, AlertTriangle, PhoneOff, Baby,
+  FileText, XCircle, Sparkles, Loader2, AlertTriangle, PhoneOff,
   Phone, RefreshCw, ChevronRight, ChevronLeft, Download, Save, Pencil, X,
   Copy, AlertCircle,
 } from "lucide-react";
@@ -145,7 +145,7 @@ function WargaKosongPanel() {
   const [expandedPanel, setExpandedPanel] = useState(true);
   // Pagination
   const [pageDiisi, setPageDiisi] = useState(1);
-  const [pageAnak, setPageAnak] = useState(1);
+  const [pageDuplikat, setPageDuplikat] = useState(1);
   // Inline edit state: wargaId -> input value
   const [editMap, setEditMap] = useState<Record<number, string>>({});
   const [savingIds, setSavingIds] = useState<Set<number>>(new Set());
@@ -166,7 +166,6 @@ function WargaKosongPanel() {
     ? allData.filter(w => w.rt === filterRtPanel)
     : allData;
 
-  const anakList = displayed.filter(w => w.isAnak);
   const perluDiisiList = displayed.filter(w => !w.isAnak);
   const rtList = stats?.byRt ?? [];
 
@@ -174,14 +173,18 @@ function WargaKosongPanel() {
   const handleFilterRt = (rt: number | null) => {
     setFilterRtPanel(rt);
     setPageDiisi(1);
-    setPageAnak(1);
+    setPageDuplikat(1);
   };
 
   // Pagination helpers
   const totalPagesDiisi = Math.ceil(perluDiisiList.length / PAGE_SIZE);
-  const totalPagesAnak = Math.ceil(anakList.length / PAGE_SIZE);
   const pagedDiisi = perluDiisiList.slice((pageDiisi - 1) * PAGE_SIZE, pageDiisi * PAGE_SIZE);
-  const pagedAnak = anakList.slice((pageAnak - 1) * PAGE_SIZE, pageAnak * PAGE_SIZE);
+
+  const duplikatFiltered = filterRtPanel !== null
+    ? (data?.duplikat ?? []).filter(g => g.warga.some(w => w.rt === filterRtPanel))
+    : (data?.duplikat ?? []);
+  const totalPagesDuplikat = Math.ceil(duplikatFiltered.length / PAGE_SIZE);
+  const pagedDuplikat = duplikatFiltered.slice((pageDuplikat - 1) * PAGE_SIZE, pageDuplikat * PAGE_SIZE);
 
   // Save nomor WA
   const saveNomorWa = async (wargaId: number) => {
@@ -255,7 +258,7 @@ function WargaKosongPanel() {
               <>
                 {/* Stats + Export */}
                 <div className="space-y-2">
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <div className="rounded-lg bg-white border border-orange-100 p-2 text-center">
                       <p className="text-lg font-bold text-orange-700">{stats.totalKosong}</p>
                       <p className="text-[10px] text-orange-500 leading-tight">WA Kosong</p>
@@ -263,10 +266,6 @@ function WargaKosongPanel() {
                     <div className="rounded-lg bg-white border border-red-100 p-2 text-center">
                       <p className="text-lg font-bold text-red-600">{stats.totalPerluDiisi}</p>
                       <p className="text-[10px] text-red-500 leading-tight">Perlu Diisi</p>
-                    </div>
-                    <div className="rounded-lg bg-white border border-blue-100 p-2 text-center">
-                      <p className="text-lg font-bold text-blue-600">{stats.totalAnak}</p>
-                      <p className="text-[10px] text-blue-500 leading-tight">Anak &lt;16 thn</p>
                     </div>
                     <div className={`rounded-lg bg-white border p-2 text-center ${(stats.totalDuplikat ?? 0) > 0 ? "border-yellow-200" : "border-gray-100"}`}>
                       <p className={`text-lg font-bold ${(stats.totalDuplikat ?? 0) > 0 ? "text-yellow-600" : "text-gray-400"}`}>
@@ -453,80 +452,28 @@ function WargaKosongPanel() {
                 )}
 
                 {/* ── Anak < 16 Tahun ── */}
-                {anakList.length > 0 && (
+                {/* ── Nomor WA Duplikat ── */}
+                {duplikatFiltered.length > 0 && (
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
-                        <Baby className="w-3.5 h-3.5 text-blue-500" />
-                        <p className="text-[11px] font-semibold text-blue-700 uppercase tracking-wide">
-                          Anak &lt; 16 Tahun — Tidak Punya WA ({anakList.length})
+                        <AlertCircle className="w-3.5 h-3.5 text-yellow-600" />
+                        <p className="text-[11px] font-semibold text-yellow-700 uppercase tracking-wide">
+                          Nomor WA Duplikat ({duplikatFiltered.length} nomor · {duplikatFiltered.reduce((s, g) => s + g.jumlah, 0)} warga)
                         </p>
                       </div>
-                      {totalPagesAnak > 1 && (
+                      {totalPagesDuplikat > 1 && (
                         <p className="text-[10px] text-muted-foreground">
-                          Hal. {pageAnak}/{totalPagesAnak}
+                          Hal. {pageDuplikat}/{totalPagesDuplikat}
                         </p>
                       )}
-                    </div>
-                    <div className="p-2.5 rounded-lg bg-blue-50 border border-blue-100">
-                      <p className="text-[11px] text-blue-700 mb-2">
-                        Anak di bawah 16 tahun dianggap tidak memiliki WhatsApp. Tidak perlu diisi.
-                      </p>
-                      <div className="space-y-1">
-                        {pagedAnak.map(w => (
-                          <div key={w.id} className="flex items-center gap-2 py-1 border-b border-blue-100 last:border-0">
-                            <Baby className="w-3 h-3 text-blue-400 flex-shrink-0" />
-                            <span className="text-[11px] text-blue-800 flex-1 font-medium">{w.namaLengkap}</span>
-                            <span className="text-[10px] text-blue-500">RT {String(w.rt).padStart(2, "0")}</span>
-                            <span className="text-[10px] text-blue-400">·</span>
-                            <span className="text-[10px] text-blue-500">{w.umur ?? "?"} thn</span>
-                            <Badge className="text-[9px] bg-blue-100 text-blue-700 border-blue-200 py-0">Anak</Badge>
-                          </div>
-                        ))}
-                      </div>
-                      {/* Pagination Anak */}
-                      {totalPagesAnak > 1 && (
-                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-blue-100">
-                          <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px] gap-1 text-blue-600"
-                            disabled={pageAnak === 1} onClick={() => setPageAnak(p => p - 1)}>
-                            <ChevronLeft className="w-3 h-3" /> Prev
-                          </Button>
-                          <div className="flex items-center gap-1">
-                            {Array.from({ length: totalPagesAnak }, (_, i) => i + 1).map(p => (
-                              <button key={p}
-                                className={`w-5 h-5 rounded text-[9px] font-medium ${pageAnak === p ? "bg-blue-500 text-white" : "bg-white border border-blue-200 text-blue-600"}`}
-                                onClick={() => setPageAnak(p)}
-                              >{p}</button>
-                            ))}
-                          </div>
-                          <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px] gap-1 text-blue-600"
-                            disabled={pageAnak === totalPagesAnak} onClick={() => setPageAnak(p => p + 1)}>
-                            Next <ChevronRight className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* ── Nomor WA Duplikat ── */}
-                {(data?.duplikat?.length ?? 0) > 0 && (
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <AlertCircle className="w-3.5 h-3.5 text-yellow-600" />
-                      <p className="text-[11px] font-semibold text-yellow-700 uppercase tracking-wide">
-                        Nomor WA Duplikat ({data!.duplikat.length} nomor · {data!.duplikat.reduce((s, g) => s + g.jumlah, 0)} warga)
-                      </p>
                     </div>
                     <div className="p-2.5 rounded-lg bg-yellow-50 border border-yellow-200">
                       <p className="text-[11px] text-yellow-700 mb-2.5 leading-snug">
                         Nomor di bawah ini dipakai oleh lebih dari 1 warga. Pastikan setiap warga punya nomor yang unik agar WA Blast terkirim tepat sasaran.
                       </p>
                       <div className="space-y-2">
-                        {(filterRtPanel !== null
-                          ? data!.duplikat.filter(g => g.warga.some(w => w.rt === filterRtPanel))
-                          : data!.duplikat
-                        ).map((group) => (
+                        {pagedDuplikat.map((group) => (
                           <div key={group.nomor} className="rounded-md bg-white border border-yellow-200 overflow-hidden">
                             {/* Header grup */}
                             <div className="flex items-center justify-between px-2.5 py-1.5 bg-yellow-100/60 border-b border-yellow-200">
@@ -539,9 +486,7 @@ function WargaKosongPanel() {
                               </div>
                               <button
                                 className="flex items-center gap-1 text-[10px] text-yellow-700 hover:text-yellow-900 transition-colors"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(group.nomor);
-                                }}
+                                onClick={() => navigator.clipboard.writeText(group.nomor)}
                                 title="Salin nomor"
                               >
                                 <Copy className="w-3 h-3" />
@@ -570,6 +515,27 @@ function WargaKosongPanel() {
                           </div>
                         ))}
                       </div>
+                      {/* Pagination Duplikat */}
+                      {totalPagesDuplikat > 1 && (
+                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-yellow-200">
+                          <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px] gap-1 text-yellow-700"
+                            disabled={pageDuplikat === 1} onClick={() => setPageDuplikat(p => p - 1)}>
+                            <ChevronLeft className="w-3 h-3" /> Prev
+                          </Button>
+                          <div className="flex items-center gap-1">
+                            {Array.from({ length: totalPagesDuplikat }, (_, i) => i + 1).map(p => (
+                              <button key={p}
+                                className={`w-5 h-5 rounded text-[9px] font-medium ${pageDuplikat === p ? "bg-yellow-500 text-white" : "bg-white border border-yellow-200 text-yellow-700"}`}
+                                onClick={() => setPageDuplikat(p)}
+                              >{p}</button>
+                            ))}
+                          </div>
+                          <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px] gap-1 text-yellow-700"
+                            disabled={pageDuplikat === totalPagesDuplikat} onClick={() => setPageDuplikat(p => p + 1)}>
+                            Next <ChevronRight className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
