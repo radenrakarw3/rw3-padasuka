@@ -172,6 +172,9 @@ export default function AdminWaBlast() {
     penerima_bansos: "Penerima Bansos",
     pemilik_kost: "Pemilik Kostan/Kontrakan",
     warga_singgah: "Warga Singgah",
+    pemuda: "Pemuda (17-35 Tahun)",
+    dewasa: "Dewasa (36-59 Tahun)",
+    lansia: "Lansia (60+ Tahun)",
   };
 
   return (
@@ -200,6 +203,9 @@ export default function AdminWaBlast() {
                 <SelectItem value="penerima_bansos">Penerima Bansos</SelectItem>
                 <SelectItem value="pemilik_kost">Pemilik Kostan/Kontrakan</SelectItem>
                 <SelectItem value="warga_singgah">Warga Singgah (Aktif)</SelectItem>
+                <SelectItem value="pemuda">Kategori Umur: Pemuda (17-35 Tahun)</SelectItem>
+                <SelectItem value="dewasa">Kategori Umur: Dewasa (36-59 Tahun)</SelectItem>
+                <SelectItem value="lansia">Kategori Umur: Lansia (60+ Tahun)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -378,6 +384,9 @@ export default function AdminWaBlast() {
             penerima_bansos: "Penerima Bansos",
             pemilik_kost: "Pemilik Kostan/Kontrakan",
             warga_singgah: "Warga Singgah",
+            pemuda: "Pemuda (17-35 Tahun)",
+            dewasa: "Dewasa (36-59 Tahun)",
+            lansia: "Lansia (60+ Tahun)",
           };
           const isExpanded = expandedId === b.id;
           const gagal = (b.jumlahPenerima || 0) - (b.jumlahBerhasil || 0);
