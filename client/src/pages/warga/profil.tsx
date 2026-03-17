@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Edit2, Check, X, User, MapPin, Clock, Upload, RefreshCw, ChevronDown, ChevronUp, Shield, AlertTriangle, CheckCircle2 } from "lucide-react";
 import type { KartuKeluarga, Warga, ProfileEditRequest } from "@shared/schema";
-import { pekerjaanOptions, pendidikanOptions, agamaOptions, jenisKelaminOptions, statusPerkawinanOptions, kedudukanKeluargaOptions, statusKependudukanOptions, statusDisabilitasOptions, kondisiKesehatanOptions } from "@/lib/constants";
+import { pekerjaanOptions, pendidikanOptions, agamaOptions, jenisKelaminOptions, statusPerkawinanOptions, kedudukanKeluargaOptions, statusKependudukanOptions, statusDisabilitasOptions, kondisiKesehatanOptions, penghasilanBulananOptions, kategoriEkonomiOptions } from "@/lib/constants";
 import { useProfileCompleteness } from "@/lib/useProfileCompleteness";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -48,6 +48,8 @@ export default function WargaProfil() {
   const { toast } = useToast();
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editData, setEditData] = useState<Record<string, string>>({});
+  const [editingEkonomi, setEditingEkonomi] = useState(false);
+  const [ekonomiForm, setEkonomiForm] = useState({ penghasilanBulanan: "", kategoriEkonomi: "" });
   const [uploadingKk, setUploadingKk] = useState(false);
   const [uploadingKtpId, setUploadingKtpId] = useState<number | null>(null);
   const [showDokumen, setShowDokumen] = useState(false);
@@ -69,6 +71,24 @@ export default function WargaProfil() {
   });
 
   const completeness = useProfileCompleteness(anggota, kk);
+
+  const updateEkonomi = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("PATCH", "/api/kk/self", {
+        penghasilanBulanan: ekonomiForm.penghasilanBulanan || null,
+        kategoriEkonomi: ekonomiForm.kategoriEkonomi || null,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Data ekonomi disimpan" });
+      setEditingEkonomi(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/kk", user?.kkId] });
+    },
+    onError: (err: any) => {
+      toast({ title: "Gagal menyimpan", description: err.message, variant: "destructive" });
+    },
+  });
 
   const submitEdit = useMutation({
     mutationFn: async (data: { wargaId: number; kkId: number; changes: Record<string, string> }) => {
@@ -252,6 +272,100 @@ export default function WargaProfil() {
               KK {maskKk(kk?.nomorKk)}
             </span>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Data Ekonomi Keluarga */}
+      <Card>
+        <CardContent className="p-0">
+          <button
+            onClick={() => {
+              setEditingEkonomi(!editingEkonomi);
+              if (!editingEkonomi) {
+                setEkonomiForm({
+                  penghasilanBulanan: kk?.penghasilanBulanan || "",
+                  kategoriEkonomi: kk?.kategoriEkonomi || "",
+                });
+              }
+            }}
+            className="w-full flex items-center justify-between p-4 text-left"
+          >
+            <div className="flex items-center gap-2">
+              <User className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm font-semibold">Data Ekonomi Keluarga</span>
+              {!kk?.penghasilanBulanan && (
+                <Badge variant="secondary" className="text-[10px] bg-amber-100 text-amber-700">Belum diisi</Badge>
+              )}
+            </div>
+            {editingEkonomi ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+          </button>
+
+          {editingEkonomi ? (
+            <div className="px-4 pb-4 space-y-3 border-t pt-4">
+              <p className="text-[11px] text-muted-foreground">Data ini digunakan untuk pemetaan sosial-ekonomi RW. Diisi secara jujur dan rahasia.</p>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Penghasilan Bulanan Keluarga</Label>
+                <Select value={ekonomiForm.penghasilanBulanan} onValueChange={(v) => setEkonomiForm(f => ({ ...f, penghasilanBulanan: v }))}>
+                  <SelectTrigger className="h-10 text-sm">
+                    <SelectValue placeholder="Pilih kisaran penghasilan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {penghasilanBulananOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Kategori Ekonomi (opsional)</Label>
+                <Select value={ekonomiForm.kategoriEkonomi} onValueChange={(v) => setEkonomiForm(f => ({ ...f, kategoriEkonomi: v }))}>
+                  <SelectTrigger className="h-10 text-sm">
+                    <SelectValue placeholder="Pilih kategori" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {kategoriEkonomiOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              {kk?.layakBansos && (
+                <div className="flex items-center gap-2 p-2 bg-amber-50 rounded-md border border-amber-200">
+                  <span className="text-xs text-amber-700">Keluarga ini terdata layak mendapatkan bantuan sosial oleh admin RW.</span>
+                </div>
+              )}
+              <div className="flex gap-2 pt-1">
+                <Button
+                  size="sm"
+                  className="flex-1 h-9"
+                  onClick={() => updateEkonomi.mutate()}
+                  disabled={!ekonomiForm.penghasilanBulanan || updateEkonomi.isPending}
+                >
+                  {updateEkonomi.isPending ? (
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <><Check className="w-3 h-3 mr-1" />Simpan</>
+                  )}
+                </Button>
+                <Button size="sm" variant="outline" className="h-9 px-3" onClick={() => setEditingEkonomi(false)}>
+                  <X className="w-3 h-3" />
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="px-4 pb-4 space-y-1.5 text-xs border-t pt-3">
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground w-28 flex-shrink-0">Penghasilan</span>
+                <span className="font-medium">{kk?.penghasilanBulanan || <span className="text-amber-600">Belum diisi</span>}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground w-28 flex-shrink-0">Kategori Ekonomi</span>
+                <span className="font-medium">{kk?.kategoriEkonomi || "-"}</span>
+              </div>
+              {kk?.layakBansos && (
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground w-28 flex-shrink-0">Bansos</span>
+                  <Badge className="text-[10px] bg-amber-100 text-amber-700 border-amber-200">Layak Bansos</Badge>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -31,10 +31,10 @@ export const REQUIRED_WARGA_FIELDS: RequiredField[] = [
   // { key: "namaFieldBaru", label: "Label yang tampil ke warga" },
 ];
 
-/** Field wajib di level KK (bisa diisi warga via upload) */
+/** Field wajib di level KK (bisa diisi warga via upload/form ekonomi) */
 export const REQUIRED_KK_FIELDS: RequiredField[] = [
   { key: "fotoKk", label: "Scan/Foto KK (PDF)" },
-  // { key: "penghasilanBulanan", label: "Penghasilan Bulanan" }, // aktifkan jika warga bisa edit KK
+  { key: "penghasilanBulanan", label: "Penghasilan Bulanan Keluarga" },
 ];
 
 export interface MissingField {

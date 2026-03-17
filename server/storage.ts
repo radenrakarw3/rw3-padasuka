@@ -253,6 +253,12 @@ export interface DashboardStats {
     totalUsahaBerizin: number;
   };
   rtList: number[];
+  kondisiKesehatan: Record<string, number>;
+  totalDisabilitas: number;
+  totalIbuHamil: number;
+  kategoriEkonomi: Record<string, number>;
+  totalLayakBansos: number;
+  kkEkonomiTerisi: number;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -945,6 +951,13 @@ export class DatabaseStorage implements IStorage {
     const totalPenghuni = allKk.reduce((s, k) => s + (k.jumlahPenghuni || 0), 0);
     const avgPenghuni = allKk.length > 0 ? Math.round((totalPenghuni / allKk.length) * 10) / 10 : 0;
 
+    const kondisiKesehatan = countByField(allWarga.filter(w => w.kondisiKesehatan && w.kondisiKesehatan !== ""), "kondisiKesehatan");
+    const totalDisabilitas = allWarga.filter(w => w.statusDisabilitas && w.statusDisabilitas !== "Tidak Ada" && w.statusDisabilitas !== "").length;
+    const totalIbuHamil = allWarga.filter(w => w.ibuHamil === true).length;
+    const kategoriEkonomi = countByField(allKk.filter(k => k.kategoriEkonomi && k.kategoriEkonomi !== ""), "kategoriEkonomi");
+    const totalLayakBansos = allKk.filter(k => k.layakBansos === true).length;
+    const kkEkonomiTerisi = allKk.filter(k => k.penghasilanBulanan && k.penghasilanBulanan !== "").length;
+
     return {
       totalKk, totalWarga, pendingLaporan, pendingSurat,
       pendingEditProfil, pendingPengajuanBansos,
@@ -961,6 +974,8 @@ export class DatabaseStorage implements IStorage {
       keuangan, donasiSummary, avgPenghuni,
       pengangguran: { total: pengangguranWarga.length, perUsia: pengangguranPerUsia, daftarNama: pengangguranDaftar },
       capaian, rtList,
+      kondisiKesehatan, totalDisabilitas, totalIbuHamil,
+      kategoriEkonomi, totalLayakBansos, kkEkonomiTerisi,
       wargaSinggahStats: await (async () => {
         const allWargaSinggahData = await db.select().from(wargaSinggah);
         const allPemilikKostData = await db.select().from(pemilikKost);

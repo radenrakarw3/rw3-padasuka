@@ -635,6 +635,19 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
     }
   });
 
+  // Warga dapat update data ekonomi KK sendiri (penghasilanBulanan, kategoriEkonomi)
+  app.patch("/api/kk/self", requireAuth, async (req, res) => {
+    if (!req.session.kkId) return res.status(403).json({ message: "Akses ditolak" });
+    try {
+      const { penghasilanBulanan, kategoriEkonomi } = req.body;
+      const data = await storage.updateKk(req.session.kkId, { penghasilanBulanan, kategoriEkonomi });
+      if (!data) return res.status(404).json({ message: "KK tidak ditemukan" });
+      res.json(data);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
   app.patch("/api/kk/:id", requireAdmin, async (req, res) => {
     try {
       const parsed = insertKkSchema.partial().parse(req.body);

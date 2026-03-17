@@ -63,6 +63,12 @@ interface DashboardStats {
   pengangguran: { total: number; perUsia: Record<string, number>; daftarNama: { nama: string; usia: number | null; rt: number | null }[]; };
   capaian: { waPercent: number; ktpPercent: number; kkFotoPercent: number; bansosPercent: number; usahaBerizinPercent: number; totalUsahaTarget: number; totalUsahaBerizin: number; };
   rtList: number[];
+  kondisiKesehatan: Record<string, number>;
+  totalDisabilitas: number;
+  totalIbuHamil: number;
+  kategoriEkonomi: Record<string, number>;
+  totalLayakBansos: number;
+  kkEkonomiTerisi: number;
 }
 
 interface MonthlySnapshotData {
@@ -1061,7 +1067,89 @@ export default function AdminDashboard() {
         </Card>
       </div>
 
-      {/* ── 12. DATA RUMAH & FASILITAS ─────────────────────────────────────── */}
+      {/* ── 12. KESEHATAN & KONDISI EKONOMI ────────────────────────────────── */}
+      <Card>
+        <CardContent className="p-4 space-y-4">
+          <SectionTitle icon={<Heart className="w-4 h-4" />}>Kesehatan & Kondisi Ekonomi</SectionTitle>
+
+          {/* Stat summary */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="p-2.5 rounded-lg bg-red-50 border border-red-100 text-center">
+              <p className="text-xs text-muted-foreground mb-0.5">Ibu Hamil</p>
+              <p className="text-lg font-bold text-red-600">{stats.totalIbuHamil}</p>
+            </div>
+            <div className="p-2.5 rounded-lg bg-purple-50 border border-purple-100 text-center">
+              <p className="text-xs text-muted-foreground mb-0.5">Disabilitas</p>
+              <p className="text-lg font-bold text-purple-600">{stats.totalDisabilitas}</p>
+            </div>
+            <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-100 text-center">
+              <p className="text-xs text-muted-foreground mb-0.5">Layak Bansos</p>
+              <p className="text-lg font-bold text-amber-600">{stats.totalLayakBansos}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            {/* Kondisi Kesehatan */}
+            <div>
+              <p className="text-xs font-medium mb-2 text-muted-foreground">Kondisi Kesehatan Warga</p>
+              {Object.entries(stats.kondisiKesehatan).filter(([,v]) => v > 0).length > 0 ? (
+                <div className="space-y-1.5">
+                  {Object.entries(stats.kondisiKesehatan).filter(([,v]) => v > 0).sort((a,b) => b[1]-a[1]).map(([label, value], i) => {
+                    const max = Math.max(...Object.values(stats.kondisiKesehatan), 1);
+                    return (
+                      <div key={label}>
+                        <div className="flex justify-between text-[11px] mb-0.5">
+                          <span className="text-muted-foreground truncate mr-2">{label}</span>
+                          <span className="font-medium">{value}</span>
+                        </div>
+                        <div className="h-2.5 bg-muted rounded-full overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${Math.max(4, (value / max) * 100)}%`, backgroundColor: COLORS[i % COLORS.length] }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : <p className="text-xs text-muted-foreground">Belum ada data</p>}
+            </div>
+
+            {/* Kategori Ekonomi */}
+            <div>
+              <p className="text-xs font-medium mb-2 text-muted-foreground">
+                Kategori Ekonomi KK
+                <span className="ml-1 text-[10px] text-muted-foreground font-normal">({stats.kkEkonomiTerisi}/{stats.totalKk} KK terisi)</span>
+              </p>
+              {Object.entries(stats.kategoriEkonomi).filter(([,v]) => v > 0).length > 0 ? (
+                <div className="space-y-1.5">
+                  {["Sangat Miskin", "Miskin", "Hampir Miskin", "Tidak Miskin"].map((label, i) => {
+                    const value = stats.kategoriEkonomi[label] || 0;
+                    if (value === 0) return null;
+                    const max = Math.max(...Object.values(stats.kategoriEkonomi), 1);
+                    const colors = ["#b54560", "#d97730", "#b8923e", "#2d7a5f"];
+                    return (
+                      <div key={label}>
+                        <div className="flex justify-between text-[11px] mb-0.5">
+                          <span className="text-muted-foreground">{label}</span>
+                          <span className="font-medium">{value}</span>
+                        </div>
+                        <div className="h-2.5 bg-muted rounded-full overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${Math.max(4, (value / max) * 100)}%`, backgroundColor: colors[i] }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <p>Belum ada data</p>
+                  <p className="text-[10px]">Warga dapat mengisi via halaman Profil</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── 13. DATA RUMAH & FASILITAS ─────────────────────────────────────── */}
       <Card>
         <CardContent className="p-4">
           <SectionTitle icon={<Home className="w-4 h-4" />} onDetailClick={() => openDetail("Detail Data Rumah", "Data Rumah & Fasilitas", { statusRumah: stats.statusRumah, listrik: stats.listrik, kondisiBangunan: stats.kondisiBangunan, sumberAir: stats.sumberAir, sanitasiWc: stats.sanitasiWc, bansos: stats.bansos })}>
