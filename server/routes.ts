@@ -186,7 +186,7 @@ const upload = multer({
   fileFilter: (_req, file, cb) => {
     const allowed = [".jpg", ".jpeg", ".png", ".pdf"];
     const ext = path.extname(file.originalname).toLowerCase();
-    if (allowed.includes(ext)) cb(null, true);
+    if (allowed.includes(ext) || file.mimetype === "application/pdf") cb(null, true);
     else cb(new Error("Format file tidak didukung. Gunakan JPG, PNG, atau PDF."));
   },
 });
@@ -1439,13 +1439,19 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
     }
   });
 
-  app.post("/api/upload/kk/:kkId", requireAuth, (req: Request, res: Response, next: any) => {
-    (req as any).uploadType = "kk";
-    next();
-  }, upload.single("file"), async (req: Request, res: Response) => {
+  const pdfOnlyUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 2 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      if (file.mimetype === "application/pdf") cb(null, true);
+      else cb(new Error("Hanya file PDF yang diizinkan untuk KK dan KTP"));
+    },
+  });
+
+  app.post("/api/upload/kk/:kkId", requireAuth, pdfOnlyUpload.single("file"), async (req: Request, res: Response) => {
     try {
       const kkId = parseInt(req.params.kkId as string);
-      if (!req.file) return res.status(400).json({ message: "File harus diunggah" });
+      if (!req.file) return res.status(400).json({ message: "File PDF harus diunggah" });
 
       const kk = await storage.getKkById(kkId);
       if (!kk) return res.status(404).json({ message: "KK tidak ditemukan" });
@@ -1454,26 +1460,39 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
         return res.status(403).json({ message: "Tidak memiliki akses" });
       }
 
-      if (kk.fotoKk) {
-        const oldPath = path.join(uploadsDir, "kk", path.basename(kk.fotoKk));
-        try { if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath); } catch {}
-      }
+      const base64Data = `data:application/pdf;base64,${req.file.buffer.toString("base64")}`;
+      const fileRef = `/api/kk/${kkId}/file`;
+      await storage.updateKk(kkId, { fotoKk: fileRef, fotoKkData: base64Data } as any);
+      res.json({ path: fileRef });
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
 
-      const filePath = `/uploads/kk/${req.file.filename}`;
-      await storage.updateKk(kkId, { fotoKk: filePath } as any);
-      res.json({ path: filePath });
+  app.get("/api/kk/:kkId/file", async (req: Request, res: Response) => {
+    try {
+      if (!req.session?.kkId && !req.session?.isAdmin) {
+        return res.status(401).json({ message: "Silakan login terlebih dahulu" });
+      }
+      const kkId = parseInt(req.params.kkId as string);
+      if (!req.session.isAdmin && req.session.kkId !== kkId) {
+        return res.status(403).json({ message: "Tidak memiliki akses" });
+      }
+      const fileData = await storage.getKkFotoData(kkId);
+      if (!fileData) return res.status(404).json({ message: "File tidak ditemukan" });
+      const base64 = fileData.substring(fileData.indexOf(",") + 1);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `inline; filename="kk-${kkId}.pdf"`);
+      res.send(Buffer.from(base64, "base64"));
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
   });
 
-  app.post("/api/upload/ktp/:wargaId", requireAuth, (req: Request, res: Response, next: any) => {
-    (req as any).uploadType = "ktp";
-    next();
-  }, upload.single("file"), async (req: Request, res: Response) => {
+  app.post("/api/upload/ktp/:wargaId", requireAuth, pdfOnlyUpload.single("file"), async (req: Request, res: Response) => {
     try {
       const wargaId = parseInt(req.params.wargaId as string);
-      if (!req.file) return res.status(400).json({ message: "File harus diunggah" });
+      if (!req.file) return res.status(400).json({ message: "File PDF harus diunggah" });
 
       const w = await storage.getWargaById(wargaId);
       if (!w) return res.status(404).json({ message: "Warga tidak ditemukan" });
@@ -1482,14 +1501,32 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
         return res.status(403).json({ message: "Tidak memiliki akses" });
       }
 
-      if (w.fotoKtp) {
-        const oldPath = path.join(uploadsDir, "ktp", path.basename(w.fotoKtp));
-        try { if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath); } catch {}
-      }
+      const base64Data = `data:application/pdf;base64,${req.file.buffer.toString("base64")}`;
+      const fileRef = `/api/warga/${wargaId}/ktp-file`;
+      await storage.updateWarga(wargaId, { fotoKtp: fileRef, fotoKtpData: base64Data } as any);
+      res.json({ path: fileRef });
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
 
-      const filePath = `/uploads/ktp/${req.file.filename}`;
-      await storage.updateWarga(wargaId, { fotoKtp: filePath } as any);
-      res.json({ path: filePath });
+  app.get("/api/warga/:wargaId/ktp-file", async (req: Request, res: Response) => {
+    try {
+      if (!req.session?.kkId && !req.session?.isAdmin) {
+        return res.status(401).json({ message: "Silakan login terlebih dahulu" });
+      }
+      const wargaId = parseInt(req.params.wargaId as string);
+      const w = await storage.getWargaById(wargaId);
+      if (!w) return res.status(404).json({ message: "Warga tidak ditemukan" });
+      if (!req.session.isAdmin && req.session.kkId !== w.kkId) {
+        return res.status(403).json({ message: "Tidak memiliki akses" });
+      }
+      const fileData = await storage.getWargaFotoKtpData(wargaId);
+      if (!fileData) return res.status(404).json({ message: "File tidak ditemukan" });
+      const base64 = fileData.substring(fileData.indexOf(",") + 1);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `inline; filename="ktp-${wargaId}.pdf"`);
+      res.send(Buffer.from(base64, "base64"));
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

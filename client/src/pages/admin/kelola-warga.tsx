@@ -65,23 +65,16 @@ export default function AdminKelolaWarga() {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const validTypes = ["image/jpeg", "image/jpg", "image/png", "application/pdf"];
-    if (!validTypes.includes(file.type)) {
-      toast({ title: "Format tidak didukung", description: "Gunakan JPG, PNG, atau PDF", variant: "destructive" });
+    if (file.type !== "application/pdf") {
+      toast({ title: "Format tidak didukung", description: "Hanya file PDF yang diterima untuk KTP", variant: "destructive" });
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      toast({ title: "File terlalu besar", description: "Maksimal 5MB", variant: "destructive" });
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: "File terlalu besar", description: "Maksimal 2MB. Kompres PDF terlebih dahulu", variant: "destructive" });
       return;
     }
     setSelectedFile(file);
-    if (file.type.startsWith("image/")) {
-      const reader = new FileReader();
-      reader.onload = (ev) => setFilePreview(ev.target?.result as string);
-      reader.readAsDataURL(file);
-    } else {
-      setFilePreview(null);
-    }
+    setFilePreview(null);
   };
 
   const clearFile = () => {
@@ -93,13 +86,12 @@ export default function AdminKelolaWarga() {
   const handleEditFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const validTypes = ["image/jpeg", "image/jpg", "image/png", "application/pdf"];
-    if (!validTypes.includes(file.type)) {
-      toast({ title: "Format tidak didukung", description: "Gunakan JPG, PNG, atau PDF", variant: "destructive" });
+    if (file.type !== "application/pdf") {
+      toast({ title: "Format tidak didukung", description: "Hanya file PDF yang diterima untuk KTP", variant: "destructive" });
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      toast({ title: "File terlalu besar", description: "Maksimal 5MB", variant: "destructive" });
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: "File terlalu besar", description: "Maksimal 2MB. Kompres PDF terlebih dahulu", variant: "destructive" });
       return;
     }
     setEditSelectedFile(file);
@@ -400,7 +392,7 @@ export default function AdminKelolaWarga() {
         <input
           ref={fileRef}
           type="file"
-          accept=".jpg,.jpeg,.png,.pdf"
+          accept=".pdf,application/pdf"
           onChange={onFileSelect}
           className="hidden"
           data-testid={`input-file-ktp-${testIdPrefix}`}

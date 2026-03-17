@@ -32,6 +32,8 @@ import {
 export interface IStorage {
   getKkByNomor(nomorKk: string): Promise<KartuKeluarga | undefined>;
   getKkById(id: number): Promise<KartuKeluarga | undefined>;
+  getKkFotoData(id: number): Promise<string | null>;
+  getWargaFotoKtpData(id: number): Promise<string | null>;
   getAllKk(): Promise<KartuKeluarga[]>;
   createKk(data: InsertKartuKeluarga): Promise<KartuKeluarga>;
   updateKk(id: number, data: Partial<InsertKartuKeluarga>): Promise<KartuKeluarga | undefined>;
@@ -264,6 +266,16 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
+  async getKkFotoData(id: number): Promise<string | null> {
+    const [result] = await db.select({ fotoKkData: kartuKeluarga.fotoKkData }).from(kartuKeluarga).where(eq(kartuKeluarga.id, id));
+    return result?.fotoKkData ?? null;
+  }
+
+  async getWargaFotoKtpData(id: number): Promise<string | null> {
+    const [result] = await db.select({ fotoKtpData: warga.fotoKtpData }).from(warga).where(eq(warga.id, id));
+    return result?.fotoKtpData ?? null;
+  }
+
   async deleteKk(id: number): Promise<void> {
     await db.transaction(async (tx) => {
       const wargaList = await tx.select({ id: warga.id }).from(warga).where(eq(warga.kkId, id));
@@ -437,6 +449,7 @@ export class DatabaseStorage implements IStorage {
       pendidikan: warga.pendidikan,
       statusKependudukan: warga.statusKependudukan,
       fotoKtp: warga.fotoKtp,
+      fotoKtpData: warga.fotoKtpData,
       createdAt: warga.createdAt,
       nomorKk: kartuKeluarga.nomorKk,
       rt: kartuKeluarga.rt,
@@ -462,6 +475,7 @@ export class DatabaseStorage implements IStorage {
       pendidikan: warga.pendidikan,
       statusKependudukan: warga.statusKependudukan,
       fotoKtp: warga.fotoKtp,
+      fotoKtpData: warga.fotoKtpData,
       createdAt: warga.createdAt,
       nomorKk: kartuKeluarga.nomorKk,
       rt: kartuKeluarga.rt,

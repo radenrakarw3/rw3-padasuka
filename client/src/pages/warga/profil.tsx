@@ -147,9 +147,8 @@ export default function WargaProfil() {
   };
 
   const validateFile = (file: File): string | null => {
-    const validTypes = ["image/jpeg", "image/jpg", "image/png", "application/pdf"];
-    if (!validTypes.includes(file.type)) return "Format tidak didukung. Gunakan JPG, PNG, atau PDF.";
-    if (file.size > 5 * 1024 * 1024) return "File terlalu besar. Maksimal 5MB.";
+    if (file.type !== "application/pdf") return "Hanya file PDF yang diterima untuk KK dan KTP.";
+    if (file.size > 2 * 1024 * 1024) return "File terlalu besar. Maksimal 2MB. Kompres PDF terlebih dahulu.";
     return null;
   };
 
@@ -505,7 +504,7 @@ export default function WargaProfil() {
                   <input
                     ref={kkFileRef}
                     type="file"
-                    accept="image/jpeg,image/png,image/jpg,application/pdf"
+                    accept="application/pdf"
                     className="hidden"
                     onChange={(e) => {
                       const f = e.target.files?.[0];
@@ -537,7 +536,7 @@ export default function WargaProfil() {
                     <input
                       ref={(el) => { ktpFileRefs.current[w.id] = el; }}
                       type="file"
-                      accept="image/jpeg,image/png,image/jpg,application/pdf"
+                      accept="application/pdf"
                       className="hidden"
                       onChange={(e) => {
                         const f = e.target.files?.[0];
