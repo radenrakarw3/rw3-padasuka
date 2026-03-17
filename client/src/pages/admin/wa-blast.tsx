@@ -18,7 +18,8 @@ import { Input } from "@/components/ui/input";
 import {
   Send, MessageSquare, Users, CheckCircle, Clock, ChevronDown, ChevronUp,
   FileText, XCircle, Sparkles, Loader2, AlertTriangle, PhoneOff, Baby,
-  Phone, RefreshCw, ChevronRight,
+  Phone, RefreshCw, ChevronRight, ChevronLeft, Download, Save, Pencil, X,
+  Copy, AlertCircle,
 } from "lucide-react";
 import type { WaBlast } from "@shared/schema";
 
@@ -112,14 +113,22 @@ interface WargaKosong {
   kepalaKeluarga: { id: number; namaLengkap: string; nomorWhatsapp: string | null } | null;
 }
 
+interface DuplikatGroup {
+  nomor: string;
+  jumlah: number;
+  warga: { id: number; namaLengkap: string; rt: number; kedudukanKeluarga: string; nomorKk: string }[];
+}
+
 interface NomorKosongData {
   stats: {
     totalKosong: number;
     totalAnak: number;
     totalPerluDiisi: number;
+    totalDuplikat: number;
     byRt: { rt: number; total: number; anak: number; perluDiisi: number }[];
   };
   data: WargaKosong[];
+  duplikat: DuplikatGroup[];
 }
 
 function buildWaLink(phone: string, message: string) {
@@ -128,9 +137,18 @@ function buildWaLink(phone: string, message: string) {
   return `https://wa.me/${intl}?text=${encodeURIComponent(message)}`;
 }
 
+const PAGE_SIZE = 10;
+
 function WargaKosongPanel() {
+  const { toast } = useToast();
   const [filterRtPanel, setFilterRtPanel] = useState<number | null>(null);
   const [expandedPanel, setExpandedPanel] = useState(true);
+  // Pagination
+  const [pageDiisi, setPageDiisi] = useState(1);
+  const [pageAnak, setPageAnak] = useState(1);
+  // Inline edit state: wargaId -> input value
+  const [editMap, setEditMap] = useState<Record<number, string>>({});
+  const [savingIds, setSavingIds] = useState<Set<number>>(new Set());
 
   const { data, isLoading, refetch, isFetching } = useQuery<NomorKosongData>({
     queryKey: ["/api/wa-blast/nomor-kosong"],
@@ -150,17 +168,52 @@ function WargaKosongPanel() {
 
   const anakList = displayed.filter(w => w.isAnak);
   const perluDiisiList = displayed.filter(w => !w.isAnak);
-
   const rtList = stats?.byRt ?? [];
+
+  // Reset halaman saat filter RT berubah
+  const handleFilterRt = (rt: number | null) => {
+    setFilterRtPanel(rt);
+    setPageDiisi(1);
+    setPageAnak(1);
+  };
+
+  // Pagination helpers
+  const totalPagesDiisi = Math.ceil(perluDiisiList.length / PAGE_SIZE);
+  const totalPagesAnak = Math.ceil(anakList.length / PAGE_SIZE);
+  const pagedDiisi = perluDiisiList.slice((pageDiisi - 1) * PAGE_SIZE, pageDiisi * PAGE_SIZE);
+  const pagedAnak = anakList.slice((pageAnak - 1) * PAGE_SIZE, pageAnak * PAGE_SIZE);
+
+  // Save nomor WA
+  const saveNomorWa = async (wargaId: number) => {
+    const nomor = (editMap[wargaId] ?? "").trim();
+    if (!nomor) {
+      toast({ title: "Nomor kosong", description: "Isi nomor WhatsApp terlebih dahulu", variant: "destructive" });
+      return;
+    }
+    setSavingIds(prev => new Set(prev).add(wargaId));
+    try {
+      await apiRequest("PATCH", `/api/warga/${wargaId}`, { nomorWhatsapp: nomor });
+      setEditMap(prev => { const n = { ...prev }; delete n[wargaId]; return n; });
+      toast({ title: "Berhasil disimpan", description: "Nomor WA berhasil diperbarui." });
+      queryClient.invalidateQueries({ queryKey: ["/api/wa-blast/nomor-kosong"] });
+    } catch (err: any) {
+      toast({ title: "Gagal simpan", description: err.message, variant: "destructive" });
+    } finally {
+      setSavingIds(prev => { const n = new Set(prev); n.delete(wargaId); return n; });
+    }
+  };
+
+  // Export Excel
+  const handleExport = () => {
+    const rtParam = filterRtPanel !== null ? `?rt=${filterRtPanel}` : "";
+    window.open(`/api/wa-blast/nomor-kosong/export${rtParam}`, "_blank");
+  };
 
   return (
     <Card className="border-orange-200 bg-orange-50/30">
       <CardContent className="p-4 space-y-3">
         {/* Header */}
-        <div
-          className="flex items-center justify-between cursor-pointer"
-          onClick={() => setExpandedPanel(p => !p)}
-        >
+        <div className="flex items-center justify-between cursor-pointer" onClick={() => setExpandedPanel(p => !p)}>
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
               <PhoneOff className="w-4 h-4 text-orange-600" />
@@ -176,20 +229,11 @@ function WargaKosongPanel() {
                 {stats.totalKosong} warga
               </Badge>
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0 text-orange-600 hover:bg-orange-100"
-              onClick={(e) => { e.stopPropagation(); refetch(); }}
-              title="Refresh data"
-            >
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-orange-600 hover:bg-orange-100"
+              onClick={(e) => { e.stopPropagation(); refetch(); }} title="Refresh">
               <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} />
             </Button>
-            {expandedPanel ? (
-              <ChevronUp className="w-4 h-4 text-orange-500" />
-            ) : (
-              <ChevronDown className="w-4 h-4 text-orange-500" />
-            )}
+            {expandedPanel ? <ChevronUp className="w-4 h-4 text-orange-500" /> : <ChevronDown className="w-4 h-4 text-orange-500" />}
           </div>
         </div>
 
@@ -197,8 +241,7 @@ function WargaKosongPanel() {
           <>
             {isLoading ? (
               <div className="space-y-2">
-                <Skeleton className="h-16 rounded-lg" />
-                <Skeleton className="h-16 rounded-lg" />
+                <Skeleton className="h-16 rounded-lg" /><Skeleton className="h-16 rounded-lg" />
               </div>
             ) : !stats || stats.totalKosong === 0 ? (
               <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 border border-green-200">
@@ -210,175 +253,320 @@ function WargaKosongPanel() {
               </div>
             ) : (
               <>
-                {/* Stats summary */}
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="rounded-lg bg-white border border-orange-100 p-2 text-center">
-                    <p className="text-lg font-bold text-orange-700">{stats.totalKosong}</p>
-                    <p className="text-[10px] text-orange-500 leading-tight">Total Kosong</p>
+                {/* Stats + Export */}
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div className="rounded-lg bg-white border border-orange-100 p-2 text-center">
+                      <p className="text-lg font-bold text-orange-700">{stats.totalKosong}</p>
+                      <p className="text-[10px] text-orange-500 leading-tight">WA Kosong</p>
+                    </div>
+                    <div className="rounded-lg bg-white border border-red-100 p-2 text-center">
+                      <p className="text-lg font-bold text-red-600">{stats.totalPerluDiisi}</p>
+                      <p className="text-[10px] text-red-500 leading-tight">Perlu Diisi</p>
+                    </div>
+                    <div className="rounded-lg bg-white border border-blue-100 p-2 text-center">
+                      <p className="text-lg font-bold text-blue-600">{stats.totalAnak}</p>
+                      <p className="text-[10px] text-blue-500 leading-tight">Anak &lt;16 thn</p>
+                    </div>
+                    <div className={`rounded-lg bg-white border p-2 text-center ${(stats.totalDuplikat ?? 0) > 0 ? "border-yellow-200" : "border-gray-100"}`}>
+                      <p className={`text-lg font-bold ${(stats.totalDuplikat ?? 0) > 0 ? "text-yellow-600" : "text-gray-400"}`}>
+                        {stats.totalDuplikat ?? 0}
+                      </p>
+                      <p className={`text-[10px] leading-tight ${(stats.totalDuplikat ?? 0) > 0 ? "text-yellow-500" : "text-gray-400"}`}>
+                        Nomor Duplikat
+                      </p>
+                    </div>
                   </div>
-                  <div className="rounded-lg bg-white border border-red-100 p-2 text-center">
-                    <p className="text-lg font-bold text-red-600">{stats.totalPerluDiisi}</p>
-                    <p className="text-[10px] text-red-500 leading-tight">Perlu Diisi</p>
-                  </div>
-                  <div className="rounded-lg bg-white border border-blue-100 p-2 text-center">
-                    <p className="text-lg font-bold text-blue-600">{stats.totalAnak}</p>
-                    <p className="text-[10px] text-blue-500 leading-tight">Anak &lt;16 thn</p>
-                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full h-8 gap-1.5 text-xs border-green-300 text-green-700 hover:bg-green-50"
+                    onClick={handleExport}
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Export Excel (WA Kosong + Duplikat)
+                  </Button>
                 </div>
 
-                {/* Persebaran per RT */}
+                {/* Filter per RT */}
                 {rtList.length > 0 && (
                   <div className="space-y-1.5">
-                    <p className="text-[11px] font-medium text-orange-700 uppercase tracking-wide">Persebaran per RT</p>
+                    <p className="text-[11px] font-medium text-orange-700 uppercase tracking-wide">Filter RT</p>
                     <div className="flex flex-wrap gap-1.5">
                       <button
-                        className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
-                          filterRtPanel === null
-                            ? "bg-orange-500 text-white"
-                            : "bg-white border border-orange-200 text-orange-700 hover:bg-orange-50"
-                        }`}
-                        onClick={() => setFilterRtPanel(null)}
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${filterRtPanel === null ? "bg-orange-500 text-white" : "bg-white border border-orange-200 text-orange-700 hover:bg-orange-50"}`}
+                        onClick={() => handleFilterRt(null)}
                       >
                         Semua ({stats.totalKosong})
                       </button>
                       {rtList.map(r => (
-                        <button
-                          key={r.rt}
-                          className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
-                            filterRtPanel === r.rt
-                              ? "bg-orange-500 text-white"
-                              : "bg-white border border-orange-200 text-orange-700 hover:bg-orange-50"
-                          }`}
-                          onClick={() => setFilterRtPanel(r.rt === filterRtPanel ? null : r.rt)}
+                        <button key={r.rt}
+                          className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${filterRtPanel === r.rt ? "bg-orange-500 text-white" : "bg-white border border-orange-200 text-orange-700 hover:bg-orange-50"}`}
+                          onClick={() => handleFilterRt(filterRtPanel === r.rt ? null : r.rt)}
                         >
                           RT {String(r.rt).padStart(2, "0")} ({r.total})
+                          {r.perluDiisi > 0 && <span className="ml-1 text-red-400">·{r.perluDiisi}</span>}
                         </button>
                       ))}
                     </div>
                   </div>
                 )}
 
-                {/* Warga perlu diisi */}
+                {/* ── Perlu Diisi ── */}
                 {perluDiisiList.length > 0 && (
                   <div className="space-y-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
-                      <p className="text-[11px] font-semibold text-red-700 uppercase tracking-wide">
-                        Perlu Diisi ({perluDiisiList.length})
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
+                        <p className="text-[11px] font-semibold text-red-700 uppercase tracking-wide">
+                          Perlu Diisi ({perluDiisiList.length})
+                        </p>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">
+                        Hal. {pageDiisi}/{totalPagesDiisi} · {(pageDiisi - 1) * PAGE_SIZE + 1}–{Math.min(pageDiisi * PAGE_SIZE, perluDiisiList.length)} dari {perluDiisiList.length}
                       </p>
                     </div>
-                    <div className="space-y-1.5">
-                      {perluDiisiList.map(w => {
+
+                    <div className="space-y-2">
+                      {pagedDiisi.map(w => {
                         const isKK = w.kedudukanKeluarga === "Kepala Keluarga";
                         const kkWaAvail = !isKK && w.kepalaKeluarga?.nomorWhatsapp;
                         const gender = w.jenisKelamin === "Perempuan" ? "Ibu" : "Bapak";
-                        const kkGender = w.kepalaKeluarga
-                          ? (w.jenisKelamin === "Perempuan" ? "Ibu" : "Bapak")
-                          : "Bapak/Ibu";
-
+                        const kkGender = w.kepalaKeluarga ? (w.kepalaKeluarga.namaLengkap.startsWith("Ibu") ? "Ibu" : "Bapak") : "Bapak/Ibu";
                         const waMsg = isKK
-                          ? `Assalamu'alaikum ${gender} ${w.namaLengkap}, kami dari pengurus RW 03 Padasuka. Mohon segera melengkapi nomor WhatsApp ${gender} di data warga RW 03 kami agar bisa menerima informasi penting warga. Terima kasih 🙏`
+                          ? `Assalamu'alaikum ${gender} ${w.namaLengkap}, kami dari pengurus RW 03 Padasuka. Mohon segera melengkapi nomor WhatsApp ${gender} di data warga RW 03 kami agar bisa menerima informasi penting. Terima kasih 🙏`
                           : `Assalamu'alaikum ${kkGender} ${w.kepalaKeluarga?.namaLengkap ?? ""}, kami dari pengurus RW 03 Padasuka. Mohon bantu melengkapi nomor WhatsApp atas nama *${w.namaLengkap}* (${w.kedudukanKeluarga}) di data warga RW 03 kami. Terima kasih 🙏`;
-
-                        const waTarget = isKK
-                          ? null
-                          : (kkWaAvail ? w.kepalaKeluarga!.nomorWhatsapp! : null);
+                        const waTarget = isKK ? null : (kkWaAvail ? w.kepalaKeluarga!.nomorWhatsapp! : null);
+                        const isEditing = w.id in editMap;
+                        const isSaving = savingIds.has(w.id);
 
                         return (
-                          <div
-                            key={w.id}
-                            className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-red-100 hover:border-red-200 transition-colors"
-                          >
-                            <div className="w-7 h-7 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0 mt-0.5">
-                              <PhoneOff className="w-3.5 h-3.5 text-red-500" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-start justify-between gap-1">
-                                <p className="text-xs font-semibold text-gray-800 leading-tight">{w.namaLengkap}</p>
-                                <Badge className="text-[9px] bg-red-100 text-red-700 border-red-200 flex-shrink-0 py-0">
-                                  Belum ada WA
-                                </Badge>
+                          <div key={w.id} className="rounded-lg bg-white border border-red-100 overflow-hidden">
+                            {/* Baris info */}
+                            <div className="flex items-start gap-2.5 p-2.5">
+                              <div className="w-7 h-7 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <PhoneOff className="w-3.5 h-3.5 text-red-500" />
                               </div>
-                              <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
-                                <span className="text-[10px] text-muted-foreground">
-                                  RT {String(w.rt).padStart(2, "0")}
-                                </span>
-                                <span className="text-[10px] text-muted-foreground">·</span>
-                                <span className="text-[10px] text-muted-foreground">{w.kedudukanKeluarga}</span>
-                                {w.umur !== null && (
-                                  <>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start justify-between gap-1">
+                                  <p className="text-xs font-semibold text-gray-800 leading-tight">{w.namaLengkap}</p>
+                                  <Badge className="text-[9px] bg-red-100 text-red-700 border-red-200 flex-shrink-0 py-0">Belum ada WA</Badge>
+                                </div>
+                                <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
+                                  <span className="text-[10px] text-muted-foreground">RT {String(w.rt).padStart(2, "0")}</span>
+                                  <span className="text-[10px] text-muted-foreground">·</span>
+                                  <span className="text-[10px] text-muted-foreground">{w.kedudukanKeluarga}</span>
+                                  {w.umur !== null && <>
                                     <span className="text-[10px] text-muted-foreground">·</span>
                                     <span className="text-[10px] text-muted-foreground">{w.umur} thn</span>
-                                  </>
+                                  </>}
+                                </div>
+                                {!isKK && w.kepalaKeluarga && (
+                                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                                    KK: {w.kepalaKeluarga.namaLengkap}
+                                    {w.kepalaKeluarga.nomorWhatsapp
+                                      ? <span className="text-green-600"> · punya WA</span>
+                                      : <span className="text-red-500"> · tidak ada WA</span>}
+                                  </p>
                                 )}
                               </div>
-                              {!isKK && w.kepalaKeluarga && (
-                                <p className="text-[10px] text-muted-foreground mt-0.5">
-                                  KK: {w.kepalaKeluarga.namaLengkap}
-                                  {w.kepalaKeluarga.nomorWhatsapp
-                                    ? <span className="text-green-600"> · punya WA</span>
-                                    : <span className="text-red-500"> · tidak ada WA</span>
-                                  }
-                                </p>
-                              )}
-                            </div>
-                            {/* WA Button */}
-                            {waTarget ? (
-                              <a
-                                href={buildWaLink(waTarget, waMsg)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex-shrink-0"
-                                title={`Hubungi KK via WA`}
-                              >
+                              {/* Aksi kanan */}
+                              <div className="flex flex-col gap-1 flex-shrink-0 items-end">
+                                {waTarget && (
+                                  <a href={buildWaLink(waTarget, waMsg)} target="_blank" rel="noopener noreferrer">
+                                    <Button size="sm" className="h-6 px-2 text-[10px] gap-1 bg-green-600 hover:bg-green-700 text-white">
+                                      <Phone className="w-3 h-3" />WA KK
+                                    </Button>
+                                  </a>
+                                )}
                                 <Button
                                   size="sm"
-                                  className="h-7 px-2 text-[10px] gap-1 bg-green-600 hover:bg-green-700 text-white"
+                                  variant="outline"
+                                  className="h-6 px-2 text-[10px] gap-1 border-blue-200 text-blue-600 hover:bg-blue-50"
+                                  onClick={() => setEditMap(prev => isEditing
+                                    ? (({ [w.id]: _, ...rest }) => rest)(prev)
+                                    : { ...prev, [w.id]: "" }
+                                  )}
                                 >
-                                  <Phone className="w-3 h-3" />
-                                  WA KK
+                                  {isEditing ? <X className="w-3 h-3" /> : <Pencil className="w-3 h-3" />}
+                                  {isEditing ? "Batal" : "Input WA"}
                                 </Button>
-                              </a>
-                            ) : isKK ? (
-                              <span className="flex-shrink-0 text-[9px] text-muted-foreground text-center leading-tight max-w-[44px]">
-                                Dia sendiri KK
-                              </span>
-                            ) : (
-                              <span className="flex-shrink-0 text-[9px] text-red-400 text-center leading-tight max-w-[44px]">
-                                KK tak punya WA
-                              </span>
+                              </div>
+                            </div>
+
+                            {/* Baris input nomor WA (expanded) */}
+                            {isEditing && (
+                              <div className="px-2.5 pb-2.5 pt-0 border-t border-red-50 bg-blue-50/50">
+                                <p className="text-[10px] text-blue-700 font-medium mb-1.5 mt-2">
+                                  Input Nomor WA untuk <span className="font-bold">{w.namaLengkap}</span>
+                                </p>
+                                <div className="flex gap-1.5">
+                                  <Input
+                                    value={editMap[w.id] ?? ""}
+                                    onChange={e => setEditMap(prev => ({ ...prev, [w.id]: e.target.value }))}
+                                    placeholder="Contoh: 08123456789"
+                                    className="h-8 text-xs flex-1"
+                                    type="tel"
+                                    onKeyDown={e => { if (e.key === "Enter" && !isSaving) saveNomorWa(w.id); }}
+                                    autoFocus
+                                  />
+                                  <Button
+                                    size="sm"
+                                    className="h-8 px-3 gap-1 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                                    onClick={() => saveNomorWa(w.id)}
+                                    disabled={isSaving || !(editMap[w.id] ?? "").trim()}
+                                  >
+                                    {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                                    Simpan
+                                  </Button>
+                                </div>
+                                <p className="text-[9px] text-muted-foreground mt-1">Format: 08xx atau 62xx. Langsung tersimpan ke database.</p>
+                              </div>
                             )}
                           </div>
                         );
                       })}
                     </div>
+
+                    {/* Pagination Perlu Diisi */}
+                    {totalPagesDiisi > 1 && (
+                      <div className="flex items-center justify-between pt-1">
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs gap-1 text-orange-700"
+                          disabled={pageDiisi === 1} onClick={() => setPageDiisi(p => p - 1)}>
+                          <ChevronLeft className="w-3.5 h-3.5" /> Prev
+                        </Button>
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: totalPagesDiisi }, (_, i) => i + 1).map(p => (
+                            <button key={p}
+                              className={`w-6 h-6 rounded text-[10px] font-medium transition-colors ${pageDiisi === p ? "bg-orange-500 text-white" : "bg-white border border-orange-200 text-orange-700 hover:bg-orange-50"}`}
+                              onClick={() => setPageDiisi(p)}
+                            >{p}</button>
+                          ))}
+                        </div>
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs gap-1 text-orange-700"
+                          disabled={pageDiisi === totalPagesDiisi} onClick={() => setPageDiisi(p => p + 1)}>
+                          Next <ChevronRight className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {/* Anak di bawah 16 tahun */}
+                {/* ── Anak < 16 Tahun ── */}
                 {anakList.length > 0 && (
                   <div className="space-y-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <Baby className="w-3.5 h-3.5 text-blue-500" />
-                      <p className="text-[11px] font-semibold text-blue-700 uppercase tracking-wide">
-                        Anak &lt; 16 Tahun — Tidak Punya WA ({anakList.length})
-                      </p>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Baby className="w-3.5 h-3.5 text-blue-500" />
+                        <p className="text-[11px] font-semibold text-blue-700 uppercase tracking-wide">
+                          Anak &lt; 16 Tahun — Tidak Punya WA ({anakList.length})
+                        </p>
+                      </div>
+                      {totalPagesAnak > 1 && (
+                        <p className="text-[10px] text-muted-foreground">
+                          Hal. {pageAnak}/{totalPagesAnak}
+                        </p>
+                      )}
                     </div>
                     <div className="p-2.5 rounded-lg bg-blue-50 border border-blue-100">
                       <p className="text-[11px] text-blue-700 mb-2">
-                        Anak di bawah 16 tahun dianggap tidak memiliki WhatsApp. Data ini tidak perlu diisi.
+                        Anak di bawah 16 tahun dianggap tidak memiliki WhatsApp. Tidak perlu diisi.
                       </p>
                       <div className="space-y-1">
-                        {anakList.map(w => (
+                        {pagedAnak.map(w => (
                           <div key={w.id} className="flex items-center gap-2 py-1 border-b border-blue-100 last:border-0">
                             <Baby className="w-3 h-3 text-blue-400 flex-shrink-0" />
                             <span className="text-[11px] text-blue-800 flex-1 font-medium">{w.namaLengkap}</span>
                             <span className="text-[10px] text-blue-500">RT {String(w.rt).padStart(2, "0")}</span>
                             <span className="text-[10px] text-blue-400">·</span>
                             <span className="text-[10px] text-blue-500">{w.umur ?? "?"} thn</span>
-                            <Badge className="text-[9px] bg-blue-100 text-blue-700 border-blue-200 py-0">
-                              Anak
-                            </Badge>
+                            <Badge className="text-[9px] bg-blue-100 text-blue-700 border-blue-200 py-0">Anak</Badge>
+                          </div>
+                        ))}
+                      </div>
+                      {/* Pagination Anak */}
+                      {totalPagesAnak > 1 && (
+                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-blue-100">
+                          <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px] gap-1 text-blue-600"
+                            disabled={pageAnak === 1} onClick={() => setPageAnak(p => p - 1)}>
+                            <ChevronLeft className="w-3 h-3" /> Prev
+                          </Button>
+                          <div className="flex items-center gap-1">
+                            {Array.from({ length: totalPagesAnak }, (_, i) => i + 1).map(p => (
+                              <button key={p}
+                                className={`w-5 h-5 rounded text-[9px] font-medium ${pageAnak === p ? "bg-blue-500 text-white" : "bg-white border border-blue-200 text-blue-600"}`}
+                                onClick={() => setPageAnak(p)}
+                              >{p}</button>
+                            ))}
+                          </div>
+                          <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px] gap-1 text-blue-600"
+                            disabled={pageAnak === totalPagesAnak} onClick={() => setPageAnak(p => p + 1)}>
+                            Next <ChevronRight className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Nomor WA Duplikat ── */}
+                {(data?.duplikat?.length ?? 0) > 0 && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5 text-yellow-600" />
+                      <p className="text-[11px] font-semibold text-yellow-700 uppercase tracking-wide">
+                        Nomor WA Duplikat ({data!.duplikat.length} nomor · {data!.duplikat.reduce((s, g) => s + g.jumlah, 0)} warga)
+                      </p>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-yellow-50 border border-yellow-200">
+                      <p className="text-[11px] text-yellow-700 mb-2.5 leading-snug">
+                        Nomor di bawah ini dipakai oleh lebih dari 1 warga. Pastikan setiap warga punya nomor yang unik agar WA Blast terkirim tepat sasaran.
+                      </p>
+                      <div className="space-y-2">
+                        {(filterRtPanel !== null
+                          ? data!.duplikat.filter(g => g.warga.some(w => w.rt === filterRtPanel))
+                          : data!.duplikat
+                        ).map((group) => (
+                          <div key={group.nomor} className="rounded-md bg-white border border-yellow-200 overflow-hidden">
+                            {/* Header grup */}
+                            <div className="flex items-center justify-between px-2.5 py-1.5 bg-yellow-100/60 border-b border-yellow-200">
+                              <div className="flex items-center gap-1.5">
+                                <Phone className="w-3 h-3 text-yellow-700 flex-shrink-0" />
+                                <span className="text-xs font-bold text-yellow-800 font-mono">{group.nomor}</span>
+                                <Badge className="text-[9px] bg-yellow-200 text-yellow-800 border-yellow-300 py-0 ml-1">
+                                  {group.jumlah}x duplikat
+                                </Badge>
+                              </div>
+                              <button
+                                className="flex items-center gap-1 text-[10px] text-yellow-700 hover:text-yellow-900 transition-colors"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(group.nomor);
+                                }}
+                                title="Salin nomor"
+                              >
+                                <Copy className="w-3 h-3" />
+                                Salin
+                              </button>
+                            </div>
+                            {/* List warga */}
+                            <div className="divide-y divide-yellow-50">
+                              {group.warga.map((w, idx) => (
+                                <div key={w.id} className="flex items-center gap-2 px-2.5 py-1.5">
+                                  <span className="w-4 h-4 rounded-full bg-yellow-100 text-yellow-700 text-[9px] font-bold flex items-center justify-center flex-shrink-0">
+                                    {idx + 1}
+                                  </span>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-[11px] font-medium text-gray-800 truncate">{w.namaLengkap}</p>
+                                    <p className="text-[10px] text-muted-foreground">
+                                      RT {String(w.rt).padStart(2, "0")} · {w.kedudukanKeluarga} · KK {w.nomorKk}
+                                    </p>
+                                  </div>
+                                  {w.kedudukanKeluarga === "Kepala Keluarga" && (
+                                    <Badge className="text-[9px] bg-orange-100 text-orange-700 border-orange-200 py-0 flex-shrink-0">KK</Badge>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -386,11 +574,11 @@ function WargaKosongPanel() {
                   </div>
                 )}
 
-                {/* Info footer */}
+                {/* Footer info */}
                 <div className="flex items-start gap-2 p-2 rounded-lg bg-orange-50 border border-orange-100">
                   <AlertTriangle className="w-3.5 h-3.5 text-orange-500 flex-shrink-0 mt-0.5" />
                   <p className="text-[10px] text-orange-700 leading-relaxed">
-                    Nomor WA yang tidak diisi akan <strong>dilewati saat WA Blast</strong>. Segera hubungi warga atau kepala keluarga untuk melengkapi data.
+                    Nomor WA yang tidak diisi akan <strong>dilewati saat WA Blast</strong>. Input langsung di sini atau export Excel untuk pengisian offline.
                   </p>
                 </div>
               </>

@@ -7,6 +7,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import express from "express";
+import * as XLSX from "xlsx";
 import { storage } from "./storage";
 import { pool } from "./db";
 import { insertKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertProfileEditSchema, insertWaBlastSchema, insertPengajuanBansosSchema, insertDonasiCampaignSchema, insertDonasiSchema, insertKasRwSchema, insertPemilikKostSchema, insertWargaSinggahSchema, insertUsahaSchema, insertKaryawanUsahaSchema, insertIzinTetanggaSchema, insertSurveyUsahaSchema } from "@shared/schema";
@@ -1348,30 +1349,43 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
         const isAnak = umur !== null && umur < 16;
         const kkMembers = perKk.get(w.kkId) || [];
         const kk = kkMembers.find(m => m.kedudukanKeluarga === "Kepala Keluarga");
-
         return {
-          id: w.id,
-          namaLengkap: w.namaLengkap,
-          nik: w.nik,
-          umur,
-          jenisKelamin: w.jenisKelamin,
-          kedudukanKeluarga: w.kedudukanKeluarga,
-          rt: w.rt,
-          alamat: w.alamat,
-          kkId: w.kkId,
-          nomorKk: w.nomorKk,
-          isAnak,
-          kepalaKeluarga: kk
-            ? { id: kk.id, namaLengkap: kk.namaLengkap, nomorWhatsapp: kk.nomorWhatsapp }
-            : null,
+          id: w.id, namaLengkap: w.namaLengkap, nik: w.nik, umur,
+          jenisKelamin: w.jenisKelamin, kedudukanKeluarga: w.kedudukanKeluarga,
+          rt: w.rt, alamat: w.alamat, kkId: w.kkId, nomorKk: w.nomorKk, isAnak,
+          kepalaKeluarga: kk ? { id: kk.id, namaLengkap: kk.namaLengkap, nomorWhatsapp: kk.nomorWhatsapp } : null,
         };
       });
+
+      // Deteksi duplikat nomor WA (warga yang punya WA tapi nomornya sama dengan orang lain)
+      const phoneMap = new Map<string, typeof allWarga>();
+      for (const w of allWarga) {
+        if (!w.nomorWhatsapp) continue;
+        const norm = w.nomorWhatsapp.replace(/[^0-9]/g, "");
+        if (!phoneMap.has(norm)) phoneMap.set(norm, []);
+        phoneMap.get(norm)!.push(w);
+      }
+      const duplikatGroups = Array.from(phoneMap.entries())
+        .filter(([, members]) => members.length > 1)
+        .map(([nomor, members]) => ({
+          nomor,
+          jumlah: members.length,
+          warga: members.map(w => ({
+            id: w.id,
+            namaLengkap: w.namaLengkap,
+            rt: w.rt,
+            kedudukanKeluarga: w.kedudukanKeluarga,
+            nomorKk: w.nomorKk,
+          })),
+        }))
+        .sort((a, b) => b.jumlah - a.jumlah);
 
       const rtList = [1, 2, 3, 4, 5, 6, 7];
       const stats = {
         totalKosong: data.length,
         totalAnak: data.filter(w => w.isAnak).length,
         totalPerluDiisi: data.filter(w => !w.isAnak).length,
+        totalDuplikat: duplikatGroups.length,
         byRt: rtList
           .map(rt => ({
             rt,
@@ -1382,7 +1396,113 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
           .filter(r => r.total > 0),
       };
 
-      res.json({ stats, data });
+      res.json({ stats, data, duplikat: duplikatGroups });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/wa-blast/nomor-kosong/export", requireAdmin, async (req, res) => {
+    try {
+      const allWarga = await storage.getAllWargaWithKk();
+
+      const perKk = new Map<number, typeof allWarga>();
+      for (const w of allWarga) {
+        if (!perKk.has(w.kkId)) perKk.set(w.kkId, []);
+        perKk.get(w.kkId)!.push(w);
+      }
+
+      const filterRtParam = req.query.rt ? parseInt(req.query.rt as string) : undefined;
+      let wargaKosong = allWarga.filter(w => !w.nomorWhatsapp);
+      if (filterRtParam && !isNaN(filterRtParam)) {
+        wargaKosong = wargaKosong.filter(w => w.rt === filterRtParam);
+      }
+
+      const rows = wargaKosong.map(w => {
+        const umur = hitungUmur(w.tanggalLahir ?? null);
+        const isAnak = umur !== null && umur < 16;
+        const kkMembers = perKk.get(w.kkId) || [];
+        const kk = kkMembers.find(m => m.kedudukanKeluarga === "Kepala Keluarga");
+        return {
+          "Nama Lengkap": w.namaLengkap,
+          "NIK": w.nik,
+          "RT": `RT ${String(w.rt).padStart(2, "0")}`,
+          "Alamat": w.alamat,
+          "No. KK": w.nomorKk,
+          "Kedudukan Keluarga": w.kedudukanKeluarga,
+          "Jenis Kelamin": w.jenisKelamin,
+          "Umur": umur !== null ? `${umur} tahun` : "-",
+          "Kategori": isAnak ? "Anak < 16 thn (Tidak punya WA)" : "Perlu diisi",
+          "Nomor WA": "",
+          "Nama Kepala Keluarga": kk?.namaLengkap ?? "-",
+          "WA Kepala Keluarga": kk?.nomorWhatsapp ?? "-",
+        };
+      });
+
+      // Duplikat nomor WA (semua RT, tidak difilter)
+      const phoneMap2 = new Map<string, typeof allWarga>();
+      for (const w of allWarga) {
+        if (!w.nomorWhatsapp) continue;
+        const norm = w.nomorWhatsapp.replace(/[^0-9]/g, "");
+        if (!phoneMap2.has(norm)) phoneMap2.set(norm, []);
+        phoneMap2.get(norm)!.push(w);
+      }
+      const dupRows: Record<string, string>[] = [];
+      for (const [nomor, members] of phoneMap2.entries()) {
+        if (members.length < 2) continue;
+        members.forEach((w, idx) => {
+          dupRows.push({
+            "Nomor WA (Duplikat)": idx === 0 ? nomor : "",
+            "Jumlah Pemakai": idx === 0 ? String(members.length) : "",
+            "Nama Warga": w.namaLengkap,
+            "RT": `RT ${String(w.rt).padStart(2, "0")}`,
+            "No. KK": w.nomorKk,
+            "Kedudukan Keluarga": w.kedudukanKeluarga,
+          });
+        });
+        dupRows.push({ "Nomor WA (Duplikat)": "", "Jumlah Pemakai": "", "Nama Warga": "", "RT": "", "No. KK": "", "Kedudukan Keluarga": "" });
+      }
+
+      const wb = XLSX.utils.book_new();
+
+      // Sheet 1: WA Kosong
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws["!cols"] = [
+        { wch: 30 }, { wch: 20 }, { wch: 8 }, { wch: 35 }, { wch: 20 },
+        { wch: 22 }, { wch: 14 }, { wch: 10 }, { wch: 30 }, { wch: 18 },
+        { wch: 30 }, { wch: 20 },
+      ];
+      XLSX.utils.book_append_sheet(wb, ws, "Nomor WA Kosong");
+
+      // Sheet 2: Duplikat WA
+      if (dupRows.length > 0) {
+        const wsDup = XLSX.utils.json_to_sheet(dupRows);
+        wsDup["!cols"] = [{ wch: 20 }, { wch: 14 }, { wch: 30 }, { wch: 8 }, { wch: 20 }, { wch: 22 }];
+        XLSX.utils.book_append_sheet(wb, wsDup, "Duplikat Nomor WA");
+      }
+
+      // Sheet 3: Info
+      const infoData = [
+        ["Laporan Nomor WA Bermasalah - RW 03 Padasuka"],
+        [`Tanggal Export: ${new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}`],
+        [`Filter RT: ${filterRtParam ? `RT ${String(filterRtParam).padStart(2, "0")}` : "Semua RT"}`],
+        [`WA Kosong: ${rows.length} warga`],
+        [`Duplikat Nomor WA: ${dupRows.length > 0 ? Math.floor(dupRows.length / 2) : 0} nomor`],
+        [],
+        ["Sheet 'Nomor WA Kosong': Isi kolom 'Nomor WA' lalu input ulang ke sistem."],
+        ["Sheet 'Duplikat Nomor WA': Cek dan perbaiki nomor yang dipakai lebih dari 1 warga."],
+      ];
+      const wsInfo = XLSX.utils.aoa_to_sheet(infoData);
+      wsInfo["!cols"] = [{ wch: 70 }];
+      XLSX.utils.book_append_sheet(wb, wsInfo, "Info");
+
+      const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+      const rtLabel = filterRtParam ? `-RT${String(filterRtParam).padStart(2, "0")}` : "-semua-rt";
+      const filename = `nomor-wa-kosong${rtLabel}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.send(buf);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
