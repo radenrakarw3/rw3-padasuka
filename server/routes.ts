@@ -1329,6 +1329,65 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
     }
   });
 
+  app.get("/api/wa-blast/nomor-kosong", requireAdmin, async (_req, res) => {
+    try {
+      const allWarga = await storage.getAllWargaWithKk();
+
+      // Kelompokkan warga per KK untuk mencari kepala keluarga
+      const perKk = new Map<number, typeof allWarga>();
+      for (const w of allWarga) {
+        if (!perKk.has(w.kkId)) perKk.set(w.kkId, []);
+        perKk.get(w.kkId)!.push(w);
+      }
+
+      // Filter warga yang belum punya nomor WA
+      const wargaKosong = allWarga.filter(w => !w.nomorWhatsapp);
+
+      const data = wargaKosong.map(w => {
+        const umur = hitungUmur(w.tanggalLahir ?? null);
+        const isAnak = umur !== null && umur < 16;
+        const kkMembers = perKk.get(w.kkId) || [];
+        const kk = kkMembers.find(m => m.kedudukanKeluarga === "Kepala Keluarga");
+
+        return {
+          id: w.id,
+          namaLengkap: w.namaLengkap,
+          nik: w.nik,
+          umur,
+          jenisKelamin: w.jenisKelamin,
+          kedudukanKeluarga: w.kedudukanKeluarga,
+          rt: w.rt,
+          alamat: w.alamat,
+          kkId: w.kkId,
+          nomorKk: w.nomorKk,
+          isAnak,
+          kepalaKeluarga: kk
+            ? { id: kk.id, namaLengkap: kk.namaLengkap, nomorWhatsapp: kk.nomorWhatsapp }
+            : null,
+        };
+      });
+
+      const rtList = [1, 2, 3, 4, 5, 6, 7];
+      const stats = {
+        totalKosong: data.length,
+        totalAnak: data.filter(w => w.isAnak).length,
+        totalPerluDiisi: data.filter(w => !w.isAnak).length,
+        byRt: rtList
+          .map(rt => ({
+            rt,
+            total: data.filter(w => w.rt === rt).length,
+            anak: data.filter(w => w.rt === rt && w.isAnak).length,
+            perluDiisi: data.filter(w => w.rt === rt && !w.isAnak).length,
+          }))
+          .filter(r => r.total > 0),
+      };
+
+      res.json({ stats, data });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.post("/api/wa-blast", requireAdmin, async (req, res) => {
     try {
       const parsed = insertWaBlastSchema.parse(req.body);

@@ -15,7 +15,11 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { rtOptions } from "@/lib/constants";
 import { Input } from "@/components/ui/input";
-import { Send, MessageSquare, Users, CheckCircle, Clock, ChevronDown, ChevronUp, FileText, XCircle, Sparkles, Loader2 } from "lucide-react";
+import {
+  Send, MessageSquare, Users, CheckCircle, Clock, ChevronDown, ChevronUp,
+  FileText, XCircle, Sparkles, Loader2, AlertTriangle, PhoneOff, Baby,
+  Phone, RefreshCw, ChevronRight,
+} from "lucide-react";
 import type { WaBlast } from "@shared/schema";
 
 const MESSAGE_TEMPLATES = [
@@ -92,6 +96,311 @@ Hatur nuhun! 🙏
 Pengurus RW 03 Padasuka`,
   },
 ];
+
+interface WargaKosong {
+  id: number;
+  namaLengkap: string;
+  nik: string;
+  umur: number | null;
+  jenisKelamin: string;
+  kedudukanKeluarga: string;
+  rt: number;
+  alamat: string;
+  kkId: number;
+  nomorKk: string;
+  isAnak: boolean;
+  kepalaKeluarga: { id: number; namaLengkap: string; nomorWhatsapp: string | null } | null;
+}
+
+interface NomorKosongData {
+  stats: {
+    totalKosong: number;
+    totalAnak: number;
+    totalPerluDiisi: number;
+    byRt: { rt: number; total: number; anak: number; perluDiisi: number }[];
+  };
+  data: WargaKosong[];
+}
+
+function buildWaLink(phone: string, message: string) {
+  const cleaned = phone.replace(/[^0-9]/g, "");
+  const intl = cleaned.startsWith("0") ? "62" + cleaned.slice(1) : cleaned;
+  return `https://wa.me/${intl}?text=${encodeURIComponent(message)}`;
+}
+
+function WargaKosongPanel() {
+  const [filterRtPanel, setFilterRtPanel] = useState<number | null>(null);
+  const [expandedPanel, setExpandedPanel] = useState(true);
+
+  const { data, isLoading, refetch, isFetching } = useQuery<NomorKosongData>({
+    queryKey: ["/api/wa-blast/nomor-kosong"],
+    queryFn: async () => {
+      const res = await fetch("/api/wa-blast/nomor-kosong", { credentials: "include" });
+      if (!res.ok) throw new Error("Gagal memuat data");
+      return res.json();
+    },
+  });
+
+  const stats = data?.stats;
+  const allData = data?.data ?? [];
+
+  const displayed = filterRtPanel !== null
+    ? allData.filter(w => w.rt === filterRtPanel)
+    : allData;
+
+  const anakList = displayed.filter(w => w.isAnak);
+  const perluDiisiList = displayed.filter(w => !w.isAnak);
+
+  const rtList = stats?.byRt ?? [];
+
+  return (
+    <Card className="border-orange-200 bg-orange-50/30">
+      <CardContent className="p-4 space-y-3">
+        {/* Header */}
+        <div
+          className="flex items-center justify-between cursor-pointer"
+          onClick={() => setExpandedPanel(p => !p)}
+        >
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
+              <PhoneOff className="w-4 h-4 text-orange-600" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-orange-800">Laporan Nomor WA Kosong</h3>
+              <p className="text-[11px] text-orange-600">Warga tanpa nomor WhatsApp terdaftar</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {stats && stats.totalKosong > 0 && (
+              <Badge className="bg-orange-100 text-orange-800 border-orange-200 text-xs font-bold">
+                {stats.totalKosong} warga
+              </Badge>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0 text-orange-600 hover:bg-orange-100"
+              onClick={(e) => { e.stopPropagation(); refetch(); }}
+              title="Refresh data"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} />
+            </Button>
+            {expandedPanel ? (
+              <ChevronUp className="w-4 h-4 text-orange-500" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-orange-500" />
+            )}
+          </div>
+        </div>
+
+        {expandedPanel && (
+          <>
+            {isLoading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-16 rounded-lg" />
+                <Skeleton className="h-16 rounded-lg" />
+              </div>
+            ) : !stats || stats.totalKosong === 0 ? (
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 border border-green-200">
+                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-green-800">Semua nomor WA sudah terisi!</p>
+                  <p className="text-[11px] text-green-600">Tidak ada warga dengan nomor WA kosong.</p>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Stats summary */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded-lg bg-white border border-orange-100 p-2 text-center">
+                    <p className="text-lg font-bold text-orange-700">{stats.totalKosong}</p>
+                    <p className="text-[10px] text-orange-500 leading-tight">Total Kosong</p>
+                  </div>
+                  <div className="rounded-lg bg-white border border-red-100 p-2 text-center">
+                    <p className="text-lg font-bold text-red-600">{stats.totalPerluDiisi}</p>
+                    <p className="text-[10px] text-red-500 leading-tight">Perlu Diisi</p>
+                  </div>
+                  <div className="rounded-lg bg-white border border-blue-100 p-2 text-center">
+                    <p className="text-lg font-bold text-blue-600">{stats.totalAnak}</p>
+                    <p className="text-[10px] text-blue-500 leading-tight">Anak &lt;16 thn</p>
+                  </div>
+                </div>
+
+                {/* Persebaran per RT */}
+                {rtList.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] font-medium text-orange-700 uppercase tracking-wide">Persebaran per RT</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
+                          filterRtPanel === null
+                            ? "bg-orange-500 text-white"
+                            : "bg-white border border-orange-200 text-orange-700 hover:bg-orange-50"
+                        }`}
+                        onClick={() => setFilterRtPanel(null)}
+                      >
+                        Semua ({stats.totalKosong})
+                      </button>
+                      {rtList.map(r => (
+                        <button
+                          key={r.rt}
+                          className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
+                            filterRtPanel === r.rt
+                              ? "bg-orange-500 text-white"
+                              : "bg-white border border-orange-200 text-orange-700 hover:bg-orange-50"
+                          }`}
+                          onClick={() => setFilterRtPanel(r.rt === filterRtPanel ? null : r.rt)}
+                        >
+                          RT {String(r.rt).padStart(2, "0")} ({r.total})
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Warga perlu diisi */}
+                {perluDiisiList.length > 0 && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
+                      <p className="text-[11px] font-semibold text-red-700 uppercase tracking-wide">
+                        Perlu Diisi ({perluDiisiList.length})
+                      </p>
+                    </div>
+                    <div className="space-y-1.5">
+                      {perluDiisiList.map(w => {
+                        const isKK = w.kedudukanKeluarga === "Kepala Keluarga";
+                        const kkWaAvail = !isKK && w.kepalaKeluarga?.nomorWhatsapp;
+                        const gender = w.jenisKelamin === "Perempuan" ? "Ibu" : "Bapak";
+                        const kkGender = w.kepalaKeluarga
+                          ? (w.jenisKelamin === "Perempuan" ? "Ibu" : "Bapak")
+                          : "Bapak/Ibu";
+
+                        const waMsg = isKK
+                          ? `Assalamu'alaikum ${gender} ${w.namaLengkap}, kami dari pengurus RW 03 Padasuka. Mohon segera melengkapi nomor WhatsApp ${gender} di data warga RW 03 kami agar bisa menerima informasi penting warga. Terima kasih 🙏`
+                          : `Assalamu'alaikum ${kkGender} ${w.kepalaKeluarga?.namaLengkap ?? ""}, kami dari pengurus RW 03 Padasuka. Mohon bantu melengkapi nomor WhatsApp atas nama *${w.namaLengkap}* (${w.kedudukanKeluarga}) di data warga RW 03 kami. Terima kasih 🙏`;
+
+                        const waTarget = isKK
+                          ? null
+                          : (kkWaAvail ? w.kepalaKeluarga!.nomorWhatsapp! : null);
+
+                        return (
+                          <div
+                            key={w.id}
+                            className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white border border-red-100 hover:border-red-200 transition-colors"
+                          >
+                            <div className="w-7 h-7 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <PhoneOff className="w-3.5 h-3.5 text-red-500" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-1">
+                                <p className="text-xs font-semibold text-gray-800 leading-tight">{w.namaLengkap}</p>
+                                <Badge className="text-[9px] bg-red-100 text-red-700 border-red-200 flex-shrink-0 py-0">
+                                  Belum ada WA
+                                </Badge>
+                              </div>
+                              <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
+                                <span className="text-[10px] text-muted-foreground">
+                                  RT {String(w.rt).padStart(2, "0")}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground">·</span>
+                                <span className="text-[10px] text-muted-foreground">{w.kedudukanKeluarga}</span>
+                                {w.umur !== null && (
+                                  <>
+                                    <span className="text-[10px] text-muted-foreground">·</span>
+                                    <span className="text-[10px] text-muted-foreground">{w.umur} thn</span>
+                                  </>
+                                )}
+                              </div>
+                              {!isKK && w.kepalaKeluarga && (
+                                <p className="text-[10px] text-muted-foreground mt-0.5">
+                                  KK: {w.kepalaKeluarga.namaLengkap}
+                                  {w.kepalaKeluarga.nomorWhatsapp
+                                    ? <span className="text-green-600"> · punya WA</span>
+                                    : <span className="text-red-500"> · tidak ada WA</span>
+                                  }
+                                </p>
+                              )}
+                            </div>
+                            {/* WA Button */}
+                            {waTarget ? (
+                              <a
+                                href={buildWaLink(waTarget, waMsg)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex-shrink-0"
+                                title={`Hubungi KK via WA`}
+                              >
+                                <Button
+                                  size="sm"
+                                  className="h-7 px-2 text-[10px] gap-1 bg-green-600 hover:bg-green-700 text-white"
+                                >
+                                  <Phone className="w-3 h-3" />
+                                  WA KK
+                                </Button>
+                              </a>
+                            ) : isKK ? (
+                              <span className="flex-shrink-0 text-[9px] text-muted-foreground text-center leading-tight max-w-[44px]">
+                                Dia sendiri KK
+                              </span>
+                            ) : (
+                              <span className="flex-shrink-0 text-[9px] text-red-400 text-center leading-tight max-w-[44px]">
+                                KK tak punya WA
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Anak di bawah 16 tahun */}
+                {anakList.length > 0 && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <Baby className="w-3.5 h-3.5 text-blue-500" />
+                      <p className="text-[11px] font-semibold text-blue-700 uppercase tracking-wide">
+                        Anak &lt; 16 Tahun — Tidak Punya WA ({anakList.length})
+                      </p>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-blue-50 border border-blue-100">
+                      <p className="text-[11px] text-blue-700 mb-2">
+                        Anak di bawah 16 tahun dianggap tidak memiliki WhatsApp. Data ini tidak perlu diisi.
+                      </p>
+                      <div className="space-y-1">
+                        {anakList.map(w => (
+                          <div key={w.id} className="flex items-center gap-2 py-1 border-b border-blue-100 last:border-0">
+                            <Baby className="w-3 h-3 text-blue-400 flex-shrink-0" />
+                            <span className="text-[11px] text-blue-800 flex-1 font-medium">{w.namaLengkap}</span>
+                            <span className="text-[10px] text-blue-500">RT {String(w.rt).padStart(2, "0")}</span>
+                            <span className="text-[10px] text-blue-400">·</span>
+                            <span className="text-[10px] text-blue-500">{w.umur ?? "?"} thn</span>
+                            <Badge className="text-[9px] bg-blue-100 text-blue-700 border-blue-200 py-0">
+                              Anak
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Info footer */}
+                <div className="flex items-start gap-2 p-2 rounded-lg bg-orange-50 border border-orange-100">
+                  <AlertTriangle className="w-3.5 h-3.5 text-orange-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-[10px] text-orange-700 leading-relaxed">
+                    Nomor WA yang tidak diisi akan <strong>dilewati saat WA Blast</strong>. Segera hubungi warga atau kepala keluarga untuk melengkapi data.
+                  </p>
+                </div>
+              </>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function AdminWaBlast() {
   const { toast } = useToast();
@@ -181,6 +490,9 @@ export default function AdminWaBlast() {
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-bold" data-testid="text-wa-blast-title">WA Blast Warga</h2>
+
+      {/* Panel Laporan Nomor WA Kosong */}
+      <WargaKosongPanel />
 
       <Card>
         <CardContent className="p-4 space-y-4">
