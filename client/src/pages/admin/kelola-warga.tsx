@@ -11,9 +11,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Search, User, ChevronLeft, ChevronRight, Upload, X, FileText, Download, MessageCircle, Pencil, Trash2, AlertTriangle } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import type { KartuKeluarga } from "@shared/schema";
-import { pekerjaanOptions, pendidikanOptions, agamaOptions, jenisKelaminOptions, statusPerkawinanOptions, kedudukanKeluargaOptions, statusKependudukanOptions } from "@/lib/constants";
+import { pekerjaanOptions, pendidikanOptions, agamaOptions, jenisKelaminOptions, statusPerkawinanOptions, kedudukanKeluargaOptions, statusKependudukanOptions, statusDisabilitasOptions, kondisiKesehatanOptions } from "@/lib/constants";
 
 const PER_PAGE = 10;
 
@@ -22,6 +23,7 @@ const defaultForm = {
   jenisKelamin: "Laki-laki", statusPerkawinan: "Belum Kawin",
   agama: "Islam", kedudukanKeluarga: "Anak", tanggalLahir: "", pekerjaan: "",
   pendidikan: "", statusKependudukan: "Aktif",
+  statusDisabilitas: "Tidak Ada", kondisiKesehatan: "Sehat", ibuHamil: false,
 };
 
 export default function AdminKelolaWarga() {
@@ -214,6 +216,9 @@ export default function AdminKelolaWarga() {
       pekerjaan: w.pekerjaan || "",
       pendidikan: w.pendidikan || "",
       statusKependudukan: w.statusKependudukan || "Aktif",
+      statusDisabilitas: w.statusDisabilitas || "Tidak Ada",
+      kondisiKesehatan: w.kondisiKesehatan || "Sehat",
+      ibuHamil: w.ibuHamil || false,
     });
     setEditingWargaId(w.id);
     clearEditFile();
@@ -387,6 +392,40 @@ export default function AdminKelolaWarga() {
           </SelectContent>
         </Select>
       </div>
+      {/* ===== DATA KESEHATAN ===== */}
+      <div className="pt-1 pb-0.5 border-t">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Data Kesehatan & Kondisi Khusus</p>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label className="text-sm">Kondisi Kesehatan</Label>
+          <Select value={formData.kondisiKesehatan} onValueChange={v => setFormData({...formData, kondisiKesehatan: v})}>
+            <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {kondisiKesehatanOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-sm">Status Disabilitas</Label>
+          <Select value={formData.statusDisabilitas} onValueChange={v => setFormData({...formData, statusDisabilitas: v})}>
+            <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {statusDisabilitasOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      {formData.jenisKelamin === "Perempuan" && (
+        <div className="flex items-center gap-2 h-9">
+          <Checkbox
+            id={`ibuHamil-${testIdPrefix}`}
+            checked={formData.ibuHamil}
+            onCheckedChange={(checked) => setFormData({...formData, ibuHamil: checked === true})}
+          />
+          <Label htmlFor={`ibuHamil-${testIdPrefix}`} className="text-sm cursor-pointer">Sedang Hamil</Label>
+        </div>
+      )}
       <div className="space-y-1">
         <Label className="text-sm">Upload Foto KTP</Label>
         <input

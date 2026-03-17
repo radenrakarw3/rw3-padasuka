@@ -16,6 +16,10 @@ export const kartuKeluarga = pgTable("kartu_keluarga", {
   listrik: text("listrik").notNull().default("PLN 900 VA"),
   penerimaBansos: boolean("penerima_bansos").notNull().default(false),
   jenisBansos: text("jenis_bansos"),
+  // Data ekonomi keluarga
+  penghasilanBulanan: text("penghasilan_bulanan"),
+  layakBansos: boolean("layak_bansos").notNull().default(false),
+  kategoriEkonomi: text("kategori_ekonomi"),
   linkGmaps: text("link_gmaps"),
   latitude: text("latitude"),
   longitude: text("longitude"),
@@ -38,6 +42,10 @@ export const warga = pgTable("warga", {
   pekerjaan: text("pekerjaan"),
   pendidikan: text("pendidikan"),
   statusKependudukan: text("status_kependudukan").notNull().default("Aktif"),
+  // Data kesehatan & kondisi khusus
+  statusDisabilitas: text("status_disabilitas").notNull().default("Tidak Ada"),
+  kondisiKesehatan: text("kondisi_kesehatan").notNull().default("Sehat"),
+  ibuHamil: boolean("ibu_hamil").notNull().default(false),
   fotoKtp: text("foto_ktp"),
   fotoKtpData: text("foto_ktp_data"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -348,6 +356,35 @@ export const monthlySnapshot = pgTable("monthly_snapshot", {
 export const insertMonthlySnapshotSchema = createInsertSchema(monthlySnapshot).omit({ id: true, createdAt: true });
 export type MonthlySnapshot = typeof monthlySnapshot.$inferSelect;
 export type InsertMonthlySnapshot = z.infer<typeof insertMonthlySnapshotSchema>;
+
+export const programRw = pgTable("program_rw", {
+  id: serial("id").primaryKey(),
+  namaProgram: text("nama_program").notNull(),
+  deskripsi: text("deskripsi"),
+  tanggalPelaksanaan: text("tanggal_pelaksanaan").notNull(),
+  kategoriSasaran: text("kategori_sasaran").notNull().default("semua"),
+  targetRt: integer("target_rt"),
+  status: text("status").notNull().default("rencana"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const pesertaProgram = pgTable("peserta_program", {
+  id: serial("id").primaryKey(),
+  programId: integer("program_id").notNull().references(() => programRw.id),
+  kkId: integer("kk_id").references(() => kartuKeluarga.id),
+  namaManual: text("nama_manual"),
+  kehadiran: text("kehadiran").notNull().default("belum"),
+  catatan: text("catatan"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertProgramRwSchema = createInsertSchema(programRw).omit({ id: true, createdAt: true });
+export const insertPesertaProgramSchema = createInsertSchema(pesertaProgram).omit({ id: true, createdAt: true });
+
+export type ProgramRw = typeof programRw.$inferSelect;
+export type InsertProgramRw = z.infer<typeof insertProgramRwSchema>;
+export type PesertaProgram = typeof pesertaProgram.$inferSelect;
+export type InsertPesertaProgram = z.infer<typeof insertPesertaProgramSchema>;
 
 export const insertPemilikKostSchema = createInsertSchema(pemilikKost).omit({ id: true, createdAt: true });
 export const insertWargaSinggahSchema = createInsertSchema(wargaSinggah).omit({ id: true, createdAt: true, status: true });

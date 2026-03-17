@@ -263,3 +263,51 @@ export const jabatanKaryawanOptions = [
   "Teknisi",
   "Lainnya",
 ];
+
+export const penghasilanBulananOptions = [
+  "< Rp 500.000",
+  "Rp 500.000 - Rp 1.000.000",
+  "Rp 1.000.000 - Rp 2.000.000",
+  "Rp 2.000.000 - Rp 3.500.000",
+  "> Rp 3.500.000",
+];
+
+export const kategoriEkonomiOptions = [
+  "Sangat Miskin",
+  "Miskin",
+  "Hampir Miskin",
+  "Tidak Miskin",
+];
+
+export const statusDisabilitasOptions = [
+  "Tidak Ada",
+  "Disabilitas Fisik",
+  "Disabilitas Mental",
+  "Disabilitas Sensorik (Tuna Rungu/Netra)",
+  "Disabilitas Ganda",
+];
+
+export const kondisiKesehatanOptions = [
+  "Sehat",
+  "Penyakit Kronis",
+  "Membutuhkan Perawatan Rutin",
+];
+
+export const kategoriProgramOptions = [
+  "semua",
+  "pemukiman",
+  "perumahan",
+  "lansia",
+  "balita",
+  "remaja",
+  "ibu hamil",
+  "penerima bansos",
+  "disabilitas",
+];
+
+export const statusProgramOptions = [
+  "rencana",
+  "berjalan",
+  "selesai",
+  "dibatalkan",
+];

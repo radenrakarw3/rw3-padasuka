@@ -5,6 +5,7 @@ import {
   profileEditRequest, adminUser, waBlast, pengajuanBansos, donasiCampaign, donasi, kasRw,
   pemilikKost, wargaSinggah, riwayatKontrak,
   usaha, karyawanUsaha, izinTetangga, surveyUsaha, riwayatStiker, monthlySnapshot,
+  programRw, pesertaProgram,
   type KartuKeluarga, type InsertKartuKeluarga,
   type Warga, type InsertWarga,
   type RtData, type InsertRtData,
@@ -27,6 +28,8 @@ import {
   type SurveyUsaha, type InsertSurveyUsaha,
   type RiwayatStiker, type InsertRiwayatStiker,
   type MonthlySnapshot, type InsertMonthlySnapshot,
+  type ProgramRw, type InsertProgramRw,
+  type PesertaProgram, type InsertPesertaProgram,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -171,6 +174,17 @@ export interface IStorage {
   getMonthlySnapshots(): Promise<MonthlySnapshot[]>;
   upsertMonthlySnapshot(data: InsertMonthlySnapshot): Promise<MonthlySnapshot>;
   captureCurrentSnapshot(): Promise<MonthlySnapshot>;
+
+  getAllProgramRw(): Promise<ProgramRw[]>;
+  getProgramRwById(id: number): Promise<ProgramRw | undefined>;
+  createProgramRw(data: InsertProgramRw): Promise<ProgramRw>;
+  updateProgramRw(id: number, data: Partial<InsertProgramRw>): Promise<ProgramRw | undefined>;
+  deleteProgramRw(id: number): Promise<void>;
+
+  getPesertaByProgramId(programId: number): Promise<(PesertaProgram & { nomorKk: string | null; alamat: string | null; kepalaKeluarga: string | null })[]>;
+  addPesertaProgram(data: InsertPesertaProgram): Promise<PesertaProgram>;
+  updateKehadiranPeserta(id: number, kehadiran: string, catatan?: string): Promise<PesertaProgram | undefined>;
+  deletePesertaProgram(id: number): Promise<void>;
 }
 
 export interface DashboardStats {
@@ -1455,6 +1469,73 @@ export class DatabaseStorage implements IStorage {
     };
 
     return this.upsertMonthlySnapshot(snapshotData);
+  }
+
+  async getAllProgramRw(): Promise<ProgramRw[]> {
+    return db.select().from(programRw).orderBy(desc(programRw.tanggalPelaksanaan));
+  }
+
+  async getProgramRwById(id: number): Promise<ProgramRw | undefined> {
+    const [result] = await db.select().from(programRw).where(eq(programRw.id, id));
+    return result;
+  }
+
+  async createProgramRw(data: InsertProgramRw): Promise<ProgramRw> {
+    const [result] = await db.insert(programRw).values(data).returning();
+    return result;
+  }
+
+  async updateProgramRw(id: number, data: Partial<InsertProgramRw>): Promise<ProgramRw | undefined> {
+    const [result] = await db.update(programRw).set(data).where(eq(programRw.id, id)).returning();
+    return result;
+  }
+
+  async deleteProgramRw(id: number): Promise<void> {
+    await db.transaction(async (tx) => {
+      await tx.delete(pesertaProgram).where(eq(pesertaProgram.programId, id));
+      await tx.delete(programRw).where(eq(programRw.id, id));
+    });
+  }
+
+  async getPesertaByProgramId(programId: number): Promise<(PesertaProgram & { nomorKk: string | null; alamat: string | null; kepalaKeluarga: string | null })[]> {
+    const results = await db.select({
+      id: pesertaProgram.id,
+      programId: pesertaProgram.programId,
+      kkId: pesertaProgram.kkId,
+      namaManual: pesertaProgram.namaManual,
+      kehadiran: pesertaProgram.kehadiran,
+      catatan: pesertaProgram.catatan,
+      createdAt: pesertaProgram.createdAt,
+      nomorKk: kartuKeluarga.nomorKk,
+      alamat: kartuKeluarga.alamat,
+      kepalaKeluarga: sql<string | null>`(
+        SELECT nama_lengkap FROM warga
+        WHERE kk_id = ${pesertaProgram.kkId}
+        AND kedudukan_keluarga = 'Kepala Keluarga'
+        LIMIT 1
+      )`,
+    })
+      .from(pesertaProgram)
+      .leftJoin(kartuKeluarga, eq(pesertaProgram.kkId, kartuKeluarga.id))
+      .where(eq(pesertaProgram.programId, programId))
+      .orderBy(pesertaProgram.createdAt);
+    return results;
+  }
+
+  async addPesertaProgram(data: InsertPesertaProgram): Promise<PesertaProgram> {
+    const [result] = await db.insert(pesertaProgram).values(data).returning();
+    return result;
+  }
+
+  async updateKehadiranPeserta(id: number, kehadiran: string, catatan?: string): Promise<PesertaProgram | undefined> {
+    const updateData: Partial<PesertaProgram> = { kehadiran };
+    if (catatan !== undefined) updateData.catatan = catatan;
+    const [result] = await db.update(pesertaProgram).set(updateData).where(eq(pesertaProgram.id, id)).returning();
+    return result;
+  }
+
+  async deletePesertaProgram(id: number): Promise<void> {
+    await db.delete(pesertaProgram).where(eq(pesertaProgram.id, id));
   }
 }
 

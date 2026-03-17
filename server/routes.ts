@@ -10,7 +10,7 @@ import express from "express";
 import * as XLSX from "xlsx";
 import { storage } from "./storage";
 import { pool } from "./db";
-import { insertKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertProfileEditSchema, insertWaBlastSchema, insertPengajuanBansosSchema, insertDonasiCampaignSchema, insertDonasiSchema, insertKasRwSchema, insertPemilikKostSchema, insertWargaSinggahSchema, insertUsahaSchema, insertKaryawanUsahaSchema, insertIzinTetanggaSchema, insertSurveyUsahaSchema } from "@shared/schema";
+import { insertKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertProfileEditSchema, insertWaBlastSchema, insertPengajuanBansosSchema, insertDonasiCampaignSchema, insertDonasiSchema, insertKasRwSchema, insertPemilikKostSchema, insertWargaSinggahSchema, insertUsahaSchema, insertKaryawanUsahaSchema, insertIzinTetanggaSchema, insertSurveyUsahaSchema, insertProgramRwSchema, insertPesertaProgramSchema } from "@shared/schema";
 
 declare module "express-session" {
   interface SessionData {
@@ -2349,6 +2349,100 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
       return res.json(laporan);
     } catch (error: any) {
       return res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ===================== PROGRAM RW =====================
+  app.get("/api/program-rw", requireAdmin, async (req, res) => {
+    try {
+      const data = await storage.getAllProgramRw();
+      res.json(data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/program-rw/:id", requireAdmin, async (req, res) => {
+    try {
+      const data = await storage.getProgramRwById(parseInt(req.params.id as string));
+      if (!data) return res.status(404).json({ message: "Program tidak ditemukan" });
+      res.json(data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/program-rw", requireAdmin, async (_req, res) => {
+    try {
+      const parsed = insertProgramRwSchema.parse(_req.body);
+      const data = await storage.createProgramRw(parsed);
+      res.json(data);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/program-rw/:id", requireAdmin, async (req, res) => {
+    try {
+      const parsed = insertProgramRwSchema.partial().parse(req.body);
+      const data = await storage.updateProgramRw(parseInt(req.params.id as string), parsed);
+      if (!data) return res.status(404).json({ message: "Program tidak ditemukan" });
+      res.json(data);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/program-rw/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteProgramRw(parseInt(req.params.id as string));
+      res.json({ message: "Program dihapus" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Peserta Program
+  app.get("/api/program-rw/:id/peserta", requireAdmin, async (req, res) => {
+    try {
+      const data = await storage.getPesertaByProgramId(parseInt(req.params.id as string));
+      res.json(data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/program-rw/:id/peserta", requireAdmin, async (req, res) => {
+    try {
+      const parsed = insertPesertaProgramSchema.parse({
+        ...req.body,
+        programId: parseInt(req.params.id as string),
+      });
+      const data = await storage.addPesertaProgram(parsed);
+      res.json(data);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/program-rw/:id/peserta/:pesertaId", requireAdmin, async (req, res) => {
+    try {
+      const { kehadiran, catatan } = req.body;
+      if (!kehadiran) return res.status(400).json({ message: "Kehadiran harus diisi" });
+      const data = await storage.updateKehadiranPeserta(parseInt(req.params.pesertaId as string), kehadiran, catatan);
+      if (!data) return res.status(404).json({ message: "Peserta tidak ditemukan" });
+      res.json(data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/program-rw/:id/peserta/:pesertaId", requireAdmin, async (req, res) => {
+    try {
+      await storage.deletePesertaProgram(parseInt(req.params.pesertaId as string));
+      res.json({ message: "Peserta dihapus" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
     }
   });
 

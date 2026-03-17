@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Search, Home, Users, ChevronLeft, ChevronRight, Download, Upload, X, FileText, ChevronDown, User, MessageCircle, ShieldCheck, ShieldAlert, QrCode, Pencil, Trash2, AlertTriangle } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { statusRumahOptions, listrikOptions, rtOptions, kondisiBangunanOptions, sumberAirOptions, sanitasiWcOptions, jenisBansosOptions } from "@/lib/constants";
+import { statusRumahOptions, listrikOptions, rtOptions, kondisiBangunanOptions, sumberAirOptions, sanitasiWcOptions, jenisBansosOptions, penghasilanBulananOptions, kategoriEkonomiOptions } from "@/lib/constants";
 import type { KartuKeluarga, Warga } from "@shared/schema";
 import QRCode from "qrcode";
 
@@ -38,6 +38,7 @@ export default function AdminKelolaKK() {
     jumlahPenghuni: "1", kondisiBangunan: "Permanen", sumberAir: "PDAM",
     sanitasiWc: "Jamban Sendiri", listrik: "PLN 900 VA", penerimaBansos: false,
     jenisBansos: "" as string,
+    penghasilanBulanan: "" as string, layakBansos: false, kategoriEkonomi: "" as string,
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
@@ -48,6 +49,7 @@ export default function AdminKelolaKK() {
     jumlahPenghuni: "1", kondisiBangunan: "Permanen", sumberAir: "PDAM",
     sanitasiWc: "Jamban Sendiri", listrik: "PLN 900 VA", penerimaBansos: false,
     jenisBansos: "" as string,
+    penghasilanBulanan: "" as string, layakBansos: false, kategoriEkonomi: "" as string,
   });
   const [editSelectedFile, setEditSelectedFile] = useState<File | null>(null);
   const [editFilePreview, setEditFilePreview] = useState<string | null>(null);
@@ -190,6 +192,9 @@ export default function AdminKelolaKK() {
       listrik: kk.listrik,
       penerimaBansos: kk.penerimaBansos,
       jenisBansos: kk.jenisBansos || "",
+      penghasilanBulanan: kk.penghasilanBulanan || "",
+      layakBansos: kk.layakBansos || false,
+      kategoriEkonomi: kk.kategoriEkonomi || "",
     });
     clearEditFile();
     setEditDialogOpen(true);
@@ -202,6 +207,8 @@ export default function AdminKelolaKK() {
         rt: parseInt(form.rt),
         jumlahPenghuni: parseInt(form.jumlahPenghuni),
         jenisBansos: form.penerimaBansos ? form.jenisBansos : null,
+        penghasilanBulanan: form.penghasilanBulanan || null,
+        kategoriEkonomi: form.kategoriEkonomi || null,
       });
       const created = await res.json();
       if (selectedFile && created.id) {
@@ -221,7 +228,7 @@ export default function AdminKelolaKK() {
     onSuccess: () => {
       toast({ title: "KK berhasil ditambahkan" });
       setDialogOpen(false);
-      setForm({ nomorKk: "", rt: "1", alamat: "", statusRumah: "Milik Sendiri", jumlahPenghuni: "1", kondisiBangunan: "Permanen", sumberAir: "PDAM", sanitasiWc: "Jamban Sendiri", listrik: "PLN 900 VA", penerimaBansos: false, jenisBansos: "" });
+      setForm({ nomorKk: "", rt: "1", alamat: "", statusRumah: "Milik Sendiri", jumlahPenghuni: "1", kondisiBangunan: "Permanen", sumberAir: "PDAM", sanitasiWc: "Jamban Sendiri", listrik: "PLN 900 VA", penerimaBansos: false, jenisBansos: "", penghasilanBulanan: "", layakBansos: false, kategoriEkonomi: "" });
       clearFile();
       queryClient.invalidateQueries({ queryKey: ["/api/kk"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats/dashboard"] });
@@ -237,6 +244,8 @@ export default function AdminKelolaKK() {
         rt: parseInt(editForm.rt),
         jumlahPenghuni: parseInt(editForm.jumlahPenghuni),
         jenisBansos: editForm.penerimaBansos ? editForm.jenisBansos : null,
+        penghasilanBulanan: editForm.penghasilanBulanan || null,
+        kategoriEkonomi: editForm.kategoriEkonomi || null,
       });
       if (editSelectedFile && editingKkId) {
         const formData = new FormData();
@@ -446,6 +455,38 @@ export default function AdminKelolaKK() {
                   </div>
                 </div>
               )}
+              {/* ===== DATA EKONOMI ===== */}
+              <div className="pt-1 pb-0.5 border-t">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Data Ekonomi Keluarga</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-sm">Penghasilan Bulanan</Label>
+                  <Select value={form.penghasilanBulanan} onValueChange={v => setForm({...form, penghasilanBulanan: v})}>
+                    <SelectTrigger className="h-10"><SelectValue placeholder="Pilih range" /></SelectTrigger>
+                    <SelectContent>
+                      {penghasilanBulananOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-sm">Kategori Ekonomi</Label>
+                  <Select value={form.kategoriEkonomi} onValueChange={v => setForm({...form, kategoriEkonomi: v})}>
+                    <SelectTrigger className="h-10"><SelectValue placeholder="Pilih kategori" /></SelectTrigger>
+                    <SelectContent>
+                      {kategoriEkonomiOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 h-9">
+                <Checkbox
+                  id="layakBansos"
+                  checked={form.layakBansos}
+                  onCheckedChange={(checked) => setForm({...form, layakBansos: checked === true})}
+                />
+                <Label htmlFor="layakBansos" className="text-sm cursor-pointer">Layak Bansos (belum menerima)</Label>
+              </div>
               <div className="space-y-1">
                 <Label className="text-sm">Upload Foto KK</Label>
                 <input
@@ -858,6 +899,38 @@ export default function AdminKelolaKK() {
                 </div>
               </div>
             )}
+            {/* ===== DATA EKONOMI ===== */}
+            <div className="pt-1 pb-0.5 border-t">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Data Ekonomi Keluarga</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-sm">Penghasilan Bulanan</Label>
+                <Select value={editForm.penghasilanBulanan} onValueChange={v => setEditForm({...editForm, penghasilanBulanan: v})}>
+                  <SelectTrigger className="h-10"><SelectValue placeholder="Pilih range" /></SelectTrigger>
+                  <SelectContent>
+                    {penghasilanBulananOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-sm">Kategori Ekonomi</Label>
+                <Select value={editForm.kategoriEkonomi} onValueChange={v => setEditForm({...editForm, kategoriEkonomi: v})}>
+                  <SelectTrigger className="h-10"><SelectValue placeholder="Pilih kategori" /></SelectTrigger>
+                  <SelectContent>
+                    {kategoriEkonomiOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 h-9">
+              <Checkbox
+                id="editLayakBansos"
+                checked={editForm.layakBansos}
+                onCheckedChange={(checked) => setEditForm({...editForm, layakBansos: checked === true})}
+              />
+              <Label htmlFor="editLayakBansos" className="text-sm cursor-pointer">Layak Bansos (belum menerima)</Label>
+            </div>
             <div className="space-y-1">
               <Label className="text-sm">Upload Foto KK</Label>
               <input
