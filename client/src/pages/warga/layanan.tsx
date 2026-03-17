@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,9 +14,51 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import {
   Plus, Send, Clock, CheckCircle, AlertCircle, ArrowLeft, FileText,
-  XCircle, MessageCircle, ClipboardList
+  XCircle, MessageCircle, ClipboardList, Lock, AlertTriangle
 } from "lucide-react";
 import type { Laporan, Warga, SuratWarga, KartuKeluarga } from "@shared/schema";
+import { useProfileCompleteness } from "@/lib/useProfileCompleteness";
+
+function ProfileLockBanner({ missingFields }: { missingFields: { key: string; label: string; wargaNama?: string }[] }) {
+  const [, setLocation] = useLocation();
+  return (
+    <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-700">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-start gap-3">
+          <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <Lock className="w-4 h-4 text-amber-600" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">Fitur Terkunci</p>
+            <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+              Lengkapi profil keluarga terlebih dahulu untuk menggunakan fitur ini.
+            </p>
+          </div>
+        </div>
+        <div className="space-y-1 pl-1">
+          {missingFields.slice(0, 5).map((f, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <AlertTriangle className="w-3 h-3 text-amber-500 flex-shrink-0" />
+              <span className="text-xs text-amber-700 dark:text-amber-400">
+                {f.label}{f.wargaNama ? ` — ${f.wargaNama}` : ""}
+              </span>
+            </div>
+          ))}
+          {missingFields.length > 5 && (
+            <p className="text-xs text-amber-600 pl-5">+{missingFields.length - 5} data lainnya</p>
+          )}
+        </div>
+        <Button
+          size="sm"
+          className="w-full bg-amber-600 hover:bg-amber-700 text-white"
+          onClick={() => setLocation("/warga/profil")}
+        >
+          Lengkapi Profil Sekarang
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
 
 type TabType = "surat" | "laporan";
 
@@ -53,6 +96,8 @@ function SuratTab() {
     queryKey: ["/api/kk", user?.kkId],
     enabled: !!user?.kkId,
   });
+
+  const completeness = useProfileCompleteness(anggota, kk);
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -181,11 +226,21 @@ function SuratTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-base font-bold" data-testid="text-pelayanan-title">Pelayanan Surat</h2>
-        <Button size="sm" onClick={() => setShowForm(true)} className="gap-1.5" data-testid="button-ajukan-surat-baru">
-          <Plus className="w-4 h-4" />
+        <Button
+          size="sm"
+          onClick={() => completeness.isComplete && setShowForm(true)}
+          disabled={!completeness.isComplete}
+          className="gap-1.5"
+          data-testid="button-ajukan-surat-baru"
+        >
+          {completeness.isComplete ? <Plus className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
           Ajukan Surat
         </Button>
       </div>
+
+      {!completeness.isComplete && (
+        <ProfileLockBanner missingFields={completeness.missingFields} />
+      )}
 
       {isLoading ? (
         <div className="space-y-3">
@@ -287,6 +342,13 @@ function LaporanTab() {
     queryKey: ["/api/warga/kk", user?.kkId],
     enabled: !!user?.kkId,
   });
+
+  const { data: kk } = useQuery<KartuKeluarga>({
+    queryKey: ["/api/kk", user?.kkId],
+    enabled: !!user?.kkId,
+  });
+
+  const completeness = useProfileCompleteness(anggota, kk);
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -411,11 +473,21 @@ function LaporanTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-base font-bold" data-testid="text-laporan-title">Laporan Saya</h2>
-        <Button size="sm" onClick={() => setShowForm(true)} className="gap-1.5" data-testid="button-buat-laporan">
-          <Plus className="w-4 h-4" />
+        <Button
+          size="sm"
+          onClick={() => completeness.isComplete && setShowForm(true)}
+          disabled={!completeness.isComplete}
+          className="gap-1.5"
+          data-testid="button-buat-laporan"
+        >
+          {completeness.isComplete ? <Plus className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
           Buat Laporan
         </Button>
       </div>
+
+      {!completeness.isComplete && (
+        <ProfileLockBanner missingFields={completeness.missingFields} />
+      )}
 
       {isLoading ? (
         <div className="space-y-3">

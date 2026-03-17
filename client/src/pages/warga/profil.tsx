@@ -10,9 +10,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Edit2, Check, X, User, MapPin, Clock, Upload, RefreshCw, ChevronDown, ChevronUp, Shield } from "lucide-react";
+import { Edit2, Check, X, User, MapPin, Clock, Upload, RefreshCw, ChevronDown, ChevronUp, Shield, AlertTriangle, CheckCircle2 } from "lucide-react";
 import type { KartuKeluarga, Warga, ProfileEditRequest } from "@shared/schema";
-import { pekerjaanOptions, pendidikanOptions, agamaOptions, jenisKelaminOptions, statusPerkawinanOptions, kedudukanKeluargaOptions, statusKependudukanOptions } from "@/lib/constants";
+import { pekerjaanOptions, pendidikanOptions, agamaOptions, jenisKelaminOptions, statusPerkawinanOptions, kedudukanKeluargaOptions, statusKependudukanOptions, statusDisabilitasOptions, kondisiKesehatanOptions } from "@/lib/constants";
+import { useProfileCompleteness } from "@/lib/useProfileCompleteness";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const fieldLabels: Record<string, string> = {
   namaLengkap: "Nama Lengkap",
@@ -26,6 +28,9 @@ const fieldLabels: Record<string, string> = {
   pekerjaan: "Pekerjaan",
   pendidikan: "Pendidikan",
   statusKependudukan: "Status",
+  kondisiKesehatan: "Kondisi Kesehatan",
+  statusDisabilitas: "Status Disabilitas",
+  ibuHamil: "Status Kehamilan",
 };
 
 function maskNik(nik: string | null): string {
@@ -62,6 +67,8 @@ export default function WargaProfil() {
   const { data: editRequests } = useQuery<ProfileEditRequest[]>({
     queryKey: ["/api/profile-edits"],
   });
+
+  const completeness = useProfileCompleteness(anggota, kk);
 
   const submitEdit = useMutation({
     mutationFn: async (data: { wargaId: number; kkId: number; changes: Record<string, string> }) => {
@@ -108,6 +115,9 @@ export default function WargaProfil() {
       pekerjaan: w.pekerjaan || "",
       pendidikan: w.pendidikan || "",
       statusKependudukan: w.statusKependudukan || "",
+      kondisiKesehatan: w.kondisiKesehatan || "Sehat",
+      statusDisabilitas: w.statusDisabilitas || "Tidak Ada",
+      ibuHamil: w.ibuHamil ? "true" : "false",
     });
   };
 
@@ -128,6 +138,10 @@ export default function WargaProfil() {
     if (editData.pekerjaan !== (w.pekerjaan || "")) changes.pekerjaan = editData.pekerjaan;
     if (editData.pendidikan !== (w.pendidikan || "")) changes.pendidikan = editData.pendidikan;
     if (editData.statusKependudukan !== (w.statusKependudukan || "")) changes.statusKependudukan = editData.statusKependudukan;
+    if (editData.kondisiKesehatan !== (w.kondisiKesehatan || "Sehat")) changes.kondisiKesehatan = editData.kondisiKesehatan;
+    if (editData.statusDisabilitas !== (w.statusDisabilitas || "Tidak Ada")) changes.statusDisabilitas = editData.statusDisabilitas;
+    const ibuHamilStr = w.ibuHamil ? "true" : "false";
+    if (editData.ibuHamil !== ibuHamilStr) changes.ibuHamil = editData.ibuHamil;
 
     if (Object.keys(changes).length === 0) {
       toast({ title: "Tidak ada perubahan" });
@@ -240,6 +254,49 @@ export default function WargaProfil() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Progress Kelengkapan Profil */}
+      {anggota && kk && (
+        <Card className={completeness.isComplete ? "border-green-200 bg-green-50/50 dark:bg-green-950/10" : "border-amber-200 bg-amber-50/50 dark:bg-amber-950/10"}>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                {completeness.isComplete
+                  ? <CheckCircle2 className="w-4 h-4 text-green-600" />
+                  : <AlertTriangle className="w-4 h-4 text-amber-600" />
+                }
+                <span className="text-sm font-semibold">
+                  {completeness.isComplete ? "Profil Lengkap" : "Profil Belum Lengkap"}
+                </span>
+              </div>
+              <span className={`text-sm font-bold ${completeness.isComplete ? "text-green-600" : "text-amber-600"}`}>
+                {completeness.completionPercent}%
+              </span>
+            </div>
+            <div className="w-full bg-muted rounded-full h-2 mb-2">
+              <div
+                className={`h-2 rounded-full transition-all ${completeness.isComplete ? "bg-green-500" : "bg-amber-500"}`}
+                style={{ width: `${completeness.completionPercent}%` }}
+              />
+            </div>
+            {!completeness.isComplete && (
+              <div className="space-y-1 mt-2">
+                <p className="text-xs text-muted-foreground font-medium">Perlu dilengkapi:</p>
+                {completeness.missingFields.slice(0, 4).map((f, i) => (
+                  <p key={i} className="text-xs text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                    <span className="w-1 h-1 rounded-full bg-amber-500 flex-shrink-0" />
+                    {f.label}{f.wargaNama ? ` — ${f.wargaNama}` : ""}
+                  </p>
+                ))}
+                {completeness.missingFields.length > 4 && (
+                  <p className="text-xs text-amber-600">+{completeness.missingFields.length - 4} lainnya</p>
+                )}
+                <p className="text-xs text-muted-foreground mt-1">Tekan Edit pada kartu anggota untuk melengkapi.</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <h3 className="text-sm font-semibold text-muted-foreground">
         Anggota Keluarga ({anggota?.length || 0})
@@ -424,7 +481,46 @@ export default function WargaProfil() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                {/* ===== Data Kesehatan ===== */}
+                <div className="pt-1 border-t">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Kesehatan & Kondisi Khusus</p>
                 </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Kondisi Kesehatan</Label>
+                    <Select value={editData.kondisiKesehatan} onValueChange={(v) => setField("kondisiKesehatan", v)}>
+                      <SelectTrigger className="h-10 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {kondisiKesehatanOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Status Disabilitas</Label>
+                    <Select value={editData.statusDisabilitas} onValueChange={(v) => setField("statusDisabilitas", v)}>
+                      <SelectTrigger className="h-10 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {statusDisabilitasOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {(editData.jenisKelamin === "Perempuan") && (
+                  <div className="flex items-center gap-2 h-9">
+                    <Checkbox
+                      id={`ibu-hamil-${w.id}`}
+                      checked={editData.ibuHamil === "true"}
+                      onCheckedChange={(checked) => setField("ibuHamil", checked ? "true" : "false")}
+                    />
+                    <Label htmlFor={`ibu-hamil-${w.id}`} className="text-xs cursor-pointer">Sedang Hamil</Label>
+                  </div>
+                )}
+              </div>
               ) : (
                 <div className="space-y-1.5 text-xs">
                   <div className="flex items-center gap-2">
@@ -457,6 +553,22 @@ export default function WargaProfil() {
                       {w.statusKependudukan}
                     </Badge>
                   </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground w-20 flex-shrink-0">Kesehatan</span>
+                    <span className="font-medium">{w.kondisiKesehatan || "-"}</span>
+                  </div>
+                  {(w.statusDisabilitas && w.statusDisabilitas !== "Tidak Ada") && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground w-20 flex-shrink-0">Disabilitas</span>
+                      <span className="font-medium">{w.statusDisabilitas}</span>
+                    </div>
+                  )}
+                  {w.ibuHamil && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground w-20 flex-shrink-0">Kondisi</span>
+                      <Badge className="text-[10px] bg-pink-100 text-pink-700 border-pink-200">Ibu Hamil</Badge>
+                    </div>
+                  )}
                 </div>
               )}
 
