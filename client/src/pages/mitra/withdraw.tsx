@@ -22,14 +22,21 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   ditolak: { label: "Ditolak", color: "bg-red-100 text-red-700" },
 };
 
+const POTONGAN_ADMIN = 5000;
+
 export default function MitraWithdraw() {
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
+  const [ubahRekening, setUbahRekening] = useState(false);
   const [form, setForm] = useState({ jumlahCoin: "", nomorRekening: "", namaBank: "", atasNama: "", catatan: "" });
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
   const { data: me } = useQuery<any>({ queryKey: ["/api/mitra/me"], queryFn: getQueryFn({ on401: "returnNull" }) });
   const { data: withdrawList = [] } = useQuery<any[]>({ queryKey: ["/api/mitra/withdraw"], queryFn: getQueryFn({ on401: "returnNull" }) });
+
+  // Cari data rekening dari riwayat withdraw sebelumnya
+  const savedBank = withdrawList.find((w: any) => w.nomorRekening && w.namaBank && w.atasNama);
+  const pakaiSavedBank = !!savedBank && !ubahRekening;
 
   const withdrawMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/mitra/withdraw", data),
@@ -38,13 +45,24 @@ export default function MitraWithdraw() {
       queryClient.invalidateQueries({ queryKey: ["/api/mitra/withdraw"] });
       queryClient.invalidateQueries({ queryKey: ["/api/mitra/me"] });
       setShowForm(false);
+      setUbahRekening(false);
       setForm({ jumlahCoin: "", nomorRekening: "", namaBank: "", atasNama: "", catatan: "" });
     },
     onError: (e: any) => toast({ variant: "destructive", title: "Gagal", description: e.message }),
   });
 
   const jumlah = parseInt(form.jumlahCoin) || 0;
-  const saldoCukup = (me?.saldo ?? 0) >= jumlah && jumlah > 0;
+  const saldo = me?.saldo ?? 0;
+  const saldoCukup = saldo >= jumlah && jumlah > POTONGAN_ADMIN;
+  const jumlahDiterima = jumlah - POTONGAN_ADMIN;
+
+  const nomorRekening = pakaiSavedBank ? savedBank.nomorRekening : form.nomorRekening;
+  const namaBank = pakaiSavedBank ? savedBank.namaBank : form.namaBank;
+  const atasNama = pakaiSavedBank ? savedBank.atasNama : form.atasNama;
+
+  const handleSubmit = () => {
+    withdrawMutation.mutate({ jumlahCoin: jumlah, nomorRekening, namaBank, atasNama, catatan: form.catatan });
+  };
 
   return (
     <div className="space-y-4">
@@ -61,8 +79,8 @@ export default function MitraWithdraw() {
       <Card className="border-0 shadow-sm" style={{ background: "linear-gradient(135deg, hsl(163,55%,22%), hsl(163,55%,35%))" }}>
         <CardContent className="p-4 text-white">
           <p className="text-sm opacity-70 mb-1">Saldo Tersedia</p>
-          <p className="text-3xl font-bold">{formatCoin(me?.saldo ?? 0)}</p>
-          <p className="text-xs opacity-60">= {formatRp(me?.saldo ?? 0)}</p>
+          <p className="text-3xl font-bold">{formatCoin(saldo)}</p>
+          <p className="text-xs opacity-60">= {formatRp(saldo)}</p>
           <p className="text-xs opacity-60 mt-2">Hanya mitra yang dapat melakukan withdraw. Kas RW akan membayarkan ke rekening Anda.</p>
         </CardContent>
       </Card>
@@ -73,29 +91,67 @@ export default function MitraWithdraw() {
           <CardContent className="p-4 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold">Form Withdraw</h3>
-              <button onClick={() => setShowForm(false)}><X className="w-5 h-5" /></button>
+              <button onClick={() => { setShowForm(false); setUbahRekening(false); }}><X className="w-5 h-5" /></button>
             </div>
 
             <div>
-              <Label>Jumlah Coin (max: {formatCoin(me?.saldo ?? 0)})</Label>
-              <Input type="number" value={form.jumlahCoin} onChange={e => set("jumlahCoin", e.target.value)} min={1} max={me?.saldo ?? 0} />
-              {jumlah > 0 && <p className="text-xs text-muted-foreground mt-1">= {formatRp(jumlah)}</p>}
-              {jumlah > 0 && !saldoCukup && (
+              <Label>Jumlah Coin (max: {formatCoin(saldo)})</Label>
+              <div className="flex gap-2 mt-1">
+                <Input type="number" value={form.jumlahCoin} onChange={e => set("jumlahCoin", e.target.value)} min={1} max={saldo} />
+                <Button type="button" variant="outline" size="sm" className="shrink-0 px-3 text-xs font-semibold border-[hsl(163,55%,22%)] text-[hsl(163,55%,22%)]"
+                  onClick={() => set("jumlahCoin", String(saldo))}>
+                  MAX
+                </Button>
+              </div>
+              {jumlah > 0 && jumlah <= POTONGAN_ADMIN && (
+                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" /> Minimal withdraw lebih dari {formatRp(POTONGAN_ADMIN)}
+                </p>
+              )}
+              {jumlah > POTONGAN_ADMIN && !saldoCukup && (
                 <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
                   <AlertCircle className="w-3 h-3" /> Saldo tidak cukup
                 </p>
               )}
+              {jumlah > POTONGAN_ADMIN && saldoCukup && (
+                <div className="mt-2 p-2 rounded bg-muted text-xs space-y-1">
+                  <div className="flex justify-between"><span>Jumlah withdraw</span><span>{formatRp(jumlah)}</span></div>
+                  <div className="flex justify-between text-red-500"><span>Potongan admin</span><span>- {formatRp(POTONGAN_ADMIN)}</span></div>
+                  <div className="flex justify-between font-semibold border-t pt-1"><span>Anda akan menerima</span><span className="text-[hsl(163,55%,22%)]">{formatRp(jumlahDiterima)}</span></div>
+                </div>
+              )}
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Nama Bank</Label><Input placeholder="BCA, BRI, Mandiri..." value={form.namaBank} onChange={e => set("namaBank", e.target.value)} /></div>
-              <div><Label>No. Rekening</Label><Input placeholder="08xx / 12345678" value={form.nomorRekening} onChange={e => set("nomorRekening", e.target.value)} /></div>
-            </div>
-            <div><Label>Atas Nama</Label><Input placeholder="Nama pemilik rekening" value={form.atasNama} onChange={e => set("atasNama", e.target.value)} /></div>
+
+            {/* Rekening */}
+            {pakaiSavedBank ? (
+              <div className="p-3 rounded-lg bg-muted space-y-1">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Rekening Tersimpan</p>
+                  <button className="text-xs text-[hsl(163,55%,22%)] underline" onClick={() => setUbahRekening(true)}>Ubah</button>
+                </div>
+                <p className="text-sm font-semibold">{savedBank.namaBank} — {savedBank.nomorRekening}</p>
+                <p className="text-xs text-muted-foreground">a/n {savedBank.atasNama}</p>
+              </div>
+            ) : (
+              <>
+                {savedBank && (
+                  <button className="text-xs text-[hsl(163,55%,22%)] underline" onClick={() => setUbahRekening(false)}>
+                    Gunakan rekening tersimpan
+                  </button>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <div><Label>Nama Bank</Label><Input placeholder="BCA, BRI, Mandiri..." value={form.namaBank} onChange={e => set("namaBank", e.target.value)} /></div>
+                  <div><Label>No. Rekening</Label><Input placeholder="08xx / 12345678" value={form.nomorRekening} onChange={e => set("nomorRekening", e.target.value)} /></div>
+                </div>
+                <div><Label>Atas Nama</Label><Input placeholder="Nama pemilik rekening" value={form.atasNama} onChange={e => set("atasNama", e.target.value)} /></div>
+              </>
+            )}
+
             <div><Label>Catatan (opsional)</Label><Input value={form.catatan} onChange={e => set("catatan", e.target.value)} /></div>
 
             <Button className="w-full bg-[hsl(163,55%,22%)]"
-              onClick={() => withdrawMutation.mutate({ jumlahCoin: jumlah, nomorRekening: form.nomorRekening, namaBank: form.namaBank, atasNama: form.atasNama, catatan: form.catatan })}
-              disabled={!saldoCukup || !form.nomorRekening || !form.namaBank || !form.atasNama || withdrawMutation.isPending}>
+              onClick={handleSubmit}
+              disabled={!saldoCukup || !nomorRekening || !namaBank || !atasNama || withdrawMutation.isPending}>
               {withdrawMutation.isPending ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Memproses...</> : <><CreditCard className="w-4 h-4 mr-2" />Kirim Permintaan Withdraw</>}
             </Button>
           </CardContent>
@@ -116,6 +172,7 @@ export default function MitraWithdraw() {
                       <p className="text-xl font-bold">{formatCoin(w.jumlahCoin)}</p>
                       <Badge className={`text-xs ${cfg.color}`}>{cfg.label}</Badge>
                     </div>
+                    <p className="text-xs text-muted-foreground">Diterima: <span className="font-medium">{formatRp(w.jumlahCoin - POTONGAN_ADMIN)}</span> (potongan admin {formatRp(POTONGAN_ADMIN)})</p>
                     <p className="text-xs text-muted-foreground">{w.namaBank} · {w.nomorRekening} · a/n {w.atasNama}</p>
                     <p className="text-xs text-muted-foreground">{formatTgl(w.createdAt)}</p>
                     {w.catatan && <p className="text-xs italic text-muted-foreground mt-1">{w.catatan}</p>}
