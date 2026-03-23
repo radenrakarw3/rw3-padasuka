@@ -1,19 +1,48 @@
+import { useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
-import { User, FileText, LogOut, Home, Heart, Wallet } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { getQueryFn } from "@/lib/queryClient";
+import { User, FileText, LogOut, Home, Wallet, Coins } from "lucide-react";
 import logoGold from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
+
+function GoldCoin({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" style={{ display: "inline-block", verticalAlign: "-0.15em", flexShrink: 0 }}>
+      <circle cx="10" cy="10" r="9.5" fill="#92400E" />
+      <circle cx="10" cy="10" r="9" fill="#D97706" />
+      <circle cx="10" cy="10" r="8" fill="#F59E0B" />
+      <circle cx="10" cy="10" r="6.8" fill="#FCD34D" />
+      <circle cx="10" cy="10" r="5.8" fill="none" stroke="#D97706" strokeWidth="0.6" />
+      <ellipse cx="8" cy="7.5" rx="2.2" ry="1.1" fill="white" fillOpacity="0.28" transform="rotate(-25 8 7.5)" />
+      <text x="10" y="13.2" textAnchor="middle" fill="#78350F" fontSize="4.8" fontWeight="900" fontFamily="Arial,sans-serif">RW</text>
+    </svg>
+  );
+}
 
 const navItems = [
   { path: "/warga", icon: Home, label: "Beranda" },
   { path: "/warga/layanan", icon: FileText, label: "Layanan" },
-  { path: "/warga/donasi", icon: Heart, label: "Donasi" },
-  { path: "/warga/keuangan", icon: Wallet, label: "Keuangan" },
+  { path: "/warga/rwcoin", icon: Coins, label: "RWcoin" },
+  { path: "/warga/donasi", icon: Wallet, label: "Keuangan" },
   { path: "/warga/profil", icon: User, label: "Profil" },
 ];
 
 export default function WargaLayout({ children }: { children: React.ReactNode }) {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const [location, setLocation] = useLocation();
+
+  const { data: wallet } = useQuery<any>({
+    queryKey: ["/api/warga/rwcoin/wallet"],
+    queryFn: getQueryFn({ on401: "returnNull" }),
+    enabled: user?.type === "warga",
+    staleTime: 30000,
+  });
+
+  // Scroll ke atas setiap ganti halaman
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [location]);
 
   return (
     <div className="min-h-screen flex flex-col bg-background pb-20">
@@ -26,14 +55,27 @@ export default function WargaLayout({ children }: { children: React.ReactNode })
               <p className="text-[10px] text-[hsl(40,30%,80%)] truncate">Sistem Informasi Warga</p>
             </div>
           </div>
-          <button
-            onClick={async () => { await logout(); setLocation("/"); }}
-            className="flex items-center gap-1 text-xs bg-white/10 px-3 py-2 rounded-md"
-            data-testid="button-logout"
-          >
-            <LogOut className="w-4 h-4" />
-            Keluar
-          </button>
+          <div className="flex items-center gap-2">
+            {wallet != null && (
+              <button
+                onClick={() => setLocation("/warga/rwcoin")}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 transition-colors"
+              >
+                <GoldCoin size={15} />
+                <span className="text-xs font-bold" style={{ color: "hsl(40,80%,75%)" }}>
+                  {wallet.saldo?.toLocaleString("id-ID")}
+                </span>
+              </button>
+            )}
+            <button
+              onClick={async () => { await logout(); setLocation("/"); }}
+              className="flex items-center gap-1 text-xs bg-white/10 px-3 py-2 rounded-md"
+              data-testid="button-logout"
+            >
+              <LogOut className="w-4 h-4" />
+              Keluar
+            </button>
+          </div>
         </div>
       </header>
 

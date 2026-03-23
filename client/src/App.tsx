@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Switch, Route, Redirect } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -11,7 +11,8 @@ import WargaLayout from "@/components/warga-layout";
 import WargaBeranda from "@/pages/warga/beranda";
 import WargaProfil from "@/pages/warga/profil";
 import WargaLayanan from "@/pages/warga/layanan";
-import WargaDonasi from "@/pages/warga/donasi";
+import WargaKeuanganDonasi from "@/pages/warga/donasi";
+import WargaRwcoin from "@/pages/warga/rwcoin";
 import AdminLayout from "@/components/admin-layout";
 import AdminDashboard from "@/pages/admin/dashboard";
 import AdminKelolaKK from "@/pages/admin/kelola-kk";
@@ -29,10 +30,19 @@ import AdminPemilikKost from "@/pages/admin/kelola-pemilik-kost";
 import AdminWargaSinggah from "@/pages/admin/kelola-warga-singgah";
 import AdminKelolaUsaha from "@/pages/admin/kelola-usaha";
 import AdminProgramRw from "@/pages/admin/program-rw";
-import WargaKeuangan from "@/pages/warga/keuangan";
+import AdminRwcoin from "@/pages/admin/rwcoin";
+import AdminIuran from "@/pages/admin/iuran";
 import SinggahLayout from "@/components/singgah-layout";
 import SinggahBeranda from "@/pages/singgah/beranda";
 import SinggahLaporan from "@/pages/singgah/laporan";
+import MitraLayout from "@/components/mitra-layout";
+import MitraLoginPage from "@/pages/mitra/login";
+import MitraBeranda from "@/pages/mitra/beranda";
+import MitraTransaksi from "@/pages/mitra/transaksi";
+import MitraWithdraw from "@/pages/mitra/withdraw";
+import MitraDiskon from "@/pages/mitra/diskon";
+import { useQuery } from "@tanstack/react-query";
+import { getQueryFn } from "@/lib/queryClient";
 import { X } from "lucide-react";
 import goldLogo from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
 import radenRakaImg from "@assets/raden_raka_nobg.png";
@@ -114,11 +124,43 @@ function WargaRoutes() {
         <Route path="/warga" component={WargaBeranda} />
         <Route path="/warga/profil" component={WargaProfil} />
         <Route path="/warga/layanan" component={WargaLayanan} />
-        <Route path="/warga/donasi" component={WargaDonasi} />
-        <Route path="/warga/keuangan" component={WargaKeuangan} />
+        <Route path="/warga/donasi" component={WargaKeuanganDonasi} />
+        <Route path="/warga/rwcoin" component={WargaRwcoin} />
         <Route>{() => <Redirect to="/warga" />}</Route>
       </Switch>
     </WargaLayout>
+  );
+}
+
+function MitraApp() {
+  const { data: mitraMe, isLoading } = useQuery<any>({
+    queryKey: ["/api/mitra/me"],
+    queryFn: getQueryFn({ on401: "returnNull" }),
+    retry: false,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 border-3 border-[hsl(163,55%,22%)] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!mitraMe) {
+    return <MitraLoginPage onLogin={() => window.location.reload()} />;
+  }
+
+  return (
+    <MitraLayout>
+      <Switch>
+        <Route path="/mitra" component={MitraBeranda} />
+        <Route path="/mitra/transaksi" component={MitraTransaksi} />
+        <Route path="/mitra/withdraw" component={MitraWithdraw} />
+        <Route path="/mitra/diskon" component={MitraDiskon} />
+        <Route>{() => <Redirect to="/mitra" />}</Route>
+      </Switch>
+    </MitraLayout>
   );
 }
 
@@ -138,10 +180,12 @@ function AdminRoutes() {
         <Route path="/admin/bansos" component={AdminBansos} />
         <Route path="/admin/donasi" component={AdminDonasi} />
         <Route path="/admin/keuangan" component={AdminKeuangan} />
+        <Route path="/admin/iuran" component={AdminIuran} />
         <Route path="/admin/pemilik-kost" component={AdminPemilikKost} />
         <Route path="/admin/warga-singgah" component={AdminWargaSinggah} />
         <Route path="/admin/usaha" component={AdminKelolaUsaha} />
         <Route path="/admin/program-rw" component={AdminProgramRw} />
+        <Route path="/admin/rwcoin" component={AdminRwcoin} />
         <Route>{() => <Redirect to="/admin" />}</Route>
       </Switch>
     </AdminLayout>
@@ -162,6 +206,12 @@ function SinggahRoutes() {
 
 function AppContent() {
   const { user, loading } = useAuth();
+  const [location] = useLocation();
+
+  // Portal mitra - jalur terpisah dari auth utama
+  if (location.startsWith("/mitra")) {
+    return <MitraApp />;
+  }
 
   if (loading) {
     return (

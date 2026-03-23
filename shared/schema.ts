@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, serial, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, serial, integer, boolean, timestamp, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -386,6 +386,200 @@ export type InsertProgramRw = z.infer<typeof insertProgramRwSchema>;
 export type PesertaProgram = typeof pesertaProgram.$inferSelect;
 export type InsertPesertaProgram = z.infer<typeof insertPesertaProgramSchema>;
 
+// ===================== RWCOIN ECOSYSTEM =====================
+
+export const mitra = pgTable("mitra", {
+  id: serial("id").primaryKey(),
+  usahaId: integer("usaha_id").references(() => usaha.id),
+  namaUsaha: text("nama_usaha").notNull(),
+  kategori: text("kategori").notNull().default("Umum"),
+  rt: integer("rt").notNull(),
+  alamat: text("alamat").notNull(),
+  nomorWaKasir: text("nomor_wa_kasir").notNull(),
+  namaKasir: text("nama_kasir").notNull(),
+  pinHash: text("pin_hash").notNull(),
+  deskripsi: text("deskripsi"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const rwcoinWallet = pgTable("rwcoin_wallet", {
+  id: serial("id").primaryKey(),
+  ownerType: text("owner_type").notNull(), // 'warga' | 'mitra'
+  wargaId: integer("warga_id").references(() => warga.id),
+  mitraId: integer("mitra_id").references(() => mitra.id),
+  kodeWallet: text("kode_wallet").notNull().unique(),
+  saldo: integer("saldo").notNull().default(0),
+  totalTopup: integer("total_topup").notNull().default(0),
+  totalBelanja: integer("total_belanja").notNull().default(0),
+  totalWithdraw: integer("total_withdraw").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const rwcoinTransaksi = pgTable("rwcoin_transaksi", {
+  id: serial("id").primaryKey(),
+  kodeTransaksi: text("kode_transaksi").notNull().unique(),
+  tipe: text("tipe").notNull(), // 'topup' | 'belanja' | 'withdraw' | 'refund' | 'transfer'
+  wargaId: integer("warga_id").references(() => warga.id),
+  mitraId: integer("mitra_id").references(() => mitra.id),
+  tujuanWargaId: integer("tujuan_warga_id").references(() => warga.id), // untuk transfer antar warga
+  jumlahBruto: integer("jumlah_bruto").notNull(),
+  jumlahDiskon: integer("jumlah_diskon").notNull().default(0),
+  jumlahBayar: integer("jumlah_bayar").notNull(),
+  voucherKode: text("voucher_kode"),
+  keterangan: text("keterangan"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const mitraVoucher = pgTable("mitra_voucher", {
+  id: serial("id").primaryKey(),
+  kode: text("kode").notNull().unique(),
+  nama: text("nama").notNull(),
+  tipe: text("tipe").notNull(), // 'persen' | 'rupiah'
+  nilai: integer("nilai").notNull(),
+  mitraId: integer("mitra_id").references(() => mitra.id),
+  minTransaksi: integer("min_transaksi").notNull().default(0),
+  kuota: integer("kuota"),
+  terpakai: integer("terpakai").notNull().default(0),
+  berlakuHingga: text("berlaku_hingga"),
+  khususWargaRw3: boolean("khusus_warga_rw3").notNull().default(true),
+  subsidiAdmin: boolean("subsidi_admin").notNull().default(false), // true = admin nanggung diskon, mitra tetap dapat full
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const mitraDiskon = pgTable("mitra_diskon", {
+  id: serial("id").primaryKey(),
+  mitraId: integer("mitra_id").notNull().references(() => mitra.id),
+  namaDiskon: text("nama_diskon").notNull(),
+  tipe: text("tipe").notNull(), // 'persen' | 'rupiah'
+  nilai: integer("nilai").notNull(),
+  berlakuMulai: text("berlaku_mulai"),
+  berlakuHingga: text("berlaku_hingga"),
+  khususWargaRw3: boolean("khusus_warga_rw3").notNull().default(true),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const rwcoinWithdraw = pgTable("rwcoin_withdraw", {
+  id: serial("id").primaryKey(),
+  mitraId: integer("mitra_id").notNull().references(() => mitra.id),
+  jumlahCoin: integer("jumlah_coin").notNull(),
+  status: text("status").notNull().default("pending"), // pending | disetujui | dibayar | ditolak
+  catatan: text("catatan"),
+  nomorRekening: text("nomor_rekening"),
+  namaBank: text("nama_bank"),
+  atasNama: text("atas_nama"),
+  disetujuiOleh: text("disetujui_oleh"),
+  disetujuiAt: timestamp("disetujui_at"),
+  dibayarAt: timestamp("dibayar_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const rwcoinPendingTransaksi = pgTable("rwcoin_pending_transaksi", {
+  id: serial("id").primaryKey(),
+  wargaId: integer("warga_id").notNull().references(() => warga.id),
+  mitraId: integer("mitra_id").notNull().references(() => mitra.id),
+  jumlahBruto: integer("jumlah_bruto").notNull(),
+  jumlahDiskon: integer("jumlah_diskon").notNull().default(0),
+  jumlahBayar: integer("jumlah_bayar").notNull(),
+  voucherKode: text("voucher_kode"),
+  keterangan: text("keterangan"),
+  otpKode: text("otp_kode").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  isConfirmed: boolean("is_confirmed").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export type RwcoinPendingTransaksi = typeof rwcoinPendingTransaksi.$inferSelect;
+
+export const rwcoinOtp = pgTable("rwcoin_otp", {
+  id: serial("id").primaryKey(),
+  wargaId: integer("warga_id").notNull().references(() => warga.id),
+  kode: text("kode").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  isUsed: boolean("is_used").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type RwcoinOtp = typeof rwcoinOtp.$inferSelect;
+
+export const rwcoinTopupRequest = pgTable("rwcoin_topup_request", {
+  id: serial("id").primaryKey(),
+  wargaId: integer("warga_id").notNull().references(() => warga.id),
+  namaWarga: text("nama_warga").notNull(),
+  noWa: text("no_wa"),
+  jumlah: integer("jumlah").notNull(),
+  metode: text("metode").notNull(),
+  rekening: text("rekening").notNull(),
+  atasnama: text("atasnama").notNull(),
+  totalTransfer: integer("total_transfer").notNull(),
+  status: text("status").notNull().default("pending"), // pending | approved | rejected
+  catatan: text("catatan"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export type RwcoinTopupRequest = typeof rwcoinTopupRequest.$inferSelect;
+
+export const insertMitraSchema = createInsertSchema(mitra).omit({ id: true, createdAt: true, pinHash: true }).extend({
+  pin: z.string().length(6, "PIN harus 6 digit").regex(/^\d+$/, "PIN harus angka"),
+});
+export const insertMitraVoucherSchema = createInsertSchema(mitraVoucher).omit({ id: true, createdAt: true, terpakai: true });
+export const insertMitraDiskonSchema = createInsertSchema(mitraDiskon).omit({ id: true, createdAt: true });
+export const insertRwcoinWithdrawSchema = createInsertSchema(rwcoinWithdraw).omit({ id: true, createdAt: true, status: true, disetujuiOleh: true, disetujuiAt: true, dibayarAt: true });
+
+export type Mitra = typeof mitra.$inferSelect;
+export type InsertMitra = z.infer<typeof insertMitraSchema>;
+export type RwcoinWallet = typeof rwcoinWallet.$inferSelect;
+export type RwcoinTransaksi = typeof rwcoinTransaksi.$inferSelect;
+export type MitraVoucher = typeof mitraVoucher.$inferSelect;
+export type InsertMitraVoucher = z.infer<typeof insertMitraVoucherSchema>;
+export type MitraDiskon = typeof mitraDiskon.$inferSelect;
+export type InsertMitraDiskon = z.infer<typeof insertMitraDiskonSchema>;
+export type RwcoinWithdraw = typeof rwcoinWithdraw.$inferSelect;
+export type InsertRwcoinWithdraw = z.infer<typeof insertRwcoinWithdrawSchema>;
+
+export const kasRwcoin = pgTable("kas_rwcoin", {
+  id: serial("id").primaryKey(),
+  tipe: text("tipe").notNull(), // 'pemasukan' | 'pengeluaran'
+  tipeDetail: text("tipe_detail"), // 'topup_coin' | 'admin_fee' | 'withdraw_mitra' | 'subsidi_voucher'
+  jumlah: integer("jumlah").notNull(),
+  keterangan: text("keterangan").notNull(),
+  referensiId: text("referensi_id"), // kodeTransaksi / withdrawId
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type KasRwcoin = typeof kasRwcoin.$inferSelect;
+
+// ===================== END RWCOIN =====================
+
+export const wargaSavedLogin = pgTable("warga_saved_login", {
+  id: serial("id").primaryKey(),
+  wargaId: integer("warga_id").notNull().references(() => warga.id),
+  kkId: integer("kk_id").notNull().references(() => kartuKeluarga.id),
+  nomorKk: text("nomor_kk").notNull(),
+  deviceId: text("device_id").notNull(),
+  pinHash: text("pin_hash").notNull(),
+  lastUsedAt: timestamp("last_used_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => ({
+  uniqWargaDevice: uniqueIndex("wsl_warga_device_unique").on(t.wargaId, t.deviceId),
+}));
+
+export type WargaSavedLogin = typeof wargaSavedLogin.$inferSelect;
+
+// ===================== CURHAT WARGA =====================
+export const curhatWarga = pgTable("curhat_warga", {
+  id: serial("id").primaryKey(),
+  wargaId: integer("warga_id").notNull().references(() => warga.id),
+  isi: text("isi").notNull(),
+  coinDiberikan: integer("coin_diberikan").notNull().default(0),
+  balasanGemini: text("balasan_gemini").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export type CurhatWarga = typeof curhatWarga.$inferSelect;
+// ===================== END CURHAT WARGA =====================
+
 export const insertPemilikKostSchema = createInsertSchema(pemilikKost).omit({ id: true, createdAt: true });
 export const insertWargaSinggahSchema = createInsertSchema(wargaSinggah).omit({ id: true, createdAt: true, status: true });
 export const insertRiwayatKontrakSchema = createInsertSchema(riwayatKontrak).omit({ id: true, createdAt: true });
@@ -413,3 +607,34 @@ export type SurveyUsaha = typeof surveyUsaha.$inferSelect;
 export type InsertSurveyUsaha = z.infer<typeof insertSurveyUsahaSchema>;
 export type RiwayatStiker = typeof riwayatStiker.$inferSelect;
 export type InsertRiwayatStiker = z.infer<typeof insertRiwayatStikerSchema>;
+
+// ===================== IURAN PER KK =====================
+
+export const iuranSetting = pgTable("iuran_setting", {
+  id: serial("id").primaryKey(),
+  jumlahDefault: integer("jumlah_default").notNull().default(30000),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  updatedBy: text("updated_by").notNull().default("admin"),
+});
+
+export const iuranKk = pgTable("iuran_kk", {
+  id: serial("id").primaryKey(),
+  kkId: integer("kk_id").notNull().references(() => kartuKeluarga.id),
+  bulanTahun: text("bulan_tahun").notNull(),
+  jumlah: integer("jumlah").notNull(),
+  status: text("status").notNull().default("belum"),
+  tanggalBayar: text("tanggal_bayar"),
+  kasRwId: integer("kas_rw_id").references(() => kasRw.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  kkBulanUnique: uniqueIndex("iuran_kk_kk_bulan_unique").on(table.kkId, table.bulanTahun),
+}));
+
+export const insertIuranKkSchema = createInsertSchema(iuranKk).omit({ id: true, createdAt: true, updatedAt: true, status: true, tanggalBayar: true, kasRwId: true });
+
+export type IuranSetting = typeof iuranSetting.$inferSelect;
+export type IuranKk = typeof iuranKk.$inferSelect;
+export type InsertIuranKk = z.infer<typeof insertIuranKkSchema>;
+
+// ===================== END IURAN PER KK =====================

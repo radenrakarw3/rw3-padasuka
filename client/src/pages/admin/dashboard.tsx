@@ -14,6 +14,7 @@ import {
   UsersRound, Building2, AlertTriangle, Clock, Store, Award, Sparkles,
   Target, BarChart3, Eye, Loader2, Filter, ChevronRight, UserSearch,
   CheckCircle2, AlertCircle, Zap, ShieldCheck, Activity,
+  Coins, ShoppingBag, ArrowUpCircle, ArrowDownCircle, Trophy,
 } from "lucide-react";
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -286,6 +287,21 @@ export default function AdminDashboard() {
       return res.json();
     },
     staleTime: 60000,
+  });
+
+  const { data: rwcoinDashboard, isLoading: rwcoinLoading } = useQuery<{
+    transaksiTerbaru: any[];
+    topupTerbaru: any[];
+    leaderboardMitra: { mitraId: number; namaUsaha: string; totalBelanja: number; jumlahTx: number }[];
+    perputaran: { totalDiWarga: number; totalDiMitra: number; totalWithdrawn: number; totalBeredar: number };
+  }>({
+    queryKey: ["/api/rwcoin/dashboard"],
+    queryFn: async () => {
+      const res = await fetch("/api/rwcoin/dashboard", { credentials: "include" });
+      if (!res.ok) throw new Error(`${res.status}`);
+      return res.json();
+    },
+    staleTime: 30000,
   });
 
   const openDetail = (title: string, section: string, data: any) => {
@@ -701,6 +717,162 @@ export default function AdminDashboard() {
               </div>
             ))}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* ── 5b. RWCOIN ECOSYSTEM ───────────────────────────────────────────── */}
+      <Card className="border-[hsl(40,45%,55%)]/30 bg-gradient-to-br from-amber-50/20 to-yellow-50/10">
+        <CardContent className="p-4">
+          <SectionTitle icon={<Coins className="w-4 h-4" style={{ color: "hsl(40,45%,55%)" }} />}>
+            Ekosistem RWcoin
+          </SectionTitle>
+
+          {rwcoinLoading ? (
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[1,2,3,4].map(i => <Skeleton key={i} className="h-14 rounded-lg" />)}
+              </div>
+              <Skeleton className="h-32 rounded-lg" />
+            </div>
+          ) : !rwcoinDashboard ? (
+            <p className="text-xs text-muted-foreground py-4 text-center">Gagal memuat data RWcoin</p>
+          ) : (
+            <>
+              {/* Perputaran coin */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+                {[
+                  { label: "Beredar di Warga", value: rwcoinDashboard.perputaran.totalDiWarga, icon: Wallet, color: "#2d7a5f" },
+                  { label: "Di Saldo Mitra", value: rwcoinDashboard.perputaran.totalDiMitra, icon: Store, color: "#3b6db5" },
+                  { label: "Total Beredar", value: rwcoinDashboard.perputaran.totalBeredar, icon: Coins, color: "hsl(40,45%,55%)" },
+                  { label: "Ditarik Mitra", value: rwcoinDashboard.perputaran.totalWithdrawn, icon: ArrowDownCircle, color: "#b54560" },
+                ].map(item => (
+                  <div key={item.label} className="flex items-center gap-2 p-2.5 rounded-lg bg-white/60 border border-white/80 shadow-sm">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: item.color }}>
+                      <item.icon className="w-3.5 h-3.5 text-white" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold leading-tight" style={{ color: item.color }}>
+                        {item.value.toLocaleString("id-ID")} 🪙
+                      </p>
+                      <p className="text-[9px] text-muted-foreground leading-tight">{item.label}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {/* 5 Transaksi Terakhir + 5 Topup Terakhir */}
+                <div className="sm:col-span-2 space-y-3">
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 mb-2">
+                      <ShoppingBag className="w-3.5 h-3.5" /> 5 Transaksi Terakhir
+                    </p>
+                    <div className="space-y-1.5">
+                      {rwcoinDashboard.transaksiTerbaru.length === 0 ? (
+                        <p className="text-xs text-muted-foreground py-2">Belum ada transaksi</p>
+                      ) : rwcoinDashboard.transaksiTerbaru.map((t: any) => (
+                        <div key={t.id} className="flex items-center justify-between py-1.5 px-2.5 rounded-lg bg-white/60 border border-white/80">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${
+                              t.tipe === "topup" ? "bg-green-100 text-green-600"
+                              : t.tipe === "belanja" ? "bg-blue-100 text-blue-600"
+                              : t.tipe === "transfer" ? "bg-purple-100 text-purple-600"
+                              : "bg-orange-100 text-orange-600"
+                            }`}>
+                              {t.tipe === "topup" ? <ArrowUpCircle className="w-3.5 h-3.5" />
+                                : t.tipe === "belanja" ? <ShoppingBag className="w-3.5 h-3.5" />
+                                : t.tipe === "transfer" ? <ArrowUpCircle className="w-3.5 h-3.5" />
+                                : <ArrowDownCircle className="w-3.5 h-3.5" />}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-[11px] font-medium truncate">
+                                {t.tipe === "topup" ? `Topup → ${t.namaWarga ?? "-"}`
+                                  : t.tipe === "belanja" ? `${t.namaWarga ?? "-"} → ${t.namaUsaha ?? "-"}`
+                                  : t.tipe === "transfer" ? `Transfer ${t.namaWarga ?? "-"}`
+                                  : `${t.namaUsaha ?? "-"}`}
+                              </p>
+                              <p className="text-[9px] text-muted-foreground">
+                                {new Date(t.createdAt).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right flex-shrink-0 ml-2">
+                            <p className={`text-[11px] font-bold ${t.tipe === "topup" ? "text-green-600" : t.tipe === "belanja" ? "text-blue-600" : "text-purple-600"}`}>
+                              {t.tipe === "topup" ? "+" : "-"}{t.jumlahBayar.toLocaleString("id-ID")} 🪙
+                            </p>
+                            {t.jumlahDiskon > 0 && (
+                              <p className="text-[9px] text-emerald-600">hemat {t.jumlahDiskon.toLocaleString("id-ID")}</p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 mb-2">
+                      <ArrowUpCircle className="w-3.5 h-3.5 text-green-600" /> 5 Topup Terakhir
+                    </p>
+                    <div className="space-y-1.5">
+                      {rwcoinDashboard.topupTerbaru.length === 0 ? (
+                        <p className="text-xs text-muted-foreground py-2">Belum ada topup</p>
+                      ) : rwcoinDashboard.topupTerbaru.map((t: any) => (
+                        <div key={t.id} className="flex items-center justify-between py-1.5 px-2.5 rounded-lg bg-green-50/60 border border-green-100/60">
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-medium truncate">{t.namaWarga ?? "-"}</p>
+                            <p className="text-[9px] text-muted-foreground">
+                              {new Date(t.createdAt).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                              {t.keterangan ? ` · ${t.keterangan}` : ""}
+                            </p>
+                          </div>
+                          <p className="text-[11px] font-bold text-green-700 flex-shrink-0 ml-2">
+                            +{t.jumlahBayar.toLocaleString("id-ID")} 🪙
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Leaderboard Mitra */}
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 mb-2">
+                    <Trophy className="w-3.5 h-3.5 text-amber-500" /> Mitra Teratas
+                  </p>
+                  {rwcoinDashboard.leaderboardMitra.length === 0 ? (
+                    <p className="text-xs text-muted-foreground py-2">Belum ada transaksi mitra</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {rwcoinDashboard.leaderboardMitra.map((m, idx) => {
+                        const max = rwcoinDashboard.leaderboardMitra[0].totalBelanja;
+                        const pct = max > 0 ? Math.round((m.totalBelanja / max) * 100) : 0;
+                        const medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"];
+                        return (
+                          <div key={m.mitraId} className="p-2 rounded-lg bg-white/60 border border-white/80">
+                            <div className="flex items-center justify-between gap-1 mb-1">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="text-sm flex-shrink-0">{medals[idx]}</span>
+                                <p className="text-[11px] font-semibold truncate">{m.namaUsaha}</p>
+                              </div>
+                              <p className="text-[10px] text-muted-foreground flex-shrink-0">{m.jumlahTx} tx</p>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: idx === 0 ? "#b8923e" : "#2d7a5f" }} />
+                              </div>
+                              <p className="text-[10px] font-bold" style={{ color: idx === 0 ? "#b8923e" : "#2d7a5f" }}>
+                                {m.totalBelanja.toLocaleString("id-ID")} 🪙
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
