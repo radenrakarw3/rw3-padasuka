@@ -399,7 +399,7 @@ export async function registerRoutes(
         return res.status(429).json({ message: "Tunggu 60 detik sebelum meminta OTP lagi" });
       }
 
-      const otp = String(Math.floor(Math.random() * 90) + 10);
+      const otp = String(Math.floor(100000 + Math.random() * 900000));
       const expiresAt = Date.now() + 5 * 60 * 1000;
 
       otpStore.set(nomorKk, { otp, kkId: kk.id, wargaId: target.id, nomorKk: kk.nomorKk, phone: target.nomorWhatsapp, expiresAt, attempts: 0, lastRequestAt: Date.now() });
@@ -508,7 +508,7 @@ export async function registerRoutes(
       const kk = await storage.getKkById(target.kkId);
       if (!kk) return res.status(404).json({ message: "Data KK tidak ditemukan" });
 
-      const otp = String(Math.floor(Math.random() * 90) + 10);
+      const otp = String(Math.floor(100000 + Math.random() * 900000));
       const expiresAt = Date.now() + 5 * 60 * 1000;
 
       waOtpStore.set(normalized, { otp, kkId: kk.id, nomorKk: kk.nomorKk, wargaId: target.id, phone: target.nomorWhatsapp, expiresAt, attempts: 0, lastRequestAt: Date.now() });
@@ -627,7 +627,7 @@ export async function registerRoutes(
       if (existing && (Date.now() - existing.lastRequestAt) < 60000) {
         return res.status(429).json({ message: "Tunggu 60 detik sebelum meminta OTP lagi" });
       }
-      const otp = String(Math.floor(Math.random() * 90) + 10);
+      const otp = String(Math.floor(100000 + Math.random() * 900000));
       const expiresAt = Date.now() + 5 * 60 * 1000;
       singgahOtpStore.set(nik, { otp, wargaSinggahId: ws.id, nik: ws.nik, phone: ws.nomorWhatsapp, expiresAt, attempts: 0, lastRequestAt: Date.now() });
       const message = `[RW 03 Padasuka]\n\nKode OTP login Warga Singgah: *${otp}*\nBerlaku 5 menit.\nJangan berikan kode ini ke siapapun ya.`;

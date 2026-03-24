@@ -47,16 +47,36 @@ export default function PrivacyPolicy() {
           </section>
 
           <section>
-            <h2 className="font-semibold text-gray-900 mb-2">4. Penyimpanan Data</h2>
+            <h2 className="font-semibold text-gray-900 mb-2">4. Layanan Pihak Ketiga</h2>
+            <p>Aplikasi ini menggunakan layanan pihak ketiga berikut untuk menjalankan fitur tertentu:</p>
+            <ul className="mt-2 list-disc list-inside space-y-2">
+              <li>
+                <span className="font-medium">StarSender (WhatsApp API)</span> — Digunakan untuk
+                mengirim pesan dan kode verifikasi (OTP) ke nomor WhatsApp warga. Data yang dikirim:
+                nomor WhatsApp dan isi pesan. Kebijakan privasi StarSender berlaku untuk data tersebut.
+              </li>
+              <li>
+                <span className="font-medium">Google Gemini AI</span> — Digunakan untuk fitur
+                "Curhat Warga" dan pembuatan surat otomatis. Data yang dikirim ke Google Gemini:
+                teks yang ditulis warga beserta nama warga. Data ini diproses oleh AI Google
+                untuk menghasilkan respons. Kebijakan privasi Google berlaku untuk data tersebut.
+                Kami tidak mengirim NIK, nomor WA, atau data identitas sensitif ke Google Gemini.
+              </li>
+            </ul>
+          </section>
+
+          <section>
+            <h2 className="font-semibold text-gray-900 mb-2">5. Penyimpanan Data</h2>
             <p>
               Data disimpan secara aman di database yang dikelola oleh pengurus RW 03.
-              Data tidak dibagikan kepada pihak ketiga tanpa persetujuan warga,
-              kecuali untuk keperluan administrasi pemerintahan yang diwajibkan oleh hukum.
+              Selain penggunaan layanan pihak ketiga yang disebutkan di atas, data tidak
+              dibagikan kepada pihak lain tanpa persetujuan warga, kecuali untuk keperluan
+              administrasi pemerintahan yang diwajibkan oleh hukum.
             </p>
           </section>
 
           <section>
-            <h2 className="font-semibold text-gray-900 mb-2">5. Hak Pengguna</h2>
+            <h2 className="font-semibold text-gray-900 mb-2">6. Hak Pengguna</h2>
             <p>Setiap warga berhak untuk:</p>
             <ul className="mt-2 list-disc list-inside space-y-1">
               <li>Melihat data pribadi yang tersimpan di sistem</li>
@@ -70,7 +90,7 @@ export default function PrivacyPolicy() {
           </section>
 
           <section>
-            <h2 className="font-semibold text-gray-900 mb-2">6. Keamanan Data</h2>
+            <h2 className="font-semibold text-gray-900 mb-2">7. Keamanan Data</h2>
             <p>
               Kami menggunakan enkripsi dan langkah-langkah keamanan teknis untuk melindungi
               data warga. Akses ke data warga dibatasi hanya untuk pengurus RW yang berwenang.
@@ -78,7 +98,7 @@ export default function PrivacyPolicy() {
           </section>
 
           <section>
-            <h2 className="font-semibold text-gray-900 mb-2">7. Perubahan Kebijakan</h2>
+            <h2 className="font-semibold text-gray-900 mb-2">8. Perubahan Kebijakan</h2>
             <p>
               Kebijakan privasi ini dapat diperbarui sewaktu-waktu. Perubahan akan
               diinformasikan melalui aplikasi atau WhatsApp warga.
