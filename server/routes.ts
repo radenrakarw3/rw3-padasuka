@@ -218,10 +218,36 @@ const upload = multer({
   },
 });
 
+// Helper: kumpulkan semua nomor WA notifikasi mitra (kasir utama + tambahan + owner)
+function semuaNomorWaMitra(m: any): string[] {
+  const out: string[] = [];
+  if (m?.nomorWaKasir) out.push(m.nomorWaKasir);
+  if (m?.nomorWaKasirTambahan) {
+    try { out.push(...JSON.parse(m.nomorWaKasirTambahan)); } catch {}
+  }
+  if (m?.nomorWaOwner) {
+    try { out.push(...JSON.parse(m.nomorWaOwner)); } catch {}
+  }
+  return out.filter(Boolean);
+}
+
+async function sendWhatsAppToMitra(m: any, pesan: string) {
+  for (const n of semuaNomorWaMitra(m)) {
+    await sendWhatsApp(n, pesan).catch(() => {});
+  }
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // Migrasi kolom baru tabel mitra (idempoten)
+  await pool.query(`
+    ALTER TABLE mitra ADD COLUMN IF NOT EXISTS nomor_wa_kasir_tambahan text;
+    ALTER TABLE mitra ADD COLUMN IF NOT EXISTS nama_owner text;
+    ALTER TABLE mitra ADD COLUMN IF NOT EXISTS nomor_wa_owner text;
+  `).catch(() => {});
+
   const isProduction = process.env.NODE_ENV === "production";
   if (isProduction) {
     app.set("trust proxy", 1);
@@ -246,26 +272,7 @@ export async function registerRoutes(
     })
   );
 
-  // Digital Asset Links untuk TWA (Trusted Web Activity) di Google Play Store
-  // SHA-256 fingerprint harus diisi setelah generate APK via PWABuilder
-  app.get("/.well-known/assetlinks.json", (_req, res) => {
-    res.setHeader("Content-Type", "application/json");
-    res.json([
-      {
-        relation: ["delegate_permission/common.handle_all_urls"],
-        target: {
-          namespace: "android_app",
-          package_name: "org.rw3padasukacimahi.app",
-          sha256_cert_fingerprints: [
-            // GANTI dengan SHA-256 fingerprint dari PWABuilder setelah generate APK
-            "PLACEHOLDER_SHA256_FINGERPRINT"
-          ],
-        },
-      },
-    ]);
-  });
-
-  const pdfTempPublicDir = path.join(uploadsDir, "pdf-temp");
+const pdfTempPublicDir = path.join(uploadsDir, "pdf-temp");
   fs.mkdirSync(pdfTempPublicDir, { recursive: true });
   const pdfTempTokens = new Map<string, { filePath: string; expires: number }>();
   app.get("/uploads/pdf-temp/:token", (req, res) => {
@@ -2954,9 +2961,9 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
       if (!data) return res.status(404).json({ message: "Request tidak ditemukan" });
       // Notif WA ke mitra
       const mitraData = await storage.getMitraById(data.mitraId);
-      if (mitraData?.nomorWaKasir) {
+      if (mitraData) {
         const pesan = `RWcoin RW03 - Permintaan withdraw Anda sebesar ${data.jumlahCoin.toLocaleString("id")} coin telah DISETUJUI. Pembayaran akan segera diproses ke rekening ${data.namaBank} ${data.nomorRekening} a/n ${data.atasNama}.`;
-        await sendWhatsApp(mitraData.nomorWaKasir, pesan);
+        await sendWhatsAppToMitra(mitraData, pesan);
       }
       res.json(data);
     } catch (error: any) {
@@ -2969,9 +2976,9 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
       const data = await storage.markWithdrawDibayar(parseInt(req.params.id as string));
       if (!data) return res.status(404).json({ message: "Request tidak ditemukan" });
       const mitraData = await storage.getMitraById(data.mitraId);
-      if (mitraData?.nomorWaKasir) {
+      if (mitraData) {
         const pesan = `RWcoin RW03 - Pembayaran withdraw ${data.jumlahCoin.toLocaleString("id")} coin telah DIBAYARKAN ke rekening ${data.namaBank} ${data.nomorRekening} a/n ${data.atasNama}. Terima kasih telah menjadi mitra RW03!`;
-        await sendWhatsApp(mitraData.nomorWaKasir, pesan);
+        await sendWhatsAppToMitra(mitraData, pesan);
       }
       res.json(data);
     } catch (error: any) {
@@ -2985,9 +2992,9 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
       const data = await storage.rejectWithdraw(parseInt(req.params.id as string), catatan || "Ditolak oleh admin");
       if (!data) return res.status(404).json({ message: "Request tidak ditemukan" });
       const mitraData = await storage.getMitraById(data.mitraId);
-      if (mitraData?.nomorWaKasir) {
+      if (mitraData) {
         const pesan = `RWcoin RW03 - Permintaan withdraw Anda sebesar ${data.jumlahCoin.toLocaleString("id")} coin telah DITOLAK. Catatan: ${catatan || "-"}. Coin telah dikembalikan ke saldo Anda.`;
-        await sendWhatsApp(mitraData.nomorWaKasir, pesan);
+        await sendWhatsAppToMitra(mitraData, pesan);
       }
       res.json(data);
     } catch (error: any) {
@@ -3033,6 +3040,31 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
     try {
       const data = await storage.getRwcoinDashboard();
       res.json(data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Settings — GET bisa diakses mitra/warga juga (untuk tampilkan fee)
+  app.get("/api/rwcoin/settings", async (_req, res) => {
+    try {
+      const data = await storage.getRwcoinSettings();
+      res.json(data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/rwcoin/settings/:key", requireAdmin, async (req, res) => {
+    try {
+      const key = req.params.key as string;
+      const { value } = req.body;
+      const allowed = ["topup_fee", "withdraw_fee", "min_topup", "min_withdraw"];
+      if (!allowed.includes(key)) return res.status(400).json({ message: "Key tidak diizinkan" });
+      const parsed = parseInt(value);
+      if (isNaN(parsed) || parsed < 0) return res.status(400).json({ message: "Nilai harus angka positif" });
+      const result = await storage.upsertRwcoinSetting(key, String(parsed));
+      res.json(result);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
@@ -3124,31 +3156,19 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
   // --- Mitra: Transaksi Belanja ---
   app.post("/api/mitra/transaksi", requireMitra, async (req, res) => {
     try {
-      const { otpKode, kodeWallet, jumlah, voucherKode, keterangan } = req.body;
+      const { kodeWallet, jumlah, voucherKode, keterangan } = req.body;
       if (!jumlah || jumlah <= 0) return res.status(400).json({ message: "Jumlah wajib diisi" });
+      if (!kodeWallet) return res.status(400).json({ message: "Kode wallet wajib diisi" });
 
-      let resolvedKodeWallet: string;
-      if (otpKode) {
-        // OTP path: validasi OTP, ambil kodeWallet, lalu mark used setelah transaksi berhasil
-        const otpInfo = await storage.validatePayOtp(String(otpKode).replace(/\D/g, ""));
-        if (!otpInfo) return res.status(400).json({ message: "Kode bayar tidak valid atau sudah kedaluwarsa" });
-        resolvedKodeWallet = otpInfo.kodeWallet;
-      } else if (kodeWallet) {
-        resolvedKodeWallet = kodeWallet.toUpperCase();
-      } else {
-        return res.status(400).json({ message: "Kode bayar atau kode wallet wajib diisi" });
-      }
+      const resolvedKodeWallet = kodeWallet.toUpperCase();
 
       const result = await storage.processBelanjaTransaksi(resolvedKodeWallet, req.session.mitraId!, parseInt(jumlah), voucherKode, keterangan);
-
-      // Mark OTP as used setelah transaksi berhasil
-      if (otpKode) await storage.markOtpUsed(String(otpKode).replace(/\D/g, ""));
-      // Kirim notifikasi WA ke kasir mitra
+      // Kirim notifikasi WA ke semua nomor mitra
       const mitraData = await storage.getMitraById(req.session.mitraId!);
-      if (mitraData?.nomorWaKasir) {
+      if (mitraData) {
         const diskonInfo = result.diskon > 0 ? ` (diskon ${result.diskon.toLocaleString("id")} coin)` : "";
         const pesan = `RWcoin RW03 - Transaksi berhasil!\nPembeli: ${result.namaWarga}\nTotal: ${result.transaksi.jumlahBruto.toLocaleString("id")} coin${diskonInfo}\nDibayar: ${result.transaksi.jumlahBayar.toLocaleString("id")} coin\nKode: ${result.transaksi.kodeTransaksi}\nMitra: ${mitraData.namaUsaha}`;
-        await sendWhatsApp(mitraData.nomorWaKasir, pesan);
+        await sendWhatsAppToMitra(mitraData, pesan);
       }
       res.json(result);
     } catch (error: any) {
@@ -3318,48 +3338,10 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
     }
   });
 
-  // Warga: Init transaksi — kirim OTP via WA ke kasir
-  app.post("/api/warga/rwcoin/init-transaksi", requireWarga, async (req, res) => {
-    try {
-      const wargaData = await getWargaFromSession(req);
-      if (!wargaData) return res.status(404).json({ message: "Data warga tidak ditemukan" });
-      const { mitraId, jumlah, voucherKode, keterangan } = req.body;
-      if (!mitraId || !jumlah || jumlah <= 0) return res.status(400).json({ message: "Pilih mitra dan masukkan jumlah" });
-      const result = await storage.initBelanjaTransaksi(wargaData.id, parseInt(mitraId), parseInt(jumlah), voucherKode, keterangan);
-      // Kirim OTP via WA ke kasir mitra
-      const diskonInfo = result.preview.diskon > 0 ? ` (hemat ${result.preview.diskon.toLocaleString("id")} coin)` : "";
-      const pesan = `RWcoin RW03 🪙\nAda permintaan bayar dari ${wargaData.namaLengkap}\nNominal: ${result.preview.bayar.toLocaleString("id")} coin${diskonInfo}\n\nKODE KONFIRMASI: *${result.pending.otpKode}*\n\nSebutkan kode ini ke pembeli. Berlaku 5 menit.`;
-      await sendWhatsApp(result.nomorWaKasir, pesan);
-      res.json({ pendingId: result.pending.id, preview: result.preview, namaUsaha: result.namaUsaha });
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  // Warga: Konfirmasi transaksi dengan OTP dari kasir
-  app.post("/api/warga/rwcoin/konfirmasi-transaksi", requireWarga, async (req, res) => {
-    try {
-      const wargaData = await getWargaFromSession(req);
-      if (!wargaData) return res.status(404).json({ message: "Data warga tidak ditemukan" });
-      const { otpKode } = req.body;
-      if (!otpKode) return res.status(400).json({ message: "Kode OTP wajib diisi" });
-      const result = await storage.konfirmasiBelanjaTransaksi(wargaData.id, String(otpKode).replace(/\D/g, ""));
-      // Kirim konfirmasi WA ke kasir
-      const mitraData = await storage.getMitraById(result.transaksi.mitraId!);
-      if (mitraData?.nomorWaKasir) {
-        const pesan = `RWcoin RW03 ✅ Transaksi berhasil!\nPembeli: ${result.namaWarga}\nDibayar: ${result.transaksi.jumlahBayar.toLocaleString("id")} coin\nID: ${result.transaksi.kodeTransaksi}`;
-        await sendWhatsApp(mitraData.nomorWaKasir, pesan);
-      }
-      res.json(result);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
   // Warga: Lookup mitra by kode wallet (untuk preview sebelum bayar)
   app.get("/api/warga/rwcoin/mitra-by-kode/:kode", requireWarga, async (req, res) => {
     try {
-      const kode = req.params.kode.toUpperCase();
+      const kode = String(req.params.kode).toUpperCase();
       // Coba lookup wallet langsung
       let wallet = await storage.getWalletByKode(kode);
       // Jika wallet belum ada, parse kode MT0001 → mitraId=1 lalu getOrCreate
@@ -3412,11 +3394,9 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
       }
       const wargaWallet = await storage.getOrCreateWargaWallet(wargaData.id);
       const result = await storage.processBelanjaTransaksi(wargaWallet.kodeWallet, mitraWallet.mitraId, parseInt(jumlah), voucherKode, keterangan);
-      if (mitraData.nomorWaKasir) {
-        const diskonInfo = result.diskon > 0 ? ` (hemat ${result.diskon.toLocaleString("id")} coin)` : "";
-        const pesan = `RWcoin RW03 - Transaksi berhasil!\nPembeli: ${result.namaWarga}\nNominal: ${result.transaksi.jumlahBruto.toLocaleString("id")} coin${diskonInfo}\nDibayar: ${result.transaksi.jumlahBayar.toLocaleString("id")} coin\nID: ${result.transaksi.kodeTransaksi}`;
-        sendWhatsApp(mitraData.nomorWaKasir, pesan).catch(() => {});
-      }
+      const diskonInfo = result.diskon > 0 ? ` (hemat ${result.diskon.toLocaleString("id")} coin)` : "";
+      const pesan = `RWcoin RW03 - Transaksi berhasil!\nPembeli: ${result.namaWarga}\nNominal: ${result.transaksi.jumlahBruto.toLocaleString("id")} coin${diskonInfo}\nDibayar: ${result.transaksi.jumlahBayar.toLocaleString("id")} coin\nID: ${result.transaksi.kodeTransaksi}`;
+      sendWhatsAppToMitra(mitraData, pesan).catch(() => {});
       res.json({ ...result, namaUsaha: mitraData.namaUsaha });
     } catch (error: any) {
       res.status(400).json({ message: error.message });
@@ -3432,7 +3412,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
       if (!jumlah || parseInt(jumlah) <= 0 || !metode || !rekening || !atasnama) {
         return res.status(400).json({ message: "Jumlah, metode, rekening, dan atas nama wajib diisi" });
       }
-      const ADMIN_FEE = 2500;
+      const ADMIN_FEE = await storage.getRwcoinSettingValue("topup_fee", 2500);
       const jumlahInt = parseInt(jumlah);
       const totalTransfer = jumlahInt + ADMIN_FEE;
 
@@ -3593,30 +3573,6 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
       });
     } catch (error: any) {
       res.status(400).json({ message: error.message });
-    }
-  });
-
-  // Warga: Generate OTP Bayar (valid 10 menit, sekali pakai)
-  app.post("/api/warga/rwcoin/generate-otp", requireWarga, async (req, res) => {
-    try {
-      const wargaData = await getWargaFromSession(req);
-      if (!wargaData) return res.status(404).json({ message: "Data warga tidak ditemukan" });
-      const otp = await storage.generatePayOtp(wargaData.id);
-      res.json({ kode: otp.kode, expiresAt: otp.expiresAt });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // Mitra: Cek OTP sebelum transaksi (preview warga)
-  app.get("/api/mitra/cek-otp/:kode", requireMitra, async (req, res) => {
-    try {
-      const kode = (req.params.kode as string).replace(/\D/g, "");
-      const result = await storage.validatePayOtp(kode);
-      if (!result) return res.status(404).json({ message: "Kode tidak valid atau sudah kedaluwarsa" });
-      res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
     }
   });
 

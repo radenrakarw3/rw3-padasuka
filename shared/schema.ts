@@ -397,6 +397,9 @@ export const mitra = pgTable("mitra", {
   alamat: text("alamat").notNull(),
   nomorWaKasir: text("nomor_wa_kasir").notNull(),
   namaKasir: text("nama_kasir").notNull(),
+  nomorWaKasirTambahan: text("nomor_wa_kasir_tambahan"), // JSON array of extra kasir WA numbers
+  namaOwner: text("nama_owner"),
+  nomorWaOwner: text("nomor_wa_owner"), // JSON array of owner WA numbers
   pinHash: text("pin_hash").notNull(),
   deskripsi: text("deskripsi"),
   isActive: boolean("is_active").notNull().default(true),
@@ -550,6 +553,17 @@ export const kasRwcoin = pgTable("kas_rwcoin", {
 });
 
 export type KasRwcoin = typeof kasRwcoin.$inferSelect;
+
+export const rwcoinSettings = pgTable("rwcoin_settings", {
+  id: serial("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  value: text("value").notNull(),
+  label: text("label").notNull(),
+  keterangan: text("keterangan"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type RwcoinSettings = typeof rwcoinSettings.$inferSelect;
 
 // ===================== END RWCOIN =====================
 

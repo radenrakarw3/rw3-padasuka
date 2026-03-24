@@ -410,7 +410,6 @@ function BayarModal({ wallet, initialVoucherKode, onClose }: { wallet: any; init
 }
 
 // ============ TOPUP MODAL ============
-const ADMIN_FEE = 2500;
 const METODE_TRANSFER = [
   { id: "BCA", label: "BCA", rekening: "1390997490", atasnama: "Raden Raka Abdul Kamal S." },
   { id: "Dana", label: "Dana / OVO", rekening: "0895424577140", atasnama: "Raden Raka" },
@@ -423,6 +422,9 @@ function TopupModal({ wallet, onClose }: { wallet: any; onClose: () => void }) {
   const [jumlah, setJumlah] = useState("");
   const [metodeId, setMetodeId] = useState("BCA");
   const [sukses, setSukses] = useState<{ totalTransfer: number; metode: typeof METODE_TRANSFER[0] } | null>(null);
+
+  const { data: settingsList = [] } = useQuery<any[]>({ queryKey: ["/api/rwcoin/settings"], queryFn: getQueryFn({ on401: "returnNull" }) });
+  const ADMIN_FEE = parseInt(settingsList.find((s: any) => s.key === "topup_fee")?.value ?? "2500");
 
   const nominalAngka = parseInt(jumlah.replace(/\D/g, "")) || 0;
   const totalTransfer = nominalAngka + ADMIN_FEE;
@@ -1178,10 +1180,9 @@ export default function WargaRwcoin() {
           <h3 className="font-semibold text-sm text-[hsl(163,55%,22%)] mb-2">Cara Bayar RWcoin</h3>
           <ol className="space-y-1.5">
             {[
-              "Tap \"Bayar Mitra\" dan pilih mitra tempat belanja",
-              "Masukkan nominal, lalu tap Bayar — OTP otomatis terkirim ke kasir via WA",
-              "Tanyakan kode OTP ke kasir, masukkan di app",
-              "Transaksi selesai! Keduanya mendapat konfirmasi otomatis",
+              "Tap \"Bayar Mitra\" dan pilih toko tujuan",
+              "Masukkan nominal coin dan pilih voucher jika ada",
+              "Tap Bayar — transaksi langsung selesai, kasir otomatis dapat notifikasi WA",
             ].map((tip, i) => (
               <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
                 <span className="w-4 h-4 rounded-full bg-[hsl(163,55%,22%)] text-white text-[10px] flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>

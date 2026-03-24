@@ -22,8 +22,6 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   ditolak: { label: "Ditolak", color: "bg-red-100 text-red-700" },
 };
 
-const POTONGAN_ADMIN = 5000;
-
 export default function MitraWithdraw() {
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
@@ -33,6 +31,10 @@ export default function MitraWithdraw() {
 
   const { data: me } = useQuery<any>({ queryKey: ["/api/mitra/me"], queryFn: getQueryFn({ on401: "returnNull" }) });
   const { data: withdrawList = [] } = useQuery<any[]>({ queryKey: ["/api/mitra/withdraw"], queryFn: getQueryFn({ on401: "returnNull" }) });
+  const { data: settingsList = [] } = useQuery<any[]>({ queryKey: ["/api/rwcoin/settings"], queryFn: getQueryFn({ on401: "returnNull" }) });
+
+  const POTONGAN_ADMIN = parseInt(settingsList.find((s: any) => s.key === "withdraw_fee")?.value ?? "5000");
+  const MIN_WITHDRAW = parseInt(settingsList.find((s: any) => s.key === "min_withdraw")?.value ?? "10000");
 
   // Cari data rekening dari riwayat withdraw sebelumnya
   const savedBank = withdrawList.find((w: any) => w.nomorRekening && w.namaBank && w.atasNama);
@@ -53,7 +55,7 @@ export default function MitraWithdraw() {
 
   const jumlah = parseInt(form.jumlahCoin) || 0;
   const saldo = me?.saldo ?? 0;
-  const saldoCukup = saldo >= jumlah && jumlah > POTONGAN_ADMIN;
+  const saldoCukup = saldo >= jumlah && jumlah >= MIN_WITHDRAW;
   const jumlahDiterima = jumlah - POTONGAN_ADMIN;
 
   const nomorRekening = pakaiSavedBank ? savedBank.nomorRekening : form.nomorRekening;
@@ -103,17 +105,17 @@ export default function MitraWithdraw() {
                   MAX
                 </Button>
               </div>
-              {jumlah > 0 && jumlah <= POTONGAN_ADMIN && (
+              {jumlah > 0 && jumlah < MIN_WITHDRAW && (
                 <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                  <AlertCircle className="w-3 h-3" /> Minimal withdraw lebih dari {formatRp(POTONGAN_ADMIN)}
+                  <AlertCircle className="w-3 h-3" /> Minimal withdraw {formatCoin(MIN_WITHDRAW)}
                 </p>
               )}
-              {jumlah > POTONGAN_ADMIN && !saldoCukup && (
+              {jumlah >= MIN_WITHDRAW && !saldoCukup && (
                 <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
                   <AlertCircle className="w-3 h-3" /> Saldo tidak cukup
                 </p>
               )}
-              {jumlah > POTONGAN_ADMIN && saldoCukup && (
+              {jumlah >= MIN_WITHDRAW && saldoCukup && (
                 <div className="mt-2 p-2 rounded bg-muted text-xs space-y-1">
                   <div className="flex justify-between"><span>Jumlah withdraw</span><span>{formatRp(jumlah)}</span></div>
                   <div className="flex justify-between text-red-500"><span>Potongan admin</span><span>- {formatRp(POTONGAN_ADMIN)}</span></div>

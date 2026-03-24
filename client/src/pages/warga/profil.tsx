@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Edit2, Check, X, User, MapPin, Clock, Upload, RefreshCw, ChevronDown, ChevronUp, Shield, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Edit2, Check, X, MapPin, Clock, Upload, RefreshCw, ChevronDown, ChevronUp, Shield, CheckCircle2, Phone, Briefcase, BookOpen, Wallet } from "lucide-react";
 import type { KartuKeluarga, Warga, ProfileEditRequest } from "@shared/schema";
 import { pekerjaanOptions, pendidikanOptions, agamaOptions, jenisKelaminOptions, statusPerkawinanOptions, kedudukanKeluargaOptions, statusKependudukanOptions, statusDisabilitasOptions, kondisiKesehatanOptions, penghasilanBulananOptions, kategoriEkonomiOptions } from "@/lib/constants";
 import { useProfileCompleteness } from "@/lib/useProfileCompleteness";
@@ -41,6 +41,20 @@ function maskNik(nik: string | null): string {
 function maskKk(nomorKk: string | null | undefined): string {
   if (!nomorKk || nomorKk.length < 6) return "••••••••••••••••";
   return nomorKk.slice(0, 4) + "••••••••" + nomorKk.slice(-4);
+}
+
+function getInitials(name: string): string {
+  return name.trim().split(/\s+/).slice(0, 2).map(n => n[0]).join("").toUpperCase();
+}
+
+function getAge(tanggalLahir: string | null | undefined): string {
+  if (!tanggalLahir) return "";
+  const birth = new Date(tanggalLahir);
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  if (today.getMonth() - birth.getMonth() < 0 ||
+    (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) age--;
+  return `${age} thn`;
 }
 
 export default function WargaProfil() {
@@ -272,6 +286,29 @@ export default function WargaProfil() {
               KK {maskKk(kk?.nomorKk)}
             </span>
           </div>
+          {anggota && (
+            <div className="mt-3">
+              {completeness.isComplete ? (
+                <p className="text-[11px] text-white/70 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" />
+                  Profil lengkap
+                </p>
+              ) : (
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] text-white/60">Kelengkapan profil</p>
+                    <p className="text-[11px] text-white/60">{completeness.completionPercent}%</p>
+                  </div>
+                  <div className="w-full bg-white/20 rounded-full h-1">
+                    <div
+                      className="h-1 rounded-full bg-[hsl(40,45%,65%)] transition-all"
+                      style={{ width: `${completeness.completionPercent}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -291,7 +328,7 @@ export default function WargaProfil() {
             className="w-full flex items-center justify-between p-4 text-left"
           >
             <div className="flex items-center gap-2">
-              <User className="w-4 h-4 text-muted-foreground" />
+              <Wallet className="w-4 h-4 text-muted-foreground" />
               <span className="text-sm font-semibold">Data Ekonomi Keluarga</span>
               {!kk?.penghasilanBulanan && (
                 <Badge variant="secondary" className="text-[10px] bg-amber-100 text-amber-700">Belum diisi</Badge>
@@ -369,49 +406,6 @@ export default function WargaProfil() {
         </CardContent>
       </Card>
 
-      {/* Progress Kelengkapan Profil */}
-      {anggota && kk && (
-        <Card className={completeness.isComplete ? "border-green-200 bg-green-50/50 dark:bg-green-950/10" : "border-amber-200 bg-amber-50/50 dark:bg-amber-950/10"}>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                {completeness.isComplete
-                  ? <CheckCircle2 className="w-4 h-4 text-green-600" />
-                  : <AlertTriangle className="w-4 h-4 text-amber-600" />
-                }
-                <span className="text-sm font-semibold">
-                  {completeness.isComplete ? "Profil Lengkap" : "Profil Belum Lengkap"}
-                </span>
-              </div>
-              <span className={`text-sm font-bold ${completeness.isComplete ? "text-green-600" : "text-amber-600"}`}>
-                {completeness.completionPercent}%
-              </span>
-            </div>
-            <div className="w-full bg-muted rounded-full h-2 mb-2">
-              <div
-                className={`h-2 rounded-full transition-all ${completeness.isComplete ? "bg-green-500" : "bg-amber-500"}`}
-                style={{ width: `${completeness.completionPercent}%` }}
-              />
-            </div>
-            {!completeness.isComplete && (
-              <div className="space-y-1 mt-2">
-                <p className="text-xs text-muted-foreground font-medium">Perlu dilengkapi:</p>
-                {completeness.missingFields.slice(0, 4).map((f, i) => (
-                  <p key={i} className="text-xs text-amber-700 dark:text-amber-400 flex items-center gap-1">
-                    <span className="w-1 h-1 rounded-full bg-amber-500 flex-shrink-0" />
-                    {f.label}{f.wargaNama ? ` — ${f.wargaNama}` : ""}
-                  </p>
-                ))}
-                {completeness.missingFields.length > 4 && (
-                  <p className="text-xs text-amber-600">+{completeness.missingFields.length - 4} lainnya</p>
-                )}
-                <p className="text-xs text-muted-foreground mt-1">Tekan Edit pada kartu anggota untuk melengkapi.</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       <h3 className="text-sm font-semibold text-muted-foreground">
         Anggota Keluarga ({anggota?.length || 0})
       </h3>
@@ -425,12 +419,14 @@ export default function WargaProfil() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between gap-2 mb-3">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-10 h-10 rounded-full bg-[hsl(163,55%,22%)] flex items-center justify-center flex-shrink-0">
-                    <User className="w-5 h-5 text-white" />
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${w.jenisKelamin === "Perempuan" ? "bg-rose-500" : "bg-[hsl(163,55%,22%)]"}`}>
+                    <span className="text-sm font-bold text-white">{getInitials(w.namaLengkap)}</span>
                   </div>
                   <div className="min-w-0">
                     <p className="font-semibold text-sm truncate" data-testid={`text-nama-${w.id}`}>{w.namaLengkap}</p>
-                    <p className="text-[11px] text-muted-foreground">{w.kedudukanKeluarga}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {w.kedudukanKeluarga}{getAge(w.tanggalLahir) ? ` • ${getAge(w.tanggalLahir)}` : ""}
+                    </p>
                   </div>
                 </div>
                 {!isEditing && !pendingEdit && (
@@ -636,53 +632,55 @@ export default function WargaProfil() {
                 )}
               </div>
               ) : (
-                <div className="space-y-1.5 text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground w-20 flex-shrink-0">NIK</span>
-                    <span className="font-medium font-mono tracking-wide">{maskNik(w.nik)}</span>
+                <div className="mt-3 space-y-2.5">
+                  {/* Nomor WA - full width */}
+                  <div className="flex items-center gap-2 text-sm">
+                    <Phone className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                    {w.nomorWhatsapp
+                      ? <span className="font-medium">{w.nomorWhatsapp}</span>
+                      : <span className="text-xs text-muted-foreground">Belum ada nomor WA</span>
+                    }
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground w-20 flex-shrink-0">WhatsApp</span>
-                    <span className="font-medium">{w.nomorWhatsapp || "-"}</span>
+
+                  {/* Pekerjaan + Pendidikan */}
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Briefcase className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                      <span className="truncate">{w.pekerjaan || <span className="text-muted-foreground">-</span>}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <BookOpen className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                      <span className="truncate">{w.pendidikan || <span className="text-muted-foreground">-</span>}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground w-20 flex-shrink-0">Kelamin</span>
-                    <span className="font-medium">{w.jenisKelamin}</span>
+
+                  {/* Kelamin + Agama */}
+                  <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                    <span>{w.jenisKelamin}</span>
+                    <span>{w.agama}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground w-20 flex-shrink-0">Agama</span>
-                    <span className="font-medium">{w.agama}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground w-20 flex-shrink-0">Pekerjaan</span>
-                    <span className="font-medium">{w.pekerjaan || "-"}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground w-20 flex-shrink-0">Pendidikan</span>
-                    <span className="font-medium">{w.pendidikan || "-"}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground w-20 flex-shrink-0">Status</span>
+
+                  {/* Status badges */}
+                  <div className="flex flex-wrap gap-1.5">
                     <Badge variant={w.statusKependudukan === "Aktif" ? "default" : "secondary"} className="text-[10px]">
                       {w.statusKependudukan}
                     </Badge>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground w-20 flex-shrink-0">Kesehatan</span>
-                    <span className="font-medium">{w.kondisiKesehatan || "-"}</span>
-                  </div>
-                  {(w.statusDisabilitas && w.statusDisabilitas !== "Tidak Ada") && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground w-20 flex-shrink-0">Disabilitas</span>
-                      <span className="font-medium">{w.statusDisabilitas}</span>
-                    </div>
-                  )}
-                  {w.ibuHamil && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground w-20 flex-shrink-0">Kondisi</span>
+                    {w.kondisiKesehatan && w.kondisiKesehatan !== "Sehat" && (
+                      <Badge variant="secondary" className="text-[10px]">{w.kondisiKesehatan}</Badge>
+                    )}
+                    {w.statusDisabilitas && w.statusDisabilitas !== "Tidak Ada" && (
+                      <Badge variant="secondary" className="text-[10px]">{w.statusDisabilitas}</Badge>
+                    )}
+                    {w.ibuHamil && (
                       <Badge className="text-[10px] bg-pink-100 text-pink-700 border-pink-200">Ibu Hamil</Badge>
-                    </div>
-                  )}
+                    )}
+                  </div>
+
+                  {/* NIK - subtle bottom */}
+                  <div className="pt-1.5 border-t flex items-center gap-2 text-[11px] text-muted-foreground">
+                    <span>NIK</span>
+                    <span className="font-mono tracking-wide">{maskNik(w.nik)}</span>
+                  </div>
                 </div>
               )}
 

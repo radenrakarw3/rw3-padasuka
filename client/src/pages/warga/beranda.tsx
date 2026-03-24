@@ -1,7 +1,7 @@
 import React from "react";
 import { useAuth } from "@/lib/auth";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
 import {
   MessageCircleHeart, Lock, Sparkles, Send, Heart, Phone,
+  Store, MapPin, ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
 } from "lucide-react";
 import type { Warga } from "@shared/schema";
 
@@ -26,12 +27,17 @@ function CoinIcon({ size = 16 }: { size?: number }) {
   );
 }
 
+const MITRA_PER_PAGE = 5;
+
 export default function WargaBeranda() {
   const { user } = useAuth();
   const [isi, setIsi] = useState("");
   const [hasil, setHasil] = useState<{
     coin: number; balasan: string;
   } | null>(null);
+  const [filterKategori, setFilterKategori] = useState("Semua");
+  const [halamanMitra, setHalamanMitra] = useState(1);
+  const [showDetailCurhat, setShowDetailCurhat] = useState(false);
 
   const { data: anggota, isLoading } = useQuery<Warga[]>({
     queryKey: ["/api/warga/kk", user?.kkId],
@@ -44,6 +50,12 @@ export default function WargaBeranda() {
     enabled: !!user,
   });
 
+  const { data: mitraList = [] } = useQuery<any[]>({
+    queryKey: ["/api/warga/rwcoin/mitra"],
+    queryFn: getQueryFn({ on401: "returnNull" }),
+    staleTime: 60_000,
+  });
+
   const curhatMutation = useMutation({
     mutationFn: async (teks: string) => {
       const res = await apiRequest("POST", "/api/warga/curhat", { isi: teks });
@@ -52,6 +64,7 @@ export default function WargaBeranda() {
     },
     onSuccess: (data) => {
       setHasil(data);
+      setShowDetailCurhat(true);
       setIsi("");
       queryClient.invalidateQueries({ queryKey: ["/api/warga/curhat/kuota"] });
       queryClient.invalidateQueries({ queryKey: ["/api/warga/rwcoin/wallet"] });
@@ -92,100 +105,69 @@ export default function WargaBeranda() {
   // ---- Kartu curhat berdasarkan kondisi ----
   let curhatCard: React.ReactNode;
 
-  if (sudahCurhat && !hasil) {
+  const coinHariIni = hasil ? hasil.coin : (kuota?.coinDiberikan ?? 0);
+  const balasanHariIni = hasil ? hasil.balasan : (kuota?.balasanGemini ?? null);
+
+  if (sudahCurhat || hasil) {
     curhatCard = (
       <Card className="border-0 overflow-hidden shadow-sm">
-        <div className="bg-gradient-to-br from-[hsl(163,55%,22%)] to-[hsl(163,55%,15%)] px-5 py-4">
+        <button
+          onClick={() => setShowDetailCurhat((v) => !v)}
+          className="w-full bg-gradient-to-br from-[hsl(163,55%,22%)] to-[hsl(163,55%,15%)] px-5 py-3 flex items-center justify-between"
+        >
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-[hsl(40,45%,65%)]" />
-            <span className="text-white font-semibold text-sm">Ruang Curhat, {namaDepan}</span>
+            <span className="text-white font-semibold text-sm">Ruang Curhat</span>
+            {coinHariIni > 0 && (
+              <span className="flex items-center gap-1 bg-white/15 rounded-full px-2 py-0.5 text-[10px] text-white/90 font-medium">
+                +{coinHariIni.toLocaleString("id-ID")} <CoinIcon size={10} />
+              </span>
+            )}
           </div>
-          <p className="text-white/60 text-[11px] mt-0.5">Udah berani nuangin perasaanmu hari ini</p>
-        </div>
-        <CardContent className="p-4 space-y-3">
-          {(kuota?.coinDiberikan ?? 0) > 0 ? (
-            <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl p-3.5">
-              <div className="w-11 h-11 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
-                <CoinIcon size={26} />
-              </div>
-              <div>
-                <p className="text-[11px] text-amber-700">Hadiah curhat hari ini</p>
-                <p className="text-xl font-bold text-amber-800 leading-tight">
-                  +{(kuota?.coinDiberikan ?? 0).toLocaleString("id-ID")} <span className="text-sm font-semibold">RWcoin</span>
-                </p>
-                <p className="text-[10px] text-amber-600 mt-0.5">Sudah masuk ke dompetmu</p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3.5">
-              <Heart className="w-8 h-8 text-rose-300 flex-shrink-0" />
-              <div>
-                <p className="text-sm font-semibold">Curhat diterima</p>
-                <p className="text-[11px] text-muted-foreground">Nggak ada coin kali ini, tapi ceritamu tetap didengar</p>
-              </div>
-            </div>
-          )}
-          {kuota?.balasanGemini && (
-            <div className="bg-[hsl(163,55%,22%)]/5 border border-[hsl(163,55%,22%)]/15 rounded-xl p-4">
-              <div className="flex items-start gap-2 mb-2">
-                <MessageCircleHeart className="w-3.5 h-3.5 text-[hsl(163,55%,22%)] mt-0.5 flex-shrink-0" />
-                <p className="text-[11px] font-semibold text-[hsl(163,55%,22%)]">Dari sahabatmu</p>
-              </div>
-              <p className="text-sm leading-relaxed">{kuota.balasanGemini}</p>
-            </div>
-          )}
-          <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
-            <Lock className="w-3 h-3 flex-shrink-0" />
-            <span>Curhat sudah digunakan hari ini. Bisa dipakai lagi besok setelah tengah malam.</span>
+          <div className="flex items-center gap-1.5 text-white/60 text-[11px]">
+            <span>{showDetailCurhat ? "Tutup" : "Lihat balasan"}</span>
+            {showDetailCurhat ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </div>
-        </CardContent>
-      </Card>
-    );
-  } else if (hasil) {
-    curhatCard = (
-      <Card className="border-0 overflow-hidden shadow-sm">
-        <div className="bg-gradient-to-br from-[hsl(163,55%,22%)] to-[hsl(163,55%,15%)] px-5 py-4">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-[hsl(40,45%,65%)]" />
-            <span className="text-white font-semibold text-sm">Makasih ya, {namaDepan}</span>
-          </div>
-          <p className="text-white/60 text-[11px] mt-0.5">Udah berani nuangin perasaanmu</p>
-        </div>
-        <CardContent className="p-4 space-y-3">
-          {hasil.coin > 0 ? (
-            <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl p-3.5">
-              <div className="w-11 h-11 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
-                <CoinIcon size={26} />
+        </button>
+        {showDetailCurhat && (
+          <CardContent className="p-4 space-y-3">
+            {coinHariIni > 0 ? (
+              <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl p-3.5">
+                <div className="w-11 h-11 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                  <CoinIcon size={26} />
+                </div>
+                <div>
+                  <p className="text-[11px] text-amber-700">Hadiah curhat hari ini</p>
+                  <p className="text-xl font-bold text-amber-800 leading-tight">
+                    +{coinHariIni.toLocaleString("id-ID")} <span className="text-sm font-semibold">RWcoin</span>
+                  </p>
+                  <p className="text-[10px] text-amber-600 mt-0.5">Sudah masuk ke dompetmu</p>
+                </div>
               </div>
-              <div>
-                <p className="text-[11px] text-amber-700">Hadiah curhat kamu</p>
-                <p className="text-xl font-bold text-amber-800 leading-tight">
-                  +{hasil.coin.toLocaleString("id-ID")} <span className="text-sm font-semibold">RWcoin</span>
-                </p>
-                <p className="text-[10px] text-amber-600 mt-0.5">Sudah masuk ke dompetmu</p>
+            ) : (
+              <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3.5">
+                <Heart className="w-8 h-8 text-rose-300 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold">Curhat diterima</p>
+                  <p className="text-[11px] text-muted-foreground">Nggak ada coin kali ini, tapi ceritamu tetap didengar</p>
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3.5">
-              <Heart className="w-8 h-8 text-rose-300 flex-shrink-0" />
-              <div>
-                <p className="text-sm font-semibold">Curhat diterima</p>
-                <p className="text-[11px] text-muted-foreground">Nggak ada coin kali ini, tapi ceritamu tetap didengar</p>
+            )}
+            {balasanHariIni && (
+              <div className="bg-[hsl(163,55%,22%)]/5 border border-[hsl(163,55%,22%)]/15 rounded-xl p-4">
+                <div className="flex items-start gap-2 mb-2">
+                  <MessageCircleHeart className="w-3.5 h-3.5 text-[hsl(163,55%,22%)] mt-0.5 flex-shrink-0" />
+                  <p className="text-[11px] font-semibold text-[hsl(163,55%,22%)]">Dari sahabatmu</p>
+                </div>
+                <p className="text-sm leading-relaxed">{balasanHariIni}</p>
               </div>
+            )}
+            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
+              <Lock className="w-3 h-3 flex-shrink-0" />
+              <span>Curhat sudah digunakan hari ini. Bisa dipakai lagi besok setelah tengah malam.</span>
             </div>
-          )}
-          <div className="bg-[hsl(163,55%,22%)]/5 border border-[hsl(163,55%,22%)]/15 rounded-xl p-4">
-            <div className="flex items-start gap-2 mb-2">
-              <MessageCircleHeart className="w-3.5 h-3.5 text-[hsl(163,55%,22%)] mt-0.5 flex-shrink-0" />
-              <p className="text-[11px] font-semibold text-[hsl(163,55%,22%)]">Dari sahabatmu</p>
-            </div>
-            <p className="text-sm leading-relaxed">{hasil.balasan}</p>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
-            <Lock className="w-3 h-3 flex-shrink-0" />
-            <span>Curhat sudah digunakan hari ini. Bisa dipakai lagi besok setelah tengah malam.</span>
-          </div>
-        </CardContent>
+          </CardContent>
+        )}
       </Card>
     );
   } else {
@@ -245,9 +227,118 @@ export default function WargaBeranda() {
     );
   }
 
+  const kategoriList = ["Semua", ...Array.from(new Set(mitraList.map((m: any) => m.kategori))).sort()];
+  const mitraFiltered = filterKategori === "Semua" ? mitraList : mitraList.filter((m: any) => m.kategori === filterKategori);
+  const totalHalamanMitra = Math.max(1, Math.ceil(mitraFiltered.length / MITRA_PER_PAGE));
+  const mitraHalaman = mitraFiltered.slice((halamanMitra - 1) * MITRA_PER_PAGE, halamanMitra * MITRA_PER_PAGE);
+
   return (
     <div className="space-y-4">
       {curhatCard}
+
+      {/* Daftar Mitra RWcoin */}
+      <Card className="border-0 shadow-sm">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Store className="w-4 h-4 text-[hsl(163,55%,22%)]" />
+            <h3 className="font-semibold text-sm text-[hsl(163,55%,22%)]">Mitra RWcoin</h3>
+            {mitraList.length > 0 && (
+              <span className="ml-auto text-[11px] text-muted-foreground">{mitraFiltered.length} toko</span>
+            )}
+          </div>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[11px] text-muted-foreground">
+              Toko & usaha warga yang menerima pembayaran RWcoin.
+            </p>
+            <a
+              href="https://wa.me/62895424577140?text=Halo%20Admin%2C%20saya%20ingin%20mendaftarkan%20usaha%20saya%20sebagai%20Mitra%20RWcoin%20RW%2003%20Padasuka."
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-shrink-0 ml-3 flex items-center gap-1.5 text-[11px] font-semibold text-white bg-[hsl(163,55%,22%)] hover:bg-[hsl(163,55%,18%)] rounded-full px-3 py-1.5 transition-colors"
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                <path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.126 1.535 5.862L.057 23.882a.5.5 0 0 0 .61.61l6.101-1.494A11.954 11.954 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.892 0-3.666-.523-5.176-1.432l-.362-.217-3.754.919.944-3.668-.236-.374A9.96 9.96 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
+              </svg>
+              Daftar Mitra
+            </a>
+          </div>
+
+          {/* Filter Kategori */}
+          {kategoriList.length > 1 && (
+            <div className="flex gap-1.5 flex-wrap mb-3">
+              {kategoriList.map((k) => (
+                <button
+                  key={k}
+                  onClick={() => { setFilterKategori(k); setHalamanMitra(1); }}
+                  className={`px-3 py-1 rounded-full text-[11px] font-medium transition-colors ${
+                    filterKategori === k
+                      ? "bg-[hsl(163,55%,22%)] text-white"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  }`}
+                >
+                  {k}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* List Mitra */}
+          {mitraList.length === 0 ? (
+            <div className="text-center py-6">
+              <Store className="w-8 h-8 mx-auto text-muted-foreground opacity-30 mb-2" />
+              <p className="text-sm text-muted-foreground">Belum ada mitra terdaftar</p>
+            </div>
+          ) : mitraHalaman.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">Tidak ada mitra di kategori ini</p>
+          ) : (
+            <div className="space-y-2">
+              {mitraHalaman.map((m: any) => (
+                <div key={m.id} className="flex items-start gap-3 py-2.5 border-b last:border-0">
+                  <div className="w-9 h-9 rounded-full bg-[hsl(163,55%,22%)] text-white flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">
+                    {m.namaUsaha[0]}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold leading-tight truncate">{m.namaUsaha}</p>
+                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                      <span className="text-[10px] bg-[hsl(163,55%,22%)]/10 text-[hsl(163,55%,22%)] px-2 py-0.5 rounded-full font-medium">{m.kategori}</span>
+                      <span className="text-[11px] text-muted-foreground">RT {String(m.rt).padStart(2, "0")}</span>
+                    </div>
+                    {m.alamat && (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <MapPin className="w-2.5 h-2.5 text-muted-foreground flex-shrink-0" />
+                        <p className="text-[11px] text-muted-foreground truncate">{m.alamat}</p>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[11px] font-mono text-muted-foreground flex-shrink-0 mt-1">{m.kodeWallet}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Pagination */}
+          {totalHalamanMitra > 1 && (
+            <div className="flex items-center justify-between mt-3 pt-3 border-t">
+              <button
+                onClick={() => setHalamanMitra((p) => Math.max(1, p - 1))}
+                disabled={halamanMitra === 1}
+                className="flex items-center gap-1 text-xs font-medium text-[hsl(163,55%,22%)] disabled:text-muted-foreground disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-4 h-4" /> Sebelumnya
+              </button>
+              <span className="text-xs text-muted-foreground">{halamanMitra} / {totalHalamanMitra}</span>
+              <button
+                onClick={() => setHalamanMitra((p) => Math.min(totalHalamanMitra, p + 1))}
+                disabled={halamanMitra === totalHalamanMitra}
+                className="flex items-center gap-1 text-xs font-medium text-[hsl(163,55%,22%)] disabled:text-muted-foreground disabled:cursor-not-allowed"
+              >
+                Berikutnya <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Nomor Penting Perangkat RW */}
       <Card className="border-0 shadow-sm">
