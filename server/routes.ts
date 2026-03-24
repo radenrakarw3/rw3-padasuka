@@ -246,6 +246,25 @@ export async function registerRoutes(
     })
   );
 
+  // Digital Asset Links untuk TWA (Trusted Web Activity) di Google Play Store
+  // SHA-256 fingerprint harus diisi setelah generate APK via PWABuilder
+  app.get("/.well-known/assetlinks.json", (_req, res) => {
+    res.setHeader("Content-Type", "application/json");
+    res.json([
+      {
+        relation: ["delegate_permission/common.handle_all_urls"],
+        target: {
+          namespace: "android_app",
+          package_name: "org.rw3padasukacimahi.app",
+          sha256_cert_fingerprints: [
+            // GANTI dengan SHA-256 fingerprint dari PWABuilder setelah generate APK
+            "PLACEHOLDER_SHA256_FINGERPRINT"
+          ],
+        },
+      },
+    ]);
+  });
+
   const pdfTempPublicDir = path.join(uploadsDir, "pdf-temp");
   fs.mkdirSync(pdfTempPublicDir, { recursive: true });
   const pdfTempTokens = new Map<string, { filePath: string; expires: number }>();

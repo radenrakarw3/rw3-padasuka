@@ -46,6 +46,7 @@ import { getQueryFn } from "@/lib/queryClient";
 import { X } from "lucide-react";
 import goldLogo from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
 import radenRakaImg from "@assets/raden_raka_nobg.png";
+import PrivacyPolicy from "@/pages/public/privacy-policy";
 
 function WelcomePopup({ onClose }: { onClose: () => void }) {
   return (
@@ -207,6 +208,11 @@ function SinggahRoutes() {
 function AppContent() {
   const { user, loading } = useAuth();
   const [location] = useLocation();
+
+  // Halaman publik - tidak butuh login
+  if (location === "/privacy-policy") {
+    return <PrivacyPolicy />;
+  }
 
   // Portal mitra - jalur terpisah dari auth utama
   if (location.startsWith("/mitra")) {
