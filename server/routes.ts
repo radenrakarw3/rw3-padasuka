@@ -10,6 +10,7 @@ import express from "express";
 import * as XLSX from "xlsx";
 import { storage } from "./storage";
 import { pool } from "./db";
+import { cache, CacheKey, TTL, invalidateWarga, invalidateKk } from "./cache";
 import { insertKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertProfileEditSchema, insertWaBlastSchema, insertPengajuanBansosSchema, insertDonasiCampaignSchema, insertDonasiSchema, insertKasRwSchema, insertPemilikKostSchema, insertWargaSinggahSchema, insertUsahaSchema, insertKaryawanUsahaSchema, insertIzinTetanggaSchema, insertSurveyUsahaSchema, insertProgramRwSchema, insertPesertaProgramSchema } from "@shared/schema";
 
 declare module "express-session" {
@@ -794,7 +795,11 @@ const pdfTempPublicDir = path.join(uploadsDir, "pdf-temp");
     try {
       const rtParam = req.query.rt ? parseInt(req.query.rt as string) : undefined;
       const rtFilter = rtParam && !isNaN(rtParam) ? rtParam : undefined;
+      const key = CacheKey.dashboard(rtFilter);
+      const cached = cache.get(key);
+      if (cached) return res.json(cached);
       const stats = await storage.getDashboardStats(rtFilter);
+      cache.set(key, stats, TTL.DASHBOARD);
       res.json(stats);
     } catch (error) {
       res.status(500).json({ message: "Gagal mengambil statistik" });
@@ -859,7 +864,11 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
 
   app.get("/api/kk", requireAuth, async (req, res) => {
     if (req.session.isAdmin) {
+      const key = CacheKey.kkList();
+      const cached = cache.get(key);
+      if (cached) return res.json(cached);
       const data = await storage.getAllKk();
+      cache.set(key, data, TTL.KK_LIST);
       return res.json(data);
     }
     const data = await storage.getKkById(req.session.kkId!);
@@ -880,6 +889,7 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
     try {
       const parsed = insertKkSchema.parse(req.body);
       const data = await storage.createKk(parsed);
+      invalidateKk();
       res.json(data);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
@@ -893,6 +903,7 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
       const { penghasilanBulanan, kategoriEkonomi } = req.body;
       const data = await storage.updateKk(req.session.kkId, { penghasilanBulanan, kategoriEkonomi });
       if (!data) return res.status(404).json({ message: "KK tidak ditemukan" });
+      invalidateKk();
       res.json(data);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
@@ -904,6 +915,7 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
       const parsed = insertKkSchema.partial().parse(req.body);
       const data = await storage.updateKk(parseInt(req.params.id as string), parsed);
       if (!data) return res.status(404).json({ message: "KK tidak ditemukan" });
+      invalidateKk();
       res.json(data);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
@@ -915,6 +927,7 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
       const kk = await storage.getKkById(parseInt(req.params.id as string));
       if (!kk) return res.status(404).json({ message: "KK tidak ditemukan" });
       await storage.deleteKk(kk.id);
+      invalidateKk();
       res.json({ message: "KK dan semua data terkait berhasil dihapus" });
     } catch (error: any) {
       res.status(500).json({ message: error.message || "Gagal menghapus KK" });
@@ -922,7 +935,11 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
   });
 
   app.get("/api/warga", requireAdmin, async (_req, res) => {
+    const key = CacheKey.wargaList();
+    const cached = cache.get(key);
+    if (cached) return res.json(cached);
     const data = await storage.getAllWarga();
+    cache.set(key, data, TTL.WARGA_LIST);
     res.json(data);
   });
 
@@ -948,7 +965,7 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
     try {
       const parsed = insertWargaSchema.parse(req.body);
       const data = await storage.createWarga(parsed);
-
+      invalidateWarga();
       res.json(data);
 
       if (data.nomorWhatsapp) {
@@ -1003,6 +1020,7 @@ Salam hangat dari pengurus RW 03 Padasuka`;
       const parsed = insertWargaSchema.partial().parse(req.body);
       const data = await storage.updateWarga(parseInt(req.params.id as string), parsed);
       if (!data) return res.status(404).json({ message: "Warga tidak ditemukan" });
+      invalidateWarga();
       res.json(data);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
@@ -1014,6 +1032,7 @@ Salam hangat dari pengurus RW 03 Padasuka`;
       const w = await storage.getWargaById(parseInt(req.params.id as string));
       if (!w) return res.status(404).json({ message: "Warga tidak ditemukan" });
       await storage.deleteWarga(w.id);
+      invalidateWarga();
       res.json({ message: "Warga dan semua data terkait berhasil dihapus" });
     } catch (error: any) {
       res.status(500).json({ message: error.message || "Gagal menghapus warga" });
@@ -1021,7 +1040,11 @@ Salam hangat dari pengurus RW 03 Padasuka`;
   });
 
   app.get("/api/warga-with-kk", requireAdmin, async (_req, res) => {
+    const key = CacheKey.wargaWithKk();
+    const cached = cache.get(key);
+    if (cached) return res.json(cached);
     const data = await storage.getAllWargaWithKk();
+    cache.set(key, data, TTL.WARGA_WITH_KK);
     res.json(data);
   });
 
@@ -1596,6 +1619,9 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
 
   app.get("/api/wa-blast/nomor-kosong", requireAdmin, async (_req, res) => {
     try {
+      const key = CacheKey.nomorKosong();
+      const cached = cache.get(key);
+      if (cached) return res.json(cached);
       const allWarga = await storage.getAllWargaWithKk();
 
       // Kelompokkan warga per KK untuk mencari kepala keluarga
@@ -1660,7 +1686,9 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
           .filter(r => r.total > 0),
       };
 
-      res.json({ stats, data, duplikat: duplikatGroups });
+      const result = { stats, data, duplikat: duplikatGroups };
+      cache.set(key, result, TTL.NOMOR_KOSONG);
+      res.json(result);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
