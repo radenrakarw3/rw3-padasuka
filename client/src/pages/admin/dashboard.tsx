@@ -20,7 +20,6 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   PieChart, Pie, Treemap, AreaChart, Area, CartesianGrid, Legend,
-  LineChart, Line, ComposedChart,
 } from "recharts";
 
 interface DashboardStats {

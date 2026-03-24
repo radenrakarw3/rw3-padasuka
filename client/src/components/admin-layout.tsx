@@ -10,6 +10,7 @@ import logoGold from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
 
 const navItems = [
   { path: "/admin", icon: LayoutDashboard, label: "Dashboard" },
+  { path: "/admin/rwcoin", icon: Coins, label: "RWcoin" },
   { path: "/admin/kk", icon: HomeIcon, label: "Kartu Keluarga" },
   { path: "/admin/warga", icon: Users, label: "Data Warga" },
   { path: "/admin/laporan", icon: ClipboardList, label: "Laporan" },
@@ -26,7 +27,6 @@ const navItems = [
   { path: "/admin/warga-singgah", icon: UserCheck, label: "Warga Singgah" },
   { path: "/admin/usaha", icon: Store, label: "Kelola Usaha" },
   { path: "/admin/program-rw", icon: CalendarDays, label: "Program RW" },
-  { path: "/admin/rwcoin", icon: Coins, label: "RWcoin" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

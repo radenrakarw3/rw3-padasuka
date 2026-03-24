@@ -62,7 +62,7 @@ export default function AdminIuranPage() {
   const [editJumlah, setEditJumlah] = useState<{ id: number; value: string } | null>(null);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const PAGE_SIZE = 20;
+  const PAGE_SIZE = 10;
 
   const { data: iuranList = [], isLoading } = useQuery<IuranRow[]>({
     queryKey: ["/api/iuran", selectedMonth, filterRt],

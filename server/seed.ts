@@ -1,8 +1,23 @@
 import { storage } from "./storage";
 import { db } from "./db";
+import { sql } from "drizzle-orm";
 import { kartuKeluarga, warga, rtData, adminUser } from "@shared/schema";
 import fs from "fs";
 import path from "path";
+
+// Pastikan tabel rwcoin_settings ada (untuk kasus db:push belum dijalankan)
+async function ensureRwcoinSettingsTable() {
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS rwcoin_settings (
+      id SERIAL PRIMARY KEY,
+      key TEXT NOT NULL,
+      value TEXT NOT NULL,
+      label TEXT NOT NULL,
+      keterangan TEXT,
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+}
 
 function parseCSVLine(line: string): string[] {
   const result: string[] = [];
@@ -101,6 +116,7 @@ async function seedAdminsAndRt() {
 
 export async function seedDatabase() {
   try {
+    await ensureRwcoinSettingsTable();
     await seedAdminsAndRt();
 
     const existingKk = await storage.getAllKk();

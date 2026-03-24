@@ -8,7 +8,7 @@ import {
   usaha, karyawanUsaha, izinTetangga, surveyUsaha, riwayatStiker, monthlySnapshot,
   programRw, pesertaProgram,
   mitra, rwcoinWallet, rwcoinTransaksi, mitraVoucher, mitraDiskon, rwcoinWithdraw, rwcoinOtp, rwcoinPendingTransaksi, kasRwcoin, rwcoinTopupRequest, wargaSavedLogin, curhatWarga,
-  iuranKk, iuranSetting,
+  iuranKk, iuranSetting, rwcoinSettings,
   type KartuKeluarga, type InsertKartuKeluarga,
   type Warga, type InsertWarga,
   type RtData, type InsertRtData,
@@ -36,7 +36,7 @@ import {
   type Mitra, type RwcoinWallet, type RwcoinTransaksi, type KasRwcoin,
   type MitraVoucher, type MitraDiskon, type RwcoinWithdraw, type RwcoinOtp, type RwcoinPendingTransaksi,
   type RwcoinTopupRequest, type CurhatWarga,
-  type IuranKk, type IuranSetting,
+  type IuranKk, type IuranSetting, type RwcoinSettings,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -253,17 +253,14 @@ export interface IStorage {
   deleteDiskon(id: number): Promise<void>;
 
   getRwcoinStats(): Promise<{ totalWallet: number; totalSaldo: number; totalTransaksi: number; totalTopup: number; totalBelanja: number; totalWithdrawPending: number }>;
-  getRwcoinDashboard(): Promise<{ transaksiTerbaru: any[]; topupTerbaru: any[]; leaderboardMitra: { mitraId: number; namaUsaha: string; totalBelanja: number; jumlahTx: number }[]; perputaran: { totalDiWarga: number; totalDiMitra: number; totalWithdrawn: number; totalBeredar: number } }>;
-
-  generatePayOtp(wargaId: number): Promise<RwcoinOtp>;
-  validatePayOtp(kode: string): Promise<{ wargaId: number; kodeWallet: string; namaWarga: string; saldo: number; rt: number } | null>;
-  markOtpUsed(kode: string): Promise<void>;
-
-  initBelanjaTransaksi(wargaId: number, mitraId: number, jumlahBruto: number, voucherKode?: string, keterangan?: string): Promise<{ pending: RwcoinPendingTransaksi; preview: { bruto: number; diskon: number; bayar: number }; namaUsaha: string; nomorWaKasir: string }>;
-  konfirmasiBelanjaTransaksi(wargaId: number, otpKode: string): Promise<{ transaksi: RwcoinTransaksi; diskon: number; namaWarga: string; namaUsaha: string }>;
+  getRwcoinDashboard(): Promise<{ transaksiTerbaru: any[]; topupTerbaru: any[]; leaderboardMitra: { mitraId: number; namaUsaha: string; totalBelanja: number; jumlahTx: number }[]; perputaran: { totalDiWarga: number; totalDiMitra: number; totalWithdrawn: number; totalBeredar: number }; ekonomi: { velocity: number; retention: number; totalPernahTopup: number; activeWarga: number; activeMitra: number; budgetSubsidi: number; topSpenders: { wargaId: number; namaWarga: string; totalBelanja: number; jumlahTx: number }[] } }>;
 
   getKasRwcoin(): Promise<{ list: KasRwcoin[]; saldo: number }>;
   injectKas(data: { tipe: string; jumlah: number; keterangan: string }): Promise<KasRwcoin>;
+
+  getRwcoinSettings(): Promise<RwcoinSettings[]>;
+  getRwcoinSettingValue(key: string, defaultValue: number): Promise<number>;
+  upsertRwcoinSetting(key: string, value: string): Promise<RwcoinSettings>;
 
   getSavedLoginsByDevice(deviceId: string): Promise<{ wargaId: number; kkId: number; nomorKk: string; nama: string; kedudukan: string; rt: number }[]>;
   getSavedLoginByWargaDevice(wargaId: number, deviceId: string): Promise<{ id: number; pinHash: string } | undefined>;
@@ -2249,131 +2246,6 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async generatePayOtp(wargaId: number): Promise<RwcoinOtp> {
-    // Invalidasi OTP lama yang belum terpakai milik warga ini
-    await db.update(rwcoinOtp)
-      .set({ isUsed: true })
-      .where(and(eq(rwcoinOtp.wargaId, wargaId), eq(rwcoinOtp.isUsed, false)));
-
-    // Generate kode 6 digit unik
-    let kode: string;
-    let attempts = 0;
-    do {
-      kode = String(Math.floor(100000 + Math.random() * 900000));
-      const existing = await db.select().from(rwcoinOtp).where(and(eq(rwcoinOtp.kode, kode), eq(rwcoinOtp.isUsed, false))).limit(1);
-      if (existing.length === 0) break;
-      attempts++;
-    } while (attempts < 10);
-
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 menit
-    const [otp] = await db.insert(rwcoinOtp).values({ wargaId, kode: kode!, expiresAt, isUsed: false }).returning();
-    return otp;
-  }
-
-  async validatePayOtp(kode: string): Promise<{ wargaId: number; kodeWallet: string; namaWarga: string; saldo: number; rt: number } | null> {
-    const [otp] = await db.select().from(rwcoinOtp)
-      .where(and(eq(rwcoinOtp.kode, kode), eq(rwcoinOtp.isUsed, false)))
-      .limit(1);
-    if (!otp) return null;
-    if (new Date() > otp.expiresAt) return null;
-
-    const wargaData = await this.getWargaById(otp.wargaId);
-    if (!wargaData) return null;
-    const wallet = await this.getOrCreateWargaWallet(otp.wargaId);
-    const kk = await this.getKkById(wargaData.kkId);
-    return { wargaId: otp.wargaId, kodeWallet: wallet.kodeWallet, namaWarga: wargaData.namaLengkap, saldo: wallet.saldo, rt: kk?.rt ?? 0 };
-  }
-
-  async markOtpUsed(kode: string): Promise<void> {
-    await db.update(rwcoinOtp).set({ isUsed: true }).where(eq(rwcoinOtp.kode, kode));
-  }
-
-  async initBelanjaTransaksi(wargaId: number, mitraId: number, jumlahBruto: number, voucherKode?: string, keterangan?: string): Promise<{ pending: RwcoinPendingTransaksi; preview: { bruto: number; diskon: number; bayar: number }; namaUsaha: string; nomorWaKasir: string }> {
-    const mitraData = await this.getMitraById(mitraId);
-    if (!mitraData || !mitraData.isActive) throw new Error("Mitra tidak ditemukan atau tidak aktif");
-
-    const walletWarga = await this.getOrCreateWargaWallet(wargaId);
-
-    // Hitung diskon mitra
-    const today = new Date().toISOString().split("T")[0];
-    const diskonList = await db.select().from(mitraDiskon).where(
-      and(eq(mitraDiskon.mitraId, mitraId), eq(mitraDiskon.isActive, true))
-    );
-    let jumlahDiskon = 0;
-    for (const d of diskonList) {
-      if (d.berlakuMulai && d.berlakuMulai > today) continue;
-      if (d.berlakuHingga && d.berlakuHingga < today) continue;
-      const potongan = d.tipe === "persen" ? Math.floor(jumlahBruto * d.nilai / 100) : d.nilai;
-      jumlahDiskon = Math.max(jumlahDiskon, potongan);
-    }
-
-    // Hitung voucher
-    if (voucherKode) {
-      const voucher = await this.getVoucherByKode(voucherKode.toUpperCase());
-      if (voucher && voucher.isActive && jumlahBruto >= (voucher.minTransaksi ?? 0) && (!voucher.berlakuHingga || voucher.berlakuHingga >= today) && (!voucher.kuota || voucher.terpakai < voucher.kuota)) {
-        const v = voucher.tipe === "persen" ? Math.floor(jumlahBruto * voucher.nilai / 100) : voucher.nilai;
-        jumlahDiskon = Math.min(jumlahDiskon + v, jumlahBruto);
-      }
-    }
-
-    const jumlahBayar = jumlahBruto - jumlahDiskon;
-    if (walletWarga.saldo < jumlahBayar) throw new Error(`Saldo tidak cukup. Saldo: ${walletWarga.saldo}, dibutuhkan: ${jumlahBayar}`);
-
-    // Invalidasi pending lama milik warga ini
-    await db.update(rwcoinPendingTransaksi).set({ isConfirmed: true }).where(
-      and(eq(rwcoinPendingTransaksi.wargaId, wargaId), eq(rwcoinPendingTransaksi.isConfirmed, false))
-    );
-
-    // Generate OTP 5 digit untuk disebutkan kasir
-    const otpKode = String(Math.floor(10000 + Math.random() * 90000));
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 menit
-
-    const [pending] = await db.insert(rwcoinPendingTransaksi).values({
-      wargaId, mitraId, jumlahBruto, jumlahDiskon, jumlahBayar,
-      voucherKode: voucherKode?.toUpperCase() ?? null,
-      keterangan: keterangan ?? null,
-      otpKode, expiresAt, isConfirmed: false,
-    }).returning();
-
-    return { pending, preview: { bruto: jumlahBruto, diskon: jumlahDiskon, bayar: jumlahBayar }, namaUsaha: mitraData.namaUsaha, nomorWaKasir: mitraData.nomorWaKasir };
-  }
-
-  async konfirmasiBelanjaTransaksi(wargaId: number, otpKode: string): Promise<{ transaksi: RwcoinTransaksi; diskon: number; namaWarga: string; namaUsaha: string }> {
-    const [pending] = await db.select().from(rwcoinPendingTransaksi).where(
-      and(eq(rwcoinPendingTransaksi.wargaId, wargaId), eq(rwcoinPendingTransaksi.otpKode, otpKode), eq(rwcoinPendingTransaksi.isConfirmed, false))
-    ).limit(1);
-
-    if (!pending) throw new Error("Kode OTP tidak valid");
-    if (new Date() > pending.expiresAt) throw new Error("Kode OTP sudah kedaluwarsa, ulangi transaksi");
-
-    // Mark as confirmed segera (prevent double submit)
-    await db.update(rwcoinPendingTransaksi).set({ isConfirmed: true }).where(eq(rwcoinPendingTransaksi.id, pending.id));
-
-    // Gunakan nilai pre-calculated dari pending agar diskon/voucher konsisten dengan yang ditampilkan ke warga
-    const walletWarga = await this.getOrCreateWargaWallet(pending.wargaId);
-    const mitraData = await this.getMitraById(pending.mitraId);
-
-    // Lookup subsidiAdmin dari voucher agar kas dan saldo mitra benar
-    let voucherSubsidiAdmin = false;
-    if (pending.voucherKode) {
-      const voucher = await this.getVoucherByKode(pending.voucherKode);
-      voucherSubsidiAdmin = voucher?.subsidiAdmin ?? false;
-    }
-
-    const result = await this._executeBelanja(
-      walletWarga,
-      pending.mitraId,
-      pending.jumlahBruto,
-      pending.jumlahDiskon,
-      pending.jumlahBayar,
-      pending.voucherKode ?? undefined,
-      pending.keterangan ?? undefined,
-      voucherSubsidiAdmin,
-    );
-
-    return { ...result, namaUsaha: mitraData?.namaUsaha ?? "" };
-  }
-
   async getKasRwcoin(): Promise<{ list: KasRwcoin[]; saldo: number }> {
     const list = await db.select().from(kasRwcoin).orderBy(desc(kasRwcoin.createdAt));
     const saldo = list.reduce((acc, r) => r.tipe === "pemasukan" ? acc + r.jumlah : acc - r.jumlah, 0);
@@ -2390,11 +2262,56 @@ export class DatabaseStorage implements IStorage {
     return row;
   }
 
+  // Defaults: topup_fee=2500, withdraw_fee=5000, min_topup=10000, min_withdraw=10000
+  private readonly SETTING_DEFAULTS: Record<string, { value: string; label: string; keterangan: string }> = {
+    topup_fee: { value: "2500", label: "Biaya Admin Topup", keterangan: "Biaya yang dikenakan ke warga setiap kali request topup coin (Rp)" },
+    withdraw_fee: { value: "5000", label: "Potongan Admin Withdraw", keterangan: "Potongan dari jumlah withdraw mitra sebelum ditransfer ke rekening (Rp)" },
+    min_topup: { value: "10000", label: "Minimal Topup", keterangan: "Nominal minimum topup coin per request (Rp)" },
+    min_withdraw: { value: "10000", label: "Minimal Withdraw", keterangan: "Jumlah coin minimum yang bisa di-withdraw oleh mitra" },
+  };
+
+  async getRwcoinSettings(): Promise<RwcoinSettings[]> {
+    const existing = await db.select().from(rwcoinSettings).orderBy(desc(rwcoinSettings.id));
+    // Deduplikasi: ambil baris terbaru (id terbesar) per key — antisipasi duplikat tanpa unique constraint
+    const latest = new Map<string, RwcoinSettings>();
+    for (const row of existing) {
+      if (!latest.has(row.key)) latest.set(row.key, row);
+    }
+    // Seed defaults yang belum ada
+    const toInsert = Object.entries(this.SETTING_DEFAULTS)
+      .filter(([key]) => !latest.has(key))
+      .map(([key, def]) => ({ key, value: def.value, label: def.label, keterangan: def.keterangan }));
+    if (toInsert.length > 0) {
+      const inserted = await db.insert(rwcoinSettings).values(toInsert).returning();
+      for (const row of inserted) latest.set(row.key, row);
+    }
+    return Array.from(latest.values()).sort((a, b) => a.key.localeCompare(b.key));
+  }
+
+  async getRwcoinSettingValue(key: string, defaultValue: number): Promise<number> {
+    const rows = await db.select({ value: rwcoinSettings.value }).from(rwcoinSettings).where(eq(rwcoinSettings.key, key));
+    return rows[0] ? parseInt(rows[0].value) || defaultValue : defaultValue;
+  }
+
+  async upsertRwcoinSetting(key: string, value: string): Promise<RwcoinSettings> {
+    const def = this.SETTING_DEFAULTS[key];
+    const [updated] = await db.update(rwcoinSettings)
+      .set({ value, updatedAt: new Date() })
+      .where(eq(rwcoinSettings.key, key))
+      .returning();
+    if (updated) return updated;
+    const [inserted] = await db.insert(rwcoinSettings)
+      .values({ key, value, label: def?.label ?? key, keterangan: def?.keterangan ?? null })
+      .returning();
+    return inserted;
+  }
+
   async getRwcoinDashboard(): Promise<{
     transaksiTerbaru: any[];
     topupTerbaru: any[];
     leaderboardMitra: { mitraId: number; namaUsaha: string; totalBelanja: number; jumlahTx: number }[];
     perputaran: { totalDiWarga: number; totalDiMitra: number; totalWithdrawn: number; totalBeredar: number };
+    ekonomi: { velocity: number; retention: number; totalPernahTopup: number; activeWarga: number; activeMitra: number; budgetSubsidi: number; topSpenders: { wargaId: number; namaWarga: string; totalBelanja: number; jumlahTx: number }[] };
   }> {
     // 5 transaksi terakhir (semua tipe)
     const transaksiTerbaru = await db.select({
@@ -2466,11 +2383,71 @@ export class DatabaseStorage implements IStorage {
     const withdrawList = await db.select({ jumlahCoin: rwcoinWithdraw.jumlahCoin }).from(rwcoinWithdraw).where(eq(rwcoinWithdraw.status, "dibayar"));
     const totalWithdrawn = withdrawList.reduce((s, w) => s + w.jumlahCoin, 0);
 
+    // === INDIKATOR EKONOMI ===
+    // Total yang pernah ditopup (semua waktu)
+    const [topupStats] = await db.select({
+      totalPernahTopup: sql<number>`COALESCE(SUM(${rwcoinTransaksi.jumlahBayar}), 0)`,
+      totalBelanja: sql<number>`COALESCE(SUM(CASE WHEN ${rwcoinTransaksi.tipe} = 'belanja' THEN ${rwcoinTransaksi.jumlahBruto} ELSE 0 END), 0)`,
+    }).from(rwcoinTransaksi).where(eq(rwcoinTransaksi.tipe, "topup"));
+
+    const [belanjaStats] = await db.select({
+      totalBelanja: sql<number>`COALESCE(SUM(${rwcoinTransaksi.jumlahBruto}), 0)`,
+    }).from(rwcoinTransaksi).where(eq(rwcoinTransaksi.tipe, "belanja"));
+
+    const totalPernahTopup = Number(topupStats?.totalPernahTopup ?? 0);
+    const totalVolumeBelanja = Number(belanjaStats?.totalBelanja ?? 0);
+
+    // Velocity: seberapa banyak coin berputar (total belanja / total topup)
+    const velocity = totalPernahTopup > 0 ? Math.round(totalVolumeBelanja / totalPernahTopup * 100) / 100 : 0;
+
+    // Retensi: % coin yang masih di ekosistem
+    const retention = totalPernahTopup > 0
+      ? Math.round((totalDiWarga + totalDiMitra) / totalPernahTopup * 100)
+      : 100;
+
+    // Warga aktif (punya wallet)
+    const [activeWargaRow] = await db.select({ count: count(rwcoinWallet.id) }).from(rwcoinWallet).where(eq(rwcoinWallet.ownerType, "warga"));
+    const activeWarga = activeWargaRow?.count ?? 0;
+
+    // Mitra aktif
+    const [activeMitraRow] = await db.select({ count: count(mitra.id) }).from(mitra).where(eq(mitra.isActive, true));
+    const activeMitra = activeMitraRow?.count ?? 0;
+
+    // Budget subsidi tersisa = saldo kas (sudah net: admin_fee - subsidi - withdraw + inject)
+    const kasRows = await db.select({ tipe: kasRwcoin.tipe, jumlah: kasRwcoin.jumlah }).from(kasRwcoin);
+    const budgetSubsidi = kasRows.reduce((acc, r) => r.tipe === "pemasukan" ? acc + r.jumlah : acc - r.jumlah, 0);
+
+    // Top 5 spender warga
+    const semuaBelanjaWarga = await db.select({
+      wargaId: rwcoinTransaksi.wargaId,
+      jumlahBruto: rwcoinTransaksi.jumlahBruto,
+      namaWarga: warga.namaLengkap,
+    }).from(rwcoinTransaksi)
+      .leftJoin(warga, eq(rwcoinTransaksi.wargaId, warga.id))
+      .where(eq(rwcoinTransaksi.tipe, "belanja"));
+
+    const spenderMap = new Map<number, { namaWarga: string; totalBelanja: number; jumlahTx: number }>();
+    for (const row of semuaBelanjaWarga) {
+      if (!row.wargaId) continue;
+      const existing = spenderMap.get(row.wargaId);
+      if (existing) {
+        existing.totalBelanja += row.jumlahBruto;
+        existing.jumlahTx += 1;
+      } else {
+        spenderMap.set(row.wargaId, { namaWarga: row.namaWarga ?? "Warga", totalBelanja: row.jumlahBruto, jumlahTx: 1 });
+      }
+    }
+    const topSpenders = Array.from(spenderMap.entries())
+      .map(([wargaId, data]) => ({ wargaId, ...data }))
+      .sort((a, b) => b.totalBelanja - a.totalBelanja)
+      .slice(0, 5);
+
     return {
       transaksiTerbaru,
       topupTerbaru,
       leaderboardMitra,
       perputaran: { totalDiWarga, totalDiMitra, totalWithdrawn, totalBeredar: totalDiWarga + totalDiMitra },
+      ekonomi: { velocity, retention, totalPernahTopup, activeWarga, activeMitra, budgetSubsidi, topSpenders },
     };
   }
 
