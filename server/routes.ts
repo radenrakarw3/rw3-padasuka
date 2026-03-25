@@ -1258,74 +1258,19 @@ Salam hangat dari pengurus RW 03 Padasuka`;
 
   app.post("/api/surat-rw", requireAdmin, async (req, res) => {
     try {
-      const { konteks, ...suratData } = req.body;
-      const parsed = insertSuratRwSchema.parse(suratData);
+      const parsed = insertSuratRwSchema.parse(req.body);
 
-      const contextBlock = konteks ? `\nDetail informasi tambahan:\n${konteks}\n` : "";
-
-      const prompt = `Buatkan ${parsed.jenisSurat} resmi dari RW 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi.
-
-Perihal: ${parsed.perihal}
-${parsed.tujuan ? `Ditujukan kepada: ${parsed.tujuan}` : ""}
-${parsed.tanggalSurat ? `Tanggal surat: ${parsed.tanggalSurat}` : `Tanggal surat: Cimahi, ${new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Jakarta" })}`}
-${contextBlock}
-INSTRUKSI PEMBUATAN SURAT:
-1. Buat surat ${parsed.jenisSurat} yang lengkap, resmi, dan profesional.
-2. Gunakan SEMUA informasi detail yang diberikan di atas secara akurat. Jangan mengarang data yang tidak diberikan.
-3. Sesuaikan gaya bahasa dan format dengan jenis surat (undangan harus ada waktu/tempat/acara, surat tugas harus ada uraian tugas, dll).
-4. Nama Ketua RW 03: Raden Raka.
-
-LARANGAN:
-1. JANGAN sertakan kop surat/header (sudah otomatis oleh sistem).
-2. JANGAN sertakan nomor surat (sudah otomatis oleh sistem).
-3. JANGAN gunakan markdown (bintang, hashtag, dll). Tulis teks biasa saja.
-4. Urutan surat HARUS dimulai dari JUDUL SURAT dalam huruf kapital (contoh: SURAT UNDANGAN, SURAT TUGAS, dll), BARU KEMUDIAN di bawahnya tulis "Perihal: ..." atau "Lampiran: ...". JANGAN menaruh Perihal/Lampiran di atas judul surat.
-5. Untuk label NIK, tulis "NIK" saja (3 huruf), JANGAN tulis "Nomor Induk Kependudukan".
-
-FORMAT TANDA TANGAN (di akhir surat, WAJIB format vertikal atas-bawah):
-
-Ketua RW 03
-Kelurahan Padasuka
-
-
-(Raden Raka)
-
-Buat surat dalam format teks biasa yang rapi dan profesional.`;
-
-      let isiSurat = "";
-      let rwComplete = false;
-      try {
-        for (let attempt = 0; attempt < 3; attempt++) {
-          isiSurat = await generateWithGemini(prompt);
-          isiSurat = isiSurat.replace(/Nomor Induk Kependudukan\s*/gi, "NIK");
-          isiSurat = isiSurat.replace(/```[a-z]*\n?/g, "").replace(/```/g, "").trim();
-
-          const hasSignature = /Raden Raka/i.test(isiSurat);
-          const hasTitle = /SURAT\s+/i.test(isiSurat);
-          const hasDemikian = /[Dd]emikian/i.test(isiSurat);
-          rwComplete = hasSignature && hasTitle && hasDemikian && isiSurat.length >= 200;
-          if (rwComplete) break;
-          console.warn(`Surat RW generate attempt ${attempt + 1} incomplete (len=${isiSurat.length}, sig=${hasSignature}, title=${hasTitle}, dem=${hasDemikian}), retrying...`);
-        }
-      } catch (err: any) {
-        console.error("Gemini error:", err.message);
+      if (!parsed.isiSurat || parsed.isiSurat.length < 100) {
+        return res.status(400).json({ message: "Isi surat tidak valid atau terlalu pendek." });
       }
 
-      if (!rwComplete || !isiSurat || isiSurat.length < 100) {
-        return res.status(500).json({ message: "Gagal membuat surat RW yang lengkap. Silakan coba lagi." });
-      }
-
-      const data = await storage.createSuratRw({ ...parsed, isiSurat });
+      const data = await storage.createSuratRw(parsed);
 
       const currentCount = await storage.countSuratRwThisYear();
       const seq = String(currentCount + 1).padStart(3, "0");
       const year = new Date().getFullYear();
       const month = String(new Date().getMonth() + 1).padStart(2, "0");
       const nomorSurat = `${seq}/SK-RW/RW-03/${month}/${year}`;
-      if (isiSurat && /XXX\//.test(isiSurat)) {
-        const fixedIsi = isiSurat.replace(/XXX\/[^\n\r]*/g, nomorSurat);
-        await storage.updateSuratRwIsi(data.id, fixedIsi);
-      }
       await storage.updateSuratRwNomor(data.id, nomorSurat);
       const updated = await storage.getSuratRwById(data.id);
       res.json(updated);

@@ -81,7 +81,7 @@ function CelebrationOverlay({ coin, onDismiss }: { coin: number; onDismiss: () =
       <style>{`
         @keyframes celebFadeIn { from { opacity: 0 } to { opacity: 1 } }
         @keyframes celebFadeOut { from { opacity: 1 } to { opacity: 0 } }
-        @keyframes celebCardUp { from { opacity: 0; transform: translateY(60px) scale(0.85) } to { opacity: 1; transform: translateY(0) scale(1) } }
+        @keyframes celebCardUp { from { opacity: 0; transform: translateY(40px) scale(0.88) } to { opacity: 1; transform: translateY(0) scale(1) } }
         @keyframes celebCardOut { from { opacity: 1; transform: scale(1) } to { opacity: 0; transform: scale(0.9) } }
         @keyframes coinPop { 0% { transform: scale(0) rotate(-20deg) } 60% { transform: scale(1.25) rotate(8deg) } 80% { transform: scale(0.92) rotate(-4deg) } 100% { transform: scale(1) rotate(0deg) } }
         @keyframes coinGlow { 0%,100% { box-shadow: 0 0 24px 6px rgba(245,158,11,0.5) } 50% { box-shadow: 0 0 48px 16px rgba(245,158,11,0.8) } }
@@ -99,7 +99,7 @@ function CelebrationOverlay({ coin, onDismiss }: { coin: number; onDismiss: () =
         .badge-float { animation: floatBadge 2s ease-in-out 1s infinite }
       `}</style>
       <div
-        className={`celeb-overlay${phase === "out" ? " out" : ""} fixed inset-0 z-50 flex items-end justify-center pb-12`}
+        className={`celeb-overlay${phase === "out" ? " out" : ""} fixed inset-0 z-50 flex items-center justify-center px-4`}
         style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(4px)" }}
         onClick={onDismiss}
       >

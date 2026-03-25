@@ -15,6 +15,249 @@ import type { SuratRw } from "@shared/schema";
 import KopSurat from "@/components/kop-surat";
 import { generateSuratPDF } from "@/lib/pdf-surat";
 
+function parseTanggalSurat(tanggalSurat?: string): string {
+  const bulan = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+  let d: Date;
+  if (tanggalSurat) {
+    const parts = tanggalSurat.split("-").map(Number);
+    d = new Date(parts[0], parts[1] - 1, parts[2]);
+  } else {
+    d = new Date();
+  }
+  return `Cimahi, ${d.getDate()} ${bulan[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+const TTD = (tanggal: string) =>
+  `${tanggal}\n\nKetua RW 03\nKelurahan Padasuka\n\n\n(Raden Raka)`;
+
+function generateIsiSurat(jenisSurat: string, perihal: string, fields: Record<string, string>): string {
+  const tanggal = parseTanggalSurat(fields.tanggalSurat);
+  const ttd = TTD(tanggal);
+
+  switch (jenisSurat) {
+    case "Surat Undangan": {
+      const agenda = fields.acara
+        ? `\nAgenda       : ${fields.acara}\n`
+        : "";
+      return `SURAT UNDANGAN
+Perihal : ${perihal}
+
+Kepada Yth.
+${fields.tujuan}
+di Tempat
+
+Assalamu'alaikum Wr. Wb.
+
+Dengan hormat,
+
+Bersama surat ini, kami Pengurus RW 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan hormat mengundang Bapak/Ibu/Saudara/i untuk hadir dalam kegiatan berikut:
+
+Hari/Tanggal : ${fields.tanggalAcara}
+Waktu        : ${fields.waktuAcara}
+Tempat       : ${fields.tempatAcara}${agenda}
+Mengingat pentingnya acara tersebut, besar harapan kami atas kehadiran Bapak/Ibu/Saudara/i tepat waktu. Apabila berhalangan hadir, mohon agar dapat menginformasikan sebelumnya kepada pengurus RW.
+
+Demikian undangan ini kami sampaikan. Atas perhatian dan kehadiran Bapak/Ibu kami ucapkan terima kasih.
+
+Wassalamu'alaikum Wr. Wb.
+
+${ttd}`;
+    }
+
+    case "Surat Undangan Klarifikasi": {
+      return `SURAT UNDANGAN KLARIFIKASI
+Perihal : ${perihal}
+
+Kepada Yth.
+${fields.tujuan}
+di Tempat
+
+Assalamu'alaikum Wr. Wb.
+
+Dengan hormat,
+
+Sehubungan dengan adanya permasalahan yang perlu diselesaikan secara musyawarah dan kekeluargaan, yaitu:
+
+${fields.masalah}
+
+Bersama surat ini, kami Pengurus RW 03 Kelurahan Padasuka mengundang Bapak/Ibu/Saudara/i untuk hadir dalam sesi klarifikasi pada:
+
+Hari/Tanggal : ${fields.tanggalAcara}
+Waktu        : ${fields.waktuAcara}
+Tempat       : ${fields.tempatAcara}
+
+Kehadiran Bapak/Ibu/Saudara/i sangat kami harapkan demi terciptanya penyelesaian yang baik, damai, dan kekeluargaan. Apabila Bapak/Ibu tidak dapat hadir, mohon menghubungi pengurus RW terlebih dahulu.
+
+Demikian undangan ini kami sampaikan. Atas perhatian dan kehadiran Bapak/Ibu kami ucapkan terima kasih.
+
+Wassalamu'alaikum Wr. Wb.
+
+${ttd}`;
+    }
+
+    case "Surat Tugas": {
+      const pelaksanaan = fields.tanggalTugas
+        ? `\nPelaksanaan  : ${fields.tanggalTugas}`
+        : "";
+      const lokasi = fields.tempatTugas
+        ? `\nLokasi Tugas : ${fields.tempatTugas}`
+        : "";
+      return `SURAT TUGAS
+Perihal : ${perihal}
+
+Yang bertanda tangan di bawah ini, Ketua RW 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini memberikan tugas kepada:
+
+Nama              : ${fields.namaDitugaskan}
+Jabatan/Kedudukan : ${fields.jabatan}
+
+Untuk melaksanakan tugas sebagai berikut:
+
+${fields.tugasDetail}${pelaksanaan}${lokasi}
+
+Yang bersangkutan diharapkan dapat melaksanakan tugas tersebut dengan sebaik-baiknya, penuh tanggung jawab, serta melaporkan hasilnya kepada Ketua RW 03 setelah selesai.
+
+Demikian surat tugas ini dibuat untuk dapat dipergunakan sebagaimana mestinya.
+
+${ttd}`;
+    }
+
+    case "Surat Permohonan Audiensi": {
+      const jadwal =
+        fields.tanggalDimohon || fields.waktuDimohon
+          ? `\nAdapun kami mengajukan permohonan audiensi pada:\n\nHari/Tanggal : ${fields.tanggalDimohon || "Sesuai kesepakatan"}\nWaktu        : ${fields.waktuDimohon || "Sesuai kesepakatan"}\n`
+          : "";
+      return `SURAT PERMOHONAN AUDIENSI
+Perihal : ${perihal}
+
+Kepada Yth.
+${fields.tujuan}
+di Tempat
+
+Dengan hormat,
+
+Yang bertanda tangan di bawah ini, Ketua RW 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, mewakili segenap warga RW 03, dengan ini mengajukan permohonan audiensi berkenaan dengan:
+
+${fields.latarBelakang}
+${jadwal}
+Besar harapan kami agar permohonan audiensi ini dapat dikabulkan guna mencari solusi terbaik demi kepentingan warga RW 03 Kelurahan Padasuka.
+
+Demikian permohonan ini kami sampaikan. Atas perhatian dan kesediaan Bapak/Ibu Pimpinan, kami ucapkan terima kasih.
+
+${ttd}`;
+    }
+
+    case "Surat Pengajuan Perbaikan": {
+      const dampak = fields.dampak
+        ? `\nDampak bagi Warga:\n${fields.dampak}\n`
+        : "";
+      return `SURAT PENGAJUAN PERBAIKAN
+Perihal : ${perihal}
+
+Kepada Yth.
+${fields.tujuan}
+di Tempat
+
+Dengan hormat,
+
+Yang bertanda tangan di bawah ini, Ketua RW 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, mewakili segenap warga RW 03, dengan ini mengajukan permohonan perbaikan sebagai berikut:
+
+Lokasi  : ${fields.lokasiPerbaikan}
+
+Kondisi dan Kerusakan:
+${fields.deskripsiKerusakan}
+${dampak}
+Mengingat kondisi tersebut sangat mengganggu aktivitas warga dan berpotensi menimbulkan bahaya, besar harapan kami agar permasalahan ini dapat segera ditindaklanjuti oleh pihak yang berwenang.
+
+Demikian surat pengajuan ini kami sampaikan. Atas perhatian dan tindak lanjutnya, kami ucapkan terima kasih.
+
+${ttd}`;
+    }
+
+    case "Surat Pengajuan": {
+      const rincian = fields.rincian
+        ? `\nRincian yang Diajukan:\n${fields.rincian}\n`
+        : "";
+      return `SURAT PENGAJUAN
+Perihal : ${perihal}
+
+Kepada Yth.
+${fields.tujuan}
+di Tempat
+
+Dengan hormat,
+
+Yang bertanda tangan di bawah ini, Ketua RW 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, mewakili segenap warga RW 03, dengan ini mengajukan permohonan sebagai berikut:
+
+${fields.deskripsiPengajuan}
+${rincian}
+Besar harapan kami agar pengajuan ini dapat dipertimbangkan dan dikabulkan demi kepentingan dan kesejahteraan warga RW 03 Kelurahan Padasuka.
+
+Demikian surat pengajuan ini kami sampaikan. Atas perhatian dan kebijaksanaannya, kami ucapkan terima kasih.
+
+${ttd}`;
+    }
+
+    case "Surat Permohonan Bantuan": {
+      const rincian = fields.rincianBantuan
+        ? `\nRincian Bantuan yang Dimohon:\n${fields.rincianBantuan}\n`
+        : "";
+      const penerima = fields.jumlahPenerima
+        ? `\nJumlah Penerima Manfaat : ${fields.jumlahPenerima}\n`
+        : "";
+      return `SURAT PERMOHONAN BANTUAN
+Perihal : ${perihal}
+
+Kepada Yth.
+${fields.tujuan}
+di Tempat
+
+Dengan hormat,
+
+Yang bertanda tangan di bawah ini, Ketua RW 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, mewakili segenap warga RW 03, dengan ini mengajukan permohonan bantuan kepada pihak yang terhormat.
+
+Latar Belakang:
+${fields.latarBelakang}
+${rincian}${penerima}
+Dengan adanya bantuan yang diberikan, diharapkan dapat meringankan beban warga serta meningkatkan kesejahteraan masyarakat RW 03 Kelurahan Padasuka.
+
+Demikian permohonan ini kami sampaikan. Atas perhatian dan bantuan yang diberikan, kami ucapkan terima kasih.
+
+${ttd}`;
+    }
+
+    case "Surat Edaran": {
+      const berlaku = fields.tanggalBerlaku
+        ? `\nBerlaku mulai : ${fields.tanggalBerlaku}\n`
+        : "";
+      return `SURAT EDARAN
+Perihal : ${perihal}
+
+Kepada Yth.
+${fields.tujuan}
+di Tempat
+
+Assalamu'alaikum Wr. Wb.
+
+Dengan hormat,
+
+Dalam rangka ${perihal}, bersama surat edaran ini kami sampaikan informasi berikut kepada seluruh warga RW 03 Kelurahan Padasuka:
+
+${fields.isiEdaran}
+${berlaku}
+Kami mohon agar seluruh warga dapat memperhatikan dan melaksanakan informasi di atas sebagaimana mestinya demi kebaikan dan ketertiban bersama.
+
+Demikian surat edaran ini kami sampaikan. Atas perhatian dan kerjasamanya, kami ucapkan terima kasih.
+
+Wassalamu'alaikum Wr. Wb.
+
+${ttd}`;
+    }
+
+    default:
+      return "";
+  }
+}
+
 type FormField = {
   key: string;
   label: string;
@@ -167,26 +410,13 @@ export default function AdminSuratRw() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const tujuan = extraFields.tujuan || "";
-      const tanggalSurat = extraFields.tanggalSurat || "";
-
-      const contextParts: string[] = [];
-      if (selectedConfig) {
-        for (const field of selectedConfig.fields) {
-          const val = extraFields[field.key];
-          if (val && field.key !== "tujuan" && field.key !== "tanggalSurat") {
-            contextParts.push(`${field.label}: ${val}`);
-          }
-        }
-      }
-      const konteks = contextParts.join("\n");
-
+      const isiSurat = generateIsiSurat(jenisSurat, perihal, extraFields);
       const res = await apiRequest("POST", "/api/surat-rw", {
         jenisSurat,
         perihal,
-        tujuan: tujuan || undefined,
-        tanggalSurat: tanggalSurat || undefined,
-        konteks: konteks || undefined,
+        tujuan: extraFields.tujuan || undefined,
+        tanggalSurat: extraFields.tanggalSurat || undefined,
+        isiSurat,
       });
       return res.json();
     },
@@ -287,9 +517,9 @@ export default function AdminSuratRw() {
                     data-testid="button-generate-surat-rw"
                   >
                     {createMutation.isPending ? (
-                      <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Membuat surat...</>
+                      <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Menyimpan surat...</>
                     ) : (
-                      "Generate Surat dengan AI"
+                      "Buat Surat"
                     )}
                   </Button>
                 </>
