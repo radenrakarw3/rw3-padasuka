@@ -3630,27 +3630,40 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
 
       const isiFormatted = items.map((it: string, i: number) => `${i + 1}. ${it.trim()}`).join("\n");
 
-      const prompt = `Kamu adalah penilai jurnal syukur harian yang bijak dan hangat untuk warga RW 03 Padasuka Cimahi. Warga bernama ${wargaData.namaLengkap} menuliskan 5 hal yang ia syukuri HARI INI secara spesifik:
+      const prompt = `Kamu adalah penilai jurnal syukur harian yang SANGAT KETAT dan selektif untuk warga RW 03 Padasuka Cimahi. Warga bernama ${wargaData.namaLengkap} mengisi 5 hal yang ia syukuri hari ini:
 
 ---
 ${isiFormatted}
 ---
 
-Tugasmu:
-1. Nilai berdasarkan DUA kriteria utama:
-   a. SPESIFISITAS HARI INI — apakah isinya benar-benar tentang kejadian/momen nyata hari ini, bukan syukur umum/generik? Makin spesifik dan kontekstual, makin tinggi nilainya.
-   b. KEDALAMAN & KETULUSAN — apakah penulis benar-benar merenungi dan merasakan syukurnya, bukan sekedar mengisi formulir?
+Tugasmu: Nilai dengan KETAT berdasarkan kriteria berikut, lalu tentukan skor coin.
 
-   Berikan skor coin antara 500 sampai 3000 (integer). Panduan:
-   - 500–900: Isian generik, singkat, tidak jelas terjadi hari ini, atau terkesan asal
-   - 900–1500: Ada beberapa yang spesifik hari ini tapi masih ada yang umum/singkat
-   - 1500–2200: Sebagian besar spesifik hari ini, cukup tulus dan bervariasi
-   - 2200–2700: Semua spesifik hari ini, jelas merefleksikan kejadian nyata, tulus dan beragam
-   - 2700–3000: Sangat detail, semua bercerita kejadian nyata hari ini, mendalam dan penuh kesadaran
+KRITERIA PENILAIAN (semua harus dipenuhi untuk skor tinggi):
+1. SPESIFIK HARI INI — kejadian/momen yang jelas terjadi hari ini, bukan kalimat generik
+2. PANJANG & DETAIL — minimal 8–10 kata per item, bukan jawaban 2–3 kata
+3. BERAGAM — 5 item berbeda tema, bukan pengulangan hal yang sama
+4. BUKAN TEMPLATE — tidak terkesan copy-paste, dibuat-buat, atau sekadar menggugurkan kewajiban
+5. REFLEKTIF — ada unsur merenungi, bukan sekadar menyebutkan
 
-2. Tulis balasan yang mengapresiasi kejadian spesifik yang ia ceritakan, menyemangati untuk terus bersyukur esok hari. Gaya bahasa: teman dekat, santai, hangat, gunakan sapaan nama (${wargaData.namaLengkap.split(" ")[0]}). Singgung minimal satu hal konkret yang ia tulis. Balasan 3-5 kalimat. Jangan pakai markdown atau simbol *.
+PANDUAN SKOR (bersifat KETAT — mayoritas warga seharusnya mendapat 500–900):
+- 500–600: Isian sangat singkat (1–3 kata), asal-asalan, atau tidak ada hubungannya dengan hari ini
+- 600–800: Ada usaha tapi terlalu generik ("syukur masih hidup", "alhamdulillah sehat"), kurang dari 5 kata per item, atau ada item yang diulang
+- 800–1000: Cukup spesifik tapi masih ada 2–3 item yang pendek/generik
+- 1000–1300: Sebagian besar spesifik hari ini, panjang memadai, tapi masih ada 1–2 yang lemah
+- 1300–1600: Semua spesifik dan cukup panjang, tapi kurang mendalam atau ada pengulangan tema
+- 1600–2000: Semua spesifik hari ini, panjang, beragam, dan tulus — kualitas baik
+- 2000–2500: Luar biasa — semua item sangat detail, jelas momen nyata hari ini, beragam, reflektif, dan menyentuh
+- 2500–3000: SANGAT JARANG — hanya untuk isian yang benar-benar menonjol: sangat detail, personal, penuh makna, menunjukkan kesadaran mendalam tentang nikmat hidup
 
-Balas HANYA dengan JSON valid seperti ini (tanpa komentar, tanpa teks lain):
+PENALTI OTOMATIS (kurangi 200–400 dari skor jika):
+- Ada item yang hanya 1–4 kata
+- Ada item yang generik tanpa konteks hari ini ("bersyukur masih sehat", "alhamdulillah", dll)
+- Ada 2 atau lebih item yang serupa/pengulangan
+- Terkesan dibuat-buat atau tidak tulus
+
+2. Tulis balasan singkat yang hangat dan memotivasi. Gaya bahasa santai, sapaan nama (${wargaData.namaLengkap.split(" ")[0]}), singgung 1 hal konkret yang ia tulis, dorong untuk lebih spesifik besok. 2–3 kalimat saja. Jangan pakai markdown atau simbol *.
+
+Balas HANYA dengan JSON valid (tanpa komentar, tanpa teks lain):
 {"coin": <angka>, "balasan": "<teks balasan>"}`;
 
       let coin = 500;
