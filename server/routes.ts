@@ -3617,32 +3617,44 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
       const wargaData = await getWargaFromSession(req);
       if (!wargaData) return res.status(404).json({ message: "Data warga tidak ditemukan" });
 
-      const { isi } = req.body;
-      if (!isi || typeof isi !== "string" || isi.trim().length < 10) {
-        return res.status(400).json({ message: "Curhat minimal 10 karakter ya, tulis lebih bebas!" });
+      const { items } = req.body;
+      if (!Array.isArray(items) || items.length !== 5 || items.some((it: any) => typeof it !== "string" || it.trim().length < 3)) {
+        return res.status(400).json({ message: "Isi 5 kebersyukuran dengan masing-masing minimal 3 karakter ya!" });
       }
 
-      // Cek apakah sudah curhat hari ini (1x/hari)
+      // Cek apakah sudah mengisi hari ini (1x/hari)
       const curhatHariIni = await storage.getCurhatHariIni(wargaData.id);
       if (curhatHariIni) {
-        return res.status(400).json({ message: "Kamu sudah curhat hari ini. Bisa lagi besok setelah tengah malam ya!" });
+        return res.status(400).json({ message: "Kamu sudah mengisi kebersyukuran hari ini. Bisa lagi besok setelah tengah malam ya!" });
       }
 
-      const prompt = `Kamu adalah sahabat dekat dan pendengar yang empatik, hangat, dan relevan untuk warga RW 03 Padasuka Cimahi. Warga bernama ${wargaData.namaLengkap} sedang meluapkan perasaan atau curhat berikut:
+      const isiFormatted = items.map((it: string, i: number) => `${i + 1}. ${it.trim()}`).join("\n");
+
+      const prompt = `Kamu adalah penilai jurnal syukur harian yang bijak dan hangat untuk warga RW 03 Padasuka Cimahi. Warga bernama ${wargaData.namaLengkap} menuliskan 5 hal yang ia syukuri HARI INI secara spesifik:
 
 ---
-${isi.trim()}
+${isiFormatted}
 ---
 
 Tugasmu:
-1. Nilai seberapa berat/serius curahan hati ini dengan skor coin antara 0 sampai 500 (integer). Makin berat beban emosional yang diungkapkan, makin banyak coin yang diberikan sebagai bentuk penghargaan atas keberanian curhat. Jika curhat sangat ringan/tidak serius, bisa 0-20. Jika sedang, 20-150. Jika berat/menyentuh, 150-500.
-2. Tulis balasan yang menenangkan, hangat, dan relevan dengan kondisi yang diceritakan. Gaya bahasa: seperti teman dekat, santai tapi penuh empati, tidak formal, gunakan sapaan nama (${wargaData.namaLengkap.split(" ")[0]}). Balasan cukup 3-5 kalimat. Jangan pakai markdown atau simbol *.
+1. Nilai berdasarkan DUA kriteria utama:
+   a. SPESIFISITAS HARI INI — apakah isinya benar-benar tentang kejadian/momen nyata hari ini, bukan syukur umum/generik? Makin spesifik dan kontekstual, makin tinggi nilainya.
+   b. KEDALAMAN & KETULUSAN — apakah penulis benar-benar merenungi dan merasakan syukurnya, bukan sekedar mengisi formulir?
+
+   Berikan skor coin antara 500 sampai 3000 (integer). Panduan:
+   - 500–900: Isian generik, singkat, tidak jelas terjadi hari ini, atau terkesan asal
+   - 900–1500: Ada beberapa yang spesifik hari ini tapi masih ada yang umum/singkat
+   - 1500–2200: Sebagian besar spesifik hari ini, cukup tulus dan bervariasi
+   - 2200–2700: Semua spesifik hari ini, jelas merefleksikan kejadian nyata, tulus dan beragam
+   - 2700–3000: Sangat detail, semua bercerita kejadian nyata hari ini, mendalam dan penuh kesadaran
+
+2. Tulis balasan yang mengapresiasi kejadian spesifik yang ia ceritakan, menyemangati untuk terus bersyukur esok hari. Gaya bahasa: teman dekat, santai, hangat, gunakan sapaan nama (${wargaData.namaLengkap.split(" ")[0]}). Singgung minimal satu hal konkret yang ia tulis. Balasan 3-5 kalimat. Jangan pakai markdown atau simbol *.
 
 Balas HANYA dengan JSON valid seperti ini (tanpa komentar, tanpa teks lain):
 {"coin": <angka>, "balasan": "<teks balasan>"}`;
 
-      let coin = 0;
-      let balasan = "Makasih udah mau cerita. Semangat terus ya, kamu nggak sendirian!";
+      let coin = 500;
+      let balasan = "Keren banget udah mau luangin waktu untuk bersyukur hari ini! Semangat terus ya, semoga harimu makin berkah!";
 
       try {
         const raw = await generateWithGemini(prompt);
@@ -3651,25 +3663,23 @@ Balas HANYA dengan JSON valid seperti ini (tanpa komentar, tanpa teks lain):
         const jsonEnd = cleaned.lastIndexOf("}");
         if (jsonStart !== -1 && jsonEnd !== -1) {
           const parsed = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1));
-          coin = Math.max(0, Math.min(500, Math.round(Number(parsed.coin) || 0)));
+          coin = Math.max(500, Math.min(3000, Math.round(Number(parsed.coin) || 500)));
           balasan = String(parsed.balasan || balasan).trim();
         }
       } catch {
-        // Gemini error: tetap simpan curhat dengan 0 coin dan balasan default
+        // Gemini error: tetap simpan dengan coin minimum dan balasan default
       }
 
-      // Simpan curhat
+      // Simpan
       const curhat = await storage.createCurhat({
         wargaId: wargaData.id,
-        isi: isi.trim(),
+        isi: isiFormatted,
         coinDiberikan: coin,
         balasanGemini: balasan,
       });
 
-      // Award coin ke wallet jika ada
-      if (coin > 0) {
-        await storage.topupWargaWallet(wargaData.id, coin, "Hadiah curhat RWcoin");
-      }
+      // Award coin ke wallet
+      await storage.topupWargaWallet(wargaData.id, coin, "Hadiah kebersyukuran RWcoin");
 
       res.json({
         coin,
