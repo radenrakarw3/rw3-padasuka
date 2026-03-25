@@ -1,6 +1,3 @@
-[variables]
-NODE_ENV = "production"
-
 [phases.setup]
 nixPkgs = ["nodejs_20"]
 
@@ -11,4 +8,4 @@ cmds = ["npm install"]
 cmds = ["npm run build"]
 
 [start]
-cmd = "npm run db:push -- --force && npm start"
+cmd = "NODE_ENV=production npm run db:push -- --force && NODE_ENV=production npm start"
