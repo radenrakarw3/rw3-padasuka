@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Switch, Route, Redirect, useLocation } from "wouter";
-import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient, getQueryFn } from "./lib/queryClient";
+import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth";
-import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/login";
 import WargaLayout from "@/components/warga-layout";
 import WargaBeranda from "@/pages/warga/beranda";
@@ -41,8 +40,6 @@ import MitraBeranda from "@/pages/mitra/beranda";
 import MitraTransaksi from "@/pages/mitra/transaksi";
 import MitraWithdraw from "@/pages/mitra/withdraw";
 import MitraDiskon from "@/pages/mitra/diskon";
-import { useQuery } from "@tanstack/react-query";
-import { getQueryFn } from "@/lib/queryClient";
 import { X } from "lucide-react";
 import goldLogo from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
 import radenRakaImg from "@assets/raden_raka_nobg.png";
@@ -239,13 +236,70 @@ function AppContent() {
   return <WargaRoutes />;
 }
 
+function AppUpdateGate({ children }: { children: React.ReactNode }) {
+  const [needsUpdate, setNeedsUpdate] = useState(false);
+  const [newVersion, setNewVersion] = useState<string | null>(null);
+
+  const { data } = useQuery<{ version: string }>({
+    queryKey: ["/api/app-version"],
+    queryFn: getQueryFn({ on401: "returnNull" }),
+    staleTime: 0,
+    refetchInterval: 5 * 60 * 1000,
+  });
+
+  useEffect(() => {
+    if (!data?.version) return;
+    const stored = localStorage.getItem("app_version");
+    if (!stored) {
+      localStorage.setItem("app_version", data.version);
+      return;
+    }
+    if (stored !== data.version) {
+      setNewVersion(data.version);
+      setNeedsUpdate(true);
+    }
+  }, [data?.version]);
+
+  if (needsUpdate) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-6">
+        <div className="text-center space-y-5 max-w-xs">
+          <img src={goldLogo} alt="RW03" className="w-16 h-16 mx-auto" />
+          <div className="space-y-2">
+            <h2 className="font-bold text-lg" style={{ color: "hsl(163,55%,22%)" }}>
+              Versi Baru Tersedia
+            </h2>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Ada pembaruan sistem RW 03 Padasuka. Perbarui terlebih dahulu sebelum melanjutkan.
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              localStorage.setItem("app_version", newVersion!);
+              window.location.reload();
+            }}
+            className="w-full py-3 rounded-xl text-white font-semibold text-sm"
+            style={{ backgroundColor: "hsl(163,55%,22%)" }}
+          >
+            Perbarui Sekarang
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AuthProvider>
           <Toaster />
-          <AppContent />
+          <AppUpdateGate>
+            <AppContent />
+          </AppUpdateGate>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

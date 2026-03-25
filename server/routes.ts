@@ -332,6 +332,11 @@ const pdfTempPublicDir = path.join(uploadsDir, "pdf-temp");
     res.status(410).json({ message: "Link PDF ini sudah tidak berlaku. Silakan download surat langsung dari web rw3padasukacimahi.org" });
   });
 
+  const SERVER_START_TIME = Date.now().toString();
+  app.get("/api/app-version", (_req: Request, res: Response) => {
+    res.json({ version: SERVER_START_TIME });
+  });
+
   function requireAuth(req: Request, res: Response, next: any) {
     if (!req.session.kkId && !req.session.isAdmin) {
       return res.status(401).json({ message: "Silakan login terlebih dahulu" });
