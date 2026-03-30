@@ -2,15 +2,17 @@ import { useQuery } from "@tanstack/react-query";
 import { getQueryFn } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ShoppingBag, Tag, TrendingUp, Coins } from "lucide-react";
+import { ShoppingBag, Tag, TrendingUp, Coins, AlertCircle, Loader2 } from "lucide-react";
+import { motion } from "framer-motion";
 
 function formatCoin(n: number) { return n.toLocaleString("id-ID") + " 🪙"; }
-function formatTgl(ts: string) {
+function formatTgl(ts: string | null) {
+  if (!ts) return "-";
   return new Date(ts).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
 export default function MitraTransaksi() {
-  const { data: transaksiList = [] } = useQuery<any[]>({
+  const { data: transaksiList = [], isLoading, isError } = useQuery<any[]>({
     queryKey: ["/api/mitra/transaksi"],
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
@@ -52,13 +54,15 @@ export default function MitraTransaksi() {
           { label: "Pemasukan Hari Ini", value: formatCoin(totalHariIni), icon: TrendingUp, color: "text-green-600" },
           { label: "Total Diskon", value: formatCoin(totalDiskonHariIni), icon: Tag, color: "text-amber-600" },
         ].map((item, i) => (
-          <Card key={i} className="border-0 shadow-sm">
-            <CardContent className="p-3 text-center">
-              <item.icon className={`w-4 h-4 ${item.color} mx-auto mb-1`} />
-              <p className="text-xs font-bold leading-tight">{item.value}</p>
-              <p className="text-[10px] text-muted-foreground leading-tight">{item.label}</p>
-            </CardContent>
-          </Card>
+          <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, duration: 0.28 }}>
+            <Card className="border-0 shadow-sm">
+              <CardContent className="p-3 text-center">
+                <item.icon className={`w-4 h-4 ${item.color} mx-auto mb-1`} />
+                <p className="text-xs font-bold leading-tight">{item.value}</p>
+                <p className="text-[10px] text-muted-foreground leading-tight">{item.label}</p>
+              </CardContent>
+            </Card>
+          </motion.div>
         ))}
       </div>
 
@@ -67,8 +71,25 @@ export default function MitraTransaksi() {
         <CardContent className="p-4">
           <h3 className="font-semibold text-sm mb-3">Semua Transaksi</h3>
           <div className="space-y-2">
-            {transaksiList.map((t: any) => (
-              <div key={t.id} className="flex items-center justify-between py-2.5 border-b last:border-0">
+            {isLoading && (
+              <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span className="text-sm">Memuat transaksi...</span>
+              </div>
+            )}
+            {isError && (
+              <div className="flex items-center justify-center gap-2 py-8 text-red-500">
+                <AlertCircle className="w-5 h-5" />
+                <span className="text-sm">Gagal memuat transaksi. Coba refresh halaman.</span>
+              </div>
+            )}
+            {!isLoading && !isError && transaksiList.map((t: any, i: number) => (
+              <motion.div
+                key={t.id}
+                initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: Math.min(i * 0.05, 0.3), duration: 0.22 }}
+                className="flex items-center justify-between py-2.5 border-b last:border-0"
+              >
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-green-100 text-green-600 flex items-center justify-center flex-shrink-0">
                     {t.namaWarga?.[0] ?? "?"}
@@ -88,9 +109,9 @@ export default function MitraTransaksi() {
                     <p className="text-[11px] text-muted-foreground">diskon {formatCoin(t.jumlahDiskon)}</p>
                   )}
                 </div>
-              </div>
+              </motion.div>
             ))}
-            {transaksiList.length === 0 && (
+            {!isLoading && !isError && transaksiList.length === 0 && (
               <div className="text-center py-8 space-y-2">
                 <Coins className="w-10 h-10 mx-auto text-muted-foreground opacity-30" />
                 <p className="text-sm text-muted-foreground">Belum ada transaksi</p>

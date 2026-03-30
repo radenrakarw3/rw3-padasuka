@@ -12,10 +12,12 @@ import {
   CheckCircle2, X, Loader2, AlertCircle, Store,
   Plus, Copy, ArrowLeftRight, User, SendHorizontal, ArrowDownCircle,
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 function formatCoin(n: number) { return n.toLocaleString("id-ID"); }
 function formatRp(n: number) { return "Rp " + n.toLocaleString("id-ID"); }
-function formatTgl(ts: string) {
+function formatTgl(ts: string | null) {
+  if (!ts) return "-";
   return new Date(ts).toLocaleString("id-ID", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
@@ -53,7 +55,7 @@ function BayarModal({ wallet, initialVoucherKode, onClose }: { wallet: any; init
   const [step, setStep] = useState<"form" | "sukses">("form");
   const [search, setSearch] = useState("");
   const [mitraSelected, setMitraSelected] = useState<any>(null);
-  const [jumlah, setJumlah] = useState("");
+  const [digits, setDigits] = useState("");
   const [voucherKode, setVoucherKode] = useState(initialVoucherKode ?? "");
   const [suksesTx, setSuksesTx] = useState<any>(null);
 
@@ -82,10 +84,22 @@ function BayarModal({ wallet, initialVoucherKode, onClose }: { wallet: any; init
     onError: (e: any) => toast({ variant: "destructive", title: "Gagal", description: e.message }),
   });
 
-  const jumlahAngka = parseInt(jumlah) || 0;
-  const saldoKurang = !!jumlah && jumlahAngka > (wallet?.saldo ?? 0);
+  const saldo = wallet?.saldo ?? 0;
+  const jumlahAngka = parseInt(digits) || 0;
+  const saldoKurang = jumlahAngka > saldo;
   const mitraIdStr = String(mitraSelected?.id ?? "");
   const today = new Date().toISOString().split("T")[0];
+
+  const numpadKeysBayar = ["1","2","3","4","5","6","7","8","9","","0","del"];
+  function handleNumKeyBayar(k: string) {
+    if (k === "del") { setDigits(d => d.slice(0, -1)); }
+    else if (digits.length < 8) {
+      const next = digits + k;
+      if (parseInt(next) <= saldo) setDigits(next);
+      else setDigits(String(saldo));
+    }
+  }
+  function addPresetBayar(n: number) { setDigits(String(Math.min(jumlahAngka + n, saldo))); }
 
   // Filter mitra by search
   const searchLower = search.toLowerCase();
@@ -112,9 +126,19 @@ function BayarModal({ wallet, initialVoucherKode, onClose }: { wallet: any; init
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 z-[100] bg-black/50" onClick={step === "sukses" ? onClose : undefined} />
+      <motion.div
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        className="fixed inset-0 z-[100] bg-black/50"
+        onClick={step === "sukses" ? onClose : undefined}
+      />
 
-      <div className="fixed inset-x-0 bottom-0 z-[101] flex flex-col bg-white rounded-t-3xl shadow-2xl" style={{ maxHeight: "92dvh" }}>
+      <motion.div
+        initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+        transition={{ type: "spring", damping: 32, stiffness: 380 }}
+        className="fixed inset-x-0 bottom-0 z-[101] flex flex-col bg-white rounded-t-3xl shadow-2xl"
+        style={{ maxHeight: "92dvh" }}
+      >
         {/* Header */}
         <div className="flex-shrink-0 px-5 pt-3 pb-3 border-b border-gray-100">
           <div className="flex justify-center mb-3">
@@ -134,10 +158,15 @@ function BayarModal({ wallet, initialVoucherKode, onClose }: { wallet: any; init
         </div>
 
         <div className="flex-1 overflow-y-auto overscroll-contain">
-
+          <AnimatePresence mode="wait">
           {/* STEP: FORM */}
           {step === "form" && (
-            <div className="p-5 space-y-4 pb-8">
+            <motion.div
+              key="bayar-form"
+              initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }}
+              transition={{ duration: 0.18 }}
+              className="p-5 space-y-4 pb-8"
+            >
               {/* Saldo info */}
               <div className="flex items-center justify-between p-3.5 rounded-2xl" style={{ background: "hsl(163,55%,96%)" }}>
                 <div>
@@ -210,26 +239,44 @@ function BayarModal({ wallet, initialVoucherKode, onClose }: { wallet: any; init
                 )}
               </div>
 
-              {/* Nominal */}
-              <div className="space-y-1.5">
-                <Label className="text-sm font-semibold">Nominal</Label>
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  placeholder="0"
-                  value={jumlah}
-                  onChange={e => setJumlah(e.target.value.replace(/\D/g, ""))}
-                  className={`text-2xl font-bold h-14 border-2 text-center ${saldoKurang ? "border-red-400" : "focus:border-[hsl(163,55%,22%)]"}`}
-                />
-                <div className="flex items-center justify-between px-1">
-                  {jumlahAngka > 0 ? <p className="text-xs text-muted-foreground">= {formatRp(jumlahAngka)}</p> : <span />}
-                  {saldoKurang && (
-                    <div className="flex items-center gap-1 text-xs text-red-500">
-                      <AlertCircle className="w-3 h-3" /> Saldo tidak cukup
-                    </div>
-                  )}
-                </div>
+              {/* Nominal — amount display */}
+              <div className="text-center py-2">
+                <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Nominal Bayar</p>
+                <motion.div key={digits} initial={{ scale: 0.94 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 500, damping: 24 }}>
+                  <p className={`text-5xl font-black tracking-tight ${saldoKurang ? "text-red-500" : jumlahAngka > 0 ? "text-[hsl(163,55%,22%)]" : "text-gray-300"}`}>
+                    {formatCoin(jumlahAngka || 0)}
+                  </p>
+                </motion.div>
+                <p className="text-sm text-muted-foreground mt-1">{jumlahAngka > 0 ? formatRp(jumlahAngka) : "Masukkan nominal"}</p>
+                {saldoKurang && <p className="text-xs text-red-500 mt-1 flex items-center justify-center gap-1"><AlertCircle className="w-3 h-3 inline" /> Melebihi saldo ({formatCoin(saldo)})</p>}
+              </div>
+
+              {/* Quick preset chips */}
+              <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                {[5000, 10000, 25000, 50000, 100000].map(n => (
+                  <motion.button key={n} whileTap={{ scale: 0.88 }} onClick={() => addPresetBayar(n)} disabled={n > saldo}
+                    className="flex-shrink-0 px-4 py-1.5 rounded-full border-2 border-[hsl(163,55%,22%)] text-[hsl(163,55%,22%)] text-xs font-bold disabled:opacity-30 disabled:border-gray-200 disabled:text-gray-400">
+                    +{n >= 1000 ? `${n/1000}rb` : n}
+                  </motion.button>
+                ))}
+                {saldo > 0 && (
+                  <motion.button whileTap={{ scale: 0.88 }} onClick={() => setDigits(String(saldo))}
+                    className="flex-shrink-0 px-4 py-1.5 rounded-full border-2 border-amber-400 text-amber-600 text-xs font-bold">
+                    Maks
+                  </motion.button>
+                )}
+              </div>
+
+              {/* Numpad */}
+              <div className="grid grid-cols-3 gap-2">
+                {numpadKeysBayar.map((k, idx) => (
+                  <motion.button key={idx} whileTap={{ scale: 0.85, backgroundColor: k === "del" ? "#fee2e2" : "#d1fae5" }}
+                    onClick={() => k && handleNumKeyBayar(k)} disabled={!k}
+                    className={`h-13 rounded-2xl text-xl font-bold select-none transition-colors ${k === "del" ? "bg-red-50 text-red-400 hover:bg-red-100" : !k ? "invisible" : "bg-gray-100 text-gray-800 hover:bg-gray-200"}`}
+                    style={{ height: "52px" }}>
+                    {k === "del" ? "⌫" : k}
+                  </motion.button>
+                ))}
               </div>
 
               {/* Voucher */}
@@ -344,30 +391,63 @@ function BayarModal({ wallet, initialVoucherKode, onClose }: { wallet: any; init
                 </div>
               )}
 
-              <Button
-                className="w-full text-base font-semibold rounded-2xl mt-2"
-                style={{ height: "52px", background: "hsl(163,55%,22%)" }}
-                disabled={!mitraSelected || !jumlah || jumlahAngka <= 0 || saldoKurang || bayarMutation.isPending}
-                onClick={() => bayarMutation.mutate({ kodeMitra: mitraSelected.kodeWallet, jumlah: jumlahAngka, voucherKode: voucherKode || undefined })}
-              >
-                {bayarMutation.isPending
-                  ? <><Loader2 className="w-5 h-5 animate-spin mr-2" /> Memproses...</>
-                  : "Bayar Sekarang"}
-              </Button>
-            </div>
+              {/* Saldo setelah bayar */}
+              <AnimatePresence>
+                {mitraSelected && jumlahAngka > 0 && !saldoKurang && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.2 }}
+                    className="flex items-center gap-3 p-3.5 rounded-2xl border border-gray-100 bg-gray-50"
+                  >
+                    <div className="flex-1 text-center">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Saldo kamu</p>
+                      <p className="text-sm font-bold">{formatCoin(saldo)} <CoinIcon /></p>
+                    </div>
+                    <div className="text-muted-foreground text-sm">→</div>
+                    <div className="flex-1 text-center">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Setelah bayar</p>
+                      <p className="text-sm font-bold text-[hsl(163,55%,22%)]">{formatCoin(saldo - bayarPreview)} <CoinIcon /></p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <motion.div whileTap={{ scale: 0.97 }}>
+                <Button
+                  className="w-full text-base font-bold rounded-2xl gap-2"
+                  style={{ height: "52px", background: "hsl(163,55%,22%)", opacity: (!mitraSelected || jumlahAngka <= 0 || saldoKurang) ? 0.5 : 1 }}
+                  disabled={!mitraSelected || jumlahAngka <= 0 || saldoKurang || bayarMutation.isPending}
+                  onClick={() => bayarMutation.mutate({ kodeMitra: mitraSelected.kodeWallet, jumlah: jumlahAngka, voucherKode: voucherKode || undefined })}
+                >
+                  {bayarMutation.isPending
+                    ? <><Loader2 className="w-5 h-5 animate-spin" /> Memproses...</>
+                    : <>Bayar {jumlahAngka > 0 ? formatCoin(bayarPreview) + " Coin" : "Sekarang"}</>}
+                </Button>
+              </motion.div>
+            </motion.div>
           )}
 
           {/* STEP: SUKSES */}
           {step === "sukses" && suksesTx && (
-            <div className="p-6 text-center space-y-5 pb-10">
+            <motion.div
+              key="bayar-sukses"
+              initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
+              transition={{ duration: 0.22 }}
+              className="p-6 text-center space-y-5 pb-10"
+            >
               {/* Animasi */}
-              <div className="relative w-28 h-28 mx-auto mt-4">
+              <motion.div
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: "spring", damping: 12, stiffness: 260, delay: 0.1 }}
+                className="relative w-28 h-28 mx-auto mt-4"
+              >
                 <div className="absolute inset-0 rounded-full bg-green-200 animate-ping opacity-50" />
                 <div className="absolute inset-2 rounded-full bg-green-100 animate-ping opacity-30" style={{ animationDelay: "0.2s" }} />
                 <div className="relative w-28 h-28 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
                   <CheckCircle2 className="w-14 h-14" />
                 </div>
-              </div>
+              </motion.div>
               <div>
                 <h3 className="text-2xl font-bold text-green-600">Berhasil!</h3>
                 <p className="text-base font-medium mt-0.5">Kasir sudah mendapat notifikasi WA</p>
@@ -401,10 +481,11 @@ function BayarModal({ wallet, initialVoucherKode, onClose }: { wallet: any; init
               >
                 Selesai
               </Button>
-            </div>
+            </motion.div>
           )}
+          </AnimatePresence>
         </div>{/* end scrollable body */}
-      </div>
+      </motion.div>
     </>
   );
 }
@@ -462,8 +543,18 @@ function TopupModal({ wallet, onClose }: { wallet: any; onClose: () => void }) {
 
   return (
     <>
-      <div className="fixed inset-0 z-[100] bg-black/50" onClick={sukses ? onClose : undefined} />
-      <div className="fixed inset-x-0 bottom-0 z-[101] flex flex-col bg-white rounded-t-3xl shadow-2xl" style={{ maxHeight: "92dvh" }}>
+      <motion.div
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        className="fixed inset-0 z-[100] bg-black/50"
+        onClick={sukses ? onClose : undefined}
+      />
+      <motion.div
+        initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+        transition={{ type: "spring", damping: 32, stiffness: 380 }}
+        className="fixed inset-x-0 bottom-0 z-[101] flex flex-col bg-white rounded-t-3xl shadow-2xl"
+        style={{ maxHeight: "92dvh" }}
+      >
         {/* Header */}
         <div className="flex-shrink-0 px-5 pt-3 pb-3 border-b border-gray-100">
           <div className="flex justify-center mb-3">
@@ -480,16 +571,28 @@ function TopupModal({ wallet, onClose }: { wallet: any; onClose: () => void }) {
           </div>
         </div>
 
+        <div className="flex-1 overflow-y-auto overscroll-contain">
+        <AnimatePresence mode="wait">
         {/* SUKSES STATE */}
         {sukses ? (
-          <div className="flex-1 overflow-y-auto overscroll-contain p-6 space-y-5 pb-10">
+          <motion.div
+            key="topup-sukses"
+            initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
+            transition={{ duration: 0.22 }}
+            className="p-6 space-y-5 pb-10"
+          >
             <div className="text-center space-y-3 mt-2">
-              <div className="relative w-24 h-24 mx-auto">
+              <motion.div
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: "spring", damping: 12, stiffness: 260, delay: 0.1 }}
+                className="relative w-24 h-24 mx-auto"
+              >
                 <div className="absolute inset-0 rounded-full bg-green-200 animate-ping opacity-40" />
                 <div className="relative w-24 h-24 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
                   <CheckCircle2 className="w-12 h-12" />
                 </div>
-              </div>
+              </motion.div>
               <div>
                 <h3 className="text-xl font-bold text-green-600">Permintaan Terkirim!</h3>
                 <p className="text-sm text-muted-foreground mt-1">Admin RW03 sudah mendapat notifikasi WA dari sistem</p>
@@ -533,10 +636,15 @@ function TopupModal({ wallet, onClose }: { wallet: any; onClose: () => void }) {
             <Button variant="outline" className="w-full h-11 rounded-2xl" onClick={onClose}>
               Selesai
             </Button>
-          </div>
+          </motion.div>
         ) : (
           /* FORM STATE */
-          <div className="flex-1 overflow-y-auto overscroll-contain p-5 space-y-4 pb-8">
+          <motion.div
+            key="topup-form"
+            initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }}
+            transition={{ duration: 0.18 }}
+            className="p-5 space-y-4 pb-8"
+          >
             {/* Nominal */}
             <div className="space-y-2">
               <Label className="text-sm font-semibold">Jumlah Topup</Label>
@@ -645,28 +753,31 @@ function TopupModal({ wallet, onClose }: { wallet: any; onClose: () => void }) {
                 Admin akan mendapat notifikasi WA otomatis
               </p>
             )}
-          </div>
+          </motion.div>
         )}
-      </div>
+        </AnimatePresence>
+        </div>{/* end scrollable body */}
+      </motion.div>
     </>
   );
 }
 
 // ============ TRANSFER MODAL ============
-const NOMINAL_TRANSFER_PRESET = [5000, 10000, 25000, 50000, 100000, 200000];
-
 function TransferModal({ wallet, onClose }: { wallet: any; onClose: () => void }) {
   const { toast } = useToast();
   const [step, setStep] = useState<"form" | "sukses">("form");
   const [kodeWallet, setKodeWallet] = useState("");
-  const [jumlah, setJumlah] = useState("");
+  const [digits, setDigits] = useState("");
   const [keterangan, setKeterangan] = useState("");
   const [suksesTx, setSuksesTx] = useState<any>(null);
 
   const kodeNorm = kodeWallet.trim().toUpperCase();
   const kodeLengkap = kodeNorm.length >= 6 && kodeNorm.startsWith("WG");
+  const jumlahAngka = parseInt(digits) || 0;
+  const saldo = wallet?.saldo ?? 0;
+  const saldoKurang = jumlahAngka > saldo;
 
-  const { data: previewPenerima, isFetching: loadingPreview, error: errorPreview } = useQuery<any>({
+  const { data: previewPenerima, isFetching: loadingPreview } = useQuery<any>({
     queryKey: ["/api/warga/rwcoin/wallet-preview", kodeNorm],
     queryFn: async () => {
       const res = await fetch(`/api/warga/rwcoin/wallet-preview/${encodeURIComponent(kodeNorm)}`, { credentials: "include" });
@@ -677,12 +788,21 @@ function TransferModal({ wallet, onClose }: { wallet: any; onClose: () => void }
     retry: false,
   });
 
-  const jumlahAngka = parseInt(jumlah) || 0;
-  const saldoKurang = jumlahAngka > 0 && jumlahAngka > (wallet?.saldo ?? 0);
-  const transferDisabled = !kodeLengkap || !previewPenerima || jumlahAngka < 100 || saldoKurang;
+  const isSendiri = previewPenerima?.kodeWallet === wallet?.kodeWallet;
+  const transferDisabled = !kodeLengkap || !previewPenerima || isSendiri || jumlahAngka < 100 || saldoKurang;
 
-  // Cek kalau kode sendiri
-  const kodeSendiri = previewPenerima && previewPenerima.kodeWallet === wallet?.kodeWallet;
+  function handleNumKey(k: string) {
+    if (k === "del") {
+      setDigits(d => d.slice(0, -1));
+    } else if (digits.length < 8) {
+      const next = digits + k;
+      if (parseInt(next) <= saldo) setDigits(next);
+      else setDigits(String(saldo));
+    }
+  }
+  function addPreset(n: number) {
+    setDigits(String(Math.min(jumlahAngka + n, saldo)));
+  }
 
   const transferMutation = useMutation({
     mutationFn: async () => {
@@ -703,240 +823,262 @@ function TransferModal({ wallet, onClose }: { wallet: any; onClose: () => void }
     onError: (e: any) => toast({ variant: "destructive", title: "Transfer Gagal", description: e.message }),
   });
 
+  const numpadKeys = ["1","2","3","4","5","6","7","8","9","","0","del"];
+
   return (
     <>
-      <div className="fixed inset-0 z-[100] bg-black/50" onClick={step === "sukses" ? onClose : undefined} />
-      <div className="fixed inset-x-0 bottom-0 z-[101] flex flex-col bg-white rounded-t-3xl shadow-2xl" style={{ maxHeight: "92dvh" }}>
-        {/* Header */}
-        <div className="flex-shrink-0 px-5 pt-3 pb-3 border-b border-gray-100">
-          <div className="flex justify-center mb-3">
+      <motion.div
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        className="fixed inset-0 z-[100] bg-black/60"
+        onClick={step === "sukses" ? onClose : undefined}
+      />
+      <motion.div
+        initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+        transition={{ type: "spring", damping: 30, stiffness: 340 }}
+        className="fixed inset-x-0 bottom-0 z-[101] flex flex-col bg-white rounded-t-3xl shadow-2xl"
+        style={{ maxHeight: "96dvh" }}
+      >
+        {/* Handle + header row */}
+        <div className="flex-shrink-0 px-5 pt-3 pb-2">
+          <div className="flex justify-center mb-2">
             <div className="w-10 h-1 bg-gray-200 rounded-full" />
           </div>
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-muted-foreground">{step === "sukses" ? "Selesai ✓" : "Kirim RWcoin"}</p>
-              <h2 className="font-bold text-base leading-tight">{step === "sukses" ? "Transfer Berhasil" : "Transfer RWcoin"}</h2>
-            </div>
+            <h2 className="font-bold text-base">{step === "sukses" ? "Transfer Berhasil" : "Transfer RWcoin"}</h2>
             {step !== "sukses" && (
-              <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+              <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
                 <X className="w-4 h-4 text-gray-500" />
               </button>
             )}
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto overscroll-contain">
-
+        <AnimatePresence mode="wait">
           {/* SUKSES */}
           {step === "sukses" && suksesTx && (
-            <div className="p-6 space-y-5 pb-10">
-              <div className="text-center space-y-3 mt-2">
-                <div className="relative w-24 h-24 mx-auto">
+            <motion.div
+              key="transfer-sukses"
+              initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
+              transition={{ duration: 0.22 }}
+              className="flex-1 overflow-y-auto overscroll-contain p-6 space-y-5 pb-10"
+            >
+              <div className="text-center space-y-3 mt-4">
+                <motion.div
+                  initial={{ scale: 0.3, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: "spring", damping: 11, stiffness: 180, delay: 0.08 }}
+                  className="relative w-28 h-28 mx-auto"
+                >
                   <div className="absolute inset-0 rounded-full bg-green-200 animate-ping opacity-40" />
-                  <div className="relative w-24 h-24 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
-                    <CheckCircle2 className="w-12 h-12" />
+                  <div className="relative w-28 h-28 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
+                    <CheckCircle2 className="w-14 h-14" />
                   </div>
-                </div>
+                </motion.div>
                 <div>
-                  <h3 className="text-xl font-bold text-green-600">Transfer Berhasil!</h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {suksesTx.namaPenerima} sudah mendapat notifikasi WA
-                  </p>
+                  <h3 className="text-2xl font-bold text-green-600">Terkirim!</h3>
+                  <p className="text-sm text-muted-foreground mt-1">{suksesTx.namaPenerima} sudah dapat notifikasi WA</p>
                 </div>
               </div>
-
               <div className="rounded-2xl p-4 space-y-2.5" style={{ background: "hsl(163,55%,96%)" }}>
-                <p className="font-semibold text-sm text-[hsl(163,55%,22%)]">Detail Transfer</p>
                 <div className="flex justify-between text-sm text-muted-foreground">
                   <span>Kepada</span>
                   <span className="font-semibold text-foreground">{suksesTx.namaPenerima}</span>
                 </div>
-                <div className="flex justify-between font-bold text-base border-t pt-2.5">
+                <div className="flex justify-between font-bold text-lg border-t pt-2.5">
                   <span>Jumlah</span>
-                  <span className="text-[hsl(163,55%,22%)] flex items-center gap-1">
-                    {formatCoin(suksesTx.jumlah)} <CoinIcon size={18} />
-                  </span>
+                  <span className="text-[hsl(163,55%,22%)] flex items-center gap-1">{formatCoin(suksesTx.jumlah)} <CoinIcon size={18} /></span>
                 </div>
                 {suksesTx.keterangan && (
                   <div className="flex justify-between text-sm text-muted-foreground">
-                    <span>Keterangan</span>
-                    <span className="text-right max-w-[55%]">{suksesTx.keterangan}</span>
+                    <span>Keterangan</span><span className="text-right max-w-[55%]">{suksesTx.keterangan}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>ID Transaksi</span>
-                  <span className="font-mono text-xs">{suksesTx.kodeTransaksi}</span>
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>ID</span><span className="font-mono">{suksesTx.kodeTransaksi}</span>
                 </div>
               </div>
-
-              <Button
-                className="w-full h-12 text-base font-semibold rounded-2xl"
-                style={{ background: "hsl(163,55%,22%)" }}
-                onClick={onClose}
-              >
+              <Button className="w-full h-12 text-base font-semibold rounded-2xl" style={{ background: "hsl(163,55%,22%)" }} onClick={onClose}>
                 Selesai
               </Button>
-            </div>
+            </motion.div>
           )}
 
-          {/* FORM */}
+          {/* FORM — numpad layout */}
           {step === "form" && (
-            <div className="p-5 space-y-4 pb-8">
-              {/* Saldo info */}
-              <div className="flex items-center justify-between p-3.5 rounded-2xl" style={{ background: "hsl(163,55%,96%)" }}>
-                <div>
-                  <p className="text-xs text-muted-foreground">Saldo tersedia</p>
-                  <p className="font-bold text-[hsl(163,55%,22%)] text-lg">{formatCoin(wallet?.saldo ?? 0)} <CoinIcon /></p>
-                </div>
-                <p className="text-sm text-muted-foreground">{formatRp(wallet?.saldo ?? 0)}</p>
-              </div>
-
-              {/* Kode Wallet Tujuan */}
-              <div className="space-y-1.5">
-                <Label className="text-sm font-semibold">Kode Wallet Penerima</Label>
+            <motion.div
+              key="transfer-form"
+              initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              className="flex-1 overflow-y-auto overscroll-contain"
+            >
+              {/* Penerima input */}
+              <div className="px-5 pb-3">
                 <div className="relative">
                   <User className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
                   <Input
-                    placeholder="Contoh: WG0012"
+                    placeholder="Kode wallet penerima: WG0001"
                     value={kodeWallet}
                     onChange={e => setKodeWallet(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
                     className="pl-9 uppercase font-mono border-2 focus:border-[hsl(163,55%,22%)] h-11 tracking-widest"
                     autoFocus
                     maxLength={8}
                   />
-                  {loadingPreview && (
-                    <Loader2 className="absolute right-3 top-3 w-4 h-4 animate-spin text-muted-foreground" />
-                  )}
+                  {loadingPreview && <Loader2 className="absolute right-3 top-3 w-4 h-4 animate-spin text-muted-foreground" />}
                 </div>
-                <p className="text-[11px] text-muted-foreground px-1">
-                  Kode wallet warga dimulai dengan WG (contoh: WG0001, WG0012)
-                </p>
-
-                {/* Preview penerima */}
-                {kodeLengkap && !loadingPreview && previewPenerima && !kodeSendiri && (
-                  <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-green-50 border-2 border-green-300">
-                    <div className="w-9 h-9 rounded-full bg-[hsl(163,55%,22%)] text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
-                      {previewPenerima.namaWarga[0]}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-green-700">{previewPenerima.namaWarga}</p>
-                      <p className="text-xs text-muted-foreground">RT {String(previewPenerima.rt).padStart(2, "0")} · {previewPenerima.kodeWallet}</p>
-                    </div>
-                    <CheckCircle2 className="w-5 h-5 text-green-500 ml-auto flex-shrink-0" />
-                  </div>
-                )}
-                {kodeSendiri && (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-50 border border-red-200">
-                    <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-                    <p className="text-xs text-red-600">Tidak bisa transfer ke diri sendiri</p>
-                  </div>
-                )}
-                {kodeLengkap && !loadingPreview && !previewPenerima && (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-50 border border-red-200">
-                    <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-                    <p className="text-xs text-red-600">Kode wallet tidak ditemukan</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Nominal */}
-              <div className="space-y-1.5">
-                <Label className="text-sm font-semibold">Jumlah Transfer</Label>
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  placeholder="0"
-                  value={jumlah}
-                  onChange={e => setJumlah(e.target.value.replace(/\D/g, ""))}
-                  className={`text-2xl font-bold h-14 border-2 text-center ${saldoKurang ? "border-red-400" : "focus:border-[hsl(163,55%,22%)]"}`}
-                />
-                <div className="flex items-center justify-between px-1">
-                  {jumlahAngka > 0 ? <p className="text-xs text-muted-foreground">= {formatRp(jumlahAngka)}</p> : <span />}
-                  {saldoKurang ? (
-                    <div className="flex items-center gap-1 text-xs text-red-500">
-                      <AlertCircle className="w-3 h-3" /> Saldo tidak cukup
-                    </div>
-                  ) : jumlahAngka > 0 && jumlahAngka < 100 ? (
-                    <p className="text-xs text-amber-600">Min. 100 coin</p>
-                  ) : null}
-                </div>
-                <div className="grid grid-cols-3 gap-2 mt-1">
-                  {NOMINAL_TRANSFER_PRESET.map(n => (
-                    <button
-                      key={n}
-                      onClick={() => setJumlah(String(n))}
-                      className={`py-2 rounded-xl text-xs font-semibold border-2 transition-colors ${jumlahAngka === n ? "border-[hsl(163,55%,22%)] bg-[hsl(163,55%,96%)] text-[hsl(163,55%,22%)]" : "border-gray-200 text-muted-foreground"}`}
+                <AnimatePresence>
+                  {kodeLengkap && !loadingPreview && previewPenerima && !isSendiri && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0, marginTop: 0 }} animate={{ opacity: 1, height: "auto", marginTop: 8 }} exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-green-50 border-2 border-green-300 overflow-hidden"
                     >
-                      {n >= 1000 ? `${n / 1000}rb` : n}
-                    </button>
-                  ))}
-                </div>
+                      <div className="w-9 h-9 rounded-full bg-[hsl(163,55%,22%)] text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
+                        {previewPenerima.namaWarga?.[0] ?? "?"}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-green-700">{previewPenerima.namaWarga}</p>
+                        <p className="text-xs text-muted-foreground">RT {String(previewPenerima.rt).padStart(2,"0")} · {previewPenerima.kodeWallet}</p>
+                      </div>
+                      <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
+                    </motion.div>
+                  )}
+                  {isSendiri && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-2 flex items-center gap-2 px-3 py-2 rounded-xl bg-red-50 border border-red-200">
+                      <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                      <p className="text-xs text-red-600">Tidak bisa transfer ke diri sendiri</p>
+                    </motion.div>
+                  )}
+                  {kodeLengkap && !loadingPreview && !previewPenerima && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-2 flex items-center gap-2 px-3 py-2 rounded-xl bg-red-50 border border-red-200">
+                      <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                      <p className="text-xs text-red-600">Kode wallet tidak ditemukan</p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
-              {/* Keterangan opsional */}
-              <div className="space-y-1.5">
-                <Label className="text-sm font-semibold flex items-center gap-1">
-                  Keterangan <span className="font-normal text-muted-foreground text-xs">(opsional)</span>
-                </Label>
+              <div className="h-px bg-gray-100 mx-5" />
+
+              {/* Amount display */}
+              <div className="px-5 py-5 text-center">
+                <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Jumlah Transfer</p>
+                <motion.div
+                  key={digits}
+                  initial={{ scale: 0.94 }} animate={{ scale: 1 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 24 }}
+                >
+                  <p className={`text-5xl font-black tracking-tight ${saldoKurang ? "text-red-500" : jumlahAngka > 0 ? "text-[hsl(163,55%,22%)]" : "text-gray-300"}`}>
+                    {formatCoin(jumlahAngka || 0)}
+                  </p>
+                </motion.div>
+                <p className="text-sm text-muted-foreground mt-1">{jumlahAngka > 0 ? formatRp(jumlahAngka) : "Masukkan jumlah"}</p>
+                {saldoKurang && (
+                  <p className="text-xs text-red-500 mt-1 flex items-center justify-center gap-1">
+                    <AlertCircle className="w-3 h-3" /> Melebihi saldo ({formatCoin(saldo)})
+                  </p>
+                )}
+                {jumlahAngka > 0 && jumlahAngka < 100 && (
+                  <p className="text-xs text-amber-500 mt-1">Min. 100 coin</p>
+                )}
+              </div>
+
+              {/* Quick preset chips */}
+              <div className="flex gap-2 px-5 pb-4 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+                {[5000, 10000, 25000, 50000, 100000].map(n => (
+                  <motion.button
+                    key={n}
+                    whileTap={{ scale: 0.88 }}
+                    onClick={() => addPreset(n)}
+                    disabled={n > saldo}
+                    className="flex-shrink-0 px-4 py-1.5 rounded-full border-2 border-[hsl(163,55%,22%)] text-[hsl(163,55%,22%)] text-xs font-bold disabled:opacity-30 disabled:border-gray-200 disabled:text-gray-400"
+                  >
+                    +{n >= 1000 ? `${n/1000}rb` : n}
+                  </motion.button>
+                ))}
+                {saldo > 0 && (
+                  <motion.button
+                    whileTap={{ scale: 0.88 }}
+                    onClick={() => setDigits(String(saldo))}
+                    className="flex-shrink-0 px-4 py-1.5 rounded-full border-2 border-amber-400 text-amber-600 text-xs font-bold"
+                  >
+                    Maks
+                  </motion.button>
+                )}
+              </div>
+
+              {/* Numpad */}
+              <div className="grid grid-cols-3 gap-2.5 px-5 pb-3">
+                {numpadKeys.map((k, idx) => (
+                  <motion.button
+                    key={idx}
+                    whileTap={{ scale: 0.85, backgroundColor: k === "del" ? "#fee2e2" : "#d1fae5" }}
+                    onClick={() => k && handleNumKey(k)}
+                    disabled={!k}
+                    className={`h-14 rounded-2xl text-xl font-bold select-none transition-colors ${
+                      k === "del" ? "bg-red-50 text-red-400 hover:bg-red-100" :
+                      !k ? "invisible" :
+                      "bg-gray-100 text-gray-800 hover:bg-gray-200"
+                    }`}
+                  >
+                    {k === "del" ? "⌫" : k}
+                  </motion.button>
+                ))}
+              </div>
+
+              {/* Saldo setelah + keterangan + CTA */}
+              <div className="px-5 pb-8 space-y-3">
+                <AnimatePresence>
+                  {jumlahAngka >= 100 && previewPenerima && !isSendiri && !saldoKurang && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.2 }}
+                      className="flex items-center gap-3 p-3.5 rounded-2xl border border-gray-100 bg-gray-50"
+                    >
+                      <div className="flex-1 text-center">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Saldo kamu</p>
+                        <p className="text-sm font-bold">{formatCoin(saldo)} <CoinIcon /></p>
+                      </div>
+                      <div className="text-muted-foreground">→</div>
+                      <div className="flex-1 text-center">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Setelah kirim</p>
+                        <p className="text-sm font-bold text-[hsl(163,55%,22%)]">{formatCoin(saldo - jumlahAngka)} <CoinIcon /></p>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <Input
-                  placeholder="Contoh: bayar utang, hadiah, dll"
+                  placeholder="Keterangan: bayar utang, hadiah... (opsional)"
                   value={keterangan}
                   onChange={e => setKeterangan(e.target.value)}
-                  className="border-2 focus:border-[hsl(163,55%,22%)]"
+                  className="border-2 focus:border-[hsl(163,55%,22%)] text-sm"
                   maxLength={100}
                 />
+
+                <motion.div whileTap={{ scale: 0.97 }}>
+                  <Button
+                    className="w-full text-base font-bold rounded-2xl gap-2"
+                    style={{ height: "52px", background: transferMutation.isError ? "hsl(0,72%,51%)" : "hsl(163,55%,22%)", opacity: transferDisabled ? 0.5 : 1 }}
+                    disabled={transferDisabled || transferMutation.isPending}
+                    onClick={() => transferMutation.mutate()}
+                  >
+                    {transferMutation.isPending
+                      ? <><Loader2 className="w-5 h-5 animate-spin" />Memproses...</>
+                      : transferMutation.isError
+                        ? <><AlertCircle className="w-5 h-5" />Gagal — Coba Lagi</>
+                        : <><SendHorizontal className="w-5 h-5" />Kirim {jumlahAngka > 0 ? formatCoin(jumlahAngka) + " Coin" : "Transfer"}</>}
+                  </Button>
+                </motion.div>
+
+                {transferMutation.isError && (
+                  <p className="text-xs text-center text-red-500">{(transferMutation.error as any)?.message}</p>
+                )}
               </div>
-
-              {/* Ringkasan */}
-              {previewPenerima && !kodeSendiri && jumlahAngka >= 100 && !saldoKurang && (
-                <div className="rounded-2xl p-4 space-y-2" style={{ background: "hsl(163,55%,96%)" }}>
-                  <p className="font-semibold text-sm text-[hsl(163,55%,22%)]">Ringkasan Transfer</p>
-                  <div className="flex justify-between text-sm text-muted-foreground">
-                    <span>Kepada</span>
-                    <span className="font-medium text-foreground">{previewPenerima.namaWarga}</span>
-                  </div>
-                  <div className="flex justify-between font-bold text-base border-t pt-2">
-                    <span>Jumlah</span>
-                    <span className="text-[hsl(163,55%,22%)] flex items-center gap-1">{formatCoin(jumlahAngka)} <CoinIcon size={16} /></span>
-                  </div>
-                  {keterangan.trim() && (
-                    <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>Keterangan</span>
-                      <span className="text-right max-w-[55%] text-xs">{keterangan.trim()}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <Button
-                className="w-full text-base font-semibold rounded-2xl gap-2"
-                style={{
-                  height: "52px",
-                  background: transferMutation.isError ? "hsl(0,72%,51%)" : transferDisabled ? undefined : "hsl(163,55%,22%)",
-                }}
-                disabled={transferDisabled || transferMutation.isPending}
-                onClick={() => transferMutation.mutate()}
-              >
-                {transferMutation.isPending
-                  ? <><Loader2 className="w-5 h-5 animate-spin mr-2" />Memproses...</>
-                  : transferMutation.isError
-                    ? <><AlertCircle className="w-5 h-5 mr-2" />Gagal — Coba Lagi</>
-                    : <><SendHorizontal className="w-5 h-5" />Kirim Transfer</>}
-              </Button>
-
-              {transferMutation.isError && (
-                <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-200 -mt-2">
-                  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-red-600">
-                    {(transferMutation.error as any)?.message ?? "Error tidak diketahui"}
-                  </p>
-                </div>
-              )}
-            </div>
+            </motion.div>
           )}
-        </div>
-      </div>
+        </AnimatePresence>
+      </motion.div>
     </>
   );
 }
@@ -952,7 +1094,7 @@ export default function WargaRwcoin() {
     queryKey: ["/api/warga/rwcoin/wallet"],
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
-  const { data: transaksiList = [] } = useQuery<any[]>({
+  const { data: transaksiList = [], isLoading: loadingTransaksi } = useQuery<any[]>({
     queryKey: ["/api/warga/rwcoin/transaksi"],
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
@@ -963,19 +1105,30 @@ export default function WargaRwcoin() {
 
   return (
     <div className="space-y-4">
-      {showBayar && (
-        <BayarModal
-          wallet={wallet}
-          initialVoucherKode={bayarVoucher}
-          onClose={() => { setShowBayar(false); setBayarVoucher(undefined); }}
-        />
-      )}
-      {showTopup && <TopupModal wallet={wallet} onClose={() => setShowTopup(false)} />}
-      {showTransfer && <TransferModal wallet={wallet} onClose={() => setShowTransfer(false)} />}
+      <AnimatePresence>
+        {showBayar && (
+          <BayarModal
+            key="modal-bayar"
+            wallet={wallet}
+            initialVoucherKode={bayarVoucher}
+            onClose={() => { setShowBayar(false); setBayarVoucher(undefined); }}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showTopup && <TopupModal key="modal-topup" wallet={wallet} onClose={() => setShowTopup(false)} />}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showTransfer && <TransferModal key="modal-transfer" wallet={wallet} onClose={() => setShowTransfer(false)} />}
+      </AnimatePresence>
 
       {/* Wallet Card */}
-      <div className="rounded-2xl p-5 text-white relative overflow-hidden"
-        style={{ background: "linear-gradient(135deg, hsl(163,55%,18%), hsl(163,55%,30%))" }}>
+      <motion.div
+        initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
+        className="rounded-2xl p-5 text-white relative overflow-hidden"
+        style={{ background: "linear-gradient(135deg, hsl(163,55%,18%), hsl(163,55%,30%))" }}
+      >
         <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-white/10" />
         <div className="absolute -left-6 bottom-0 w-24 h-24 rounded-full bg-white/5" />
         <div className="relative">
@@ -990,11 +1143,11 @@ export default function WargaRwcoin() {
               <div className="h-4 bg-white/10 rounded w-32" />
             </div>
           ) : (
-            <>
+            <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
               <p className="text-sm opacity-70 mb-1">Saldo Tersedia</p>
               <p className="text-4xl font-bold mb-1">{formatCoin(wallet?.saldo ?? 0)} <CoinIcon size={28} /></p>
               <p className="text-sm opacity-70">= {formatRp(wallet?.saldo ?? 0)}</p>
-            </>
+            </motion.div>
           )}
 
           {wallet && (
@@ -1013,28 +1166,32 @@ export default function WargaRwcoin() {
             </div>
           )}
         </div>
-      </div>
+      </motion.div>
 
       {/* Tombol Aksi */}
       <div className="grid grid-cols-2 gap-3">
-        <Button
-          className="py-6 text-sm font-bold gap-2 rounded-2xl shadow-sm flex-col h-auto"
-          style={{ background: "linear-gradient(135deg, hsl(163,55%,22%), hsl(163,55%,32%))" }}
-          onClick={() => setShowBayar(true)}
-          disabled={!wallet || wallet.saldo <= 0}
-        >
-          <Store className="w-5 h-5" />
-          Bayar Mitra
-        </Button>
-        <Button
-          className="py-6 text-sm font-bold gap-2 rounded-2xl shadow-sm flex-col h-auto"
-          style={{ background: "linear-gradient(135deg, hsl(40,45%,45%), hsl(40,45%,58%))" }}
-          onClick={() => setShowTransfer(true)}
-          disabled={!wallet || wallet.saldo <= 0}
-        >
-          <ArrowLeftRight className="w-5 h-5" />
-          Transfer
-        </Button>
+        <motion.div whileTap={{ scale: 0.95 }} transition={{ type: "spring", stiffness: 400, damping: 20 }}>
+          <Button
+            className="w-full py-6 text-sm font-bold gap-2 rounded-2xl shadow-sm flex-col h-auto"
+            style={{ background: "linear-gradient(135deg, hsl(163,55%,22%), hsl(163,55%,32%))" }}
+            onClick={() => setShowBayar(true)}
+            disabled={!wallet || wallet.saldo <= 0}
+          >
+            <Store className="w-5 h-5" />
+            Bayar Mitra
+          </Button>
+        </motion.div>
+        <motion.div whileTap={{ scale: 0.95 }} transition={{ type: "spring", stiffness: 400, damping: 20 }}>
+          <Button
+            className="w-full py-6 text-sm font-bold gap-2 rounded-2xl shadow-sm flex-col h-auto"
+            style={{ background: "linear-gradient(135deg, hsl(40,45%,45%), hsl(40,45%,58%))" }}
+            onClick={() => setShowTransfer(true)}
+            disabled={!wallet || wallet.saldo <= 0}
+          >
+            <ArrowLeftRight className="w-5 h-5" />
+            Transfer
+          </Button>
+        </motion.div>
       </div>
       {wallet?.saldo === 0 && (
         <p className="text-center text-xs text-muted-foreground -mt-2">
@@ -1051,13 +1208,15 @@ export default function WargaRwcoin() {
             { label: "Total Belanja", value: formatCoin(wallet.totalBelanja ?? 0), icon: ShoppingBag, color: "text-blue-600" },
             { label: "Transaksi", value: transaksiList.length + " tx", icon: TrendingUp, color: "text-purple-600" },
           ].map((item, i) => (
-            <Card key={i} className="border-0 shadow-sm">
-              <CardContent className="p-3 text-center">
-                <item.icon className={`w-5 h-5 ${item.color} mx-auto mb-1`} />
-                <p className="text-xs font-bold">{item.value}</p>
-                <p className="text-[10px] text-muted-foreground">{item.label}</p>
-              </CardContent>
-            </Card>
+            <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07, duration: 0.28 }}>
+              <Card className="border-0 shadow-sm">
+                <CardContent className="p-3 text-center">
+                  <item.icon className={`w-5 h-5 ${item.color} mx-auto mb-1`} />
+                  <p className="text-xs font-bold">{item.value}</p>
+                  <p className="text-[10px] text-muted-foreground">{item.label}</p>
+                </CardContent>
+              </Card>
+            </motion.div>
           ))}
         </div>
       )}
@@ -1071,8 +1230,8 @@ export default function WargaRwcoin() {
               Voucher Tersedia ({voucherList.length})
             </h3>
             <div className="space-y-2">
-              {voucherList.map((v: any) => (
-                <div key={v.id} className="flex items-center justify-between p-3 rounded-xl" style={{ backgroundColor: "hsl(40,45%,96%)" }}>
+              {voucherList.map((v: any, vi: number) => (
+                <motion.div key={v.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: vi * 0.06, duration: 0.22 }} className="flex items-center justify-between p-3 rounded-xl" style={{ backgroundColor: "hsl(40,45%,96%)" }}>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-bold text-sm font-mono" style={{ color: "hsl(40,45%,35%)" }}>{v.kode}</p>
@@ -1093,7 +1252,7 @@ export default function WargaRwcoin() {
                       Pakai
                     </button>
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
           </CardContent>
@@ -1108,7 +1267,7 @@ export default function WargaRwcoin() {
             Riwayat Transaksi
           </h3>
           <div className="space-y-2">
-            {transaksiList.map((t: any) => {
+            {transaksiList.map((t: any, txIdx: number) => {
               // Untuk transfer: apakah kita penerima?
               const isTransferMasuk = t.tipe === "transfer" && t.tujuanWargaId != null && t.wargaId !== wallet?.wargaId;
               const isTransferKeluar = t.tipe === "transfer" && !isTransferMasuk;
@@ -1131,7 +1290,12 @@ export default function WargaRwcoin() {
               const isPositive = t.tipe === "topup" || isTransferMasuk;
 
               return (
-                <div key={t.id} className="flex items-center justify-between py-2.5 border-b last:border-0">
+                <motion.div
+                  key={t.id}
+                  initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: Math.min(txIdx * 0.04, 0.25), duration: 0.2 }}
+                  className="flex items-center justify-between py-2.5 border-b last:border-0"
+                >
                   <div className="flex items-center gap-3">
                     <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${iconBg}`}>
                       <Icon className="w-4 h-4" />
@@ -1160,10 +1324,16 @@ export default function WargaRwcoin() {
                       <p className="text-[11px] text-emerald-600">hemat {formatCoin(t.jumlahDiskon)} <CoinIcon /></p>
                     )}
                   </div>
-                </div>
+                </motion.div>
               );
             })}
-            {transaksiList.length === 0 && (
+            {loadingTransaksi && (
+              <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span className="text-sm">Memuat transaksi...</span>
+              </div>
+            )}
+            {!loadingTransaksi && transaksiList.length === 0 && (
               <div className="text-center py-6 space-y-2">
                 <Coins className="w-10 h-10 mx-auto text-muted-foreground opacity-40" />
                 <p className="text-sm text-muted-foreground">Belum ada transaksi</p>

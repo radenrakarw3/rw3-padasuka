@@ -1802,6 +1802,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteMitra(id: number): Promise<void> {
+    // Hapus semua data terkait terlebih dahulu (foreign key constraints)
+    await db.delete(rwcoinPendingTransaksi).where(eq(rwcoinPendingTransaksi.mitraId, id));
+    await db.delete(rwcoinWithdraw).where(eq(rwcoinWithdraw.mitraId, id));
+    await db.delete(mitraDiskon).where(eq(mitraDiskon.mitraId, id));
+    await db.delete(mitraVoucher).where(eq(mitraVoucher.mitraId, id));
+    await db.delete(rwcoinTransaksi).where(eq(rwcoinTransaksi.mitraId, id));
+    await db.delete(rwcoinWallet).where(eq(rwcoinWallet.mitraId, id));
     await db.delete(mitra).where(eq(mitra.id, id));
   }
 
