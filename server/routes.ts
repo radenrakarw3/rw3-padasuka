@@ -138,9 +138,8 @@ async function generateWithGemini(prompt: string, options: number | GeminiOption
 }
 
 async function sendWhatsApp(phoneNumber: string, message: string): Promise<boolean> {
-  const apiKey = process.env.STARSENDER_API_KEY;
-  const deviceId = process.env.STARSENDER_DEVICE_ID;
-  if (!apiKey || !deviceId) return false;
+  const token = process.env.FONNTE_TOKEN;
+  if (!token) return false;
 
   let formattedPhone = phoneNumber.replace(/[^0-9]/g, "");
   if (formattedPhone.startsWith("0")) {
@@ -152,23 +151,27 @@ async function sendWhatsApp(phoneNumber: string, message: string): Promise<boole
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000); // timeout 8 detik
-    const response = await fetch("https://api.starsender.online/api/send", {
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    const response = await fetch("https://api.fonnte.com/send", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        "Authorization": apiKey,
+        "Authorization": token,
       },
-      body: JSON.stringify({
-        messageType: "text",
-        to: formattedPhone,
-        body: message,
-        device_id: deviceId,
-      }),
+      body: (() => {
+        const form = new URLSearchParams();
+        form.append("target", formattedPhone);
+        form.append("message", message);
+        form.append("countryCode", "62");
+        return form;
+      })(),
       signal: controller.signal,
     });
     clearTimeout(timeout);
-    return response.ok;
+    const result = await response.json() as { status: boolean; reason?: string; detail?: string };
+    if (!result.status) {
+      console.error("Fonnte error:", result.reason || result.detail || JSON.stringify(result));
+    }
+    return result.status === true;
   } catch (error) {
     console.error("WhatsApp send error:", error);
     return false;
