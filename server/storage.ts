@@ -39,11 +39,18 @@ import {
   type IuranKk, type IuranSetting, type RwcoinSettings,
 } from "@shared/schema";
 
+function normalizeStoredPhone(phone?: string | null): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, "");
+  if (!digits) return null;
+  if (digits.startsWith("62")) return `0${digits.slice(2)}`;
+  if (digits.startsWith("8")) return `0${digits}`;
+  return digits;
+}
+
 export interface IStorage {
   getKkByNomor(nomorKk: string): Promise<KartuKeluarga | undefined>;
   getKkById(id: number): Promise<KartuKeluarga | undefined>;
-  getKkFotoData(id: number): Promise<string | null>;
-  getWargaFotoKtpData(id: number): Promise<string | null>;
   getAllKk(): Promise<KartuKeluarga[]>;
   createKk(data: InsertKartuKeluarga): Promise<KartuKeluarga>;
   updateKk(id: number, data: Partial<InsertKartuKeluarga>): Promise<KartuKeluarga | undefined>;
@@ -118,6 +125,7 @@ export interface IStorage {
   getAllDonasi(): Promise<(Donasi & { judulCampaign: string })[]>;
   getDonasiByKkId(kkId: number): Promise<(Donasi & { judulCampaign: string })[]>;
   createDonasi(data: InsertDonasi): Promise<Donasi>;
+  createDonasiWithRwcoin(data: { campaignId: number; kkId: number; wargaId: number; namaDonatur: string; jumlah: number }): Promise<{ donasi: Donasi; transaksi: RwcoinTransaksi; saldoBaru: number }>;
   getDonasiById(id: number): Promise<Donasi | undefined>;
   updateDonasiStatus(id: number, status: string): Promise<Donasi | undefined>;
   confirmDonasiWithKas(donasiId: number, kasData: InsertKasRw): Promise<Donasi | undefined>;
@@ -135,9 +143,10 @@ export interface IStorage {
   // === IURAN PER KK ===
   getIuranSetting(): Promise<IuranSetting | undefined>;
   upsertIuranSetting(jumlah: number, updatedBy: string): Promise<IuranSetting>;
-  getIuranByBulan(bulanTahun: string, filterRt?: number): Promise<(IuranKk & { nomorKk: string; rt: number; alamat: string; kepalaKeluarga: string | null })[]>;
+  getIuranByBulan(bulanTahun: string, filterRt?: number): Promise<(IuranKk & { nomorKk: string; rt: number; alamat: string; kepalaKeluarga: string | null; paymentSource?: string | null })[]>;
   generateIuranBulan(bulanTahun: string, jumlahDefault: number): Promise<{ created: number; skipped: number }>;
   markIuranLunas(iuranId: number, tanggalBayar: string, adminNama: string): Promise<IuranKk | undefined>;
+  payIuranWithRwcoin(iuranId: number, wargaId: number, tanggalBayar: string): Promise<{ iuran: IuranKk; transaksi: RwcoinTransaksi; saldoBaru: number }>;
   batalIuranLunas(iuranId: number): Promise<IuranKk | undefined>;
   updateJumlahIuran(iuranId: number, jumlah: number): Promise<IuranKk | undefined>;
   getIuranRekap(tahun: string): Promise<{ bulan: string; totalKk: number; sudahBayar: number; belumBayar: number; totalNominal: number }[]>;
@@ -349,6 +358,37 @@ export interface DashboardStats {
 }
 
 export class DatabaseStorage implements IStorage {
+  private async ensureRwcoinWalletTx(
+    tx: any,
+    owner: { ownerType: "warga"; wargaId: number } | { ownerType: "mitra"; mitraId: number },
+  ): Promise<RwcoinWallet> {
+    const isWarga = owner.ownerType === "warga";
+    const existing = await tx.select().from(rwcoinWallet).where(
+      isWarga
+        ? and(eq(rwcoinWallet.ownerType, "warga"), eq(rwcoinWallet.wargaId, owner.wargaId))
+        : and(eq(rwcoinWallet.ownerType, "mitra"), eq(rwcoinWallet.mitraId, owner.mitraId)),
+    );
+    if (existing[0]) return existing[0];
+
+    const kodeWallet = isWarga
+      ? "WG" + String(owner.wargaId).padStart(4, "0")
+      : "MT" + String(owner.mitraId).padStart(4, "0");
+
+    await tx.insert(rwcoinWallet).values(
+      isWarga
+        ? { ownerType: "warga", wargaId: owner.wargaId, kodeWallet }
+        : { ownerType: "mitra", mitraId: owner.mitraId, kodeWallet },
+    ).onConflictDoNothing();
+
+    const created = await tx.select().from(rwcoinWallet).where(
+      isWarga
+        ? and(eq(rwcoinWallet.ownerType, "warga"), eq(rwcoinWallet.wargaId, owner.wargaId))
+        : and(eq(rwcoinWallet.ownerType, "mitra"), eq(rwcoinWallet.mitraId, owner.mitraId)),
+    );
+    if (!created[0]) throw new Error("Gagal menyiapkan wallet RWcoin");
+    return created[0];
+  }
+
   async getKkByNomor(nomorKk: string): Promise<KartuKeluarga | undefined> {
     const [result] = await db.select().from(kartuKeluarga).where(eq(kartuKeluarga.nomorKk, nomorKk));
     return result;
@@ -371,16 +411,6 @@ export class DatabaseStorage implements IStorage {
   async updateKk(id: number, data: Partial<InsertKartuKeluarga>): Promise<KartuKeluarga | undefined> {
     const [result] = await db.update(kartuKeluarga).set(data).where(eq(kartuKeluarga.id, id)).returning();
     return result;
-  }
-
-  async getKkFotoData(id: number): Promise<string | null> {
-    const [result] = await db.select({ fotoKkData: kartuKeluarga.fotoKkData }).from(kartuKeluarga).where(eq(kartuKeluarga.id, id));
-    return result?.fotoKkData ?? null;
-  }
-
-  async getWargaFotoKtpData(id: number): Promise<string | null> {
-    const [result] = await db.select({ fotoKtpData: warga.fotoKtpData }).from(warga).where(eq(warga.id, id));
-    return result?.fotoKtpData ?? null;
   }
 
   async deleteKk(id: number): Promise<void> {
@@ -408,6 +438,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getWargaByNomorWa(nomorWa: string): Promise<(Pick<Warga, "id" | "kkId" | "namaLengkap" | "kedudukanKeluarga"> & { nomorKk: string; rt: number })[]> {
+    const normalized = normalizeStoredPhone(nomorWa);
+    if (!normalized) return [];
+
+    const cleanedDbPhone = sql<string>`
+      CASE
+        WHEN regexp_replace(coalesce(${warga.nomorWhatsapp}, ''), '\D', '', 'g') LIKE '62%' THEN
+          '0' || substring(regexp_replace(coalesce(${warga.nomorWhatsapp}, ''), '\D', '', 'g') FROM 3)
+        WHEN regexp_replace(coalesce(${warga.nomorWhatsapp}, ''), '\D', '', 'g') LIKE '8%' THEN
+          '0' || regexp_replace(coalesce(${warga.nomorWhatsapp}, ''), '\D', '', 'g')
+        ELSE
+          regexp_replace(coalesce(${warga.nomorWhatsapp}, ''), '\D', '', 'g')
+      END
+    `;
+
     const results = await db.select({
       id: warga.id,
       kkId: warga.kkId,
@@ -417,7 +461,7 @@ export class DatabaseStorage implements IStorage {
       rt: kartuKeluarga.rt,
     }).from(warga)
       .innerJoin(kartuKeluarga, eq(warga.kkId, kartuKeluarga.id))
-      .where(eq(warga.nomorWhatsapp, nomorWa));
+      .where(eq(cleanedDbPhone, normalized));
     return results;
   }
 
@@ -426,12 +470,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createWarga(data: InsertWarga): Promise<Warga> {
-    const [result] = await db.insert(warga).values(data).returning();
+    const payload = {
+      ...data,
+      nomorWhatsapp: normalizeStoredPhone(data.nomorWhatsapp),
+    };
+    const [result] = await db.insert(warga).values(payload).returning();
     return result;
   }
 
   async updateWarga(id: number, data: Partial<InsertWarga>): Promise<Warga | undefined> {
-    const [result] = await db.update(warga).set(data).where(eq(warga.id, id)).returning();
+    const payload = {
+      ...data,
+      ...(Object.prototype.hasOwnProperty.call(data, "nomorWhatsapp")
+        ? { nomorWhatsapp: normalizeStoredPhone(data.nomorWhatsapp) }
+        : {}),
+    };
+    const [result] = await db.update(warga).set(payload).where(eq(warga.id, id)).returning();
     return result;
   }
 
@@ -569,8 +623,6 @@ export class DatabaseStorage implements IStorage {
       pekerjaan: warga.pekerjaan,
       pendidikan: warga.pendidikan,
       statusKependudukan: warga.statusKependudukan,
-      fotoKtp: warga.fotoKtp,
-      fotoKtpData: warga.fotoKtpData,
       statusDisabilitas: warga.statusDisabilitas,
       kondisiKesehatan: warga.kondisiKesehatan,
       ibuHamil: warga.ibuHamil,
@@ -598,8 +650,6 @@ export class DatabaseStorage implements IStorage {
       pekerjaan: warga.pekerjaan,
       pendidikan: warga.pendidikan,
       statusKependudukan: warga.statusKependudukan,
-      fotoKtp: warga.fotoKtp,
-      fotoKtpData: warga.fotoKtpData,
       statusDisabilitas: warga.statusDisabilitas,
       kondisiKesehatan: warga.kondisiKesehatan,
       ibuHamil: warga.ibuHamil,
@@ -793,6 +843,77 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
+  async createDonasiWithRwcoin(data: { campaignId: number; kkId: number; wargaId: number; namaDonatur: string; jumlah: number }): Promise<{ donasi: Donasi; transaksi: RwcoinTransaksi; saldoBaru: number }> {
+    return await db.transaction(async (tx) => {
+      const [campaign] = await tx.select().from(donasiCampaign).where(eq(donasiCampaign.id, data.campaignId));
+      if (!campaign || campaign.status !== "aktif") {
+        throw new Error("Campaign tidak ditemukan atau sudah selesai");
+      }
+
+      const [wargaWallet] = await tx
+        .select({
+          kkId: warga.kkId,
+          namaLengkap: warga.namaLengkap,
+          walletId: rwcoinWallet.id,
+          saldo: rwcoinWallet.saldo,
+          totalBelanja: rwcoinWallet.totalBelanja,
+        })
+        .from(warga)
+        .leftJoin(
+          rwcoinWallet,
+          and(eq(rwcoinWallet.ownerType, "warga"), eq(rwcoinWallet.wargaId, warga.id)),
+        )
+        .where(eq(warga.id, data.wargaId));
+
+      if (!wargaWallet) throw new Error("Data warga tidak ditemukan");
+      if (wargaWallet.kkId !== data.kkId) throw new Error("Data sesi warga tidak cocok dengan kartu keluarga");
+      if (!wargaWallet.walletId || wargaWallet.saldo == null || wargaWallet.totalBelanja == null) throw new Error("Wallet RWcoin tidak ditemukan");
+      if (wargaWallet.saldo < data.jumlah) throw new Error("Saldo RWcoin tidak cukup");
+
+      await tx.update(rwcoinWallet).set({
+        saldo: wargaWallet.saldo - data.jumlah,
+        totalBelanja: wargaWallet.totalBelanja + data.jumlah,
+        updatedAt: new Date(),
+      }).where(eq(rwcoinWallet.id, wargaWallet.walletId));
+
+      const [createdDonasi] = await tx.insert(donasi).values({
+        campaignId: data.campaignId,
+        kkId: data.kkId,
+        namaDonatur: data.namaDonatur,
+        jumlah: data.jumlah,
+        status: "dikonfirmasi",
+      }).returning();
+
+      const kodeTransaksi = "DN" + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 5).toUpperCase();
+      const keterangan = `Donasi ${campaign.judul} oleh ${data.namaDonatur} via RWcoin`;
+
+      const [transaksi] = await tx.insert(rwcoinTransaksi).values({
+        kodeTransaksi,
+        tipe: "donasi",
+        wargaId: data.wargaId,
+        jumlahBruto: data.jumlah,
+        jumlahBayar: data.jumlah,
+        keterangan,
+      }).returning();
+
+      await tx.insert(kasRw).values({
+        tipe: "pemasukan",
+        kategori: "Donasi",
+        jumlah: data.jumlah,
+        keterangan,
+        tanggal: new Date().toISOString().slice(0, 10),
+        createdBy: "rwcoin-donasi",
+        campaignId: data.campaignId,
+      });
+
+      return {
+        donasi: createdDonasi,
+        transaksi,
+        saldoBaru: wargaWallet.saldo - data.jumlah,
+      };
+    });
+  }
+
   async getDonasiById(id: number): Promise<Donasi | undefined> {
     const [result] = await db.select().from(donasi).where(eq(donasi.id, id));
     return result;
@@ -835,23 +956,34 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getDashboardStats(rtFilter?: number): Promise<DashboardStats> {
-    const allKkRaw = await db.select().from(kartuKeluarga);
-    const allWargaRaw = await db.select().from(warga);
-    const allRtData = await db.select().from(rtData).orderBy(rtData.nomorRt);
+    const [
+      allKkRaw, allWargaRaw, allRtData,
+      allLaporan, allSuratWarga, allSuratRw,
+      allProfileEdits, allPengajuanBansos, allKasRw,
+      allDonasi, allCampaigns, allUsahaRaw,
+      allWargaSinggahData, allPemilikKostData,
+    ] = await Promise.all([
+      db.select().from(kartuKeluarga),
+      db.select().from(warga),
+      db.select().from(rtData).orderBy(rtData.nomorRt),
+      db.select().from(laporan),
+      db.select().from(suratWarga),
+      db.select().from(suratRw),
+      db.select().from(profileEditRequest),
+      db.select().from(pengajuanBansos),
+      db.select().from(kasRw),
+      db.select().from(donasi),
+      db.select().from(donasiCampaign),
+      db.select().from(usaha),
+      db.select().from(wargaSinggah),
+      db.select().from(pemilikKost),
+    ]);
+
     const rtList = allRtData.map(r => r.nomorRt);
 
     const allKk = rtFilter ? allKkRaw.filter(k => k.rt === rtFilter) : allKkRaw;
     const kkIds = new Set(allKk.map(k => k.id));
     const allWarga = rtFilter ? allWargaRaw.filter(w => kkIds.has(w.kkId)) : allWargaRaw;
-
-    const allLaporan = await db.select().from(laporan);
-    const allSuratWarga = await db.select().from(suratWarga);
-    const allSuratRw = await db.select().from(suratRw);
-    const allProfileEdits = await db.select().from(profileEditRequest);
-    const allPengajuanBansos = await db.select().from(pengajuanBansos);
-    const allKasRw = await db.select().from(kasRw);
-    const allDonasi = await db.select().from(donasi);
-    const allCampaigns = await db.select().from(donasiCampaign);
 
     const totalKk = allKk.length;
     const totalWarga = allWarga.length;
@@ -951,10 +1083,6 @@ export class DatabaseStorage implements IStorage {
       punya: allWarga.filter(w => w.nomorWhatsapp).length,
       belum: allWarga.filter(w => !w.nomorWhatsapp).length,
     };
-    const ktpOwnership = {
-      punya: allWarga.filter(w => w.fotoKtp).length,
-      belum: allWarga.filter(w => !w.fotoKtp).length,
-    };
 
     const statusRumah = countByField(allKk, "statusRumah");
     const kondisiBangunan = countByField(allKk, "kondisiBangunan");
@@ -965,10 +1093,6 @@ export class DatabaseStorage implements IStorage {
     const bansos = {
       penerima: allKk.filter(k => k.penerimaBansos).length,
       bukan: allKk.filter(k => !k.penerimaBansos).length,
-    };
-    const kkFotoOwnership = {
-      punya: allKk.filter(k => k.fotoKk).length,
-      belum: allKk.filter(k => !k.fotoKk).length,
     };
 
     const kkRtMapAll = new Map(allKkRaw.map(k => [k.id, k.rt]));
@@ -1028,13 +1152,10 @@ export class DatabaseStorage implements IStorage {
       pengangguranDaftar.push({ nama: w.namaLengkap, usia: age, rt: kkRtMap.get(w.kkId) || null });
     }
 
-    const allUsahaForCapaian = await db.select().from(usaha);
-    const filteredUsaha = rtFilter ? allUsahaForCapaian.filter(u => u.rt === rtFilter) : allUsahaForCapaian;
+    const filteredUsaha = rtFilter ? allUsahaRaw.filter(u => u.rt === rtFilter) : allUsahaRaw;
     const totalUsahaBerizin = filteredUsaha.filter(u => u.status === "disetujui").length;
     const capaian = {
       waPercent: totalWarga > 0 ? Math.round((waOwnership.punya / totalWarga) * 100) : 0,
-      ktpPercent: totalWarga > 0 ? Math.round((ktpOwnership.punya / totalWarga) * 100) : 0,
-      kkFotoPercent: allKk.length > 0 ? Math.round((kkFotoOwnership.punya / allKk.length) * 100) : 0,
       bansosPercent: allKk.length > 0 ? Math.round((bansos.penerima / allKk.length) * 100) : 0,
       usahaBerizinPercent: filteredUsaha.length > 0 ? Math.round((totalUsahaBerizin / filteredUsaha.length) * 100) : 0,
       totalUsahaTarget: filteredUsaha.length,
@@ -1083,9 +1204,7 @@ export class DatabaseStorage implements IStorage {
       capaian, rtList,
       kondisiKesehatan, totalDisabilitas, totalIbuHamil,
       kategoriEkonomi, totalLayakBansos, kkEkonomiTerisi,
-      wargaSinggahStats: await (async () => {
-        const allWargaSinggahData = await db.select().from(wargaSinggah);
-        const allPemilikKostData = await db.select().from(pemilikKost);
+      wargaSinggahStats: (() => {
         const todayStr2 = today.toISOString().split("T")[0];
         const sevenDaysLater = new Date(today);
         sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
@@ -1097,20 +1216,19 @@ export class DatabaseStorage implements IStorage {
           totalPemilikKost: allPemilikKostData.length,
         };
       })(),
-      usahaStats: await (async () => {
-        const allUsahaData = await db.select().from(usaha);
+      usahaStats: (() => {
         const todayStr3 = today.toISOString().split("T")[0];
         const thirtyDaysLater = new Date(today);
         thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
         const thirtyDaysStr = thirtyDaysLater.toISOString().split("T")[0];
         return {
-          totalUsaha: allUsahaData.length,
-          pendaftaran: allUsahaData.filter(u => u.status === "pendaftaran").length,
-          survey: allUsahaData.filter(u => u.status === "survey").length,
-          disetujui: allUsahaData.filter(u => u.status === "disetujui").length,
-          ditolak: allUsahaData.filter(u => u.status === "ditolak").length,
-          stikerAktif: allUsahaData.filter(u => u.status === "disetujui" && u.tanggalStikerExpired && u.tanggalStikerExpired >= todayStr3).length,
-          stikerMendekatiExpired: allUsahaData.filter(u => u.status === "disetujui" && u.tanggalStikerExpired && u.tanggalStikerExpired >= todayStr3 && u.tanggalStikerExpired <= thirtyDaysStr).length,
+          totalUsaha: allUsahaRaw.length,
+          pendaftaran: allUsahaRaw.filter(u => u.status === "pendaftaran").length,
+          survey: allUsahaRaw.filter(u => u.status === "survey").length,
+          disetujui: allUsahaRaw.filter(u => u.status === "disetujui").length,
+          ditolak: allUsahaRaw.filter(u => u.status === "ditolak").length,
+          stikerAktif: allUsahaRaw.filter(u => u.status === "disetujui" && u.tanggalStikerExpired && u.tanggalStikerExpired >= todayStr3).length,
+          stikerMendekatiExpired: allUsahaRaw.filter(u => u.status === "disetujui" && u.tanggalStikerExpired && u.tanggalStikerExpired >= todayStr3 && u.tanggalStikerExpired <= thirtyDaysStr).length,
         };
       })(),
     };
@@ -1184,7 +1302,7 @@ export class DatabaseStorage implements IStorage {
     return row;
   }
 
-  async getIuranByBulan(bulanTahun: string, filterRt?: number): Promise<(IuranKk & { nomorKk: string; rt: number; alamat: string; kepalaKeluarga: string | null })[]> {
+  async getIuranByBulan(bulanTahun: string, filterRt?: number): Promise<(IuranKk & { nomorKk: string; rt: number; alamat: string; kepalaKeluarga: string | null; paymentSource?: string | null })[]> {
     const rows = await db
       .select({
         iuran: iuranKk,
@@ -1192,9 +1310,11 @@ export class DatabaseStorage implements IStorage {
         rt: kartuKeluarga.rt,
         alamat: kartuKeluarga.alamat,
         kepalaKeluarga: sql<string | null>`(SELECT nama_lengkap FROM warga WHERE kk_id = ${kartuKeluarga.id} AND kedudukan_keluarga = 'Kepala Keluarga' LIMIT 1)`,
+        paymentSource: kasRw.createdBy,
       })
       .from(iuranKk)
       .innerJoin(kartuKeluarga, eq(iuranKk.kkId, kartuKeluarga.id))
+      .leftJoin(kasRw, eq(iuranKk.kasRwId, kasRw.id))
       .where(
         and(
           eq(iuranKk.bulanTahun, bulanTahun),
@@ -1202,7 +1322,7 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .orderBy(kartuKeluarga.rt, kartuKeluarga.id);
-    return rows.map(r => ({ ...r.iuran, nomorKk: r.nomorKk, rt: r.rt, alamat: r.alamat, kepalaKeluarga: r.kepalaKeluarga }));
+    return rows.map(r => ({ ...r.iuran, nomorKk: r.nomorKk, rt: r.rt, alamat: r.alamat, kepalaKeluarga: r.kepalaKeluarga, paymentSource: r.paymentSource }));
   }
 
   async generateIuranBulan(bulanTahun: string, jumlahDefault: number): Promise<{ created: number; skipped: number }> {
@@ -1224,11 +1344,10 @@ export class DatabaseStorage implements IStorage {
       if (!iuran || iuran.status === "lunas") return undefined;
 
       const [kk] = await tx.select({ nomorKk: kartuKeluarga.nomorKk }).from(kartuKeluarga).where(eq(kartuKeluarga.id, iuran.kkId));
-      const [kepala] = await tx.select({ namaLengkap: warga.namaLengkap }).from(warga).where(and(eq(warga.kkId, iuran.kkId), eq(warga.kedudukanKeluarga, "Kepala Keluarga"))).limit(1);
 
       const [tahunStr, bulanStr] = iuran.bulanTahun.split("-").map(Number);
       const namaBulan = new Date(tahunStr, bulanStr - 1, 1).toLocaleDateString("id-ID", { month: "long", year: "numeric" });
-      const keterangan = `Iuran ${namaBulan} - KK ${kk?.nomorKk ?? iuran.kkId} - ${kepala?.namaLengkap ?? "Kepala KK"}`;
+      const keterangan = `Iuran ${namaBulan} - KK ${kk?.nomorKk ?? iuran.kkId} (dicatat admin ${adminNama})`;
 
       const [kasEntry] = await tx.insert(kasRw).values({
         tipe: "pemasukan",
@@ -1241,6 +1360,86 @@ export class DatabaseStorage implements IStorage {
 
       const [updated] = await tx.update(iuranKk).set({ status: "lunas", tanggalBayar, kasRwId: kasEntry.id, updatedAt: new Date() }).where(eq(iuranKk.id, iuranId)).returning();
       return updated;
+    });
+  }
+
+  async payIuranWithRwcoin(iuranId: number, wargaId: number, tanggalBayar: string): Promise<{ iuran: IuranKk; transaksi: RwcoinTransaksi; saldoBaru: number }> {
+    return await db.transaction(async (tx) => {
+      const [iuranData] = await tx
+        .select({
+          id: iuranKk.id,
+          kkId: iuranKk.kkId,
+          bulanTahun: iuranKk.bulanTahun,
+          jumlah: iuranKk.jumlah,
+          status: iuranKk.status,
+          nomorKk: kartuKeluarga.nomorKk,
+        })
+        .from(iuranKk)
+        .innerJoin(kartuKeluarga, eq(iuranKk.kkId, kartuKeluarga.id))
+        .where(eq(iuranKk.id, iuranId));
+      if (!iuranData) throw new Error("Iuran tidak ditemukan");
+      if (iuranData.status === "lunas") throw new Error("Iuran sudah lunas");
+
+      const [wargaWallet] = await tx
+        .select({
+          kkId: warga.kkId,
+          namaLengkap: warga.namaLengkap,
+          walletId: rwcoinWallet.id,
+          saldo: rwcoinWallet.saldo,
+          totalBelanja: rwcoinWallet.totalBelanja,
+        })
+        .from(warga)
+        .leftJoin(
+          rwcoinWallet,
+          and(eq(rwcoinWallet.ownerType, "warga"), eq(rwcoinWallet.wargaId, warga.id)),
+        )
+        .where(eq(warga.id, wargaId));
+      if (!wargaWallet) throw new Error("Data warga tidak ditemukan");
+      if (wargaWallet.kkId !== iuranData.kkId) throw new Error("Hanya anggota dari kartu keluarga yang sama yang bisa membayar iuran ini");
+      if (!wargaWallet.walletId || wargaWallet.saldo == null || wargaWallet.totalBelanja == null) throw new Error("Wallet RWcoin tidak ditemukan");
+      if (wargaWallet.saldo < iuranData.jumlah) throw new Error("Saldo RWcoin tidak cukup");
+
+      const [tahunStr, bulanStr] = iuranData.bulanTahun.split("-").map(Number);
+      const namaBulan = new Date(tahunStr, bulanStr - 1, 1).toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+      const kasKet = `Iuran ${namaBulan} - KK ${iuranData.nomorKk ?? iuranData.kkId} (dibayar oleh ${wargaWallet.namaLengkap} via RWcoin)`;
+      const kodeTransaksi = "IU" + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 5).toUpperCase();
+
+      await tx.update(rwcoinWallet).set({
+        saldo: wargaWallet.saldo - iuranData.jumlah,
+        totalBelanja: wargaWallet.totalBelanja + iuranData.jumlah,
+        updatedAt: new Date(),
+      }).where(eq(rwcoinWallet.id, wargaWallet.walletId));
+
+      const [transaksi] = await tx.insert(rwcoinTransaksi).values({
+        kodeTransaksi,
+        tipe: "iuran",
+        wargaId,
+        jumlahBruto: iuranData.jumlah,
+        jumlahBayar: iuranData.jumlah,
+        keterangan: kasKet,
+      }).returning();
+
+      const [kasEntry] = await tx.insert(kasRw).values({
+        tipe: "pemasukan",
+        kategori: "Iuran Warga",
+        jumlah: iuranData.jumlah,
+        keterangan: kasKet,
+        tanggal: tanggalBayar,
+        createdBy: "rwcoin-iuran",
+      }).returning();
+
+      const [updatedIuran] = await tx.update(iuranKk).set({
+        status: "lunas",
+        tanggalBayar,
+        kasRwId: kasEntry.id,
+        updatedAt: new Date(),
+      }).where(eq(iuranKk.id, iuranId)).returning();
+
+      return {
+        iuran: updatedIuran,
+        transaksi,
+        saldoBaru: wargaWallet.saldo - iuranData.jumlah,
+      };
     });
   }
 
@@ -1656,8 +1855,6 @@ export class DatabaseStorage implements IStorage {
     }).length;
 
     const waRegistered = allWarga.filter(w => w.nomorWhatsapp && w.nomorWhatsapp.trim() !== "").length;
-    const ktpUploaded = allWarga.filter(w => w.fotoKtp && w.fotoKtp.trim() !== "").length;
-    const kkFotoUploaded = allKk.filter(k => k.fotoKk && k.fotoKk.trim() !== "").length;
     const penerimaBansos = allKk.filter(k => k.penerimaBansos).length;
     const usahaBerizin = allUsahaData.filter(u => u.status === "disetujui").length;
     const laporanSelesai = allLaporanData.filter(l => l.status === "selesai").length;
@@ -1671,14 +1868,12 @@ export class DatabaseStorage implements IStorage {
     const totalW = allWarga.length || 1;
     const totalK = allKk.length || 1;
     const waP = Math.round((waRegistered / totalW) * 100);
-    const ktpP = Math.round((ktpUploaded / totalW) * 100);
-    const kkP = Math.round((kkFotoUploaded / totalK) * 100);
     const bansosP = Math.round((penerimaBansos / totalK) * 100);
     const usahaP = allUsahaData.length > 0 ? Math.round((usahaBerizin / allUsahaData.length) * 100) : 0;
     const pengangguranP = Math.max(0, 100 - Math.round((pengangguranCount / totalW) * 100));
     const laporanP = allLaporanData.length > 0 ? Math.round((laporanSelesai / allLaporanData.length) * 100) : 100;
 
-    const indeks = Math.round((waP + ktpP + kkP + bansosP + usahaP + pengangguranP + laporanP) / 7);
+    const indeks = Math.round((waP + bansosP + usahaP + pengangguranP + laporanP) / 5);
 
     const snapshotData: InsertMonthlySnapshot = {
       month: currentMonth,
@@ -1686,8 +1881,6 @@ export class DatabaseStorage implements IStorage {
       totalWarga: allWarga.length,
       pengangguran: pengangguranCount,
       waRegistered,
-      ktpUploaded,
-      kkFotoUploaded,
       penerimaBansos,
       usahaBerizin,
       totalUsaha: allUsahaData.length,
@@ -1816,7 +2009,9 @@ export class DatabaseStorage implements IStorage {
     const existing = await db.select().from(rwcoinWallet).where(and(eq(rwcoinWallet.ownerType, "warga"), eq(rwcoinWallet.wargaId, wargaId)));
     if (existing[0]) return existing[0];
     const kodeWallet = "WG" + String(wargaId).padStart(4, "0");
-    const [result] = await db.insert(rwcoinWallet).values({ ownerType: "warga", wargaId, kodeWallet }).returning();
+    await db.insert(rwcoinWallet).values({ ownerType: "warga", wargaId, kodeWallet }).onConflictDoNothing();
+    const [result] = await db.select().from(rwcoinWallet).where(and(eq(rwcoinWallet.ownerType, "warga"), eq(rwcoinWallet.wargaId, wargaId)));
+    if (!result) throw new Error("Gagal menyiapkan wallet warga");
     return result;
   }
 
@@ -1824,7 +2019,9 @@ export class DatabaseStorage implements IStorage {
     const existing = await db.select().from(rwcoinWallet).where(and(eq(rwcoinWallet.ownerType, "mitra"), eq(rwcoinWallet.mitraId, mitraId)));
     if (existing[0]) return existing[0];
     const kodeWallet = "MT" + String(mitraId).padStart(4, "0");
-    const [result] = await db.insert(rwcoinWallet).values({ ownerType: "mitra", mitraId, kodeWallet }).returning();
+    await db.insert(rwcoinWallet).values({ ownerType: "mitra", mitraId, kodeWallet }).onConflictDoNothing();
+    const [result] = await db.select().from(rwcoinWallet).where(and(eq(rwcoinWallet.ownerType, "mitra"), eq(rwcoinWallet.mitraId, mitraId)));
+    if (!result) throw new Error("Gagal menyiapkan wallet mitra");
     return result;
   }
 
@@ -1883,20 +2080,54 @@ export class DatabaseStorage implements IStorage {
   }
 
   async accTopupRequest(id: number): Promise<{ request: RwcoinTopupRequest; transaksi: RwcoinTransaksi }> {
-    const [req] = await db.select().from(rwcoinTopupRequest).where(eq(rwcoinTopupRequest.id, id));
-    if (!req || req.status !== "pending") throw new Error("Request tidak ditemukan atau sudah diproses");
-    const transaksi = await this.topupWargaWallet(req.wargaId, req.jumlah, `Topup via ${req.metode}`);
-    // Catat admin fee ke kas (selisih totalTransfer - jumlah topup)
-    const adminFee = req.totalTransfer - req.jumlah;
-    if (adminFee > 0) {
-      await db.insert(kasRwcoin).values({
-        tipe: "pemasukan", tipeDetail: "admin_fee", jumlah: adminFee,
-        referensiId: String(id),
-        keterangan: `Admin fee topup #${id} (${req.namaWarga}) via ${req.metode}`,
-      });
-    }
-    const [updated] = await db.update(rwcoinTopupRequest).set({ status: "approved", updatedAt: new Date() }).where(eq(rwcoinTopupRequest.id, id)).returning();
-    return { request: updated, transaksi };
+    return await db.transaction(async (tx) => {
+      const [req] = await tx.update(rwcoinTopupRequest)
+        .set({ status: "approved", updatedAt: new Date() })
+        .where(and(eq(rwcoinTopupRequest.id, id), eq(rwcoinTopupRequest.status, "pending")))
+        .returning();
+      if (!req) throw new Error("Request tidak ditemukan atau sudah diproses");
+
+      const wallet = await this.ensureRwcoinWalletTx(tx, { ownerType: "warga", wargaId: req.wargaId });
+      const kode = "TP" + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 5).toUpperCase();
+
+      await tx.update(rwcoinWallet).set({
+        saldo: sql`${rwcoinWallet.saldo} + ${req.jumlah}`,
+        totalTopup: sql`${rwcoinWallet.totalTopup} + ${req.jumlah}`,
+        updatedAt: new Date(),
+      }).where(eq(rwcoinWallet.id, wallet.id));
+
+      const [transaksi] = await tx.insert(rwcoinTransaksi).values({
+        kodeTransaksi: kode,
+        tipe: "topup",
+        wargaId: req.wargaId,
+        jumlahBruto: req.jumlah,
+        jumlahBayar: req.jumlah,
+        keterangan: `Topup via ${req.metode}`,
+      }).returning();
+
+      const adminFee = req.totalTransfer - req.jumlah;
+      const today = new Date().toISOString().slice(0, 10);
+      if (adminFee > 0) {
+        const feeKeterangan = `Pendapatan admin fee topup #${id} (${req.namaWarga}) via ${req.metode}`;
+        await tx.insert(kasRwcoin).values({
+          tipe: "pemasukan",
+          tipeDetail: "admin_fee",
+          jumlah: adminFee,
+          referensiId: String(id),
+          keterangan: feeKeterangan,
+        });
+        await tx.insert(kasRw).values({
+          tipe: "pemasukan",
+          kategori: "Pendapatan RWcoin",
+          jumlah: adminFee,
+          keterangan: feeKeterangan,
+          tanggal: today,
+          createdBy: "rwcoin-topup-fee",
+        });
+      }
+
+      return { request: req, transaksi };
+    });
   }
 
   async tolakTopupRequest(id: number, catatan?: string): Promise<RwcoinTopupRequest | undefined> {
@@ -1905,23 +2136,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async topupWargaWallet(wargaId: number, jumlah: number, keterangan: string): Promise<RwcoinTransaksi> {
-    const wallet = await this.getOrCreateWargaWallet(wargaId);
-    const kode = "TP" + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 5).toUpperCase();
-    await db.update(rwcoinWallet).set({
-      saldo: wallet.saldo + jumlah,
-      totalTopup: wallet.totalTopup + jumlah,
-      updatedAt: new Date(),
-    }).where(eq(rwcoinWallet.id, wallet.id));
-    const [transaksi] = await db.insert(rwcoinTransaksi).values({
-      kodeTransaksi: kode, tipe: "topup", wargaId,
-      jumlahBruto: jumlah, jumlahBayar: jumlah, keterangan,
-    }).returning();
-    // Catat ke kas RWcoin
-    await db.insert(kasRwcoin).values({
-      tipe: "pemasukan", tipeDetail: "topup_coin", jumlah, referensiId: kode,
-      keterangan: `Topup warga (${kode}): ${keterangan}`,
+    return await db.transaction(async (tx) => {
+      const wallet = await this.ensureRwcoinWalletTx(tx, { ownerType: "warga", wargaId });
+      const kode = "TP" + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 5).toUpperCase();
+      await tx.update(rwcoinWallet).set({
+        saldo: sql`${rwcoinWallet.saldo} + ${jumlah}`,
+        totalTopup: sql`${rwcoinWallet.totalTopup} + ${jumlah}`,
+        updatedAt: new Date(),
+      }).where(eq(rwcoinWallet.id, wallet.id));
+      const [transaksi] = await tx.insert(rwcoinTransaksi).values({
+        kodeTransaksi: kode, tipe: "topup", wargaId,
+        jumlahBruto: jumlah, jumlahBayar: jumlah, keterangan,
+      }).returning();
+      await tx.insert(kasRwcoin).values({
+        tipe: "pemasukan", tipeDetail: "topup_coin", jumlah, referensiId: kode,
+        keterangan: `Topup warga (${kode}): ${keterangan}`,
+      });
+      return transaksi;
     });
-    return transaksi;
   }
 
   // Helper internal: eksekusi belanja dengan nilai pre-calculated (tanpa hitung ulang diskon)
@@ -1937,42 +2169,45 @@ export class DatabaseStorage implements IStorage {
   ): Promise<{ transaksi: RwcoinTransaksi; diskon: number; namaWarga: string }> {
     if (walletWarga.saldo < jumlahBayar) throw new Error("Saldo tidak cukup");
 
-    await db.update(rwcoinWallet).set({
-      saldo: walletWarga.saldo - jumlahBayar,
-      totalBelanja: walletWarga.totalBelanja + jumlahBayar,
-      updatedAt: new Date(),
-    }).where(eq(rwcoinWallet.id, walletWarga.id));
-
-    // Mitra dapat: full (jumlahBruto) jika voucher admin subsidi, atau hanya jumlahBayar jika mitra nanggung sendiri
-    const jumlahKeMitra = voucherSubsidiAdmin && jumlahDiskon > 0 ? jumlahBruto : jumlahBayar;
     const walletMitra = await this.getOrCreateMitraWallet(mitraId);
-    await db.update(rwcoinWallet).set({
-      saldo: walletMitra.saldo + jumlahKeMitra,
-      updatedAt: new Date(),
-    }).where(eq(rwcoinWallet.id, walletMitra.id));
-
-    // Catat pengeluaran kas jika admin subsidi voucher
-    if (voucherSubsidiAdmin && jumlahDiskon > 0) {
-      await db.insert(kasRwcoin).values({
-        tipe: "pengeluaran", tipeDetail: "subsidi_voucher", jumlah: jumlahDiskon,
-        referensiId: voucherKode ?? null,
-        keterangan: `Subsidi voucher ${voucherKode ?? ""} — admin bayar ${jumlahDiskon} coin ke mitra`,
-      });
-    }
-
-    // Increment terpakai voucher jika ada
-    if (voucherKode) {
-      const [v] = await db.select().from(mitraVoucher).where(eq(mitraVoucher.kode, voucherKode));
-      if (v) await db.update(mitraVoucher).set({ terpakai: v.terpakai + 1 }).where(eq(mitraVoucher.id, v.id));
-    }
-
+    const jumlahKeMitra = voucherSubsidiAdmin && jumlahDiskon > 0 ? jumlahBruto : jumlahBayar;
     const kode = "BL" + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 5).toUpperCase();
-    const [transaksi] = await db.insert(rwcoinTransaksi).values({
-      kodeTransaksi: kode, tipe: "belanja",
-      wargaId: walletWarga.wargaId, mitraId,
-      jumlahBruto, jumlahDiskon, jumlahBayar,
-      voucherKode: voucherKode ?? null, keterangan: keterangan ?? null,
-    }).returning();
+
+    const transaksi = await db.transaction(async (tx) => {
+      const debited = await tx.update(rwcoinWallet).set({
+        saldo: sql`${rwcoinWallet.saldo} - ${jumlahBayar}`,
+        totalBelanja: sql`${rwcoinWallet.totalBelanja} + ${jumlahBayar}`,
+        updatedAt: new Date(),
+      }).where(and(eq(rwcoinWallet.id, walletWarga.id), gte(rwcoinWallet.saldo, jumlahBayar))).returning({ id: rwcoinWallet.id });
+      if (!debited[0]) throw new Error("Saldo tidak cukup atau sedang berubah, silakan coba lagi");
+
+      await tx.update(rwcoinWallet).set({
+        saldo: sql`${rwcoinWallet.saldo} + ${jumlahKeMitra}`,
+        updatedAt: new Date(),
+      }).where(eq(rwcoinWallet.id, walletMitra.id));
+
+      if (voucherSubsidiAdmin && jumlahDiskon > 0) {
+        await tx.insert(kasRwcoin).values({
+          tipe: "pengeluaran", tipeDetail: "subsidi_voucher", jumlah: jumlahDiskon,
+          referensiId: voucherKode ?? null,
+          keterangan: `Subsidi voucher ${voucherKode ?? ""} - admin bayar ${jumlahDiskon} coin ke mitra`,
+        });
+      }
+
+      if (voucherKode) {
+        await tx.update(mitraVoucher).set({
+          terpakai: sql`${mitraVoucher.terpakai} + 1`,
+        }).where(eq(mitraVoucher.kode, voucherKode));
+      }
+
+      const [created] = await tx.insert(rwcoinTransaksi).values({
+        kodeTransaksi: kode, tipe: "belanja",
+        wargaId: walletWarga.wargaId, mitraId,
+        jumlahBruto, jumlahDiskon, jumlahBayar,
+        voucherKode: voucherKode ?? null, keterangan: keterangan ?? null,
+      }).returning();
+      return created;
+    });
 
     const wargaData = await db.select({ nama: warga.namaLengkap }).from(warga).where(eq(warga.id, walletWarga.wargaId!));
     return { transaksi, diskon: jumlahDiskon, namaWarga: wargaData[0]?.nama ?? "Warga" };
@@ -2029,25 +2264,26 @@ export class DatabaseStorage implements IStorage {
     if (jumlah < 100) throw new Error("Minimal transfer 100 coin");
 
     const kode = tujuanKodeWallet.trim().toUpperCase();
-    const walletTujuan = await this.getWalletByKode(kode);
-    if (!walletTujuan) throw new Error("Kode wallet tujuan tidak ditemukan");
-    if (walletTujuan.ownerType !== "warga" || !walletTujuan.wargaId) throw new Error("Tujuan harus wallet warga, bukan mitra");
-    if (walletTujuan.wargaId === pengirimWargaId) throw new Error("Tidak bisa transfer ke diri sendiri");
+    const walletTujuanRaw = await this.getWalletByKode(kode);
+    if (!walletTujuanRaw) throw new Error("Kode wallet tujuan tidak ditemukan");
+    if (walletTujuanRaw.ownerType !== "warga" || !walletTujuanRaw.wargaId) throw new Error("Tujuan harus wallet warga, bukan mitra");
+    if (walletTujuanRaw.wargaId === pengirimWargaId) throw new Error("Tidak bisa transfer ke diri sendiri");
 
     const walletPengirim = await this.getOrCreateWargaWallet(pengirimWargaId);
     if (walletPengirim.saldo < jumlah) throw new Error(`Saldo tidak cukup. Saldo Anda: ${walletPengirim.saldo.toLocaleString("id")} coin`);
+    const walletTujuan = await this.getOrCreateWargaWallet(walletTujuanRaw.wargaId);
 
     const kodeTransaksi = "TR" + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 5).toUpperCase();
 
-    // Atomic: debit pengirim, credit penerima, insert transaksi
     const [transaksi] = await db.transaction(async (tx) => {
-      await tx.update(rwcoinWallet).set({
-        saldo: walletPengirim.saldo - jumlah,
+      const debited = await tx.update(rwcoinWallet).set({
+        saldo: sql`${rwcoinWallet.saldo} - ${jumlah}`,
         updatedAt: new Date(),
-      }).where(eq(rwcoinWallet.id, walletPengirim.id));
+      }).where(and(eq(rwcoinWallet.id, walletPengirim.id), gte(rwcoinWallet.saldo, jumlah))).returning({ id: rwcoinWallet.id });
+      if (!debited[0]) throw new Error("Saldo tidak cukup atau sedang berubah, silakan coba lagi");
 
       await tx.update(rwcoinWallet).set({
-        saldo: walletTujuan.saldo + jumlah,
+        saldo: sql`${rwcoinWallet.saldo} + ${jumlah}`,
         updatedAt: new Date(),
       }).where(eq(rwcoinWallet.id, walletTujuan.id));
 
@@ -2076,45 +2312,89 @@ export class DatabaseStorage implements IStorage {
   async processWithdrawRequest(mitraId: number, jumlahCoin: number, nomorRekening: string, namaBank: string, atasNama: string, catatan?: string): Promise<RwcoinWithdraw> {
     const wallet = await this.getOrCreateMitraWallet(mitraId);
     if (wallet.saldo < jumlahCoin) throw new Error("Saldo coin tidak cukup untuk withdraw");
-    await db.update(rwcoinWallet).set({
-      saldo: wallet.saldo - jumlahCoin,
-      totalWithdraw: wallet.totalWithdraw + jumlahCoin,
-      updatedAt: new Date(),
-    }).where(eq(rwcoinWallet.id, wallet.id));
-    const [result] = await db.insert(rwcoinWithdraw).values({ mitraId, jumlahCoin, nomorRekening, namaBank, atasNama, catatan }).returning();
-    return result;
+    return await db.transaction(async (tx) => {
+      const debited = await tx.update(rwcoinWallet).set({
+        saldo: sql`${rwcoinWallet.saldo} - ${jumlahCoin}`,
+        totalWithdraw: sql`${rwcoinWallet.totalWithdraw} + ${jumlahCoin}`,
+        updatedAt: new Date(),
+      }).where(and(eq(rwcoinWallet.id, wallet.id), gte(rwcoinWallet.saldo, jumlahCoin))).returning({ id: rwcoinWallet.id });
+      if (!debited[0]) throw new Error("Saldo coin tidak cukup atau sedang berubah, silakan coba lagi");
+      const [result] = await tx.insert(rwcoinWithdraw).values({ mitraId, jumlahCoin, nomorRekening, namaBank, atasNama, catatan }).returning();
+      return result;
+    });
   }
 
   async approveWithdraw(withdrawId: number, adminNama: string): Promise<RwcoinWithdraw | undefined> {
-    const [result] = await db.update(rwcoinWithdraw).set({ status: "disetujui", disetujuiOleh: adminNama, disetujuiAt: new Date() }).where(eq(rwcoinWithdraw.id, withdrawId)).returning();
+    const [result] = await db.update(rwcoinWithdraw)
+      .set({ status: "disetujui", disetujuiOleh: adminNama, disetujuiAt: new Date() })
+      .where(and(eq(rwcoinWithdraw.id, withdrawId), eq(rwcoinWithdraw.status, "pending")))
+      .returning();
     return result;
   }
 
   async markWithdrawDibayar(withdrawId: number): Promise<RwcoinWithdraw | undefined> {
-    const [result] = await db.update(rwcoinWithdraw).set({ status: "dibayar", dibayarAt: new Date() }).where(eq(rwcoinWithdraw.id, withdrawId)).returning();
-    if (result) {
-      // Catat pengeluaran ke kas RWcoin
-      await db.insert(kasRwcoin).values({
-        tipe: "pengeluaran", tipeDetail: "withdraw_mitra", jumlah: result.jumlahCoin, referensiId: String(result.id),
-        keterangan: `Withdraw mitra #${result.mitraId} ke ${result.namaBank} ${result.nomorRekening}`,
-      });
-    }
-    return result;
+    return await db.transaction(async (tx) => {
+      const [result] = await tx.update(rwcoinWithdraw)
+        .set({ status: "dibayar", dibayarAt: new Date() })
+        .where(and(eq(rwcoinWithdraw.id, withdrawId), eq(rwcoinWithdraw.status, "disetujui")))
+        .returning();
+      if (!result) return undefined;
+
+      const withdrawFee = await this.getRwcoinSettingValue("withdraw_fee", 5000);
+      const payoutAmount = Math.max(0, result.jumlahCoin - withdrawFee);
+      const today = new Date().toISOString().slice(0, 10);
+      const baseKeterangan = `Withdraw mitra #${result.mitraId} ke ${result.namaBank} ${result.nomorRekening}`;
+
+      if (payoutAmount > 0) {
+        await tx.insert(kasRwcoin).values({
+          tipe: "pengeluaran",
+          tipeDetail: "withdraw_mitra",
+          jumlah: payoutAmount,
+          referensiId: String(result.id),
+          keterangan: `${baseKeterangan} (transfer bersih)`,
+        });
+      }
+
+      if (withdrawFee > 0) {
+        const feeKeterangan = `Pendapatan potongan withdraw #${result.id} dari mitra #${result.mitraId}`;
+        await tx.insert(kasRwcoin).values({
+          tipe: "pemasukan",
+          tipeDetail: "admin_fee",
+          jumlah: withdrawFee,
+          referensiId: String(result.id),
+          keterangan: feeKeterangan,
+        });
+        await tx.insert(kasRw).values({
+          tipe: "pemasukan",
+          kategori: "Pendapatan RWcoin",
+          jumlah: withdrawFee,
+          keterangan: feeKeterangan,
+          tanggal: today,
+          createdBy: "rwcoin-withdraw-fee",
+        });
+      }
+
+      return result;
+    });
   }
 
   async rejectWithdraw(withdrawId: number, catatan: string): Promise<RwcoinWithdraw | undefined> {
-    // Kembalikan coin ke mitra
-    const [wd] = await db.select().from(rwcoinWithdraw).where(eq(rwcoinWithdraw.id, withdrawId));
-    if (wd && wd.status === "pending") {
-      const wallet = await this.getOrCreateMitraWallet(wd.mitraId);
-      await db.update(rwcoinWallet).set({
-        saldo: wallet.saldo + wd.jumlahCoin,
-        totalWithdraw: Math.max(0, wallet.totalWithdraw - wd.jumlahCoin),
+    return await db.transaction(async (tx) => {
+      const [result] = await tx.update(rwcoinWithdraw)
+        .set({ status: "ditolak", catatan })
+        .where(and(eq(rwcoinWithdraw.id, withdrawId), or(eq(rwcoinWithdraw.status, "pending"), eq(rwcoinWithdraw.status, "disetujui"))))
+        .returning();
+      if (!result) return undefined;
+
+      const wallet = await this.ensureRwcoinWalletTx(tx, { ownerType: "mitra", mitraId: result.mitraId });
+      await tx.update(rwcoinWallet).set({
+        saldo: sql`${rwcoinWallet.saldo} + ${result.jumlahCoin}`,
+        totalWithdraw: sql`GREATEST(${rwcoinWallet.totalWithdraw} - ${result.jumlahCoin}, 0)`,
         updatedAt: new Date(),
       }).where(eq(rwcoinWallet.id, wallet.id));
-    }
-    const [result] = await db.update(rwcoinWithdraw).set({ status: "ditolak", catatan }).where(eq(rwcoinWithdraw.id, withdrawId)).returning();
-    return result;
+
+      return result;
+    });
   }
 
   async getAllWithdrawRequests(): Promise<(RwcoinWithdraw & { namaUsaha: string; nomorWaKasir: string })[]> {
@@ -2240,7 +2520,7 @@ export class DatabaseStorage implements IStorage {
     const [txStats] = await db.select({
       totalTransaksi: count(rwcoinTransaksi.id),
       totalTopup: sql<number>`COALESCE(SUM(CASE WHEN ${rwcoinTransaksi.tipe} = 'topup' THEN ${rwcoinTransaksi.jumlahBayar} ELSE 0 END), 0)`,
-      totalBelanja: sql<number>`COALESCE(SUM(CASE WHEN ${rwcoinTransaksi.tipe} = 'belanja' THEN ${rwcoinTransaksi.jumlahBayar} ELSE 0 END), 0)`,
+      totalBelanja: sql<number>`COALESCE(SUM(CASE WHEN ${rwcoinTransaksi.tipe} IN ('belanja', 'tripay') THEN ${rwcoinTransaksi.jumlahBayar} ELSE 0 END), 0)`,
     }).from(rwcoinTransaksi);
     const [wdStats] = await db.select({ totalWithdrawPending: count(rwcoinWithdraw.id) }).from(rwcoinWithdraw).where(eq(rwcoinWithdraw.status, "pending"));
     return {
@@ -2394,12 +2674,12 @@ export class DatabaseStorage implements IStorage {
     // Total yang pernah ditopup (semua waktu)
     const [topupStats] = await db.select({
       totalPernahTopup: sql<number>`COALESCE(SUM(${rwcoinTransaksi.jumlahBayar}), 0)`,
-      totalBelanja: sql<number>`COALESCE(SUM(CASE WHEN ${rwcoinTransaksi.tipe} = 'belanja' THEN ${rwcoinTransaksi.jumlahBruto} ELSE 0 END), 0)`,
+      totalBelanja: sql<number>`COALESCE(SUM(CASE WHEN ${rwcoinTransaksi.tipe} IN ('belanja', 'tripay') THEN ${rwcoinTransaksi.jumlahBruto} ELSE 0 END), 0)`,
     }).from(rwcoinTransaksi).where(eq(rwcoinTransaksi.tipe, "topup"));
 
     const [belanjaStats] = await db.select({
       totalBelanja: sql<number>`COALESCE(SUM(${rwcoinTransaksi.jumlahBruto}), 0)`,
-    }).from(rwcoinTransaksi).where(eq(rwcoinTransaksi.tipe, "belanja"));
+    }).from(rwcoinTransaksi).where(sql`${rwcoinTransaksi.tipe} IN ('belanja', 'tripay')`);
 
     const totalPernahTopup = Number(topupStats?.totalPernahTopup ?? 0);
     const totalVolumeBelanja = Number(belanjaStats?.totalBelanja ?? 0);
@@ -2431,7 +2711,7 @@ export class DatabaseStorage implements IStorage {
       namaWarga: warga.namaLengkap,
     }).from(rwcoinTransaksi)
       .leftJoin(warga, eq(rwcoinTransaksi.wargaId, warga.id))
-      .where(eq(rwcoinTransaksi.tipe, "belanja"));
+      .where(sql`${rwcoinTransaksi.tipe} IN ('belanja', 'tripay')`);
 
     const spenderMap = new Map<number, { namaWarga: string; totalBelanja: number; jumlahTx: number }>();
     for (const row of semuaBelanjaWarga) {

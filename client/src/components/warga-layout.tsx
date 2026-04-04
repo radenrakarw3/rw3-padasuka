@@ -2,8 +2,9 @@ import { useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { getQueryFn } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import { User, FileText, LogOut, Home, Wallet, Coins } from "lucide-react";
+import { prefetchWargaCoreData, wargaWalletQueryOptions } from "@/lib/warga-prefetch";
 import logoGold from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
 
 function GoldCoin({ size = 14 }: { size?: number }) {
@@ -33,8 +34,7 @@ export default function WargaLayout({ children }: { children: React.ReactNode })
   const [location, setLocation] = useLocation();
 
   const { data: wallet } = useQuery<any>({
-    queryKey: ["/api/warga/rwcoin/wallet"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
+    ...wargaWalletQueryOptions(),
     enabled: user?.type === "warga",
     staleTime: 30000,
   });
@@ -43,6 +43,10 @@ export default function WargaLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [location]);
+
+  useEffect(() => {
+    return prefetchWargaCoreData(queryClient, user);
+  }, [user?.type, user?.kkId]);
 
   return (
     <div className="min-h-screen flex flex-col bg-background pb-20">

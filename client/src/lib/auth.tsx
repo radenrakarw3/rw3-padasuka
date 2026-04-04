@@ -1,14 +1,17 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { apiRequest } from "./queryClient";
 
-interface AuthUser {
-  type: "warga" | "admin" | "warga_singgah";
+export interface AuthUser {
+  type: "warga" | "admin" | "warga_singgah" | "mitra";
   kkId?: number;
   wargaId?: number;
   nomorKk?: string;
   isAdmin?: boolean;
   wargaSinggahId?: number;
   nik?: string;
+  mitraId?: number;
+  namaUsaha?: string;
+  namaKasir?: string;
 }
 
 interface WaContact {

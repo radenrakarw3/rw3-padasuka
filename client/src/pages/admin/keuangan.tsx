@@ -102,6 +102,10 @@ const ChartTooltip = ({ active, payload, label }: any) => {
 
 const ITEMS_PER_PAGE = 15;
 
+function isRwcoinKasEntry(item: KasRw): boolean {
+  return (item.createdBy ?? "").startsWith("rwcoin-") || item.kategori === "Pendapatan RWcoin";
+}
+
 export default function AdminKeuangan() {
   const { toast } = useToast();
   const now = getCurrentMonth();
@@ -111,6 +115,7 @@ export default function AdminKeuangan() {
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const [sourceFilter, setSourceFilter] = useState<"semua" | "rwcoin">("semua");
 
   const [tipe, setTipe] = useState<"pemasukan" | "pengeluaran">("pemasukan");
   const [kategori, setKategori] = useState("");
@@ -124,13 +129,17 @@ export default function AdminKeuangan() {
   const { data: campaigns } = useQuery<DonasiCampaign[]>({ queryKey: ["/api/donasi-campaign"] });
   const { data: campaignKas } = useQuery<Record<number, { pemasukan: number; pengeluaran: number; saldo: number }>>({ queryKey: ["/api/kas-rw/campaign-summary"] });
 
-  useEffect(() => { setPage(1); }, [selectedMonth]);
+  useEffect(() => { setPage(1); }, [selectedMonth, sourceFilter]);
 
   const transaksi = transaksiAll || [];
   const monthlyChart = getMonthlyChartData(transaksi);
   const dailyChart = getDailyChartData(transaksi, selectedMonth);
 
-  const filtered = transaksi.filter(t => t.tanggal.startsWith(selectedMonth));
+  const filtered = transaksi.filter(t => {
+    if (!t.tanggal.startsWith(selectedMonth)) return false;
+    if (sourceFilter === "rwcoin" && !isRwcoinKasEntry(t)) return false;
+    return true;
+  });
   const monthPemasukan = filtered.filter(t => t.tipe === "pemasukan").reduce((s, t) => s + Number(t.jumlah), 0);
   const monthPengeluaran = filtered.filter(t => t.tipe === "pengeluaran").reduce((s, t) => s + Number(t.jumlah), 0);
 
@@ -370,6 +379,34 @@ export default function AdminKeuangan() {
         </button>
       </div>
 
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          onClick={() => setSourceFilter("semua")}
+          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+            sourceFilter === "semua"
+              ? "bg-[hsl(163,55%,22%)] text-white"
+              : "bg-white border border-gray-200 text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Semua Kas
+        </button>
+        <button
+          onClick={() => setSourceFilter("rwcoin")}
+          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+            sourceFilter === "rwcoin"
+              ? "bg-[hsl(40,45%,45%)] text-white"
+              : "bg-white border border-amber-200 text-amber-700 hover:bg-amber-50"
+          }`}
+        >
+          RWcoin Saja
+        </button>
+        {sourceFilter === "rwcoin" && (
+          <p className="text-[11px] text-muted-foreground">
+            Menampilkan iuran RWcoin, admin fee topup, dan potongan withdraw yang masuk ke kas RW.
+          </p>
+        )}
+      </div>
+
       {/* Summary bulan terpilih */}
       {!isLoading && (
         <div className="grid grid-cols-3 gap-2">
@@ -443,6 +480,11 @@ export default function AdminKeuangan() {
                         <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${t.tipe === "pemasukan" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
                           {t.kategori}
                         </span>
+                        {isRwcoinKasEntry(t) && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-amber-100 text-amber-700">
+                            RWcoin
+                          </span>
+                        )}
                         {t.campaignId && campaigns && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-purple-100 text-purple-700 flex items-center gap-0.5">
                             <Heart className="w-2.5 h-2.5" />

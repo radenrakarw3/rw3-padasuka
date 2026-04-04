@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, readJsonSafely } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -17,6 +18,7 @@ import {
 } from "recharts";
 import { Receipt, CheckCircle2 } from "lucide-react";
 import type { DonasiCampaign, Donasi, KasRw, IuranKk } from "@shared/schema";
+import { wargaWalletQueryOptions } from "@/lib/warga-prefetch";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const formatRupiah = (n: number) =>
@@ -112,6 +114,11 @@ function TabKeuangan() {
 
   return (
     <div className="space-y-4">
+      <div className="rounded-xl border border-blue-100 bg-blue-50/80 px-3 py-2.5">
+        <p className="text-xs font-medium text-blue-700">Tab ini hanya menampilkan laporan kas RW.</p>
+        <p className="text-[11px] text-blue-700/80 mt-0.5">Pembayaran dengan RWcoin saat ini baru berlaku untuk tab Iuran.</p>
+      </div>
+
       {/* Summary */}
       <div className="grid grid-cols-3 gap-2">
         {[
@@ -300,24 +307,52 @@ function TabDonasi() {
   const [nominalPreset, setNominalPreset] = useState<number | null>(null);
   const [nominalCustom, setNominalCustom] = useState("");
   const [showAllLeaderboard, setShowAllLeaderboard] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<"transfer_manual" | "rwcoin">("transfer_manual");
+  const [recentRwcoinDonasi, setRecentRwcoinDonasi] = useState<{ campaignTitle: string; amount: number; saldoBaru: number } | null>(null);
 
   const { data: campaigns, isLoading } = useQuery<DonasiCampaign[]>({ queryKey: ["/api/donasi-campaign"] });
   const { data: myDonasi }  = useQuery<(Donasi & { judulCampaign: string })[]>({ queryKey: ["/api/donasi"] });
   const { data: leaderboard } = useQuery<{ namaDonatur: string; total: number; count: number }[]>({ queryKey: ["/api/donasi/leaderboard"] });
   const { data: terkumpulMap } = useQuery<Record<number, number>>({ queryKey: ["/api/donasi/terkumpul"] });
+  const { data: rwcoinWallet } = useQuery<any>({
+    ...wargaWalletQueryOptions(),
+  });
 
   const jumlahFinal = nominalPreset ?? (nominalCustom ? parseInt(nominalCustom) : 0);
   const activeCampaigns = campaigns?.filter(c => c.status === "aktif") ?? [];
   const selectedCampaign = activeCampaigns.find(c => c.id === selectedCampaignId);
+  const saldoRwcoin = rwcoinWallet?.saldo ?? 0;
+  const saldoCukupRwcoin = jumlahFinal > 0 && Number(saldoRwcoin) >= jumlahFinal;
+  const namaAkunRwcoin = rwcoinWallet?.namaWarga ?? "Akun warga";
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("POST", "/api/donasi", { campaignId: selectedCampaignId, kkId: user?.kkId, namaDonatur, jumlah: jumlahFinal });
+      const res = await apiRequest("POST", "/api/donasi", {
+        campaignId: selectedCampaignId,
+        kkId: user?.kkId,
+        namaDonatur: paymentMethod === "rwcoin" ? namaAkunRwcoin : namaDonatur,
+        jumlah: jumlahFinal,
+        paymentMethod,
+      });
+      return readJsonSafely<any>(res);
     },
-    onSuccess: () => {
-      toast({ title: "Terima kasih!", description: "Donasi tercatat, menunggu konfirmasi admin." });
+    onSuccess: (result) => {
+      if (paymentMethod === "rwcoin") {
+        setRecentRwcoinDonasi({
+          campaignTitle: selectedCampaign?.judul ?? "Campaign",
+          amount: jumlahFinal,
+          saldoBaru: result?.saldoBaru ?? Math.max(0, Number(saldoRwcoin) - jumlahFinal),
+        });
+        queryClient.setQueryData<any>(["/api/warga/rwcoin/wallet"], (current: any) =>
+          current ? { ...current, saldo: result?.saldoBaru ?? current.saldo } : current,
+        );
+        queryClient.invalidateQueries({ queryKey: ["/api/warga/rwcoin/transaksi"] });
+        toast({ title: "Donasi RWcoin berhasil", description: "Donasi langsung masuk ke campaign dan tercatat otomatis di kas RW." });
+      } else {
+        toast({ title: "Terima kasih!", description: "Donasi tercatat, menunggu konfirmasi admin." });
+      }
       setStep(0); setSelectedCampaignId(null);
-      setNamaDonatur(""); setNominalPreset(null); setNominalCustom("");
+      setNamaDonatur(""); setNominalPreset(null); setNominalCustom(""); setPaymentMethod("transfer_manual");
       queryClient.invalidateQueries({ queryKey: ["/api/donasi"] });
       queryClient.invalidateQueries({ queryKey: ["/api/donasi/terkumpul"] });
     },
@@ -333,6 +368,8 @@ function TabDonasi() {
     setSelectedCampaignId(campaignId);
     setNominalPreset(preset ?? 25000);
     setNominalCustom("");
+    setPaymentMethod("transfer_manual");
+    setRecentRwcoinDonasi(null);
     setStep(1);
   };
 
@@ -348,6 +385,18 @@ function TabDonasi() {
         <button onClick={() => setStep(0)} className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <ChevronLeft className="w-4 h-4" /> Kembali
         </button>
+
+        {recentRwcoinDonasi && (
+          <div className="rounded-2xl border border-green-200 bg-green-50/80 p-4">
+            <p className="text-sm font-semibold text-green-700">Donasi RWcoin baru saja berhasil</p>
+            <p className="text-xs text-green-700/80 mt-1">
+              {recentRwcoinDonasi.campaignTitle} · {formatRupiah(recentRwcoinDonasi.amount)}
+            </p>
+            <p className="text-[11px] text-green-700/80 mt-1">
+              Saldo RWcoin tersisa {formatRupiah(recentRwcoinDonasi.saldoBaru)}.
+            </p>
+          </div>
+        )}
 
         {/* Header campaign */}
         <div className="rounded-2xl bg-gradient-to-br from-[hsl(163,55%,22%)] to-[hsl(163,55%,15%)] p-4 text-white">
@@ -374,29 +423,88 @@ function TabDonasi() {
           </div>
         </div>
 
-        {/* Rekening */}
-        <div className="rounded-xl border-2 border-dashed border-[hsl(163,55%,22%)]/30 bg-[hsl(163,55%,22%)]/5 p-4">
-          <p className="text-xs text-muted-foreground mb-2.5 font-medium">1. Transfer terlebih dahulu ke rekening ini</p>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center">
+        <div className="space-y-2.5">
+          <p className="text-xs text-muted-foreground font-medium">1. Pilih metode donasi</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => setPaymentMethod("transfer_manual")}
+              className={`rounded-2xl border-2 p-3 text-left transition-all ${
+                paymentMethod === "transfer_manual"
+                  ? "border-[hsl(163,55%,22%)] bg-[hsl(163,55%,97%)]"
+                  : "border-border bg-background"
+              }`}
+            >
+              <div className="flex items-center gap-2">
                 <Banknote className="w-4 h-4 text-blue-600" />
+                <p className="text-sm font-semibold">Transfer Bank</p>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">BCA · Raden Raka Abdul Kamal S.</p>
-                <p className="text-lg font-bold tracking-wider">1390997490</p>
+              <p className="text-[11px] text-muted-foreground mt-1">Perlu konfirmasi admin setelah transfer.</p>
+            </button>
+            <button
+              onClick={() => {
+                setPaymentMethod("rwcoin");
+                setNamaDonatur("");
+              }}
+              className={`rounded-2xl border-2 p-3 text-left transition-all ${
+                paymentMethod === "rwcoin"
+                  ? "border-[hsl(163,55%,22%)] bg-[hsl(163,55%,97%)]"
+                  : "border-border bg-background"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Wallet className="w-4 h-4 text-[hsl(163,55%,22%)]" />
+                <p className="text-sm font-semibold">Pakai RWcoin</p>
               </div>
-            </div>
-            <button onClick={copyRekening}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[hsl(163,55%,22%)] text-white text-xs font-semibold active:scale-95 transition-transform">
-              <Copy className="w-3.5 h-3.5" /> Salin
+              <p className="text-[11px] text-muted-foreground mt-1">Langsung tercatat otomatis ke campaign dan kas RW.</p>
             </button>
           </div>
         </div>
 
+        {/* Rekening */}
+        {paymentMethod === "transfer_manual" ? (
+          <div className="rounded-xl border-2 border-dashed border-[hsl(163,55%,22%)]/30 bg-[hsl(163,55%,22%)]/5 p-4">
+            <p className="text-xs text-muted-foreground mb-2.5 font-medium">2. Transfer terlebih dahulu ke rekening ini</p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center">
+                  <Banknote className="w-4 h-4 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">BCA · Raden Raka Abdul Kamal S.</p>
+                  <p className="text-lg font-bold tracking-wider">1390997490</p>
+                </div>
+              </div>
+              <button onClick={copyRekening}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[hsl(163,55%,22%)] text-white text-xs font-semibold active:scale-95 transition-transform">
+                <Copy className="w-3.5 h-3.5" /> Salin
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-[hsl(163,55%,22%)]/20 bg-[hsl(163,55%,97%)] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Saldo RWcoin Anda</p>
+                <p className="text-lg font-bold text-[hsl(163,55%,22%)]">{formatRupiah(Number(saldoRwcoin))}</p>
+              </div>
+              {jumlahFinal > 0 && (
+                <div className="text-right">
+                  <p className="text-xs text-muted-foreground">Setelah donasi</p>
+                  <p className={`text-sm font-semibold ${saldoCukupRwcoin ? "text-[hsl(163,55%,22%)]" : "text-red-600"}`}>
+                    {formatRupiah(Math.max(0, Number(saldoRwcoin) - jumlahFinal))}
+                  </p>
+                </div>
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-2">
+              Donasi RWcoin tidak perlu menunggu verifikasi admin. Begitu dibayar, campaign dan kas RW langsung diperbarui.
+            </p>
+          </div>
+        )}
+
         {/* Nominal */}
         <div className="space-y-2.5">
-          <p className="text-xs text-muted-foreground font-medium">2. Pilih jumlah donasi</p>
+          <p className="text-xs text-muted-foreground font-medium">{paymentMethod === "transfer_manual" ? "3. Pilih jumlah donasi" : "2. Pilih jumlah donasi"}</p>
           <div className="grid grid-cols-3 gap-2">
             {NOMINAL_PRESETS.map(n => (
               <button key={n}
@@ -431,21 +539,51 @@ function TabDonasi() {
 
         {/* Nama */}
         <div className="space-y-2">
-          <p className="text-xs text-muted-foreground font-medium">3. Nama pengirim transfer</p>
-          <Input value={namaDonatur} onChange={e => setNamaDonatur(e.target.value)}
-            placeholder="Nama sesuai pengirim di bank" className="h-12 text-base" />
-          <p className="text-[10px] text-muted-foreground">Isi sama persis seperti nama di rekening/m-Banking agar admin bisa memverifikasi.</p>
+          <p className="text-xs text-muted-foreground font-medium">{paymentMethod === "transfer_manual" ? "4. Nama pengirim transfer" : "3. Donatur otomatis"}</p>
+          {paymentMethod === "transfer_manual" ? (
+            <>
+              <Input value={namaDonatur} onChange={e => setNamaDonatur(e.target.value)}
+                placeholder="Nama sesuai pengirim di bank"
+                className="h-12 text-base" />
+              <p className="text-[10px] text-muted-foreground">
+                Isi sama persis seperti nama di rekening/m-Banking agar admin bisa memverifikasi.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="h-12 rounded-xl border bg-muted/30 px-4 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Akun yang dipakai</p>
+                  <p className="text-sm font-semibold text-[hsl(163,55%,22%)]">{namaAkunRwcoin}</p>
+                </div>
+                <Wallet className="w-4 h-4 text-[hsl(163,55%,22%)]" />
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Nama donatur otomatis mengikuti akun warga yang sedang login dan donasi langsung masuk tanpa menunggu ACC admin.
+              </p>
+            </>
+          )}
         </div>
 
         <Button className="w-full h-14 text-base font-bold bg-[hsl(163,55%,22%)] gap-2"
           onClick={() => createMutation.mutate()}
-          disabled={!namaDonatur.trim() || jumlahFinal <= 0 || createMutation.isPending}>
+          disabled={(paymentMethod === "transfer_manual" && !namaDonatur.trim()) || jumlahFinal <= 0 || createMutation.isPending || (paymentMethod === "rwcoin" && !saldoCukupRwcoin)}>
           {createMutation.isPending
-            ? <span className="flex items-center gap-2"><span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />Mengirim...</span>
-            : <span className="flex items-center gap-2"><Heart className="w-5 h-5" />Saya Sudah Transfer — Konfirmasi</span>
+            ? <span className="flex items-center gap-2"><span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />Memproses...</span>
+            : paymentMethod === "rwcoin"
+              ? <span className="flex items-center gap-2"><Wallet className="w-5 h-5" />Donasi Pakai RWcoin</span>
+              : <span className="flex items-center gap-2"><Heart className="w-5 h-5" />Saya Sudah Transfer — Konfirmasi</span>
           }
         </Button>
-        <p className="text-[10px] text-muted-foreground text-center">Admin akan memverifikasi transfer Anda.</p>
+        {paymentMethod === "rwcoin" && !saldoCukupRwcoin && jumlahFinal > 0 ? (
+          <p className="text-[10px] text-center text-red-500">Saldo RWcoin belum cukup untuk nominal donasi ini.</p>
+        ) : (
+          <p className="text-[10px] text-muted-foreground text-center">
+            {paymentMethod === "rwcoin"
+              ? "Donasi RWcoin langsung tercatat otomatis."
+              : "Admin akan memverifikasi transfer Anda."}
+          </p>
+        )}
       </div>
     );
   }
@@ -632,16 +770,70 @@ function getCurrentMonthIuran(): string {
 }
 
 function TabIuran() {
+  const { toast } = useToast();
+  const [confirmRwcoinIuran, setConfirmRwcoinIuran] = useState<IuranKk | null>(null);
+  const [processingIuran, setProcessingIuran] = useState<IuranKk | null>(null);
+  const [recentPaidIuran, setRecentPaidIuran] = useState<IuranKk | null>(null);
   const { data: iuranList = [], isLoading } = useQuery<IuranKk[]>({
     queryKey: ["/api/iuran/warga"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/iuran/warga");
-      return res.json();
+      return readJsonSafely<IuranKk[]>(res);
+    },
+  });
+  const { data: rwcoinWallet } = useQuery<any>({
+    ...wargaWalletQueryOptions(),
+  });
+
+  const bayarRwcoinMutation = useMutation<{
+    iuran: IuranKk;
+    transaksi: { id: number; tipe: string; createdAt?: string | null };
+    saldoBaru: number;
+  }, Error, number>({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("POST", `/api/iuran/${id}/bayar-rwcoin`, {
+        tanggalBayar: new Date().toISOString().slice(0, 10),
+      });
+      return readJsonSafely(res);
+    },
+    onMutate: (id: number) => {
+      const targetIuran = iuranList.find((row) => row.id === id) ?? null;
+      setProcessingIuran(targetIuran);
+      setConfirmRwcoinIuran(null);
+      setRecentPaidIuran(null);
+    },
+    onSuccess: (result) => {
+      queryClient.setQueryData<IuranKk[]>(["/api/iuran/warga"], (current = []) =>
+        current.map((row) => (row.id === result.iuran.id ? { ...row, ...result.iuran } : row)),
+      );
+      queryClient.setQueryData<any>(["/api/warga/rwcoin/wallet"], (current: any) =>
+        current ? { ...current, saldo: result.saldoBaru } : current,
+      );
+      queryClient.invalidateQueries({ queryKey: ["/api/iuran/warga"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/warga/rwcoin/wallet"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/warga/rwcoin/transaksi"] });
+      setProcessingIuran(null);
+      setRecentPaidIuran(result.iuran);
+      toast({ title: "Iuran berhasil dibayar", description: "Status lunas tersimpan untuk kartu keluarga Anda dan langsung terlihat oleh anggota KK lainnya." });
+    },
+    onError: (e: any) => {
+      setProcessingIuran(null);
+      toast({ title: "Gagal bayar iuran", description: e.message, variant: "destructive" });
     },
   });
 
   const currentMonth = getCurrentMonthIuran();
   const iuranBulanIni = iuranList.find(r => r.bulanTahun === currentMonth);
+  const saldoRwcoin = rwcoinWallet?.saldo ?? 0;
+  const bisaBayarBulanIni = !!iuranBulanIni && iuranBulanIni.status !== "lunas" && saldoRwcoin >= Number(iuranBulanIni.jumlah);
+  const tunggakanList = iuranList
+    .filter((r) => r.status !== "lunas" && r.bulanTahun < currentMonth)
+    .sort((a, b) => a.bulanTahun.localeCompare(b.bulanTahun));
+  const totalTunggakan = tunggakanList.reduce((sum, row) => sum + Number(row.jumlah), 0);
+  const confirmNominal = confirmRwcoinIuran ? Number(confirmRwcoinIuran.jumlah) : 0;
+  const sisaSaldoSetelahBayar = Math.max(0, Number(saldoRwcoin) - confirmNominal);
+  const isConfirmingTunggakan = !!confirmRwcoinIuran && confirmRwcoinIuran.bulanTahun < currentMonth;
+  const isProcessingTunggakan = !!processingIuran && processingIuran.bulanTahun < currentMonth;
 
   if (isLoading) {
     return (
@@ -665,12 +857,71 @@ function TabIuran() {
 
   return (
     <div className="space-y-3">
+      {recentPaidIuran && (
+        <Card className="border-green-200 bg-green-50/80">
+          <CardContent className="pt-4 pb-3 flex items-start gap-3">
+            <div className="mt-0.5 rounded-full bg-green-100 p-2 text-green-700">
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-green-700">
+                {recentPaidIuran.bulanTahun < currentMonth ? "Tunggakan berhasil dilunasi" : "Iuran berhasil dibayar"}
+              </p>
+              <p className="text-xs text-green-700/80 mt-1">
+                {formatBulanIuran(recentPaidIuran.bulanTahun)} · {formatRupiahIuran(Number(recentPaidIuran.jumlah))}
+              </p>
+              <p className="text-[11px] text-green-700/80 mt-1">
+                Status lunas sekarang sudah berlaku untuk seluruh anggota dalam kartu keluarga yang sama.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {processingIuran && (
+        <Card className="border-[hsl(163,55%,22%)]/20 bg-[hsl(163,55%,97%)]">
+          <CardContent className="pt-4 pb-3 flex items-start gap-3">
+            <div className="mt-0.5 rounded-full bg-[hsl(163,55%,22%)]/10 p-2 text-[hsl(163,55%,22%)]">
+              <Clock className="w-4 h-4 animate-spin" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-[hsl(163,55%,22%)]">
+                {isProcessingTunggakan ? "Pembayaran tunggakan sedang diproses" : "Pembayaran iuran sedang diproses"}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {formatBulanIuran(processingIuran.bulanTahun)} · {formatRupiahIuran(Number(processingIuran.jumlah))}
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                {isProcessingTunggakan
+                  ? "Mohon tunggu sebentar. Tunggakan yang Anda pilih sedang dilunasi dan statusnya akan diperbarui otomatis."
+                  : "Mohon tunggu sebentar. Status iuran dan saldo RWcoin akan diperbarui otomatis setelah transaksi selesai."}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card className="border-[hsl(163,55%,22%)]/20 bg-[hsl(163,55%,97%)]">
+        <CardContent className="pt-4 pb-3 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs text-muted-foreground">Saldo RWcoin Anda</p>
+            <p className="font-bold text-lg text-[hsl(163,55%,22%)]">{formatRupiahIuran(Number(saldoRwcoin))}</p>
+            <p className="text-[11px] text-muted-foreground">Iuran adalah tagihan per kartu keluarga, jadi anggota KK mana pun boleh melunasi dengan RWcoin.</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[11px] text-muted-foreground">Tagihan bulan ini</p>
+            <p className="font-semibold">{iuranBulanIni ? formatRupiahIuran(Number(iuranBulanIni.jumlah)) : "-"}</p>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Status bulan ini */}
       <Card className={iuranBulanIni?.status === "lunas" ? "border-green-200 bg-green-50/50" : "border-orange-200 bg-orange-50/50"}>
         <CardContent className="pt-4 pb-3">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground mb-0.5">Iuran Bulan Ini</p>
+              <p className="text-[11px] text-muted-foreground">Berlaku untuk seluruh anggota dalam satu KK.</p>
               <p className="font-semibold text-sm">{formatBulanIuran(currentMonth)}</p>
             </div>
             {iuranBulanIni ? (
@@ -688,8 +939,74 @@ function TabIuran() {
               <span className="text-xs text-muted-foreground">Belum ada tagihan</span>
             )}
           </div>
+          {iuranBulanIni && iuranBulanIni.status !== "lunas" && (
+            <div className="mt-3 pt-3 border-t flex items-center justify-between gap-3">
+              <p className="text-xs text-muted-foreground">
+                {bisaBayarBulanIni
+                  ? "Saldo RWcoin cukup. Anggota KK mana pun bisa melunasi tagihan ini sekarang."
+                  : "Saldo RWcoin pada akun ini belum cukup untuk melunasi iuran KK bulan ini."}
+              </p>
+              <Button
+                size="sm"
+                className="bg-[hsl(163,55%,22%)]"
+                disabled={!bisaBayarBulanIni || bayarRwcoinMutation.isPending}
+                onClick={() => setConfirmRwcoinIuran(iuranBulanIni)}
+              >
+                {bayarRwcoinMutation.isPending ? "Memproses..." : "Bayar dengan RWcoin"}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {tunggakanList.length > 0 && (
+        <Card className="border-red-200 bg-red-50/40">
+          <CardHeader className="pb-2 pt-4">
+            <CardTitle className="text-sm font-semibold text-red-700">Tunggakan Iuran</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-start justify-between gap-3 rounded-2xl border border-red-100 bg-white/80 p-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Bulan yang belum lunas</p>
+                <p className="text-sm font-semibold">{tunggakanList.length} bulan</p>
+                <p className="text-[11px] text-muted-foreground">Silakan lunasi satu per satu mulai dari bulan terlama.</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-muted-foreground">Total tunggakan</p>
+                <p className="text-sm font-bold text-red-600">{formatRupiahIuran(totalTunggakan)}</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {tunggakanList.map((row) => {
+                const saldoCukup = Number(saldoRwcoin) >= Number(row.jumlah);
+                return (
+                  <div key={row.id} className="flex items-center justify-between rounded-2xl border border-red-100 bg-white px-4 py-3">
+                    <div>
+                      <p className="text-sm font-medium">{formatBulanIuran(row.bulanTahun)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {saldoCukup ? "Bisa dibayar sekarang dengan RWcoin." : "Saldo RWcoin pada akun ini belum cukup."}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold">{formatRupiahIuran(Number(row.jumlah))}</p>
+                      <Button
+                        size="sm"
+                        variant={saldoCukup ? "default" : "outline"}
+                        className={saldoCukup ? "mt-2 bg-[hsl(163,55%,22%)]" : "mt-2"}
+                        disabled={!saldoCukup || bayarRwcoinMutation.isPending}
+                        onClick={() => setConfirmRwcoinIuran(row)}
+                      >
+                        Bayar Tunggakan
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Riwayat */}
       <Card>
@@ -699,17 +1016,33 @@ function TabIuran() {
         <CardContent className="p-0">
           <div className="divide-y">
             {iuranList.map(r => (
-              <div key={r.id} className="flex items-center justify-between px-4 py-3">
+              <div
+                key={r.id}
+                className={`flex items-center justify-between px-4 py-3 ${
+                  recentPaidIuran?.id === r.id ? "bg-green-50/70" : ""
+                }`}
+              >
                 <div>
                   <p className="text-sm font-medium">{formatBulanIuran(r.bulanTahun)}</p>
                   {r.tanggalBayar && (
                     <p className="text-xs text-muted-foreground">Bayar: {formatTanggalIuran(r.tanggalBayar)}</p>
                   )}
+                  {r.status !== "lunas" && saldoRwcoin >= Number(r.jumlah) && (
+                    <button
+                      onClick={() => setConfirmRwcoinIuran(r)}
+                      className="text-xs text-[hsl(163,55%,22%)] font-medium mt-1 hover:underline"
+                      disabled={bayarRwcoinMutation.isPending}
+                    >
+                      Bayar pakai RWcoin
+                    </button>
+                  )}
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-semibold">{formatRupiahIuran(Number(r.jumlah))}</p>
                   {r.status === "lunas" ? (
-                    <span className="text-xs text-green-600 font-medium">Lunas</span>
+                    <span className="text-xs text-green-600 font-medium">
+                      {recentPaidIuran?.id === r.id ? "Baru saja lunas" : "Lunas"}
+                    </span>
                   ) : (
                     <span className="text-xs text-red-500">Belum</span>
                   )}
@@ -719,6 +1052,53 @@ function TabIuran() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={!!confirmRwcoinIuran} onOpenChange={(open) => !open && setConfirmRwcoinIuran(null)}>
+        <DialogContent className="max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>{isConfirmingTunggakan ? "Konfirmasi Bayar Tunggakan" : "Konfirmasi Bayar Iuran"}</DialogTitle>
+          </DialogHeader>
+          {confirmRwcoinIuran && (
+            <div className="space-y-4">
+              <div className="rounded-2xl border bg-[hsl(163,55%,97%)] p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-muted-foreground">Periode</span>
+                  <span className="font-semibold">{formatBulanIuran(confirmRwcoinIuran.bulanTahun)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-muted-foreground">Nominal iuran</span>
+                  <span className="font-semibold">{formatRupiahIuran(confirmNominal)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-muted-foreground">Saldo sekarang</span>
+                  <span className="font-semibold">{formatRupiahIuran(Number(saldoRwcoin))}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 border-t pt-3 text-sm">
+                  <span className="text-muted-foreground">Sisa setelah bayar</span>
+                  <span className="font-bold text-[hsl(163,55%,22%)]">{formatRupiahIuran(sisaSaldoSetelahBayar)}</span>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {isConfirmingTunggakan
+                  ? "Pembayaran ini akan langsung melunasi tunggakan yang dipilih untuk kartu keluarga Anda dan status lunasnya otomatis terlihat oleh anggota KK lain."
+                  : "Pembayaran ini akan langsung melunasi iuran untuk kartu keluarga Anda dan status lunasnya otomatis terlihat oleh anggota KK lain."}
+              </p>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setConfirmRwcoinIuran(null)} disabled={bayarRwcoinMutation.isPending}>
+                  Batal
+                </Button>
+                <Button
+                  className="flex-1 bg-[hsl(163,55%,22%)]"
+                  onClick={() => bayarRwcoinMutation.mutate(confirmRwcoinIuran.id)}
+                  disabled={bayarRwcoinMutation.isPending || confirmNominal > Number(saldoRwcoin)}
+                >
+                  {bayarRwcoinMutation.isPending ? "Memproses..." : "Konfirmasi Bayar"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

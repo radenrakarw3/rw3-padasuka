@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, getQueryFn } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useLocation } from "wouter";
+import { wargaAnggotaQueryOptions, wargaCurhatKuotaQueryOptions, wargaMitraQueryOptions } from "@/lib/warga-prefetch";
 import {
   MessageCircleHeart, Lock, Sparkles, Send, Phone,
   Store, MapPin, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ShoppingBag, Star,
@@ -260,20 +261,16 @@ export default function WargaBeranda() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const { data: anggota, isLoading } = useQuery<Warga[]>({
-    queryKey: ["/api/warga/kk", user?.kkId],
-    enabled: !!user?.kkId,
+    ...wargaAnggotaQueryOptions(user?.kkId),
   });
 
   const { data: kuota } = useQuery<{ sudahCurhatHariIni: boolean; coinDiberikan: number; balasanGemini: string | null }>({
-    queryKey: ["/api/warga/curhat/kuota"],
-    staleTime: 30_000,
+    ...wargaCurhatKuotaQueryOptions(),
     enabled: !!user,
   });
 
   const { data: mitraList = [] } = useQuery<any[]>({
-    queryKey: ["/api/warga/rwcoin/mitra"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
-    staleTime: 60_000,
+    ...wargaMitraQueryOptions(),
   });
 
   const curhatMutation = useMutation({

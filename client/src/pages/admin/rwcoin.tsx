@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
+import { apiRequest, queryClient, getQueryFn, readJsonSafely } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,8 @@ import {
   Plus, Pencil, Trash2, X, Check, ChevronDown, ChevronUp,
   ShoppingBag, Tag, Percent, AlertCircle, Clock, CheckCircle2,
   Search, Users, CreditCard, RefreshCw, Landmark, Phone, User,
-  AlertTriangle, Shield, BarChart3, Activity, PiggyBank,
+  AlertTriangle, Shield, BarChart3, Activity, PiggyBank, Smartphone, Zap, Wifi, EyeOff, Receipt,
+  Sparkles,
 } from "lucide-react";
 
 function formatCoin(n: number) {
@@ -23,6 +24,151 @@ function formatRp(n: number) {
 }
 function formatTgl(ts: string) {
   return new Date(ts).toLocaleString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function parseTripayFilterValue(value: string) {
+  if (value === "all") return "all";
+  return /^\d+$/.test(value) ? Number(value) : value;
+}
+
+function tripayKindLabel(kind: string) {
+  if (kind === "electricity") return "Token PLN";
+  if (kind === "data") return "Paket Data";
+  return "Pulsa";
+}
+
+function simpleTripayOperatorLabel(value?: string | null) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (!normalized) return null;
+  const map: Record<string, string> = {
+    pln: "PLN",
+    telkomsel: "Telkomsel",
+    indosat: "Indosat",
+    xl: "XL",
+    axis: "AXIS",
+    tri: "Tri",
+    smartfren: "Smartfren",
+    mobile_legends: "Mobile Legends",
+    free_fire: "Free Fire",
+    point_blank: "Point Blank",
+    grab_driver: "Grab Driver",
+    pubg: "PUBG",
+    valorant: "Valorant",
+    call_of_duty: "Call of Duty",
+    roblox: "Roblox",
+    genshin_impact: "Genshin Impact",
+    aov: "AOV",
+    google_play: "Google Play",
+    steam: "Steam",
+    gopay: "GoPay",
+    shopeepay: "ShopeePay",
+    linkaja: "LinkAja",
+  };
+  if (map[normalized]) return map[normalized];
+  return normalized
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function isGeneratedTripayOperatorLabel(value?: string | null) {
+  const label = String(value ?? "").trim();
+  if (!label) return true;
+  return /^operator\b/i.test(label) || /tidak dikenal/i.test(label);
+}
+
+function simpleTripayOperatorFromProduct(product: any) {
+  return simpleTripayOperatorLabel(product?.operatorNormalized)
+    || (!isGeneratedTripayOperatorLabel(product?.operatorName) ? simpleTripayOperatorLabel(product?.operatorName) : null)
+    || simpleTripayOperatorLabel(fallbackTripayOperatorName(product))
+    || null;
+}
+
+function productOperatorSearchLabel(product: any) {
+  return (
+    simpleTripayOperatorFromProduct(product)
+    || simpleTripayOperatorLabel(product?.operatorName)
+    || fallbackTripayOperatorName(product)
+    || ""
+  );
+}
+
+function simpleTripayGroupLabel(product: any) {
+  const kind = String(product?.kind ?? "").toLowerCase();
+  const group = String(product?.productGroup ?? "").toLowerCase();
+  const operator = simpleTripayOperatorFromProduct(product);
+  if (group === "electricity" || kind === "electricity") return "PLN";
+  if (operator && group === "data") return `${operator} Data`;
+  if (operator && group === "pulsa") return `${operator} Pulsa`;
+  if (operator && kind === "data") return `${operator} Data`;
+  if (operator && kind === "pulsa") return `${operator} Pulsa`;
+  if (operator) return operator;
+  if (group === "data" || kind === "data") return "Data";
+  if (group === "pulsa" || kind === "pulsa") return "Pulsa";
+  return fallbackTripayCategoryName(product);
+}
+
+function simpleTripayGroupKey(product: any) {
+  const kind = String(product?.kind ?? "").toLowerCase();
+  const group = String(product?.productGroup ?? "").toLowerCase();
+  const operator = String(product?.operatorNormalized ?? product?.operatorName ?? fallbackTripayOperatorName(product) ?? "").trim().toLowerCase();
+  if (group === "electricity" || kind === "electricity") return "pln";
+  if (operator && (group === "data" || group === "pulsa")) return `${operator}-${group}`;
+  if (operator && (kind === "data" || kind === "pulsa")) return `${operator}-${kind}`;
+  return `${fallbackTripayCategoryType(product).toLowerCase()}-${fallbackTripayCategoryName(product).toLowerCase()}`;
+}
+
+function fallbackTripayCategoryName(product: any) {
+  if (product?.categoryName) return product.categoryName;
+  if (product?.categoryType === "DATA" || product?.productGroup === "data" || product?.kind === "data") return "Paket Data";
+  if (product?.categoryType === "PLN" || product?.productGroup === "electricity" || product?.kind === "electricity") return "Token PLN";
+  if (product?.categoryType === "GAME" || product?.productGroup === "game") return "Voucher Game";
+  if (product?.productGroup === "ewallet") return "E-Wallet";
+  if (product?.productGroup === "voucher") return "Voucher";
+  if (product?.productGroup === "finance") return "Tagihan & Finansial";
+  if (product?.productGroup === "streaming") return "Streaming";
+  if (product?.productGroup === "pulsa" || product?.kind === "pulsa") return "Pulsa";
+  return "Produk Digital Lainnya";
+}
+
+function fallbackTripayCategoryType(product: any) {
+  if (product?.categoryType) return product.categoryType;
+  if (product?.productGroup === "electricity" || product?.kind === "electricity") return "PLN";
+  if (product?.productGroup === "data" || product?.kind === "data") return "DATA";
+  if (product?.productGroup === "game") return "GAME";
+  if (product?.productGroup === "ewallet") return "EWALLET";
+  if (product?.productGroup === "streaming") return "STREAMING";
+  if (product?.productGroup === "finance") return "FINANCE";
+  if (product?.productGroup === "voucher") return "VOUCHER";
+  if (product?.productGroup === "pulsa" || product?.kind === "pulsa") return "PULSA";
+  return "OTHER";
+}
+
+function fallbackTripayOperatorName(product: any) {
+  if (product?.operatorName && !isGeneratedTripayOperatorLabel(product.operatorName)) return product.operatorName;
+  if (product?.operatorNormalized) {
+    return String(product.operatorNormalized)
+      .split(/[_\s-]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  }
+  const text = `${product?.productName ?? ""} ${product?.productCode ?? ""}`.toLowerCase();
+  if (text.includes("indosat") || text.includes("im3")) return "Indosat";
+  if (text.includes("telkomsel") || text.includes("simpati") || text.includes("halo") || text.includes("by.u") || text.includes("byu")) return "Telkomsel";
+  if ((/\bxl\b/.test(text) || text.includes("xtra")) && !text.includes("axis")) return "XL";
+  if (text.includes("axis")) return "AXIS";
+  if (/\btri\b/.test(text) || text.includes("three")) return "Tri";
+  if (text.includes("smartfren")) return "Smartfren";
+  if (text.includes("pln")) return "PLN";
+  if (text.includes("mobile legends") || text.includes("mobilelegend") || text.includes("mlbb")) return "Mobile Legends";
+  if (text.includes("free fire")) return "Free Fire";
+  if (text.includes("point blank") || /\bpb\b/.test(text) || text.includes("pb cash")) return "Point Blank";
+  if (text.includes("grab driver") || text.includes("voucher grab driver") || text.includes("gbd")) return "Grab Driver";
+  if (text.includes("pubg")) return "PUBG";
+  if (product?.operatorId != null) return `Operator ${product.operatorId}`;
+  return "Operator Tidak Dikenal";
 }
 
 const KATEGORI_MITRA = ["Makanan & Minuman", "Warung", "Toko Kelontong", "Jasa", "Bengkel", "Fashion", "Pendidikan", "Kesehatan", "Lainnya"];
@@ -43,7 +189,7 @@ function TopupDialog({ onClose }: { onClose: () => void }) {
   ).slice(0, 8);
 
   const topupMutation = useMutation({
-    mutationFn: async (data: any) => { const res = await apiRequest("POST", "/api/rwcoin/topup", data); return await res.json(); },
+    mutationFn: async (data: any) => { const res = await apiRequest("POST", "/api/rwcoin/topup", data); return await readJsonSafely(res); },
     onSuccess: (data: any) => {
       toast({ title: "Topup berhasil!", description: `Saldo baru: ${formatCoin(data.saldoBaru ?? 0)}` });
       queryClient.invalidateQueries({ queryKey: ["/api/rwcoin/transaksi"] });
@@ -513,10 +659,246 @@ function SettingRow({ def, initialVal }: { def: any; initialVal: number }) {
   );
 }
 
+function TripayProductRow({ product, onSave, savingId }: {
+  product: any;
+  onSave: (id: number, data: {
+    marginFlat?: number;
+    isActive?: boolean;
+    isVisibleToWarga?: boolean;
+    isFeatured?: boolean;
+    isRecommended?: boolean;
+    kind?: "pulsa" | "data" | "electricity";
+    productGroup?: string;
+    operatorNormalized?: string;
+    displayOrder?: number;
+    adminNote?: string;
+  }) => void;
+  savingId?: number | null;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [margin, setMargin] = useState(String(product.marginFlat ?? 0));
+  const [manualKind, setManualKind] = useState<"pulsa" | "data" | "electricity">(product.kind ?? "pulsa");
+  const [manualGroup, setManualGroup] = useState(product.productGroup ?? "other");
+  const [manualOperator, setManualOperator] = useState(product.operatorNormalized ?? "");
+  const [displayOrder, setDisplayOrder] = useState(String(product.displayOrder ?? 0));
+  const [adminNote, setAdminNote] = useState(product.adminNote ?? "");
+  const [isActiveValue, setIsActiveValue] = useState(Boolean(product.isActive));
+  const [isVisibleValue, setIsVisibleValue] = useState(Boolean(product.isVisibleToWarga));
+  const [isFeaturedValue, setIsFeaturedValue] = useState(Boolean(product.isFeatured));
+  const [isRecommendedValue, setIsRecommendedValue] = useState(Boolean(product.isRecommended));
+  const isSaving = savingId === product.id;
+  const hargaJual = (product.hargaModal ?? 0) + (product.marginFlat ?? 0);
+  const marginPreview = (product.hargaModal ?? 0) + (parseInt(margin) || 0);
+
+  useEffect(() => { setMargin(String(product.marginFlat ?? 0)); }, [product.marginFlat]);
+  useEffect(() => {
+    setManualKind(product.kind ?? "pulsa");
+    setManualGroup(product.productGroup ?? "other");
+    setManualOperator(product.operatorNormalized ?? "");
+    setDisplayOrder(String(product.displayOrder ?? 0));
+    setAdminNote(product.adminNote ?? "");
+    setIsActiveValue(Boolean(product.isActive));
+    setIsVisibleValue(Boolean(product.isVisibleToWarga));
+    setIsFeaturedValue(Boolean(product.isFeatured));
+    setIsRecommendedValue(Boolean(product.isRecommended));
+  }, [product.kind, product.productGroup, product.operatorNormalized, product.displayOrder, product.adminNote, product.isActive, product.isVisibleToWarga, product.isFeatured, product.isRecommended]);
+
+  const handleSaveForm = () => {
+    onSave(product.id, {
+      marginFlat: Math.max(0, parseInt(margin) || 0),
+      kind: manualKind,
+      productGroup: manualGroup,
+      operatorNormalized: manualOperator.trim(),
+      displayOrder: Math.max(0, parseInt(displayOrder) || 0),
+      adminNote,
+      isActive: isActiveValue,
+      isVisibleToWarga: isVisibleValue,
+      isFeatured: isFeaturedValue,
+      isRecommended: isRecommendedValue,
+    });
+    setEditing(false);
+  };
+
+  const handleResetForm = () => {
+    setMargin(String(product.marginFlat ?? 0));
+    setManualKind(product.kind ?? "pulsa");
+    setManualGroup(product.productGroup ?? "other");
+    setManualOperator(product.operatorNormalized ?? "");
+    setDisplayOrder(String(product.displayOrder ?? 0));
+    setAdminNote(product.adminNote ?? "");
+    setIsActiveValue(Boolean(product.isActive));
+    setIsVisibleValue(Boolean(product.isVisibleToWarga));
+    setIsFeaturedValue(Boolean(product.isFeatured));
+    setIsRecommendedValue(Boolean(product.isRecommended));
+    setEditing(false);
+  };
+
+  return (
+    <div className="py-2.5 border-b last:border-0 space-y-3">
+      <div className="flex items-center gap-3">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <p className="text-sm font-semibold truncate">{product.productName}</p>
+          {product.isFeatured && <Badge className="text-[10px] bg-amber-100 text-amber-700">Unggulan</Badge>}
+          {product.isRecommended && <Badge className="text-[10px] bg-sky-100 text-sky-700">Rekomendasi</Badge>}
+          <Badge variant="outline" className="text-[10px]">{simpleTripayGroupLabel(product)}</Badge>
+        </div>
+        <p className="text-[11px] text-muted-foreground">{simpleTripayOperatorFromProduct(product) || product.operatorName || "Tripay"} · <span className="font-mono">{product.productCode}</span></p>
+        <p className="text-[10px] text-muted-foreground">
+          {simpleTripayGroupLabel(product)}
+          {product.categoryType ? ` · tipe: ${product.categoryType}` : ""}
+          {product.lastSoldAt ? ` · terakhir ${formatTgl(product.lastSoldAt)}` : ""}
+        </p>
+      </div>
+      <div className="text-right flex-shrink-0 min-w-[80px]">
+        <div className="text-right">
+          <p className="text-sm font-bold text-[hsl(163,55%,22%)]">{formatRp(hargaJual)}</p>
+          <p className="text-[10px] text-muted-foreground">modal {formatRp(product.hargaModal ?? 0)} {product.marginFlat > 0 && <span className="text-amber-600">+{formatRp(product.marginFlat)}</span>}</p>
+        </div>
+      </div>
+      <Button
+        size="sm"
+        variant={editing ? "secondary" : "outline"}
+        className="flex-shrink-0 text-xs"
+        onClick={() => setEditing((v) => !v)}
+      >
+        <Pencil className="w-3 h-3 mr-1" /> {editing ? "Tutup" : "Edit"}
+      </Button>
+      </div>
+
+      {editing && (
+        <div className="rounded-xl border bg-muted/30 p-3 space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <div>
+              <Label className="text-[11px] text-muted-foreground">Nama Produk</Label>
+              <Input value={product.productName} disabled className="h-9 text-sm bg-white" />
+            </div>
+            <div>
+              <Label className="text-[11px] text-muted-foreground">Kode Produk</Label>
+              <Input value={product.productCode} disabled className="h-9 text-sm bg-white font-mono" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+            <div>
+              <Label className="text-[11px] text-muted-foreground">Harga Modal</Label>
+              <Input value={formatRp(product.hargaModal ?? 0)} disabled className="h-9 text-sm bg-white" />
+            </div>
+            <div>
+              <Label className="text-[11px] text-muted-foreground">Margin</Label>
+              <Input
+                type="number"
+                min={0}
+                value={margin}
+                onChange={(e) => setMargin(e.target.value)}
+                className="h-9 text-sm bg-white"
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">Harga jual → {formatRp(marginPreview)}</p>
+            </div>
+            <div>
+              <Label className="text-[11px] text-muted-foreground">Urutan</Label>
+              <Input
+                type="number"
+                min={0}
+                value={displayOrder}
+                onChange={(e) => setDisplayOrder(e.target.value)}
+                className="h-9 text-sm bg-white"
+              />
+            </div>
+            <div>
+              <Label className="text-[11px] text-muted-foreground">Label Sederhana</Label>
+              <Input value={simpleTripayGroupLabel({ ...product, kind: manualKind, productGroup: manualGroup, operatorNormalized: manualOperator })} disabled className="h-9 text-sm bg-white" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+          <div>
+            <Label className="text-[11px] text-muted-foreground">Jenis</Label>
+            <select
+              value={manualKind}
+              onChange={(e) => setManualKind(e.target.value as "pulsa" | "data" | "electricity")}
+              className="w-full border rounded-md h-9 px-2 text-sm bg-white"
+            >
+              <option value="pulsa">Pulsa</option>
+              <option value="data">Data</option>
+              <option value="electricity">Electricity</option>
+            </select>
+          </div>
+          <div>
+            <Label className="text-[11px] text-muted-foreground">Grup Produk</Label>
+            <select
+              value={manualGroup}
+              onChange={(e) => setManualGroup(e.target.value)}
+              className="w-full border rounded-md h-9 px-2 text-sm bg-white"
+            >
+              {["pulsa", "data", "electricity", "game", "ewallet", "streaming", "finance", "voucher", "other"].map((group) => (
+                <option key={group} value={group}>{group}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label className="text-[11px] text-muted-foreground">Operator Normalisasi</Label>
+            <Input
+              value={manualOperator}
+              onChange={(e) => setManualOperator(e.target.value)}
+              className="h-9 text-sm bg-white"
+              placeholder="mis. telkomsel / mobile_legends"
+            />
+          </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <label className="rounded-lg border bg-white px-3 py-2 text-sm flex items-center gap-2">
+              <input type="checkbox" checked={isActiveValue} onChange={(e) => setIsActiveValue(e.target.checked)} />
+              Aktif
+            </label>
+            <label className="rounded-lg border bg-white px-3 py-2 text-sm flex items-center gap-2">
+              <input type="checkbox" checked={isVisibleValue} onChange={(e) => setIsVisibleValue(e.target.checked)} />
+              Tampil ke warga
+            </label>
+            <label className="rounded-lg border bg-white px-3 py-2 text-sm flex items-center gap-2">
+              <input type="checkbox" checked={isFeaturedValue} onChange={(e) => setIsFeaturedValue(e.target.checked)} />
+              Unggulan
+            </label>
+            <label className="rounded-lg border bg-white px-3 py-2 text-sm flex items-center gap-2">
+              <input type="checkbox" checked={isRecommendedValue} onChange={(e) => setIsRecommendedValue(e.target.checked)} />
+              Rekomendasi
+            </label>
+          </div>
+          <div>
+            <Label className="text-[11px] text-muted-foreground">Catatan Admin</Label>
+            <textarea
+              value={adminNote}
+              onChange={(e) => setAdminNote(e.target.value)}
+              className="w-full min-h-[72px] rounded-md border px-3 py-2 text-sm bg-white"
+              placeholder="Catatan internal untuk produk ini"
+            />
+          </div>
+          <div className="flex items-end gap-2">
+            <Button
+              size="sm"
+              className="h-9 bg-[hsl(163,55%,22%)]"
+              disabled={isSaving}
+              onClick={handleSaveForm}
+            >
+              {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : "Simpan Perubahan"}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9"
+              onClick={handleResetForm}
+            >
+              Batal
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ============ MAIN PAGE ============
 export default function AdminRwcoin() {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<"dashboard" | "mitra" | "topup" | "withdraw" | "transaksi" | "voucher" | "kas" | "pengaturan">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "mitra" | "topup" | "withdraw" | "transaksi" | "voucher" | "kas" | "tripay" | "pengaturan">("dashboard");
   const [showTopup, setShowTopup] = useState(false);
   const [editMitra, setEditMitra] = useState<any>(null);
   const [showMitraForm, setShowMitraForm] = useState(false);
@@ -527,6 +909,39 @@ export default function AdminRwcoin() {
   const [injectJumlah, setInjectJumlah] = useState("");
   const [injectKet, setInjectKet] = useState("");
   const [kasFilter, setKasFilter] = useState("semua");
+  const [tripayKindFilter, setTripayKindFilter] = useState<"all" | "pulsa" | "data" | "electricity">("all");
+  const [tripayOperatorFilter, setTripayOperatorFilter] = useState("all");
+  const [tripayActivePage, setTripayActivePage] = useState(1);
+  const [tripayHiddenPage, setTripayHiddenPage] = useState(1);
+  const [savingTripayProductId, setSavingTripayProductId] = useState<number | null>(null);
+  const [bulkMargin, setBulkMargin] = useState("");
+  const [bulkOperator, setBulkOperator] = useState("all");
+  const [showHiddenProducts, setShowHiddenProducts] = useState(false);
+  const [tripaySection, setTripaySection] = useState<"overview" | "categories" | "operators" | "products" | "transactions" | "settings">("overview");
+  const [tripayProductSearch, setTripayProductSearch] = useState("");
+  const [tripayTransactionSearch, setTripayTransactionSearch] = useState("");
+  const [tripayTransactionStatusFilter, setTripayTransactionStatusFilter] = useState<"all" | "pending" | "success" | "refunded">("all");
+  const [tripayCategoryFilter, setTripayCategoryFilter] = useState<number | string | "all">("all");
+  const [tripayOperatorCatalogFilter, setTripayOperatorCatalogFilter] = useState<number | string | "all">("all");
+  const TRIPAY_PER_PAGE = 20;
+
+  useEffect(() => {
+    setBulkOperator("all");
+    setTripayOperatorFilter("all");
+    setTripayActivePage(1);
+    setTripayHiddenPage(1);
+  }, [tripayKindFilter]);
+
+  useEffect(() => {
+    setTripayActivePage(1);
+    setTripayHiddenPage(1);
+  }, [tripayOperatorFilter]);
+
+  useEffect(() => {
+    setTripayOperatorCatalogFilter("all");
+    setTripayActivePage(1);
+    setTripayHiddenPage(1);
+  }, [tripayCategoryFilter]);
 
   const { data: stats } = useQuery<any>({ queryKey: ["/api/rwcoin/stats"], queryFn: getQueryFn({ on401: "throw" }) });
   const { data: mitraList = [] } = useQuery<any[]>({ queryKey: ["/api/rwcoin/mitra"], queryFn: getQueryFn({ on401: "throw" }) });
@@ -537,13 +952,18 @@ export default function AdminRwcoin() {
   const { data: dashboardData } = useQuery<any>({ queryKey: ["/api/rwcoin/dashboard"], queryFn: getQueryFn({ on401: "throw" }) });
   const { data: topupRequestList = [] } = useQuery<any[]>({ queryKey: ["/api/rwcoin/topup-request"], queryFn: getQueryFn({ on401: "throw" }) });
   const { data: settingsList = [] } = useQuery<any[]>({ queryKey: ["/api/rwcoin/settings"], queryFn: getQueryFn({ on401: "throw" }) });
+  const { data: tripayConfig } = useQuery<any>({ queryKey: ["/api/rwcoin/tripay/config"], queryFn: getQueryFn({ on401: "throw" }) });
+  const { data: tripayCategories = [] } = useQuery<any[]>({ queryKey: ["/api/rwcoin/tripay/categories"], queryFn: getQueryFn({ on401: "throw" }) });
+  const { data: tripayOperators = [] } = useQuery<any[]>({ queryKey: ["/api/rwcoin/tripay/operators"], queryFn: getQueryFn({ on401: "throw" }) });
+  const { data: tripayProducts = [] } = useQuery<any[]>({ queryKey: ["/api/rwcoin/tripay/products"], queryFn: getQueryFn({ on401: "throw" }) });
+  const { data: tripayTransactions = [] } = useQuery<any[]>({ queryKey: ["/api/rwcoin/tripay/transaksi"], queryFn: getQueryFn({ on401: "throw" }) });
 
   const saveMitraMutation = useMutation({
     mutationFn: async (data: any) => {
       const res = await (editMitra
         ? apiRequest("PATCH", `/api/rwcoin/mitra/${editMitra.id}`, data)
         : apiRequest("POST", "/api/rwcoin/mitra", data));
-      return await res.json();
+      return await readJsonSafely(res);
     },
     onSuccess: () => {
       toast({ title: editMitra ? "Mitra diperbarui!" : "Mitra berhasil ditambahkan!" });
@@ -554,7 +974,7 @@ export default function AdminRwcoin() {
   });
 
   const deleteMitraMutation = useMutation({
-    mutationFn: async (id: number) => { const res = await apiRequest("DELETE", `/api/rwcoin/mitra/${id}`); return await res.json(); },
+    mutationFn: async (id: number) => { const res = await apiRequest("DELETE", `/api/rwcoin/mitra/${id}`); return await readJsonSafely(res); },
     onSuccess: () => { toast({ title: "Mitra dihapus" }); queryClient.invalidateQueries({ queryKey: ["/api/rwcoin/mitra"] }); },
     onError: (e: any) => toast({ variant: "destructive", title: "Gagal", description: e.message }),
   });
@@ -562,7 +982,7 @@ export default function AdminRwcoin() {
   const withdrawMutation = useMutation({
     mutationFn: async ({ id, action, catatan }: { id: number; action: string; catatan?: string }) => {
       const res = await apiRequest("PATCH", `/api/rwcoin/withdraw/${id}/${action}`, { catatan });
-      return await res.json();
+      return await readJsonSafely(res);
     },
     onSuccess: (_, vars) => {
       toast({ title: vars.action === "setujui" ? "Withdraw disetujui" : vars.action === "bayar" ? "Marked dibayar" : "Withdraw ditolak" });
@@ -582,7 +1002,7 @@ export default function AdminRwcoin() {
       const res = await (editVoucher
         ? apiRequest("PATCH", `/api/rwcoin/voucher/${editVoucher.id}`, data)
         : apiRequest("POST", "/api/rwcoin/voucher", data));
-      return await res.json();
+      return await readJsonSafely(res);
     },
     onSuccess: () => {
       toast({ title: editVoucher ? "Voucher diperbarui" : "Voucher dibuat" });
@@ -593,13 +1013,13 @@ export default function AdminRwcoin() {
   });
 
   const deleteVoucherMutation = useMutation({
-    mutationFn: async (id: number) => { const res = await apiRequest("DELETE", `/api/rwcoin/voucher/${id}`); return await res.json(); },
+    mutationFn: async (id: number) => { const res = await apiRequest("DELETE", `/api/rwcoin/voucher/${id}`); return await readJsonSafely(res); },
     onSuccess: () => { toast({ title: "Voucher dihapus" }); queryClient.invalidateQueries({ queryKey: ["/api/rwcoin/voucher"] }); },
     onError: (e: any) => toast({ variant: "destructive", title: "Gagal", description: e.message }),
   });
 
   const accTopupMutation = useMutation({
-    mutationFn: async (id: number) => { const res = await apiRequest("POST", `/api/rwcoin/topup-request/${id}/acc`); return await res.json(); },
+    mutationFn: async (id: number) => { const res = await apiRequest("POST", `/api/rwcoin/topup-request/${id}/acc`); return await readJsonSafely(res); },
     onSuccess: () => {
       toast({ title: "Topup disetujui!", description: "Saldo warga sudah diaktifkan & WA konfirmasi terkirim." });
       queryClient.invalidateQueries({ queryKey: ["/api/rwcoin/topup-request"] });
@@ -611,7 +1031,7 @@ export default function AdminRwcoin() {
   });
 
   const tolakTopupMutation = useMutation({
-    mutationFn: async (id: number) => { const res = await apiRequest("POST", `/api/rwcoin/topup-request/${id}/tolak`); return await res.json(); },
+    mutationFn: async (id: number) => { const res = await apiRequest("POST", `/api/rwcoin/topup-request/${id}/tolak`); return await readJsonSafely(res); },
     onSuccess: () => {
       toast({ title: "Permintaan ditolak" });
       queryClient.invalidateQueries({ queryKey: ["/api/rwcoin/topup-request"] });
@@ -620,7 +1040,7 @@ export default function AdminRwcoin() {
   });
 
   const injectKasMutation = useMutation({
-    mutationFn: async (data: any) => { const res = await apiRequest("POST", "/api/rwcoin/kas/inject", data); return await res.json(); },
+    mutationFn: async (data: any) => { const res = await apiRequest("POST", "/api/rwcoin/kas/inject", data); return await readJsonSafely(res); },
     onSuccess: () => {
       toast({ title: "Kas berhasil diupdate!" });
       queryClient.invalidateQueries({ queryKey: ["/api/rwcoin/kas"] });
@@ -631,6 +1051,98 @@ export default function AdminRwcoin() {
     onError: (e: any) => toast({ variant: "destructive", title: "Gagal", description: e.message }),
   });
 
+  const syncTripayMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/rwcoin/tripay/products/sync");
+      return await readJsonSafely(res);
+    },
+    onSuccess: (data: any) => {
+      toast({ title: "Produk Tripay tersinkron", description: `${data.totalRemote ?? 0} produk dibaca dari Tripay.` });
+      queryClient.invalidateQueries({ queryKey: ["/api/rwcoin/tripay/categories"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/rwcoin/tripay/operators"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/rwcoin/tripay/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/rwcoin/tripay/config"] });
+    },
+    onError: (e: any) => toast({ variant: "destructive", title: "Sync Tripay gagal", description: e.message }),
+  });
+
+  const updateTripayProductMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const res = await apiRequest("PATCH", `/api/rwcoin/tripay/products/${id}`, data);
+      return await readJsonSafely(res);
+    },
+    onMutate: ({ id }) => setSavingTripayProductId(id),
+    onSuccess: () => {
+      toast({ title: "Produk Tripay diperbarui" });
+      queryClient.invalidateQueries({ queryKey: ["/api/rwcoin/tripay/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/rwcoin/tripay/config"] });
+    },
+    onError: (e: any) => toast({ variant: "destructive", title: "Gagal update produk", description: e.message }),
+    onSettled: () => setSavingTripayProductId(null),
+  });
+
+  const updateTripayCategoryMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const res = await apiRequest("PATCH", `/api/rwcoin/tripay/categories/${id}`, data);
+      return await readJsonSafely(res);
+    },
+    onSuccess: () => {
+      toast({ title: "Kategori Tripay diperbarui" });
+      queryClient.invalidateQueries({ queryKey: ["/api/rwcoin/tripay/categories"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/rwcoin/tripay/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/rwcoin/tripay/config"] });
+    },
+    onError: (e: any) => toast({ variant: "destructive", title: "Gagal update kategori", description: e.message }),
+  });
+
+  const updateTripayOperatorMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const res = await apiRequest("PATCH", `/api/rwcoin/tripay/operators/${id}`, data);
+      return await readJsonSafely(res);
+    },
+    onSuccess: () => {
+      toast({ title: "Operator Tripay diperbarui" });
+      queryClient.invalidateQueries({ queryKey: ["/api/rwcoin/tripay/operators"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/rwcoin/tripay/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/rwcoin/tripay/config"] });
+    },
+    onError: (e: any) => toast({ variant: "destructive", title: "Gagal update operator", description: e.message }),
+  });
+
+  const bulkTripayMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      const res = await apiRequest("POST", "/api/rwcoin/tripay/products/bulk-update", payload);
+      return await readJsonSafely(res);
+    },
+    onSuccess: (data: any) => {
+      toast({ title: "Bulk margin diterapkan", description: `${data.updated ?? 0} produk diperbarui.` });
+      queryClient.invalidateQueries({ queryKey: ["/api/rwcoin/tripay/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/rwcoin/tripay/config"] });
+    },
+    onError: (e: any) => toast({ variant: "destructive", title: "Bulk update gagal", description: e.message }),
+  });
+
+  const reconcileTripayMutation = useMutation({
+    mutationFn: async (payload?: { reference?: string }) => {
+      const res = await apiRequest("POST", "/api/rwcoin/tripay/reconcile", payload ?? {});
+      return await readJsonSafely(res);
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Reconcile Tripay selesai",
+        description: data.mode === "bulk"
+          ? `Dicek ${data.checked ?? 0}, sukses ${data.success ?? 0}, refund ${data.refunded ?? 0}, masih pending ${data.pending ?? 0}.`
+          : "Status transaksi diperbarui.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/rwcoin/tripay/transaksi"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/rwcoin/tripay/config"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/rwcoin/kas"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/rwcoin/transaksi"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/rwcoin/stats"] });
+    },
+    onError: (e: any) => toast({ variant: "destructive", title: "Reconcile gagal", description: e.message }),
+  });
+
   const tabs = [
     { id: "dashboard", label: "Dashboard", icon: Coins },
     { id: "mitra", label: "Mitra", icon: Store },
@@ -639,6 +1151,7 @@ export default function AdminRwcoin() {
     { id: "transaksi", label: "Transaksi", icon: ShoppingBag },
     { id: "voucher", label: "Voucher", icon: Tag },
     { id: "kas", label: "Kas", icon: Landmark },
+    { id: "tripay", label: "Tripay", icon: Smartphone },
     { id: "pengaturan", label: "Pengaturan", icon: Shield },
   ] as const;
 
@@ -945,7 +1458,15 @@ export default function AdminRwcoin() {
                     </div>
                     <div>
                       <p className="text-sm font-medium">
-                        {t.tipe === "topup" ? `Topup → ${t.namaWarga}` : t.tipe === "belanja" ? `${t.namaWarga} → ${t.namaUsaha}` : t.namaUsaha}
+                        {t.tipe === "topup"
+                          ? `Topup → ${t.namaWarga}`
+                          : t.tipe === "belanja"
+                          ? `${t.namaWarga} → ${t.namaUsaha}`
+                          : t.tipe === "tripay"
+                          ? `${t.namaWarga} → Tripay`
+                          : t.tipe === "refund"
+                          ? `Refund → ${t.namaWarga}`
+                          : t.namaUsaha}
                       </p>
                       <p className="text-xs text-muted-foreground">{formatTgl(t.createdAt)} · #{t.kodeTransaksi}</p>
                       {t.voucherKode && <Badge variant="outline" className="text-[10px] px-1 py-0 mt-0.5"><Tag className="w-2.5 h-2.5 mr-0.5" />{t.voucherKode}</Badge>}
@@ -972,14 +1493,17 @@ export default function AdminRwcoin() {
         const topupCoin = list.filter(r => r.tipeDetail === "topup_coin").reduce((a: number, r: any) => a + r.jumlah, 0);
         const subsidiVoucher = list.filter(r => r.tipeDetail === "subsidi_voucher").reduce((a: number, r: any) => a + r.jumlah, 0);
         const withdrawMitra = list.filter(r => r.tipeDetail === "withdraw_mitra").reduce((a: number, r: any) => a + r.jumlah, 0);
+        const tripayModal = list.filter(r => r.tipeDetail === "tripay_modal").reduce((a: number, r: any) => a + r.jumlah, 0);
+        const tripayRefund = list.filter(r => r.tipeDetail === "tripay_refund").reduce((a: number, r: any) => a + r.jumlah, 0);
         const injectMasuk = list.filter(r => r.tipeDetail === "inject_admin" && r.tipe === "pemasukan").reduce((a: number, r: any) => a + r.jumlah, 0);
         const injectKeluar = list.filter(r => r.tipeDetail === "inject_admin" && r.tipe === "pengeluaran").reduce((a: number, r: any) => a + r.jumlah, 0);
-        const totalMasuk = topupCoin + adminFee + injectMasuk;
-        const totalKeluar = withdrawMitra + subsidiVoucher + injectKeluar;
+        const totalMasuk = topupCoin + adminFee + injectMasuk + tripayRefund;
+        const totalKeluar = withdrawMitra + subsidiVoucher + injectKeluar + tripayModal;
         const saldoKas = kasData?.saldo ?? 0;
 
         // Margin bersih RW (hanya dari fee & inject, bukan modal coin)
-        const marginBersih = adminFee + injectMasuk - subsidiVoucher - injectKeluar;
+        const marginTripay = tripayTransactions.filter((t: any) => t.status === "success").reduce((a: number, t: any) => a + ((t.hargaJual ?? 0) - (t.hargaModal ?? 0)), 0);
+        const marginBersih = adminFee + injectMasuk + marginTripay - subsidiVoucher - injectKeluar;
 
         // Data ekosistem coin
         const ek = dashboardData?.ekonomi;
@@ -1081,6 +1605,7 @@ export default function AdminRwcoin() {
                     <p className="text-xs opacity-60 mb-1.5">PENGELUARAN</p>
                     <div className="space-y-1 text-xs">
                       <div className="flex justify-between"><span className="opacity-75">Withdraw Mitra</span><span className="font-semibold text-red-300">-{formatRp(withdrawMitra)}</span></div>
+                      <div className="flex justify-between"><span className="opacity-75">Modal Tripay</span><span className="font-semibold text-cyan-300">-{formatRp(tripayModal)}</span></div>
                       <div className="flex justify-between"><span className="opacity-75">Subsidi Voucher</span><span className="font-semibold text-orange-300">-{formatRp(subsidiVoucher)}</span></div>
                       {injectKeluar > 0 && <div className="flex justify-between"><span className="opacity-75">Tarik Manual</span><span className="font-semibold text-red-300">-{formatRp(injectKeluar)}</span></div>}
                       <div className="flex justify-between border-t border-white/20 pt-1 mt-1"><span className="opacity-60">Total keluar</span><span className="font-bold">-{formatRp(totalKeluar)}</span></div>
@@ -1187,13 +1712,15 @@ export default function AdminRwcoin() {
                 </div>
                 {/* Breakdown baris per baris */}
                 <div className="space-y-1.5 pt-2 border-t">
-                  {[
-                    { label: "Admin Fee Topup", val: adminFee, plus: true, color: "text-yellow-600" },
-                    { label: "Inject Kas Manual", val: injectMasuk, plus: true, color: "text-blue-600", skip: injectMasuk === 0 },
+                    {[
+                      { label: "Admin Fee Topup", val: adminFee, plus: true, color: "text-yellow-600" },
+                      { label: "Margin Tripay", val: marginTripay, plus: true, color: "text-cyan-600" },
+                      { label: "Inject Kas Manual", val: injectMasuk, plus: true, color: "text-blue-600", skip: injectMasuk === 0 },
                     { label: "Subsidi Voucher", val: subsidiVoucher, plus: false, color: "text-orange-600" },
                     { label: "Tarik Kas Manual", val: injectKeluar, plus: false, color: "text-red-600", skip: injectKeluar === 0 },
                   ].filter(r => !r.skip).map(row => {
-                    const pct = (adminFee + injectMasuk) > 0 ? Math.round(row.val / (adminFee + injectMasuk) * 100) : 0;
+                    const basis = adminFee + injectMasuk + marginTripay;
+                    const pct = basis > 0 ? Math.round(row.val / basis * 100) : 0;
                     return (
                       <div key={row.label} className="flex items-center gap-2">
                         <div className="w-28 flex-shrink-0">
@@ -1318,6 +1845,8 @@ export default function AdminRwcoin() {
                     { key: "admin_fee", label: "Admin Fee" },
                     { key: "topup_coin", label: "Modal Topup" },
                     { key: "withdraw_mitra", label: "Withdraw Mitra" },
+                    { key: "tripay_modal", label: "Modal Tripay" },
+                    { key: "tripay_refund", label: "Refund Tripay" },
                     { key: "subsidi_voucher", label: "Subsidi" },
                     { key: "inject_admin", label: "Manual" },
                   ].map(f => (
@@ -1337,11 +1866,15 @@ export default function AdminRwcoin() {
                         topup_coin: "Modal Coin Warga",
                         subsidi_voucher: "Subsidi Voucher",
                         withdraw_mitra: "Withdraw Mitra",
+                        tripay_modal: "Modal Tripay",
+                        tripay_refund: "Refund Tripay",
                       };
                       const iconMap: Record<string, { bg: string; icon: React.ReactNode }> = {
                         admin_fee: { bg: "bg-yellow-100 text-yellow-700", icon: <Coins className="w-4 h-4" /> },
                         topup_coin: { bg: "bg-green-100 text-green-700", icon: <ArrowUpCircle className="w-4 h-4" /> },
                         withdraw_mitra: { bg: "bg-red-100 text-red-600", icon: <ArrowDownCircle className="w-4 h-4" /> },
+                        tripay_modal: { bg: "bg-cyan-100 text-cyan-700", icon: <Smartphone className="w-4 h-4" /> },
+                        tripay_refund: { bg: "bg-sky-100 text-sky-700", icon: <RefreshCw className="w-4 h-4" /> },
                         subsidi_voucher: { bg: "bg-orange-100 text-orange-600", icon: <Tag className="w-4 h-4" /> },
                         inject_admin: r.tipe === "pemasukan" ? { bg: "bg-blue-100 text-blue-600", icon: <Plus className="w-4 h-4" /> } : { bg: "bg-gray-100 text-gray-600", icon: <ArrowDownCircle className="w-4 h-4" /> },
                       };
@@ -1433,6 +1966,785 @@ export default function AdminRwcoin() {
           </div>
         </div>
       )}
+
+      {/* TRIPAY TAB */}
+      {activeTab === "tripay" && (() => {
+        const byKind = (p: any) => tripayKindFilter === "all" || p.kind === tripayKindFilter;
+          const byOp = (p: any) => tripayOperatorFilter === "all" || productOperatorSearchLabel(p) === tripayOperatorFilter;
+        const productFallbackCategoryId = (p: any) => `fallback-cat-${simpleTripayGroupKey(p)}`;
+        const productFallbackOperatorId = (p: any) => `fallback-op-${productFallbackCategoryId(p)}-${simpleTripayOperatorFromProduct(p) || fallbackTripayOperatorName(p)}`;
+        const byCategory = (p: any) => tripayCategoryFilter === "all" || p.categoryRefId === tripayCategoryFilter || productFallbackCategoryId(p) === tripayCategoryFilter;
+        const byCatalogOperator = (p: any) => tripayOperatorCatalogFilter === "all" || p.operatorRefId === tripayOperatorCatalogFilter || productFallbackOperatorId(p) === tripayOperatorCatalogFilter;
+        const productSearch = tripayProductSearch.trim().toLowerCase();
+        const byProductSearch = (p: any) => !productSearch
+          || p.productName?.toLowerCase().includes(productSearch)
+          || p.productCode?.toLowerCase().includes(productSearch)
+          || productOperatorSearchLabel(p).toLowerCase().includes(productSearch)
+          || p.categoryName?.toLowerCase().includes(productSearch);
+        const activeProducts = tripayProducts.filter((p: any) => p.isActive && byKind(p) && byOp(p) && byCategory(p) && byCatalogOperator(p) && byProductSearch(p));
+        const hiddenProducts = tripayProducts.filter((p: any) => !p.isActive && byKind(p) && byOp(p) && byCategory(p) && byCatalogOperator(p) && byProductSearch(p));
+        const successTripay = tripayTransactions.filter((t: any) => t.status === "success");
+        const pendingTripay = tripayTransactions.filter((t: any) => t.status === "pending");
+        const refundedTripay = tripayTransactions.filter((t: any) => t.status === "refunded");
+        const tripayMargin = successTripay.reduce((sum: number, t: any) => sum + ((t.hargaJual ?? 0) - (t.hargaModal ?? 0)), 0);
+        const transactionsToday = tripayTransactions.filter((t: any) => {
+          const created = t.createdAt ? new Date(t.createdAt) : null;
+          const now = new Date();
+          return created
+            && created.getDate() === now.getDate()
+            && created.getMonth() === now.getMonth()
+            && created.getFullYear() === now.getFullYear();
+        });
+        const stalePending = pendingTripay.filter((t: any) => {
+          const createdAt = t.createdAt ? new Date(t.createdAt).getTime() : 0;
+          return createdAt > 0 && Date.now() - createdAt > 5 * 60 * 1000;
+        });
+        const transactionSearch = tripayTransactionSearch.trim().toLowerCase();
+        const filteredTransactions = tripayTransactions.filter((t: any) => {
+          const statusOk = tripayTransactionStatusFilter === "all" || t.status === tripayTransactionStatusFilter;
+          if (!statusOk) return false;
+          if (!transactionSearch) return true;
+          return [
+            t.productName,
+            t.productCode,
+            t.reference,
+            t.target,
+            t.noMeterPln,
+            t.namaWarga,
+          ].some((value) => String(value ?? "").toLowerCase().includes(transactionSearch));
+        });
+        // Operator dari SEMUA produk pada kind filter (tidak dipengaruhi operator filter agar chip tetap muncul)
+        const allOperatorsInKind = Array.from(new Set(
+          tripayProducts.filter(byKind).map((p: any) => productOperatorSearchLabel(p)).filter(Boolean)
+        )).sort() as string[];
+        const operatorOptions = allOperatorsInKind;
+        const fallbackCategories = Array.from(new Map(
+          tripayProducts.map((product: any) => {
+            const id = `fallback-cat-${simpleTripayGroupKey(product)}`;
+            const item = {
+              id,
+              tripayCategoryId: product.categoryId ?? null,
+              name: simpleTripayGroupLabel(product),
+              adminLabel: null,
+              type: product.kind === "electricity" ? "PLN" : product.kind === "data" ? "DATA" : product.kind === "pulsa" ? "PULSA" : fallbackTripayCategoryType(product),
+              isActive: true,
+              isVisibleToWarga: Boolean(product.isVisibleToWarga ?? product.isActive),
+              displayOrder: 0,
+            };
+            return [String(id), item];
+          })
+        ).values()).map((category: any) => {
+          const categoryProducts = tripayProducts.filter((product: any) => (product.categoryRefId ?? product.categoryId ?? `fallback-cat-${fallbackTripayCategoryType(product)}-${fallbackTripayCategoryName(product)}`) === category.id);
+          const operatorCount = new Set(categoryProducts.map((product: any) => product.operatorRefId ?? product.operatorId ?? fallbackTripayOperatorName(product))).size;
+          return {
+            ...category,
+            operatorCount,
+            productCount: categoryProducts.length,
+            activeProductCount: categoryProducts.filter((product: any) => product.isActive).length,
+          };
+        });
+        const fallbackOperators = Array.from(new Map(
+          tripayProducts.map((product: any) => {
+            const categoryId = `fallback-cat-${simpleTripayGroupKey(product)}`;
+            const id = `fallback-op-${categoryId}-${simpleTripayOperatorFromProduct(product) || fallbackTripayOperatorName(product)}`;
+            const item = {
+              id,
+              tripayOperatorId: product.operatorId ?? null,
+              categoryRefId: categoryId,
+              tripayCategoryId: product.categoryId ?? null,
+              name: simpleTripayOperatorFromProduct(product) || fallbackTripayOperatorName(product),
+              normalizedName: product.operatorNormalized ?? null,
+              categoryName: simpleTripayGroupLabel(product),
+              isActive: true,
+              isVisibleToWarga: Boolean(product.isVisibleToWarga ?? product.isActive),
+              displayOrder: 0,
+            };
+            return [String(id), item];
+          })
+        ).values()).map((operator: any) => {
+          const operatorProducts = tripayProducts.filter((product: any) => `fallback-op-${`fallback-cat-${simpleTripayGroupKey(product)}`}-${simpleTripayOperatorFromProduct(product) || fallbackTripayOperatorName(product)}` === operator.id);
+          return {
+            ...operator,
+            productCount: operatorProducts.length,
+            activeProductCount: operatorProducts.filter((product: any) => product.isActive).length,
+          };
+        });
+        const usingFallbackCategories = tripayCategories.length === 0 && fallbackCategories.length > 0;
+        const usingFallbackOperators = tripayOperators.length === 0 && fallbackOperators.length > 0;
+        const categoryOptions = tripayCategories.length > 0 ? tripayCategories : fallbackCategories;
+        const operatorSource = tripayOperators.length > 0 ? tripayOperators : fallbackOperators;
+        const operatorCatalogOptions = operatorSource.filter((operator: any) => tripayCategoryFilter === "all" || operator.categoryRefId === tripayCategoryFilter);
+        const featuredProducts = tripayProducts.filter((p: any) => p.isFeatured);
+        const recommendedProducts = tripayProducts.filter((p: any) => p.isRecommended);
+        // Pagination
+        const activeTotalPages = Math.ceil(activeProducts.length / TRIPAY_PER_PAGE);
+        const activePagedProducts = activeProducts.slice((tripayActivePage - 1) * TRIPAY_PER_PAGE, tripayActivePage * TRIPAY_PER_PAGE);
+        const hiddenTotalPages = Math.ceil(hiddenProducts.length / TRIPAY_PER_PAGE);
+        const hiddenPagedProducts = hiddenProducts.slice((tripayHiddenPage - 1) * TRIPAY_PER_PAGE, tripayHiddenPage * TRIPAY_PER_PAGE);
+
+        return (
+          <div className="space-y-4">
+
+            {/* Header + aksi */}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="font-bold text-base">Tripay PPOB</h3>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <Badge className={tripayConfig?.isConfigured ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}>
+                    {tripayConfig?.isConfigured ? "Env OK" : "Env belum lengkap"}
+                  </Badge>
+                  <Badge variant="outline" className="text-[10px]">{tripayConfig?.sandbox ? "Sandbox" : "Production"}</Badge>
+                </div>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <Button size="sm" variant="outline" onClick={() => reconcileTripayMutation.mutate()} disabled={reconcileTripayMutation.isPending}>
+                  {reconcileTripayMutation.isPending ? <RefreshCw className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Clock className="w-3.5 h-3.5 mr-1.5" />}
+                  Reconcile
+                </Button>
+                <Button size="sm" className="bg-[hsl(163,55%,22%)]" onClick={() => syncTripayMutation.mutate()} disabled={syncTripayMutation.isPending}>
+                  {syncTripayMutation.isPending ? <RefreshCw className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
+                  Sync Produk
+                </Button>
+              </div>
+            </div>
+
+            {/* Stats */}
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { label: "Produk Aktif", value: tripayConfig?.activeProducts ?? 0, sub: `${hiddenProducts.length} tersembunyi`, icon: Smartphone, color: "text-cyan-600" },
+                { label: "Transaksi Sukses", value: tripayConfig?.successTransactions ?? 0, sub: `${tripayConfig?.pendingTransactions ?? 0} pending`, icon: CheckCircle2, color: "text-green-600" },
+                { label: "Margin Terkumpul", value: formatRp(tripayMargin), sub: "dari transaksi selesai", icon: TrendingUp, color: "text-emerald-600" },
+                { label: "Transaksi Refund", value: tripayConfig?.refundedTransactions ?? 0, sub: "dikembalikan", icon: AlertCircle, color: "text-red-500" },
+              ].map((item, idx) => (
+                <Card key={idx} className="border shadow-sm">
+                  <CardContent className="p-3 flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-gray-50`}>
+                      <item.icon className={`w-5 h-5 ${item.color}`} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-bold text-sm leading-tight">{item.value}</p>
+                      <p className="text-[10px] text-muted-foreground">{item.label}</p>
+                      <p className="text-[10px] text-muted-foreground opacity-70">{item.sub}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+              {[
+                { label: "Pending Perlu Dicek", value: stalePending.length, sub: "lebih dari 5 menit", icon: AlertTriangle, color: "text-amber-600" },
+                { label: "Transaksi Hari Ini", value: transactionsToday.length, sub: "semua status", icon: Activity, color: "text-sky-600" },
+                { label: "Produk Unggulan", value: featuredProducts.length, sub: `${recommendedProducts.length} rekomendasi`, icon: Sparkles, color: "text-fuchsia-600" },
+                { label: "Refund", value: refundedTripay.length, sub: "perlu dipantau", icon: RefreshCw, color: "text-rose-600" },
+              ].map((item, idx) => (
+                <Card key={idx} className="border shadow-sm">
+                  <CardContent className="p-3 flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-gray-50">
+                      <item.icon className={`w-5 h-5 ${item.color}`} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-bold text-sm leading-tight">{item.value}</p>
+                      <p className="text-[10px] text-muted-foreground">{item.label}</p>
+                      <p className="text-[10px] text-muted-foreground opacity-70">{item.sub}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            {/* Callback URL */}
+            <div className="rounded-xl border bg-muted/40 p-3 space-y-1">
+              <p className="text-xs font-semibold text-muted-foreground">Callback URL untuk Tripay</p>
+              <p className="text-[11px] break-all font-mono bg-background rounded px-2 py-1.5 border select-all">{tripayConfig?.callbackUrl ?? "-"}</p>
+              <p className="text-[10px] text-muted-foreground">Daftarkan URL ini di Tripay Enterprise → Pengaturan → Callback URL</p>
+            </div>
+
+            <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+              {([
+                { key: "overview", label: "Overview", icon: BarChart3 },
+                { key: "categories", label: "Kategori", icon: Tag },
+                { key: "operators", label: "Operator", icon: Phone },
+                { key: "products", label: "Produk", icon: ShoppingBag },
+                { key: "transactions", label: "Transaksi", icon: Receipt },
+                { key: "settings", label: "Pengaturan", icon: Shield },
+              ] as const).map((item) => (
+                <button
+                  key={item.key}
+                  onClick={() => setTripaySection(item.key)}
+                  className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${tripaySection === item.key ? "bg-slate-700 text-white border-slate-700" : "bg-white text-muted-foreground border-gray-200"}`}
+                >
+                  <item.icon className="w-3.5 h-3.5" /> {item.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Filter kategori */}
+            {(tripaySection === "products" || tripaySection === "overview") && (
+            <div className="space-y-2">
+              <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+                {([
+                  { key: "all", label: "Semua", icon: Smartphone },
+                  { key: "pulsa", label: "Pulsa", icon: Phone },
+                  { key: "data", label: "Paket Data", icon: Wifi },
+                  { key: "electricity", label: "Token PLN", icon: Zap },
+                ] as const).map((f) => (
+                  <button
+                    key={f.key}
+                    onClick={() => setTripayKindFilter(f.key)}
+                    className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${tripayKindFilter === f.key ? "bg-[hsl(163,55%,22%)] text-white border-[hsl(163,55%,22%)]" : "bg-white text-muted-foreground border-gray-200"}`}
+                  >
+                    <f.icon className="w-3.5 h-3.5" /> {f.label}
+                  </button>
+                ))}
+              </div>
+              {/* Filter operator */}
+              {allOperatorsInKind.length > 1 && (
+                <div className="flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+                  <button
+                    onClick={() => setTripayOperatorFilter("all")}
+                    className={`flex-shrink-0 px-3 py-1 rounded-full text-xs border transition-colors ${tripayOperatorFilter === "all" ? "bg-slate-700 text-white border-slate-700" : "bg-white text-muted-foreground border-gray-200"}`}
+                  >
+                    Semua Operator
+                  </button>
+                  {allOperatorsInKind.map((op) => (
+                    <button
+                      key={op}
+                      onClick={() => setTripayOperatorFilter(op)}
+                      className={`flex-shrink-0 px-3 py-1 rounded-full text-xs border transition-colors ${tripayOperatorFilter === op ? "bg-slate-700 text-white border-slate-700" : "bg-white text-muted-foreground border-gray-200"}`}
+                    >
+                      {op}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {tripaySection === "products" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <select
+                    value={tripayCategoryFilter}
+                    onChange={(e) => setTripayCategoryFilter(parseTripayFilterValue(e.target.value))}
+                    className="h-10 rounded-lg border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="all">Semua kategori Tripay</option>
+                    {categoryOptions.map((category: any) => (
+                      <option key={category.id} value={category.id}>{category.adminLabel || category.name}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={tripayOperatorCatalogFilter}
+                    onChange={(e) => setTripayOperatorCatalogFilter(parseTripayFilterValue(e.target.value))}
+                    className="h-10 rounded-lg border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="all">Semua operator katalog</option>
+                    {operatorCatalogOptions.map((operator: any) => (
+                      <option key={operator.id} value={operator.id}>{operator.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+            )}
+
+            {tripaySection === "overview" && (
+              <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+                <Card className="border shadow-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-semibold">Antrian Prioritas</CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-4 pb-4">
+                    {pendingTripay.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-6">Tidak ada transaksi pending saat ini</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {pendingTripay.slice(0, 5).map((t: any) => {
+                          const isStale = stalePending.some((row: any) => row.id === t.id);
+                          return (
+                            <div key={t.id} className={`rounded-xl border p-3 ${isStale ? "border-amber-300 bg-amber-50" : "border-gray-200 bg-white"}`}>
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="text-sm font-semibold">{t.productName}</p>
+                                    <Badge className="bg-amber-100 text-amber-700 text-[10px]">pending</Badge>
+                                    <Badge variant="outline" className="text-[10px]">{tripayKindLabel(t.kind)}</Badge>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">{t.namaWarga ?? "Warga"} · {t.target}</p>
+                                  <p className="text-[10px] text-muted-foreground">{formatTgl(t.createdAt)}</p>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-xs"
+                                  disabled={reconcileTripayMutation.isPending}
+                                  onClick={() => reconcileTripayMutation.mutate({ reference: t.reference })}
+                                >
+                                  Cek
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card className="border shadow-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-semibold">Produk Terlaris</CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-4 pb-4 space-y-2">
+                    {(tripayConfig?.topProducts ?? []).length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-6">Belum ada data penjualan produk</p>
+                    ) : (
+                      (tripayConfig?.topProducts ?? []).map((item: any) => (
+                        <div key={item.id} className="rounded-xl border bg-muted/40 p-3">
+                          <p className="text-sm font-semibold">{item.productName}</p>
+                          <p className="text-[11px] text-muted-foreground">{productOperatorSearchLabel(item) || "Tripay"} · {item.salesCount}x terjual</p>
+                        </div>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {tripaySection === "overview" && (
+              <div className="grid gap-4 lg:grid-cols-2">
+                <Card className="border shadow-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-semibold">Operator Terlaris</CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-4 pb-4 space-y-2">
+                    {(tripayConfig?.topOperators ?? []).length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-6">Belum ada operator dengan data penjualan</p>
+                    ) : (
+                      (tripayConfig?.topOperators ?? []).map((item: any) => (
+                        <div key={item.name} className="flex items-center justify-between rounded-xl border bg-muted/40 p-3">
+                          <p className="text-sm font-medium">{item.name}</p>
+                          <Badge variant="outline">{item.salesCount}x</Badge>
+                        </div>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card className="border shadow-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-semibold">Catatan Operasional</CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-4 pb-4 space-y-2">
+                    <div className="rounded-xl border bg-muted/40 p-3">
+                      <p className="text-xs font-semibold">Yang perlu dicek admin</p>
+                      <p className="text-[11px] text-muted-foreground mt-1">Transaksi pending lebih dari 5 menit, refund berulang, dan produk aktif dengan margin belum diatur.</p>
+                    </div>
+                    <div className="rounded-xl border bg-muted/40 p-3">
+                      <p className="text-xs font-semibold">Katalog siap jual</p>
+                      <p className="text-[11px] text-muted-foreground mt-1">{activeProducts.length} produk aktif untuk filter saat ini. Gunakan toggle unggulan dan rekomendasi untuk mengarahkan pilihan warga.</p>
+                    </div>
+                    <div className="rounded-xl border bg-muted/40 p-3">
+                      <p className="text-xs font-semibold">Mode Tripay</p>
+                      <p className="text-[11px] text-muted-foreground mt-1">{tripayConfig?.sandbox ? "Masih sandbox. Aman untuk uji coba." : "Sudah production. Pastikan callback selalu aktif."}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {tripaySection === "categories" && (
+              <Card className="border shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold">Master Kategori Tripay</CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-4 space-y-3">
+                  {categoryOptions.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-6">Belum ada kategori. Jalankan `Sync Produk` dulu.</p>
+                  ) : (
+                    categoryOptions.map((category: any) => (
+                      <div key={category.id} className="rounded-xl border p-3 space-y-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-sm font-semibold">{category.adminLabel || category.name}</p>
+                              <Badge variant="outline" className="text-[10px]">{category.type || "GENERAL"}</Badge>
+                              {category.isVisibleToWarga ? <Badge className="bg-sky-100 text-sky-700 text-[10px]">Tampil ke warga</Badge> : <Badge variant="outline" className="text-[10px]">Disembunyikan</Badge>}
+                            </div>
+                            <p className="text-[11px] text-muted-foreground">
+                              {category.operatorCount} operator · {category.productCount} produk · {category.activeProductCount} aktif
+                            </p>
+                          </div>
+                          <div className="flex gap-2 flex-shrink-0">
+                            <Button size="sm" disabled={usingFallbackCategories} variant={category.isVisibleToWarga ? "default" : "outline"} className={category.isVisibleToWarga ? "bg-sky-600 hover:bg-sky-700" : ""} onClick={() => updateTripayCategoryMutation.mutate({ id: category.id, data: { isVisibleToWarga: !category.isVisibleToWarga } })}>
+                              {category.isVisibleToWarga ? "Visible" : "Hidden"}
+                            </Button>
+                            <Button size="sm" disabled={usingFallbackCategories} variant={category.isActive ? "default" : "outline"} className={category.isActive ? "bg-[hsl(163,55%,22%)]" : ""} onClick={() => updateTripayCategoryMutation.mutate({ id: category.id, data: { isActive: !category.isActive } })}>
+                              {category.isActive ? "Aktif" : "Nonaktif"}
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                          <Input
+                            disabled={usingFallbackCategories}
+                            defaultValue={category.adminLabel ?? ""}
+                            placeholder="Label admin / warga"
+                            onBlur={(e) => {
+                              const value = e.target.value;
+                              if (value !== (category.adminLabel ?? "")) updateTripayCategoryMutation.mutate({ id: category.id, data: { adminLabel: value } });
+                            }}
+                          />
+                          <Input
+                            disabled={usingFallbackCategories}
+                            defaultValue={category.iconKey ?? ""}
+                            placeholder="Icon key"
+                            onBlur={(e) => {
+                              const value = e.target.value;
+                              if (value !== (category.iconKey ?? "")) updateTripayCategoryMutation.mutate({ id: category.id, data: { iconKey: value } });
+                            }}
+                          />
+                          <Input
+                            disabled={usingFallbackCategories}
+                            type="number"
+                            defaultValue={category.displayOrder ?? 0}
+                            placeholder="Urutan tampil"
+                            onBlur={(e) => {
+                              const value = Number(e.target.value || 0);
+                              if (value !== (category.displayOrder ?? 0)) updateTripayCategoryMutation.mutate({ id: category.id, data: { displayOrder: value } });
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {tripaySection === "operators" && (
+              <Card className="border shadow-sm">
+                <CardHeader className="pb-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <CardTitle className="text-sm font-semibold">Master Operator Tripay</CardTitle>
+                    <select
+                      value={tripayCategoryFilter}
+                      onChange={(e) => setTripayCategoryFilter(parseTripayFilterValue(e.target.value))}
+                      className="h-9 rounded-lg border border-input bg-background px-3 text-sm"
+                    >
+                      <option value="all">Semua kategori</option>
+                      {categoryOptions.map((category: any) => (
+                        <option key={category.id} value={category.id}>{category.adminLabel || category.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </CardHeader>
+                <CardContent className="px-4 pb-4 space-y-3">
+                  {operatorSource.filter((operator: any) => tripayCategoryFilter === "all" || operator.categoryRefId === tripayCategoryFilter).length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-6">Belum ada operator pada filter ini.</p>
+                  ) : (
+                    operatorSource
+                      .filter((operator: any) => tripayCategoryFilter === "all" || operator.categoryRefId === tripayCategoryFilter)
+                      .map((operator: any) => (
+                        <div key={operator.id} className="rounded-xl border p-3 space-y-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="text-sm font-semibold">{operator.name}</p>
+                                {operator.categoryName && <Badge variant="outline" className="text-[10px]">{operator.categoryName}</Badge>}
+                                {operator.isVisibleToWarga ? <Badge className="bg-sky-100 text-sky-700 text-[10px]">Visible</Badge> : <Badge variant="outline" className="text-[10px]">Hidden</Badge>}
+                              </div>
+                              <p className="text-[11px] text-muted-foreground">{operator.productCount} produk · {operator.activeProductCount} aktif</p>
+                            </div>
+                            <div className="flex gap-2 flex-shrink-0">
+                              <Button size="sm" disabled={usingFallbackOperators} variant={operator.isVisibleToWarga ? "default" : "outline"} className={operator.isVisibleToWarga ? "bg-sky-600 hover:bg-sky-700" : ""} onClick={() => updateTripayOperatorMutation.mutate({ id: operator.id, data: { isVisibleToWarga: !operator.isVisibleToWarga } })}>
+                                {operator.isVisibleToWarga ? "Visible" : "Hidden"}
+                              </Button>
+                              <Button size="sm" disabled={usingFallbackOperators} variant={operator.isActive ? "default" : "outline"} className={operator.isActive ? "bg-[hsl(163,55%,22%)]" : ""} onClick={() => updateTripayOperatorMutation.mutate({ id: operator.id, data: { isActive: !operator.isActive } })}>
+                                {operator.isActive ? "Aktif" : "Nonaktif"}
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <Input
+                              disabled={usingFallbackOperators}
+                              defaultValue={operator.normalizedName ?? ""}
+                              placeholder="Nama normalisasi"
+                              onBlur={(e) => {
+                                const value = e.target.value;
+                                if (value !== (operator.normalizedName ?? "")) updateTripayOperatorMutation.mutate({ id: operator.id, data: { normalizedName: value } });
+                              }}
+                            />
+                            <Input
+                              disabled={usingFallbackOperators}
+                              type="number"
+                              defaultValue={operator.displayOrder ?? 0}
+                              placeholder="Urutan tampil"
+                              onBlur={(e) => {
+                                const value = Number(e.target.value || 0);
+                                if (value !== (operator.displayOrder ?? 0)) updateTripayOperatorMutation.mutate({ id: operator.id, data: { displayOrder: value } });
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ))
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Produk Aktif */}
+            {tripaySection === "products" && (
+            <Card className="border shadow-sm">
+              <CardHeader className="pb-0 pt-4 px-4">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <Check className="w-4 h-4 text-green-600" />
+                    Produk Aktif
+                    <Badge className="bg-green-100 text-green-700 text-[10px]">{activeProducts.length}</Badge>
+                  </CardTitle>
+                  {/* Bulk margin */}
+                  {activeProducts.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={bulkOperator}
+                        onChange={e => setBulkOperator(e.target.value)}
+                        className="h-7 rounded-lg border border-input bg-background px-2 text-xs"
+                      >
+                        <option value="all">Semua operator</option>
+                        {operatorOptions.map((op) => <option key={op} value={op}>{op}</option>)}
+                      </select>
+                      <Input
+                        type="number" min={0}
+                        value={bulkMargin}
+                        onChange={e => setBulkMargin(e.target.value)}
+                        placeholder="Margin"
+                        className="h-7 w-24 text-xs"
+                      />
+                      <Button
+                        size="sm" className="h-7 text-xs bg-[hsl(163,55%,22%)] px-3"
+                        disabled={bulkTripayMutation.isPending || bulkMargin === ""}
+                        onClick={() => bulkTripayMutation.mutate({
+                          marginFlat: parseInt(bulkMargin),
+                          kind: tripayKindFilter === "all" ? undefined : tripayKindFilter,
+                          operatorName: bulkOperator === "all" ? undefined : bulkOperator,
+                        })}
+                      >
+                        {bulkTripayMutation.isPending ? <RefreshCw className="w-3 h-3 animate-spin" /> : "Terapkan"}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                <div className="pt-3">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      value={tripayProductSearch}
+                      onChange={(e) => {
+                        setTripayProductSearch(e.target.value);
+                        setTripayActivePage(1);
+                        setTripayHiddenPage(1);
+                      }}
+                      placeholder="Cari nama produk, kode, atau operator..."
+                      className="pl-9 h-10"
+                    />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="px-4 pb-4 pt-2">
+                {activeProducts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-6">
+                    {tripayProducts.length === 0 ? 'Belum ada produk. Tekan "Sync Produk".' : "Tidak ada produk aktif pada filter ini."}
+                  </p>
+                ) : (
+                  <>
+                    <div>
+                      {activePagedProducts.map((product: any) => (
+                        <TripayProductRow
+                          key={product.id}
+                          product={product}
+                          savingId={savingTripayProductId}
+                          onSave={(id, data) => updateTripayProductMutation.mutate({ id, data })}
+                        />
+                      ))}
+                    </div>
+                    {activeTotalPages > 1 && (
+                      <div className="flex items-center justify-between pt-3 mt-1 border-t">
+                        <button
+                          onClick={() => setTripayActivePage(p => Math.max(1, p - 1))}
+                          disabled={tripayActivePage <= 1}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg border text-xs font-medium disabled:opacity-40 hover:bg-gray-50"
+                        >
+                          <ChevronDown className="w-3.5 h-3.5 rotate-90" /> Sebelumnya
+                        </button>
+                        <p className="text-xs text-muted-foreground">
+                          {tripayActivePage} / {activeTotalPages} · {activeProducts.length} produk
+                        </p>
+                        <button
+                          onClick={() => setTripayActivePage(p => Math.min(activeTotalPages, p + 1))}
+                          disabled={tripayActivePage >= activeTotalPages}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg border text-xs font-medium disabled:opacity-40 hover:bg-gray-50"
+                        >
+                          Berikutnya <ChevronDown className="w-3.5 h-3.5 -rotate-90" />
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+            )}
+
+            {/* Produk Tersembunyi */}
+            {tripaySection === "products" && hiddenProducts.length > 0 && (
+              <Card className="border shadow-sm border-dashed">
+                <button
+                  className="w-full px-4 py-3 flex items-center justify-between"
+                  onClick={() => setShowHiddenProducts(v => !v)}
+                >
+                  <div className="flex items-center gap-2">
+                    <EyeOff className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm font-semibold text-muted-foreground">Produk Tersembunyi</span>
+                    <Badge variant="outline" className="text-[10px]">{hiddenProducts.length}</Badge>
+                  </div>
+                  {showHiddenProducts ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                </button>
+                {showHiddenProducts && (
+                  <CardContent className="px-4 pb-4 pt-0">
+                    <p className="text-[11px] text-muted-foreground mb-3">Produk ini tidak tampil ke warga. Klik ikon di kanan untuk mengaktifkan.</p>
+                    {hiddenPagedProducts.map((product: any) => (
+                      <TripayProductRow
+                        key={product.id}
+                        product={product}
+                        savingId={savingTripayProductId}
+                        onSave={(id, data) => updateTripayProductMutation.mutate({ id, data })}
+                      />
+                    ))}
+                    {hiddenTotalPages > 1 && (
+                      <div className="flex items-center justify-between pt-3 mt-1 border-t">
+                        <button
+                          onClick={() => setTripayHiddenPage(p => Math.max(1, p - 1))}
+                          disabled={tripayHiddenPage <= 1}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg border text-xs font-medium disabled:opacity-40 hover:bg-gray-50"
+                        >
+                          <ChevronDown className="w-3.5 h-3.5 rotate-90" /> Sebelumnya
+                        </button>
+                        <p className="text-xs text-muted-foreground">
+                          {tripayHiddenPage} / {hiddenTotalPages} · {hiddenProducts.length} produk
+                        </p>
+                        <button
+                          onClick={() => setTripayHiddenPage(p => Math.min(hiddenTotalPages, p + 1))}
+                          disabled={tripayHiddenPage >= hiddenTotalPages}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg border text-xs font-medium disabled:opacity-40 hover:bg-gray-50"
+                        >
+                          Berikutnya <ChevronDown className="w-3.5 h-3.5 -rotate-90" />
+                        </button>
+                      </div>
+                    )}
+                  </CardContent>
+                )}
+              </Card>
+            )}
+
+            {/* Riwayat Transaksi */}
+            {tripaySection === "transactions" && (
+            <Card className="border shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold">Pengawalan Transaksi</CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4">
+                <div className="space-y-3 mb-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      value={tripayTransactionSearch}
+                      onChange={(e) => setTripayTransactionSearch(e.target.value)}
+                      placeholder="Cari reference, warga, nomor tujuan, SKU..."
+                      className="pl-9 h-10"
+                    />
+                  </div>
+                  <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+                    {([
+                      { key: "all", label: "Semua" },
+                      { key: "pending", label: "Pending" },
+                      { key: "success", label: "Sukses" },
+                      { key: "refunded", label: "Refund" },
+                    ] as const).map((item) => (
+                      <button
+                        key={item.key}
+                        onClick={() => setTripayTransactionStatusFilter(item.key)}
+                        className={`flex-shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium ${tripayTransactionStatusFilter === item.key ? "bg-slate-700 text-white border-slate-700" : "bg-white text-muted-foreground border-gray-200"}`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {filteredTransactions.length === 0 ? (
+                  <p className="text-center text-sm text-muted-foreground py-6">Belum ada transaksi Tripay</p>
+                ) : (
+                  <div>
+                    {filteredTransactions.slice(0, 50).map((t: any) => (
+                      <div key={t.id} className="flex items-start justify-between py-2.5 border-b last:border-0 gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="text-sm font-semibold">{t.productName}</p>
+                            <Badge className={`text-[10px] ${t.status === "success" ? "bg-green-100 text-green-700" : t.status === "pending" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`}>
+                              {t.status}
+                            </Badge>
+                            <Badge variant="outline" className="text-[10px]">{tripayKindLabel(t.kind)}</Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{t.namaWarga ?? "Warga"} · {t.target}{t.noMeterPln ? ` · ${t.noMeterPln}` : ""}</p>
+                          <p className="text-[10px] text-muted-foreground">{formatTgl(t.createdAt)} · {t.reference}</p>
+                          {t.note && <p className="text-[10px] text-muted-foreground">{t.note}</p>}
+                          {t.serialNumber && <p className="text-[10px] text-green-700 font-mono break-all">Token: {t.serialNumber}</p>}
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-sm font-bold">{formatRp(t.hargaJual ?? 0)}</p>
+                          <p className="text-[10px] text-cyan-700">+{formatRp((t.hargaJual ?? 0) - (t.hargaModal ?? 0))}</p>
+                          {t.status === "pending" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="mt-2 h-7 text-[11px]"
+                              disabled={reconcileTripayMutation.isPending}
+                              onClick={() => reconcileTripayMutation.mutate({ reference: t.reference })}
+                            >
+                              Cek ulang
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            )}
+
+            {tripaySection === "settings" && (
+              <Card className="border shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold">Pengaturan Operasional</CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-4 space-y-3">
+                  <div className="rounded-xl border bg-muted/40 p-3 space-y-1">
+                    <p className="text-xs font-semibold text-muted-foreground">Aksi utama</p>
+                    <p className="text-sm">`Sync Produk` untuk ambil katalog terbaru dari Tripay.</p>
+                    <p className="text-sm">`Reconcile` untuk memeriksa transaksi pending secara massal.</p>
+                  </div>
+                  <div className="rounded-xl border bg-muted/40 p-3 space-y-1">
+                    <p className="text-xs font-semibold text-muted-foreground">Callback</p>
+                    <p className="text-sm break-all font-mono">{tripayConfig?.callbackUrl ?? "-"}</p>
+                    <p className="text-[11px] text-muted-foreground">Pastikan URL ini terdaftar agar status transaksi masuk otomatis tanpa menunggu pengecekan manual.</p>
+                  </div>
+                  <div className="rounded-xl border bg-muted/40 p-3 space-y-1">
+                    <p className="text-xs font-semibold text-muted-foreground">Saran operasional</p>
+                    <p className="text-[11px] text-muted-foreground">Atur margin per operator dari tab katalog, cek pending lebih dari 5 menit dari tab overview, lalu tindak lanjuti refund dari tab transaksi.</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        );
+      })()}
 
       {/* PENGATURAN TAB */}
       {activeTab === "pengaturan" && (() => {

@@ -8,4 +8,4 @@ cmds = ["NODE_ENV=development npm install"]
 cmds = ["npm run build"]
 
 [start]
-cmd = "NODE_ENV=production npm run db:push -- --force && NODE_ENV=production npm start"
+cmd = "NODE_ENV=production npm start"

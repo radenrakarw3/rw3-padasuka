@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { getQueryFn, apiRequest } from "@/lib/queryClient";
+import { getQueryFn, apiRequest, readJsonSafely } from "@/lib/queryClient";
 import {
   Users, Home, ClipboardList, FileText, UserCheck, UserX, UserMinus,
   Phone, PhoneOff, CreditCard, ImageOff, HandCoins, UserCog, ScrollText,
@@ -203,7 +203,7 @@ function AiInsightButton({ section, data }: { section: string; data: any }) {
   const mutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/stats/dashboard/ai-insight", { section, data });
-      return res.json();
+      return readJsonSafely(res);
     },
     onSuccess: (d: any) => setInsight(d.insight),
   });
@@ -271,11 +271,11 @@ export default function AdminDashboard() {
       const url = rtFilter === "all" ? "/api/stats/dashboard" : `/api/stats/dashboard?rt=${rtFilter}`;
       const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch");
-      return res.json();
+      return readJsonSafely<DashboardStats>(res);
     },
-    staleTime: 30000,
-    refetchOnWindowFocus: true,
-    refetchInterval: 60000,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
   });
 
   const { data: monthlyData } = useQuery<MonthlySnapshotData[]>({
@@ -283,7 +283,7 @@ export default function AdminDashboard() {
     queryFn: async () => {
       const res = await fetch("/api/stats/monthly", { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch");
-      return res.json();
+      return readJsonSafely<MonthlySnapshotData[]>(res);
     },
     staleTime: 60000,
   });
@@ -298,7 +298,7 @@ export default function AdminDashboard() {
     queryFn: async () => {
       const res = await fetch("/api/rwcoin/dashboard", { credentials: "include" });
       if (!res.ok) throw new Error(`${res.status}`);
-      return res.json();
+      return readJsonSafely(res);
     },
     staleTime: 30000,
   });

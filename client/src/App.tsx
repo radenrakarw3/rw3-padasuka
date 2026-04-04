@@ -1,122 +1,102 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { Switch, Route, Redirect, useLocation } from "wouter";
-import { queryClient, getQueryFn } from "./lib/queryClient";
+import { queryClient, getQueryFn, readJsonSafely } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth";
-import LoginPage from "@/pages/login";
-import WargaLayout from "@/components/warga-layout";
-import WargaBeranda from "@/pages/warga/beranda";
-import WargaProfil from "@/pages/warga/profil";
-import WargaLayanan from "@/pages/warga/layanan";
-import WargaKeuanganDonasi from "@/pages/warga/donasi";
-import WargaRwcoin from "@/pages/warga/rwcoin";
-import AdminLayout from "@/components/admin-layout";
-import AdminDashboard from "@/pages/admin/dashboard";
-import AdminKelolaKK from "@/pages/admin/kelola-kk";
-import AdminKelolaWarga from "@/pages/admin/kelola-warga";
-import AdminKelolaLaporan from "@/pages/admin/kelola-laporan";
-import AdminKelolaSurat from "@/pages/admin/kelola-surat";
-import AdminSuratRw from "@/pages/admin/surat-rw";
-import AdminProfilEdit from "@/pages/admin/profil-edit";
-import AdminWaBlast from "@/pages/admin/wa-blast";
-import AdminArsipSurat from "@/pages/admin/arsip-surat";
-import AdminBansos from "@/pages/admin/bansos";
-import AdminDonasi from "@/pages/admin/donasi";
-import AdminKeuangan from "@/pages/admin/keuangan";
-import AdminPemilikKost from "@/pages/admin/kelola-pemilik-kost";
-import AdminWargaSinggah from "@/pages/admin/kelola-warga-singgah";
-import AdminKelolaUsaha from "@/pages/admin/kelola-usaha";
-import AdminProgramRw from "@/pages/admin/program-rw";
-import AdminRwcoin from "@/pages/admin/rwcoin";
-import AdminIuran from "@/pages/admin/iuran";
-import SinggahLayout from "@/components/singgah-layout";
-import SinggahBeranda from "@/pages/singgah/beranda";
-import SinggahLaporan from "@/pages/singgah/laporan";
-import MitraLayout from "@/components/mitra-layout";
-import MitraLoginPage from "@/pages/mitra/login";
-import MitraBeranda from "@/pages/mitra/beranda";
-import MitraTransaksi from "@/pages/mitra/transaksi";
-import MitraWithdraw from "@/pages/mitra/withdraw";
-import MitraDiskon from "@/pages/mitra/diskon";
-import { X } from "lucide-react";
-import goldLogo from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
-import radenRakaImg from "@assets/raden_raka_nobg.png";
 
-function WelcomePopup({ onClose }: { onClose: () => void }) {
+const LoginPage = lazy(() => import("@/pages/login"));
+const WargaLayout = lazy(() => import("@/components/warga-layout"));
+const WargaBeranda = lazy(() => import("@/pages/warga/beranda"));
+const WargaProfil = lazy(() => import("@/pages/warga/profil"));
+const WargaLayanan = lazy(() => import("@/pages/warga/layanan"));
+const WargaKeuanganDonasi = lazy(() => import("@/pages/warga/donasi"));
+const WargaRwcoin = lazy(() => import("@/pages/warga/rwcoin"));
+const AdminLayout = lazy(() => import("@/components/admin-layout"));
+const AdminDashboard = lazy(() => import("@/pages/admin/dashboard"));
+const AdminKelolaKK = lazy(() => import("@/pages/admin/kelola-kk"));
+const AdminKelolaWarga = lazy(() => import("@/pages/admin/kelola-warga"));
+const AdminKelolaLaporan = lazy(() => import("@/pages/admin/kelola-laporan"));
+const AdminKelolaSurat = lazy(() => import("@/pages/admin/kelola-surat"));
+const AdminSuratRw = lazy(() => import("@/pages/admin/surat-rw"));
+const AdminProfilEdit = lazy(() => import("@/pages/admin/profil-edit"));
+const AdminWaBlast = lazy(() => import("@/pages/admin/wa-blast"));
+const AdminArsipSurat = lazy(() => import("@/pages/admin/arsip-surat"));
+const AdminBansos = lazy(() => import("@/pages/admin/bansos"));
+const AdminDonasi = lazy(() => import("@/pages/admin/donasi"));
+const AdminKeuangan = lazy(() => import("@/pages/admin/keuangan"));
+const AdminPemilikKost = lazy(() => import("@/pages/admin/kelola-pemilik-kost"));
+const AdminWargaSinggah = lazy(() => import("@/pages/admin/kelola-warga-singgah"));
+const AdminKelolaUsaha = lazy(() => import("@/pages/admin/kelola-usaha"));
+const AdminProgramRw = lazy(() => import("@/pages/admin/program-rw"));
+const AdminRwcoin = lazy(() => import("@/pages/admin/rwcoin"));
+const AdminIuran = lazy(() => import("@/pages/admin/iuran"));
+const SinggahLayout = lazy(() => import("@/components/singgah-layout"));
+const SinggahBeranda = lazy(() => import("@/pages/singgah/beranda"));
+const SinggahLaporan = lazy(() => import("@/pages/singgah/laporan"));
+const MitraLayout = lazy(() => import("@/components/mitra-layout"));
+const MitraLoginPage = lazy(() => import("@/pages/mitra/login"));
+const MitraBeranda = lazy(() => import("@/pages/mitra/beranda"));
+const MitraTransaksi = lazy(() => import("@/pages/mitra/transaksi"));
+const MitraWithdraw = lazy(() => import("@/pages/mitra/withdraw"));
+const MitraDiskon = lazy(() => import("@/pages/mitra/diskon"));
+
+import goldLogo from "@assets/RW3-Cimahi-Logo-Gold.webp";
+import emblemSvg from "@assets/rw03-emblem.svg";
+
+function PageLoader() {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={onClose} data-testid="welcome-overlay">
-      <div
-        className="relative w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"
-        style={{ backgroundColor: "hsl(163,55%,22%)" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button
-          onClick={onClose}
-          className="absolute top-3 right-3 z-20 w-8 h-8 rounded-full bg-black/30 text-white flex items-center justify-center hover:bg-black/50 transition-colors"
-          data-testid="button-close-welcome"
-        >
-          <X className="w-5 h-5" />
-        </button>
+    <div
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6"
+      style={{ background: "linear-gradient(160deg, hsl(163,55%,16%) 0%, hsl(163,55%,24%) 100%)" }}
+    >
+      {/* Emblem */}
+      <div className="relative flex items-center justify-center">
+        {/* Glow ring */}
+        <div
+          className="absolute w-40 h-40 rounded-full opacity-20 animate-pulse"
+          style={{ background: "radial-gradient(circle, hsl(40,45%,55%) 0%, transparent 70%)" }}
+        />
+        <img
+          src={emblemSvg}
+          alt="RW03"
+          className="w-28 h-auto relative z-10 drop-shadow-2xl"
+          style={{ filter: "drop-shadow(0 4px 24px rgba(199,163,90,0.3))" }}
+        />
+      </div>
 
-        <div className="relative min-h-[420px]">
-          <img
-            src={goldLogo}
-            alt=""
-            className="absolute bottom-4 left-4 w-24 h-24 opacity-30"
+      {/* Text */}
+      <div className="text-center space-y-1">
+        <p className="text-lg font-bold tracking-wide" style={{ color: "hsl(40,45%,65%)" }}>
+          RW 03 Padasuka
+        </p>
+        <p className="text-xs tracking-widest uppercase opacity-60 text-white">
+          Sistem Informasi Warga
+        </p>
+      </div>
+
+      {/* Loading dots */}
+      <div className="flex items-center gap-1.5">
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            className="w-1.5 h-1.5 rounded-full animate-bounce"
+            style={{
+              backgroundColor: "hsl(40,45%,55%)",
+              animationDelay: `${i * 0.15}s`,
+              animationDuration: "0.8s",
+            }}
           />
-
-          <img
-            src={goldLogo}
-            alt="RW03 Logo"
-            className="absolute top-4 right-4 w-10 h-10"
-          />
-
-          <div className="absolute top-8 left-5 right-24 z-10">
-            <h1
-              className="text-[2.2rem] leading-[1.1] font-bold italic"
-              style={{ color: "hsl(40,45%,55%)", fontFamily: "Georgia, 'Times New Roman', serif" }}
-              data-testid="text-welcome-title"
-            >
-              Wilujeng Sumping Wargi RW03!
-            </h1>
-          </div>
-
-          <img
-            src={radenRakaImg}
-            alt="Raden Raka - Ketua RW03"
-            className="absolute bottom-0 right-0 w-[75%] h-auto object-contain"
-            style={{ maxHeight: "85%" }}
-            data-testid="img-welcome"
-          />
-
-          <div className="absolute bottom-16 left-5 z-10">
-            <p
-              className="text-sm italic font-medium"
-              style={{ color: "hsl(40,45%,65%)" }}
-            >
-              Raden Raka
-            </p>
-            <p
-              className="text-xs italic"
-              style={{ color: "hsl(40,45%,65%)" }}
-            >
-              Ketua RW03
-            </p>
-          </div>
-        </div>
+        ))}
       </div>
     </div>
   );
 }
 
 function WargaRoutes() {
-  const [showWelcome, setShowWelcome] = useState(true);
-
   return (
     <WargaLayout>
-      {showWelcome && <WelcomePopup onClose={() => setShowWelcome(false)} />}
       <Switch>
         <Route path="/warga" component={WargaBeranda} />
         <Route path="/warga/profil" component={WargaProfil} />
@@ -129,25 +109,70 @@ function WargaRoutes() {
   );
 }
 
-function MitraApp() {
-  const { data: mitraMe, isLoading } = useQuery<any>({
-    queryKey: ["/api/mitra/me"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
-    retry: false,
-  });
+function AdminLoginForm() {
+  const { login } = useAuth();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [err, setErr] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 border-3 border-[hsl(163,55%,22%)] border-t-transparent rounded-full animate-spin" />
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr("");
+    setSubmitting(true);
+    try {
+      await login(username, password);
+    } catch (error: any) {
+      const msg = error.message?.includes(":") ? error.message.split(":").slice(1).join(":").trim() : error.message;
+      try { setErr(JSON.parse(msg).message); } catch { setErr(msg); }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <div className="w-full max-w-sm space-y-6">
+        <div className="text-center space-y-2">
+          <img src={goldLogo} alt="RW03" className="w-14 h-14 mx-auto" />
+          <h1 className="text-xl font-bold" style={{ color: "hsl(163,55%,22%)" }}>Admin RW 03 Padasuka</h1>
+          <p className="text-xs text-muted-foreground">Akses khusus pengurus RW</p>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4 bg-card border rounded-2xl p-6 shadow-sm">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Username</label>
+            <input type="text" value={username} onChange={e => setUsername(e.target.value)}
+              placeholder="Masukkan username"
+              className="w-full h-11 px-3 rounded-lg border bg-background text-sm outline-none focus:ring-2 focus:ring-[hsl(163,55%,22%)]" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Password</label>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+              placeholder="Masukkan password"
+              className="w-full h-11 px-3 rounded-lg border bg-background text-sm outline-none focus:ring-2 focus:ring-[hsl(163,55%,22%)]" />
+          </div>
+          {err && <p className="text-xs text-destructive">{err}</p>}
+          <button type="submit" disabled={submitting}
+            className="w-full h-11 rounded-lg text-sm font-semibold text-white disabled:opacity-60"
+            style={{ backgroundColor: "hsl(163,55%,22%)" }}>
+            {submitting ? "Masuk..." : "Masuk sebagai Admin"}
+          </button>
+        </form>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
-  if (!mitraMe) {
-    return <MitraLoginPage onLogin={() => window.location.reload()} />;
+function AdminApp() {
+  const { user, loading } = useAuth();
+  if (loading) return <PageLoader />;
+  if (!user || (user.type !== "admin" && !user.isAdmin)) {
+    return <AdminLoginForm />;
   }
+  return <AdminRoutes />;
+}
 
+function MitraRoutes() {
   return (
     <MitraLayout>
       <Switch>
@@ -205,9 +230,9 @@ function AppContent() {
   const { user, loading } = useAuth();
   const [location] = useLocation();
 
-  // Portal mitra - jalur terpisah dari auth utama
-  if (location.startsWith("/mitra")) {
-    return <MitraApp />;
+  // Admin - jalur terpisah, punya login sendiri
+  if (location.startsWith("/admin")) {
+    return <Suspense fallback={<PageLoader />}><AdminApp /></Suspense>;
   }
 
   if (loading) {
@@ -222,27 +247,52 @@ function AppContent() {
   }
 
   if (!user) {
-    return <LoginPage />;
+    if (location.startsWith("/mitra")) {
+      return <Suspense fallback={<PageLoader />}><MitraLoginPage onLogin={() => window.location.reload()} /></Suspense>;
+    }
+    return <Suspense fallback={<PageLoader />}><LoginPage /></Suspense>;
   }
 
   if (user.type === "admin" || user.isAdmin) {
-    return <AdminRoutes />;
+    return <Redirect to="/admin" />;
+  }
+
+  if (user.type === "mitra") {
+    return <Suspense fallback={<PageLoader />}><MitraRoutes /></Suspense>;
   }
 
   if (user.type === "warga_singgah") {
-    return <SinggahRoutes />;
+    return <Suspense fallback={<PageLoader />}><SinggahRoutes /></Suspense>;
   }
 
-  return <WargaRoutes />;
+  return <Suspense fallback={<PageLoader />}><WargaRoutes /></Suspense>;
 }
 
 function AppUpdateGate({ children }: { children: React.ReactNode }) {
   const [needsUpdate, setNeedsUpdate] = useState(false);
   const [newVersion, setNewVersion] = useState<string | null>(null);
 
-  const { data } = useQuery<{ version: string }>({
+  const { data } = useQuery<{ version: string } | null>({
     queryKey: ["/api/app-version"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
+    queryFn: async () => {
+      const res = await fetch("/api/app-version", {
+        credentials: "include",
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache",
+        },
+      });
+
+      if (res.status === 401) {
+        return null;
+      }
+
+      if (!res.ok) {
+        throw new Error(`Gagal memeriksa versi aplikasi (${res.status})`);
+      }
+
+      return readJsonSafely<{ version: string }>(res);
+    },
     staleTime: 0,
     refetchInterval: 5 * 60 * 1000,
   });
@@ -276,7 +326,9 @@ function AppUpdateGate({ children }: { children: React.ReactNode }) {
           <button
             onClick={() => {
               localStorage.setItem("app_version", newVersion!);
-              window.location.reload();
+              const url = new URL(window.location.href);
+              url.searchParams.set("_appv", newVersion!);
+              window.location.replace(url.toString());
             }}
             className="w-full py-3 rounded-xl text-white font-semibold text-sm"
             style={{ backgroundColor: "hsl(163,55%,22%)" }}

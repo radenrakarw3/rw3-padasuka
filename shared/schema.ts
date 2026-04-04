@@ -23,8 +23,6 @@ export const kartuKeluarga = pgTable("kartu_keluarga", {
   linkGmaps: text("link_gmaps"),
   latitude: text("latitude"),
   longitude: text("longitude"),
-  fotoKk: text("foto_kk"),
-  fotoKkData: text("foto_kk_data"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -46,8 +44,6 @@ export const warga = pgTable("warga", {
   statusDisabilitas: text("status_disabilitas").notNull().default("Tidak Ada"),
   kondisiKesehatan: text("kondisi_kesehatan").notNull().default("Sehat"),
   ibuHamil: boolean("ibu_hamil").notNull().default(false),
-  fotoKtp: text("foto_ktp"),
-  fotoKtpData: text("foto_ktp_data"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -336,8 +332,6 @@ export const monthlySnapshot = pgTable("monthly_snapshot", {
   totalWarga: integer("total_warga").notNull().default(0),
   pengangguran: integer("pengangguran").notNull().default(0),
   waRegistered: integer("wa_registered").notNull().default(0),
-  ktpUploaded: integer("ktp_uploaded").notNull().default(0),
-  kkFotoUploaded: integer("kk_foto_uploaded").notNull().default(0),
   penerimaBansos: integer("penerima_bansos").notNull().default(0),
   usahaBerizin: integer("usaha_berizin").notNull().default(0),
   totalUsaha: integer("total_usaha").notNull().default(0),
@@ -418,7 +412,10 @@ export const rwcoinWallet = pgTable("rwcoin_wallet", {
   totalWithdraw: integer("total_withdraw").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  uniqRwcoinWalletWarga: uniqueIndex("rwcoin_wallet_warga_unique").on(table.wargaId),
+  uniqRwcoinWalletMitra: uniqueIndex("rwcoin_wallet_mitra_unique").on(table.mitraId),
+}));
 
 export const rwcoinTransaksi = pgTable("rwcoin_transaksi", {
   id: serial("id").primaryKey(),
@@ -541,6 +538,114 @@ export type MitraDiskon = typeof mitraDiskon.$inferSelect;
 export type InsertMitraDiskon = z.infer<typeof insertMitraDiskonSchema>;
 export type RwcoinWithdraw = typeof rwcoinWithdraw.$inferSelect;
 export type InsertRwcoinWithdraw = z.infer<typeof insertRwcoinWithdrawSchema>;
+
+export const tripayCategory = pgTable("tripay_category", {
+  id: serial("id").primaryKey(),
+  tripayCategoryId: integer("tripay_category_id").notNull().unique(),
+  name: text("name").notNull(),
+  type: text("type"),
+  isActive: boolean("is_active").notNull().default(true),
+  isVisibleToWarga: boolean("is_visible_to_warga").notNull().default(true),
+  displayOrder: integer("display_order").notNull().default(0),
+  iconKey: text("icon_key"),
+  adminLabel: text("admin_label"),
+  syncedAt: timestamp("synced_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const tripayOperator = pgTable("tripay_operator", {
+  id: serial("id").primaryKey(),
+  tripayOperatorId: integer("tripay_operator_id").notNull().unique(),
+  tripayCategoryId: integer("tripay_category_id"),
+  categoryRefId: integer("category_ref_id").references(() => tripayCategory.id),
+  name: text("name").notNull(),
+  normalizedName: text("normalized_name"),
+  isActive: boolean("is_active").notNull().default(true),
+  isVisibleToWarga: boolean("is_visible_to_warga").notNull().default(true),
+  displayOrder: integer("display_order").notNull().default(0),
+  syncedAt: timestamp("synced_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const tripayProduct = pgTable("tripay_product", {
+  id: serial("id").primaryKey(),
+  kind: text("kind").notNull(), // 'pulsa' | 'data' | 'electricity'
+  categoryId: integer("category_id"),
+  categoryName: text("category_name"),
+  categoryType: text("category_type"),
+  categoryRefId: integer("category_ref_id").references(() => tripayCategory.id),
+  operatorId: integer("operator_id"),
+  operatorName: text("operator_name"),
+  operatorRefId: integer("operator_ref_id").references(() => tripayOperator.id),
+  operatorNormalized: text("operator_normalized"),
+  productGroup: text("product_group").notNull().default("other"),
+  productCode: text("product_code").notNull().unique(),
+  productName: text("product_name").notNull(),
+  hargaModal: integer("harga_modal").notNull(),
+  marginFlat: integer("margin_flat").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
+  isVisibleToWarga: boolean("is_visible_to_warga").notNull().default(true),
+  isFeatured: boolean("is_featured").notNull().default(false),
+  isRecommended: boolean("is_recommended").notNull().default(false),
+  displayOrder: integer("display_order").notNull().default(0),
+  salesCount: integer("sales_count").notNull().default(0),
+  lastSoldAt: timestamp("last_sold_at"),
+  hiddenReason: text("hidden_reason"),
+  adminNote: text("admin_note"),
+  tripayStatus: integer("tripay_status").notNull().default(1),
+  rawData: jsonb("raw_data"),
+  syncedAt: timestamp("synced_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const tripayTransaction = pgTable("tripay_transaction", {
+  id: serial("id").primaryKey(),
+  reference: text("reference").notNull().unique(), // api_trxid kita
+  tripayTrxId: integer("tripay_trx_id"),
+  wargaId: integer("warga_id").notNull().references(() => warga.id),
+  rwcoinTransaksiId: integer("rwcoin_transaksi_id").notNull().references(() => rwcoinTransaksi.id),
+  refundedRwcoinTransaksiId: integer("refunded_rwcoin_transaksi_id").references(() => rwcoinTransaksi.id),
+  productId: integer("product_id").references(() => tripayProduct.id),
+  kind: text("kind").notNull(), // 'pulsa' | 'data' | 'electricity'
+  categoryRefId: integer("category_ref_id").references(() => tripayCategory.id),
+  categoryNameSnapshot: text("category_name_snapshot"),
+  categoryTypeSnapshot: text("category_type_snapshot"),
+  operatorRefId: integer("operator_ref_id").references(() => tripayOperator.id),
+  operatorNameSnapshot: text("operator_name_snapshot"),
+  operatorNormalizedSnapshot: text("operator_normalized_snapshot"),
+  productGroupSnapshot: text("product_group_snapshot"),
+  productCode: text("product_code").notNull(),
+  productName: text("product_name").notNull(),
+  target: text("target").notNull(),
+  noMeterPln: text("no_meter_pln"),
+  hargaModal: integer("harga_modal").notNull(),
+  marginFlat: integer("margin_flat").notNull().default(0),
+  hargaJual: integer("harga_jual").notNull(),
+  status: text("status").notNull().default("pending"), // pending | success | failed | refunded
+  statusDetail: text("status_detail").default("queued"),
+  tripayStatus: integer("tripay_status").notNull().default(0),
+  note: text("note"),
+  failureReason: text("failure_reason"),
+  adminNote: text("admin_note"),
+  sourceChannel: text("source_channel").notNull().default("warga_web"),
+  reconcileCount: integer("reconcile_count").notNull().default(0),
+  lastReconcileAt: timestamp("last_reconcile_at"),
+  finalizedAt: timestamp("finalized_at"),
+  serialNumber: text("serial_number"),
+  requestPayload: jsonb("request_payload"),
+  responsePayload: jsonb("response_payload"),
+  callbackPayload: jsonb("callback_payload"),
+  successAt: timestamp("success_at"),
+  failedAt: timestamp("failed_at"),
+  refundedAt: timestamp("refunded_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type TripayProduct = typeof tripayProduct.$inferSelect;
+export type TripayTransaction = typeof tripayTransaction.$inferSelect;
+export type TripayCategory = typeof tripayCategory.$inferSelect;
+export type TripayOperator = typeof tripayOperator.$inferSelect;
 
 export const kasRwcoin = pgTable("kas_rwcoin", {
   id: serial("id").primaryKey(),

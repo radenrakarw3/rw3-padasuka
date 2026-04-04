@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { LogIn, Shield, MessageCircle, ArrowLeft, Loader2, User, Building2, Phone, CreditCard, KeyRound, Trash2, ChevronRight, CheckCircle2 } from "lucide-react";
-import logoGold from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
+import { LogIn, MessageCircle, ArrowLeft, Loader2, User, Building2, Phone, CreditCard, KeyRound, Trash2, ChevronRight, CheckCircle2, Eye, EyeOff, Coins } from "lucide-react";
+import logoGold from "@assets/RW3-Cimahi-Logo-Gold.webp";
 
 interface WaContact {
   id: number;
@@ -26,14 +26,14 @@ function parseErrorMsg(error: any): string {
 
 export default function LoginPage() {
   const {
-    login, checkKk, requestOtp, verifyOtp, checkWa, requestWaOtp, verifyWaOtp,
+    checkKk, requestOtp, verifyOtp, checkWa, requestWaOtp, verifyWaOtp,
     singgahCheckNik, singgahRequestOtp, singgahVerifyOtp,
     pendingLoginData, completePendingLogin, getSavedAccounts, setupPinLogin, pinLogin, deleteSavedLogin,
   } = useAuth();
   const { toast } = useToast();
 
   // Tab utama
-  const [loginMode, setLoginMode] = useState<"warga" | "singgah" | "admin">("warga");
+  const [loginMode, setLoginMode] = useState<"warga" | "singgah" | "mitra">("warga");
 
   // Sub-metode login warga
   const [wargaMethod, setWargaMethod] = useState<"wa" | "kk">("wa");
@@ -55,9 +55,10 @@ export default function LoginPage() {
   const [countdown, setCountdown] = useState(0);
   const otpInputRef = useRef<HTMLInputElement>(null);
 
-  // State admin
-  const [adminUsername, setAdminUsername] = useState("");
-  const [adminPassword, setAdminPassword] = useState("");
+  // State mitra
+  const [mitraNomorWa, setMitraNomorWa] = useState("");
+  const [mitraPin, setMitraPin] = useState("");
+  const [showMitraPin, setShowMitraPin] = useState(false);
 
   // State singgah
   const [singgahNik, setSinggahNik] = useState("");
@@ -248,16 +249,25 @@ export default function LoginPage() {
     await handleSendKkOtp(selectedContact);
   };
 
-  // --- Admin login ---
-  const handleAdminLogin = async (e: React.FormEvent) => {
+  // --- Mitra login ---
+  const handleMitraLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!adminUsername || !adminPassword) { toast({ title: "Mohon isi semua kolom", variant: "destructive" }); return; }
+    if (!mitraNomorWa || !mitraPin) { toast({ title: "Mohon isi semua kolom", variant: "destructive" }); return; }
     setLoading(true);
     try {
-      await login(adminUsername, adminPassword);
-      toast({ title: "Login berhasil!" });
+      const res = await fetch("/api/mitra/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ nomorWa: mitraNomorWa, pin: mitraPin }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || "Login gagal");
+      }
+      window.location.reload();
     } catch (error: any) {
-      toast({ title: "Login Gagal", description: parseErrorMsg(error), variant: "destructive" });
+      toast({ title: "Login Gagal", description: error.message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -580,33 +590,39 @@ export default function LoginPage() {
                 <Building2 className="w-3.5 h-3.5" />
                 Singgah
               </button>
-              <button type="button" onClick={() => { setLoginMode("admin"); resetWa(); resetKk(); resetSinggah(); }}
-                className={`px-3 py-2 rounded-md text-xs font-medium transition-colors flex items-center gap-1 ${loginMode === "admin" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
-                data-testid="button-login-admin">
-                <Shield className="w-3.5 h-3.5" />
-                Admin
+              <button type="button" onClick={() => { setLoginMode("mitra"); resetWa(); resetKk(); resetSinggah(); }}
+                className={`px-3 py-2 rounded-md text-xs font-medium transition-colors flex items-center gap-1 ${loginMode === "mitra" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
+                data-testid="button-login-mitra">
+                <Coins className="w-3.5 h-3.5" />
+                Mitra
               </button>
             </div>
           </CardHeader>
 
           <CardContent className="px-5 pb-5 pt-3">
 
-            {/* ---- ADMIN ---- */}
-            {loginMode === "admin" && (
-              <form onSubmit={handleAdminLogin} className="space-y-4">
+            {/* ---- MITRA ---- */}
+            {loginMode === "mitra" && (
+              <form onSubmit={handleMitraLogin} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="admin-username" className="text-base font-medium">Username</Label>
-                  <Input id="admin-username" type="text" placeholder="Masukkan username" value={adminUsername}
-                    onChange={(e) => setAdminUsername(e.target.value)} className="h-12 text-base" data-testid="input-username" />
+                  <Label htmlFor="mitra-wa" className="text-base font-medium">Nomor WA Kasir</Label>
+                  <Input id="mitra-wa" type="tel" placeholder="08xxxxxxxxxx" value={mitraNomorWa}
+                    onChange={(e) => setMitraNomorWa(e.target.value)} className="h-12 text-base" />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="admin-password" className="text-base font-medium">Password</Label>
-                  <Input id="admin-password" type="password" placeholder="Masukkan password" value={adminPassword}
-                    onChange={(e) => setAdminPassword(e.target.value)} className="h-12 text-base" data-testid="input-password" />
+                  <Label htmlFor="mitra-pin" className="text-base font-medium">PIN</Label>
+                  <div className="relative">
+                    <Input id="mitra-pin" type={showMitraPin ? "text" : "password"} placeholder="Masukkan PIN" value={mitraPin}
+                      onChange={(e) => setMitraPin(e.target.value)} className="h-12 text-base pr-12" />
+                    <button type="button" onClick={() => setShowMitraPin(v => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                      {showMitraPin ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
                 </div>
-                <Button type="submit" className="w-full h-12 text-base font-semibold" disabled={loading} data-testid="button-submit-login">
+                <Button type="submit" className="w-full h-12 text-base font-semibold" disabled={loading}>
                   {loading ? <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Masuk...</span>
-                    : <span className="flex items-center gap-2"><LogIn className="w-5 h-5" />Masuk</span>}
+                    : <span className="flex items-center gap-2"><LogIn className="w-5 h-5" />Masuk sebagai Mitra</span>}
                 </Button>
               </form>
             )}
@@ -922,7 +938,7 @@ export default function LoginPage() {
         </Card>
 
         <p className="text-center text-[hsl(40,20%,65%)] text-xs">
-          {loginMode === "admin" ? "Login khusus admin RW 03"
+          {loginMode === "mitra" ? "Login khusus mitra RWcoin"
             : loginMode === "singgah" ? "Login khusus warga singgah / penghuni kost"
             : wargaView === "pin-setup-enter" || wargaView === "pin-setup-confirm" ? "Buat PIN untuk login cepat di perangkat ini"
             : wargaView === "pin-login" ? "Masukkan PIN 4 digit Anda"

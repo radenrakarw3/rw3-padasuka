@@ -1,5 +1,6 @@
 import { jsPDF } from "jspdf";
-import logoGreen from "@assets/RW3-Cimahi-Logo-Green@16x_1772999415502.png";
+import logoBlack from "@assets/RW03-Cimahi-Logo-Black.svg";
+import QRCode from "qrcode";
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -12,10 +13,12 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 let compressedLogoCache: string | null = null;
+let signatureImageCache: string | null = null;
+let watermarkLogoCache: string | null = null;
 async function getCompressedLogo(): Promise<string | null> {
   if (compressedLogoCache) return compressedLogoCache;
   try {
-    const img = await loadImage(logoGreen);
+    const img = await loadImage(logoBlack);
     const size = 150;
     const canvas = document.createElement("canvas");
     canvas.width = size;
@@ -27,6 +30,54 @@ async function getCompressedLogo(): Promise<string | null> {
     ctx.drawImage(img, 0, 0, size, size);
     compressedLogoCache = canvas.toDataURL("image/jpeg", 0.7);
     return compressedLogoCache;
+  } catch {
+    return null;
+  }
+}
+
+async function getSignatureImage(name: string): Promise<string | null> {
+  if (signatureImageCache) return signatureImageCache;
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 900;
+    canvas.height = 280;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#141414";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = 'italic 108px "Brush Script MT", "Segoe Script", "Snell Roundhand", cursive';
+    ctx.fillText(name, canvas.width / 2, canvas.height / 2);
+
+    signatureImageCache = canvas.toDataURL("image/png");
+    return signatureImageCache;
+  } catch {
+    return null;
+  }
+}
+
+async function getWatermarkLogo(): Promise<string | null> {
+  if (watermarkLogoCache) return watermarkLogoCache;
+  try {
+    const img = await loadImage(logoBlack);
+    const canvas = document.createElement("canvas");
+    canvas.width = 900;
+    canvas.height = 900;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.globalAlpha = 0.06;
+
+    const targetHeight = 520;
+    const ratio = img.width / img.height;
+    const targetWidth = targetHeight * ratio;
+    ctx.drawImage(img, (canvas.width - targetWidth) / 2, (canvas.height - targetHeight) / 2, targetWidth, targetHeight);
+
+    watermarkLogoCache = canvas.toDataURL("image/png");
+    return watermarkLogoCache;
   } catch {
     return null;
   }
@@ -163,25 +214,39 @@ function hasTwoColumnSig(sigLines: string[]): boolean {
 }
 
 export async function generateSuratPDF(options: {
+  id?: number;
   nomorSurat?: string | null;
   isiSurat: string;
   jenisSurat: string;
+  tanggalSurat?: string | null;
   fileName?: string;
   returnBlob?: boolean;
 }): Promise<Blob | void> {
-  const { nomorSurat, isiSurat, jenisSurat, fileName, returnBlob } = options;
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4", compress: true });
+  const { id, nomorSurat, isiSurat, jenisSurat, tanggalSurat, fileName, returnBlob } = options;
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [330, 210], compress: true });
   const pageWidth = 210;
-  const marginLeft = 20;
-  const marginRight = 20;
+  const marginLeft = 18;
+  const marginRight = 18;
   const contentWidth = pageWidth - marginLeft - marginRight;
-  const pageHeight = 297;
-  const startY = 42;
-  const bottomMargin = 12;
+  const pageHeight = 330;
+  const startY = 51;
+  const bottomMargin = 18;
   const availableHeight = pageHeight - startY - bottomMargin;
   const colonMM = 35;
 
   const compressedLogo = await getCompressedLogo();
+  const signatureImage = await getSignatureImage("Raden Raka");
+  const watermarkLogo = await getWatermarkLogo();
+  const verifyUrl = id && nomorSurat
+    ? `${window.location.origin}/verify/surat-rw/${id}?nomor=${encodeURIComponent(nomorSurat)}`
+    : null;
+  const qrDataUrl = verifyUrl
+    ? await QRCode.toDataURL(verifyUrl, {
+      margin: 0,
+      width: 160,
+      color: { dark: "#111111", light: "#FFFFFF" },
+    }).catch(() => null)
+    : null;
 
   let processedText = cleanText(isiSurat);
   processedText = processedText.replace(/Nomor Induk Kependudukan\s*/gi, "NIK");
@@ -246,9 +311,9 @@ export async function generateSuratPDF(options: {
     sigEstLines += 1;
   }
 
-  const fixedFs = 10;
-  const fixedLh = 4.8;
-  const titleFs = 12;
+  const fixedFs = 9.6;
+  const fixedLh = 5.1;
+  const titleFs = 13;
 
   let bodyLineCount = 0;
   let fixedLineCount = 0;
@@ -270,7 +335,7 @@ export async function generateSuratPDF(options: {
       bodyLineCount += w.length;
     }
   }
-  if (nomorSurat && !hasTitle) fixedLineCount += 1;
+  if (nomorSurat) fixedLineCount += 1;
 
   const fixedHeight = (fixedLineCount + sigEstLines) * fixedLh;
   const bodyAvailable = availableHeight - fixedHeight;
@@ -279,33 +344,64 @@ export async function generateSuratPDF(options: {
   let bodyScale = 1;
   if (bodyNeeded > bodyAvailable && bodyAvailable > 0) {
     bodyScale = bodyAvailable / bodyNeeded;
-    if (bodyScale < 0.55) bodyScale = 0.55;
+    if (bodyScale < 0.92) bodyScale = 0.92;
   }
 
-  const bodyFs = Math.max(7, Math.round(fixedFs * bodyScale * 10) / 10);
+  const bodyFs = Math.max(8.8, Math.round(fixedFs * bodyScale * 10) / 10);
   const bodyLh = fixedLh * bodyScale;
 
   const drawKop = () => {
-    if (compressedLogo) doc.addImage(compressedLogo, "JPEG", marginLeft + 2, 12, 18, 18);
+    if (compressedLogo) doc.addImage(compressedLogo, "JPEG", marginLeft + 1, 10, 20, 28);
     doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    doc.text("PEMERINTAH KOTA CIMAHI", pageWidth / 2, 15, { align: "center" });
     doc.setFontSize(9);
-    doc.text("RUKUN WARGA 03", pageWidth / 2, 16, { align: "center" });
+    doc.text("KECAMATAN CIMAHI TENGAH", pageWidth / 2, 20, { align: "center" });
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text("KELURAHAN PADASUKA", pageWidth / 2, 22, { align: "center" });
+    doc.setFontSize(16);
+    doc.text("RUKUN WARGA 03 PADASUKA", pageWidth / 2, 26.5, { align: "center" });
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.text("KECAMATAN CIMAHI TENGAH - KOTA CIMAHI", pageWidth / 2, 27, { align: "center" });
-    doc.setFontSize(7.5);
-    doc.text("Sekretariat: Jln. K.H. Usman Dhomiri, Padasuka, Kota Cimahi, 40526", pageWidth / 2, 31, { align: "center" });
+    doc.setFontSize(9.2);
+    doc.text("SEKRETARIAT PENGURUS RW 03 KELURAHAN PADASUKA", pageWidth / 2, 32, { align: "center" });
+    doc.setFontSize(7.8);
+    doc.text("Jl. K.H. Usman Dhomiri, Kel. Padasuka, Kec. Cimahi Tengah, Kota Cimahi 40526", pageWidth / 2, 36.5, { align: "center" });
+    doc.setFontSize(7.2);
+    doc.text("Tertib Administrasi  |  Pelayanan Warga  |  Kolaborasi Lingkungan", pageWidth / 2, 40.5, { align: "center" });
     doc.setLineWidth(0.8);
-    doc.line(marginLeft, 34, pageWidth - marginRight, 34);
+    doc.line(marginLeft, 43.5, pageWidth - marginRight, 43.5);
     doc.setLineWidth(0.3);
-    doc.line(marginLeft, 35, pageWidth - marginRight, 35);
+    doc.line(marginLeft, 44.8, pageWidth - marginRight, 44.8);
   };
 
   drawKop();
   let y = startY;
+
+  if (watermarkLogo) {
+    doc.addImage(watermarkLogo, "PNG", 34, 88, 142, 142);
+  }
+
+  const drawVerificationFooter = () => {
+    const footerY = pageHeight - 26;
+    const qrSize = 21;
+
+    if (qrDataUrl) {
+      doc.addImage(qrDataUrl, "PNG", marginLeft, footerY - 2, qrSize, qrSize);
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.text("VERIFIKASI DOKUMEN", marginLeft + qrSize + 5, footerY + 3);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.7);
+    doc.text("Pindai QR untuk memeriksa keabsahan surat RW 03.", marginLeft + qrSize + 5, footerY + 7.5);
+    if (nomorSurat) {
+      doc.text(`Nomor: ${nomorSurat}`, marginLeft + qrSize + 5, footerY + 11.8);
+    }
+    if (tanggalSurat) {
+      doc.text(`Tanggal surat: ${tanggalSurat}`, marginLeft + qrSize + 5, footerY + 16.1);
+    }
+    doc.text("Dokumen administratif resmi RW 03 Padasuka, Kota Cimahi.", marginLeft + qrSize + 5, footerY + 20.4);
+  };
 
   const printBody = (text: string) => {
     doc.setFontSize(bodyFs);
@@ -330,7 +426,7 @@ export async function generateSuratPDF(options: {
     const ci = line.indexOf(":");
     const label = line.substring(0, ci).trim();
     const value = line.substring(ci + 1).trim();
-    doc.setFontSize(fixedFs);
+    doc.setFontSize(bodyFs);
     doc.setFont("helvetica", "normal");
     const colonX = marginLeft + colonMM;
     doc.text(label, marginLeft, y);
@@ -340,7 +436,7 @@ export async function generateSuratPDF(options: {
     const wrapped = doc.splitTextToSize(value, maxW);
     for (let j = 0; j < wrapped.length; j++) {
       doc.text(wrapped[j], valueX, y);
-      y += fixedLh;
+      y += bodyLh;
     }
   };
 
@@ -363,14 +459,26 @@ export async function generateSuratPDF(options: {
 
     if (isTitleLine(trimmed)) {
       prevWasBiodata = false;
-      y += fixedLh * 0.3;
-      const spaced = trimmed.split("").join(" ").replace(/\s{3,}/g, "   ");
-      printCentered(spaced, true, titleFs);
+      y += fixedLh * 0.55;
+      const blockLeft = marginLeft + 20;
+      const blockRight = pageWidth - marginRight - 20;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(titleFs + 0.7);
+      doc.text(trimmed, pageWidth / 2, y, { align: "center" });
+      y += fixedLh * 0.65;
+
+      doc.setDrawColor(40, 40, 40);
+      doc.setLineWidth(0.45);
+      doc.line(blockLeft, y, blockRight, y);
+      y += fixedLh * 0.9;
+
       if (nomorSurat && !nomorDone) {
-        printCentered(`Nomor: ${nomorSurat}`, false, fixedFs);
+        printBiodata(`Nomor : ${nomorSurat}`);
+        y += bodyLh * 0.45;
         nomorDone = true;
+      } else {
+        y += fixedLh * 0.7;
       }
-      y += fixedLh * 0.3;
       continue;
     }
 
@@ -379,10 +487,11 @@ export async function generateSuratPDF(options: {
       doc.setFont("helvetica", "normal");
       const contX = marginLeft + colonMM + 3;
       const contW = contentWidth - colonMM - 3;
+      doc.setFontSize(bodyFs);
       const wrapped = doc.splitTextToSize(trimmed, contW);
       for (const wl of wrapped) {
         doc.text(wl, contX, y);
-        y += fixedLh;
+        y += bodyLh;
       }
       continue;
     }
@@ -398,14 +507,17 @@ export async function generateSuratPDF(options: {
   }
 
   if (dateLine || sigLines.length > 0) {
-    y += fixedLh * 0.5;
+    const signatureLineUnits = sigEstLines || 6;
+    const signatureBlockHeight = signatureLineUnits * fixedLh;
+    const signatureTopTarget = pageHeight - bottomMargin - signatureBlockHeight;
+    y = Math.max(y + fixedLh * 0.6, Math.min(signatureTopTarget, pageHeight - bottomMargin - fixedLh * 5));
   }
 
   if (dateLine) {
-    doc.setFontSize(fixedFs);
+    doc.setFontSize(bodyFs);
     doc.setFont("helvetica", "normal");
     doc.text(dateLine, pageWidth - marginRight, y, { align: "right" });
-    y += fixedLh * 1.2;
+    y += bodyLh * 1.2;
   }
 
   if (sigLines.length > 0) {
@@ -428,7 +540,7 @@ export async function generateSuratPDF(options: {
           y += fixedLh * 2.5;
         }
 
-        doc.setFontSize(fixedFs);
+        doc.setFontSize(bodyFs);
 
         if (left) {
           doc.setFont("helvetica", leftIsName ? "bold" : "normal");
@@ -449,11 +561,30 @@ export async function generateSuratPDF(options: {
           }
         }
         doc.setFont("helvetica", "normal");
-        y += fixedLh;
+        y += bodyLh;
       }
     } else {
       const sigCenter = marginLeft + contentWidth * 0.75;
       const sigW = contentWidth * 0.45;
+      const stampCenterX = sigCenter - sigW * 0.24;
+      const stampCenterY = y + fixedLh * 3.2;
+
+      doc.setDrawColor(38, 38, 38);
+      doc.setTextColor(38, 38, 38);
+      doc.setLineWidth(0.35);
+      doc.circle(stampCenterX, stampCenterY, 12.5);
+      doc.setLineWidth(0.2);
+      doc.circle(stampCenterX, stampCenterY, 10.2);
+      if (compressedLogo) {
+        doc.addImage(compressedLogo, "JPEG", stampCenterX - 4.8, stampCenterY - 6.6, 9.6, 13.2);
+      }
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(5.2);
+      doc.text("DISTEMPEL", stampCenterX, stampCenterY - 8.5, { align: "center" });
+      doc.text("ELEKTRONIK", stampCenterX, stampCenterY + 8.4, { align: "center" });
+      doc.setFontSize(4.4);
+      doc.text("RW 03 PADASUKA", stampCenterX, stampCenterY + 10.6, { align: "center" });
+      doc.setTextColor(0, 0, 0);
 
       for (const rawLine of sigLines) {
         const line = rawLine.trim();
@@ -462,19 +593,22 @@ export async function generateSuratPDF(options: {
         const isName = /^\(.*\)$/.test(line);
         if (isName) {
           y += fixedLh * 2.5;
+          if (signatureImage) {
+            doc.addImage(signatureImage, "PNG", sigCenter - 28, y - 15, 56, 18);
+          }
           doc.setFont("helvetica", "bold");
-          doc.setFontSize(fixedFs);
+          doc.setFontSize(bodyFs);
           const w = doc.getTextWidth(line);
           doc.text(line, sigCenter - w / 2, y);
           doc.setLineWidth(0.3);
           doc.line(sigCenter - w / 2, y + 1, sigCenter + w / 2, y + 1);
           doc.setFont("helvetica", "normal");
-          y += fixedLh;
+          y += bodyLh;
           continue;
         }
 
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(fixedFs);
+        doc.setFontSize(bodyFs);
         const tw = doc.getTextWidth(line);
         if (tw <= sigW) {
           doc.text(line, sigCenter - tw / 2, y);
@@ -482,14 +616,16 @@ export async function generateSuratPDF(options: {
           const wrapped = doc.splitTextToSize(line, sigW);
           for (const wl of wrapped) {
             doc.text(wl, sigCenter - sigW / 2, y);
-            y += fixedLh;
+            y += bodyLh;
           }
           continue;
         }
-        y += fixedLh;
+        y += bodyLh;
       }
     }
   }
+
+  drawVerificationFooter();
 
   const safeName = fileName || `${jenisSurat.replace(/\s+/g, "_")}${nomorSurat ? "_" + nomorSurat.replace(/\//g, "-") : ""}`;
   if (returnBlob) {

@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import type { Laporan, Warga, SuratWarga, KartuKeluarga } from "@shared/schema";
 import { useProfileCompleteness } from "@/lib/useProfileCompleteness";
+import { wargaAnggotaQueryOptions, wargaKkQueryOptions } from "@/lib/warga-prefetch";
 
 function ProfileLockBanner({ missingFields }: { missingFields: { key: string; label: string; wargaNama?: string }[] }) {
   const [, setLocation] = useLocation();
@@ -88,13 +89,11 @@ function SuratTab() {
   });
 
   const { data: anggota } = useQuery<Warga[]>({
-    queryKey: ["/api/warga/kk", user?.kkId],
-    enabled: !!user?.kkId,
+    ...wargaAnggotaQueryOptions(user?.kkId),
   });
 
   const { data: kk } = useQuery<KartuKeluarga>({
-    queryKey: ["/api/kk", user?.kkId],
-    enabled: !!user?.kkId,
+    ...wargaKkQueryOptions(user?.kkId),
   });
 
   const completeness = useProfileCompleteness(anggota, kk);
@@ -339,13 +338,11 @@ function LaporanTab() {
   });
 
   const { data: anggota } = useQuery<Warga[]>({
-    queryKey: ["/api/warga/kk", user?.kkId],
-    enabled: !!user?.kkId,
+    ...wargaAnggotaQueryOptions(user?.kkId),
   });
 
   const { data: kk } = useQuery<KartuKeluarga>({
-    queryKey: ["/api/kk", user?.kkId],
-    enabled: !!user?.kkId,
+    ...wargaKkQueryOptions(user?.kkId),
   });
 
   const completeness = useProfileCompleteness(anggota, kk);

@@ -15,6 +15,7 @@ import type { KartuKeluarga, Warga, ProfileEditRequest } from "@shared/schema";
 import { pekerjaanOptions, pendidikanOptions, agamaOptions, jenisKelaminOptions, statusPerkawinanOptions, kedudukanKeluargaOptions, statusKependudukanOptions, statusDisabilitasOptions, kondisiKesehatanOptions, penghasilanBulananOptions, kategoriEkonomiOptions } from "@/lib/constants";
 import { useProfileCompleteness } from "@/lib/useProfileCompleteness";
 import { Checkbox } from "@/components/ui/checkbox";
+import { wargaAnggotaQueryOptions, wargaKkQueryOptions } from "@/lib/warga-prefetch";
 
 const fieldLabels: Record<string, string> = {
   namaLengkap: "Nama Lengkap",
@@ -71,13 +72,11 @@ export default function WargaProfil() {
   const ktpFileRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
   const { data: kk, isLoading: kkLoading } = useQuery<KartuKeluarga>({
-    queryKey: ["/api/kk", user?.kkId],
-    enabled: !!user?.kkId,
+    ...wargaKkQueryOptions(user?.kkId),
   });
 
   const { data: anggota, isLoading: wargaLoading } = useQuery<Warga[]>({
-    queryKey: ["/api/warga/kk", user?.kkId],
-    enabled: !!user?.kkId,
+    ...wargaAnggotaQueryOptions(user?.kkId),
   });
 
   const { data: editRequests } = useQuery<ProfileEditRequest[]>({

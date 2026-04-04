@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, readJsonSafely } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import type { IuranKk, IuranSetting } from "@shared/schema";
 
-type IuranRow = IuranKk & { nomorKk: string; rt: number; alamat: string; kepalaKeluarga: string | null };
+type IuranRow = IuranKk & { nomorKk: string; rt: number; alamat: string; kepalaKeluarga: string | null; paymentSource?: string | null };
 type RekapRow = { bulan: string; totalKk: number; sudahBayar: number; belumBayar: number; totalNominal: number };
 
 function formatRupiah(num: number): string {
@@ -70,7 +70,7 @@ export default function AdminIuranPage() {
       const params = new URLSearchParams({ bulanTahun: selectedMonth });
       if (filterRt) params.set("rt", String(filterRt));
       const res = await apiRequest("GET", `/api/iuran?${params}`);
-      return res.json();
+      return readJsonSafely<IuranRow[]>(res);
     },
   });
 
@@ -78,7 +78,7 @@ export default function AdminIuranPage() {
     queryKey: ["/api/iuran/setting"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/iuran/setting");
-      return res.json();
+      return readJsonSafely<IuranSetting>(res);
     },
   });
 
@@ -86,7 +86,7 @@ export default function AdminIuranPage() {
     queryKey: ["/api/iuran/rekap", selectedMonth.slice(0, 4)],
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/iuran/rekap?tahun=${selectedMonth.slice(0, 4)}`);
-      return res.json();
+      return readJsonSafely<RekapRow[]>(res);
     },
     enabled: showRekap,
   });
@@ -94,7 +94,7 @@ export default function AdminIuranPage() {
   const generateMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/iuran/generate", { bulanTahun: selectedMonth });
-      return res.json();
+      return readJsonSafely<any>(res);
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/iuran"] });
@@ -106,7 +106,7 @@ export default function AdminIuranPage() {
   const bayarMutation = useMutation({
     mutationFn: async ({ id, tanggalBayar }: { id: number; tanggalBayar: string }) => {
       const res = await apiRequest("PUT", `/api/iuran/${id}/bayar`, { tanggalBayar });
-      return res.json();
+      return readJsonSafely(res);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/iuran"] });
@@ -122,7 +122,7 @@ export default function AdminIuranPage() {
   const batalMutation = useMutation({
     mutationFn: async (id: number) => {
       const res = await apiRequest("PUT", `/api/iuran/${id}/batal`, {});
-      return res.json();
+      return readJsonSafely(res);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/iuran"] });
@@ -138,7 +138,7 @@ export default function AdminIuranPage() {
   const jumlahMutation = useMutation({
     mutationFn: async ({ id, jumlah }: { id: number; jumlah: number }) => {
       const res = await apiRequest("PATCH", `/api/iuran/${id}/jumlah`, { jumlah });
-      return res.json();
+      return readJsonSafely(res);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/iuran"] });
@@ -151,7 +151,7 @@ export default function AdminIuranPage() {
   const settingMutation = useMutation({
     mutationFn: async (jumlahDefault: number) => {
       const res = await apiRequest("PUT", "/api/iuran/setting", { jumlahDefault });
-      return res.json();
+      return readJsonSafely(res);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/iuran/setting"] });
@@ -362,6 +362,7 @@ export default function AdminIuranPage() {
                     <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground hidden sm:table-cell">Alamat</th>
                     <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Jumlah</th>
                     <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground">Status</th>
+                    <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground hidden md:table-cell">Metode</th>
                     <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground hidden sm:table-cell">Tgl Bayar</th>
                     <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground">Aksi</th>
                   </tr>
@@ -412,6 +413,17 @@ export default function AdminIuranPage() {
                           </span>
                         ) : (
                           <span className="inline-block bg-red-100 text-red-600 text-xs rounded-full px-2 py-0.5">Belum</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-center hidden md:table-cell">
+                        {row.status === "lunas" ? (
+                          row.paymentSource === "rwcoin-iuran" ? (
+                            <span className="inline-block bg-[hsl(163,55%,22%)]/10 text-[hsl(163,55%,22%)] text-xs rounded-full px-2 py-0.5">RWcoin</span>
+                          ) : (
+                            <span className="inline-block bg-blue-100 text-blue-700 text-xs rounded-full px-2 py-0.5">Manual/Admin</span>
+                          )
+                        ) : (
+                          <span className="text-xs text-muted-foreground">-</span>
                         )}
                       </td>
                       <td className="px-3 py-2 text-center text-xs text-muted-foreground hidden sm:table-cell">

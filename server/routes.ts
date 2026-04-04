@@ -6,12 +6,26 @@ import bcrypt from "bcryptjs";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 import express from "express";
 import * as XLSX from "xlsx";
 import { storage } from "./storage";
 import { pool } from "./db";
 import { cache, CacheKey, TTL, invalidateWarga, invalidateKk } from "./cache";
 import { insertKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertProfileEditSchema, insertWaBlastSchema, insertPengajuanBansosSchema, insertDonasiCampaignSchema, insertDonasiSchema, insertKasRwSchema, insertPemilikKostSchema, insertWargaSinggahSchema, insertUsahaSchema, insertKaryawanUsahaSchema, insertIzinTetanggaSchema, insertSurveyUsahaSchema, insertProgramRwSchema, insertPesertaProgramSchema } from "@shared/schema";
+import { bulkUpdateTripayProducts, createTripayPurchase, ensureTripaySchema, getTripayOverview, getTripayPublicConfig, handleTripayCallback, listTripayCatalogCategoriesForWarga, listTripayCatalogOperatorsForWarga, listTripayCatalogProductsForWarga, listTripayCategories, listTripayOperators, listTripayProducts, listTripayTransactions, listTripayTransactionsByWargaId, reconcilePendingTripayTransactions, reconcileTripayTransaction, syncTripayProducts, updateTripayCategorySetting, updateTripayOperatorSetting, updateTripayProductSetting } from "./tripay";
+
+function resolveAppVersion() {
+  const productionIndexPath = path.resolve(process.cwd(), "dist", "public", "index.html");
+  const developmentIndexPath = path.resolve(process.cwd(), "client", "index.html");
+  const versionFilePath = fs.existsSync(productionIndexPath) ? productionIndexPath : developmentIndexPath;
+
+  try {
+    return fs.statSync(versionFilePath).mtimeMs.toString();
+  } catch {
+    return Date.now().toString();
+  }
+}
 
 declare module "express-session" {
   interface SessionData {
@@ -28,22 +42,68 @@ declare module "express-session" {
   }
 }
 
-async function generateWithGemini(prompt: string, maxRetries = 2): Promise<string> {
+type GeminiOptions = {
+  maxRetries?: number;
+  model?: string;
+  temperature?: number;
+  maxOutputTokens?: number;
+  minLength?: number;
+  timeoutMs?: number;
+  thinkingBudget?: number;
+};
+
+async function generateWithGemini(prompt: string, options: number | GeminiOptions = 2): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
 
+  const normalizedOptions: GeminiOptions =
+    typeof options === "number" ? { maxRetries: options } : options;
+  const {
+    maxRetries = 2,
+    model = "gemini-2.5-flash",
+    temperature = 0.3,
+    maxOutputTokens = 8192,
+    minLength = 100,
+    timeoutMs = 20000,
+    thinkingBudget,
+  } = normalizedOptions;
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.3, maxOutputTokens: 8192 },
-        }),
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    let response: Response;
+    try {
+      response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature,
+              maxOutputTokens,
+              ...(typeof thinkingBudget === "number"
+                ? { thinkingConfig: { thinkingBudget } }
+                : {}),
+            },
+          }),
+          signal: controller.signal,
+        }
+      );
+    } catch (error: any) {
+      clearTimeout(timeout);
+      if (attempt < maxRetries) {
+        console.warn(`Gemini request gagal (attempt ${attempt + 1}), retrying...`, error?.message || error);
+        continue;
       }
-    );
+      if (error?.name === "AbortError") {
+        throw new Error("Koneksi ke Gemini melewati batas waktu. Silakan coba lagi.");
+      }
+      throw new Error(`Gagal terhubung ke Gemini: ${error?.message || "Unknown error"}`);
+    }
+    clearTimeout(timeout);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -64,7 +124,7 @@ async function generateWithGemini(prompt: string, maxRetries = 2): Promise<strin
       continue;
     }
 
-    if (!text || text.length < 100) {
+    if (!text || text.length < minLength) {
       if (attempt < maxRetries) {
         console.warn(`Gemini response too short (${text.length} chars), retrying...`);
         continue;
@@ -145,7 +205,7 @@ async function notifyWarga(wargaId: number, template: string) {
   }
 }
 
-const ADMIN_NOTIF_PHONE = "085860604142";
+const ADMIN_NOTIF_PHONE = "085285341039";
 
 async function notifyAdmin(message: string) {
   try {
@@ -167,6 +227,29 @@ function normalizePhone(phone: string): string {
   return digits;
 }
 
+function clearOtpForWarga(wargaId: number, nomorKk?: string | null, phones: Array<string | null | undefined> = []) {
+  if (nomorKk) {
+    const storedByKk = otpStore.get(nomorKk);
+    if (storedByKk?.wargaId === wargaId) {
+      otpStore.delete(nomorKk);
+    }
+  }
+
+  const normalizedPhones = phones
+    .filter((phone): phone is string => Boolean(phone))
+    .map((phone) => normalizePhone(phone));
+
+  for (const phone of normalizedPhones) {
+    waOtpStore.delete(phone);
+  }
+
+  for (const [key, value] of waOtpStore.entries()) {
+    if (value.wargaId === wargaId) {
+      waOtpStore.delete(key);
+    }
+  }
+}
+
 function maskNama(nama: string): string {
   const words = nama.trim().split(/\s+/);
   return words.map((w, i) => {
@@ -177,8 +260,6 @@ function maskNama(nama: string): string {
 }
 
 const uploadsDir = path.join(process.cwd(), "uploads");
-fs.mkdirSync(path.join(uploadsDir, "kk"), { recursive: true });
-fs.mkdirSync(path.join(uploadsDir, "ktp"), { recursive: true });
 fs.mkdirSync(path.join(uploadsDir, "surat"), { recursive: true });
 const pdfTempDir = path.join(uploadsDir, "pdf-temp");
 fs.mkdirSync(pdfTempDir, { recursive: true });
@@ -196,28 +277,6 @@ function cleanupOldPdfTemps() {
     }
   } catch {}
 }
-
-const uploadStorage = multer.diskStorage({
-  destination: (req, _file, cb) => {
-    const type = (req as any).uploadType || "kk";
-    cb(null, path.join(uploadsDir, type));
-  },
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
-  },
-});
-
-const upload = multer({
-  storage: uploadStorage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    const allowed = [".jpg", ".jpeg", ".png", ".pdf"];
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (allowed.includes(ext) || file.mimetype === "application/pdf") cb(null, true);
-    else cb(new Error("Format file tidak didukung. Gunakan JPG, PNG, atau PDF."));
-  },
-});
 
 // Helper: kumpulkan semua nomor WA notifikasi mitra (kasir utama + tambahan + owner)
 function semuaNomorWaMitra(m: any): string[] {
@@ -238,6 +297,14 @@ async function sendWhatsAppToMitra(m: any, pesan: string) {
   }
 }
 
+function safeSecretEqual(expected: string, incoming: string) {
+  try {
+    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(incoming));
+  } catch {
+    return false;
+  }
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -248,6 +315,9 @@ export async function registerRoutes(
     ALTER TABLE mitra ADD COLUMN IF NOT EXISTS nama_owner text;
     ALTER TABLE mitra ADD COLUMN IF NOT EXISTS nomor_wa_owner text;
   `).catch(() => {});
+  await ensureTripaySchema().catch((error) => {
+    console.error("Tripay schema init error:", error);
+  });
 
   const isProduction = process.env.NODE_ENV === "production";
   if (isProduction) {
@@ -331,10 +401,12 @@ const pdfTempPublicDir = path.join(uploadsDir, "pdf-temp");
   app.get("/api/surat-pdf/:code", (_req: Request, res: Response) => {
     res.status(410).json({ message: "Link PDF ini sudah tidak berlaku. Silakan download surat langsung dari web rw3padasukacimahi.org" });
   });
-
-  const SERVER_START_TIME = Date.now().toString();
+  const APP_VERSION = resolveAppVersion();
   app.get("/api/app-version", (_req: Request, res: Response) => {
-    res.json({ version: SERVER_START_TIME });
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.json({ version: APP_VERSION });
   });
 
   function requireAuth(req: Request, res: Response, next: any) {
@@ -700,6 +772,9 @@ const pdfTempPublicDir = path.join(uploadsDir, "pdf-temp");
     if (req.session.kkId) {
       return res.json({ type: "warga", kkId: req.session.kkId, wargaId: req.session.wargaId, nomorKk: req.session.nomorKk });
     }
+    if (req.session.mitraId) {
+      return res.json({ type: "mitra", mitraId: req.session.mitraId, namaUsaha: req.session.mitraNama, namaKasir: req.session.mitraWaKasir });
+    }
     return res.status(401).json({ message: "Belum login" });
   });
 
@@ -828,7 +903,7 @@ const pdfTempPublicDir = path.join(uploadsDir, "pdf-temp");
         if (input && typeof input === "object") {
           const sanitized: Record<string, any> = {};
           for (const [key, val] of Object.entries(input)) {
-            if (["daftarNama", "nama", "namaLengkap", "nik", "nomorWhatsapp", "fotoKtp"].includes(key)) continue;
+            if (["daftarNama", "nama", "namaLengkap", "nik", "nomorWhatsapp"].includes(key)) continue;
             sanitized[key] = sanitizeData(val);
           }
           return sanitized;
@@ -1022,9 +1097,17 @@ Salam hangat dari pengurus RW 03 Padasuka`;
 
   app.patch("/api/warga/:id", requireAdmin, async (req, res) => {
     try {
+      const wargaId = parseInt(req.params.id as string);
       const parsed = insertWargaSchema.partial().parse(req.body);
-      const data = await storage.updateWarga(parseInt(req.params.id as string), parsed);
+      const before = await storage.getWargaById(wargaId);
+      const data = await storage.updateWarga(wargaId, parsed);
       if (!data) return res.status(404).json({ message: "Warga tidak ditemukan" });
+      const kk = await storage.getKkById(data.kkId);
+      clearOtpForWarga(
+        data.id,
+        kk?.nomorKk,
+        [before?.nomorWhatsapp, data.nomorWhatsapp]
+      );
       invalidateWarga();
       res.json(data);
     } catch (error: any) {
@@ -1261,6 +1344,162 @@ Salam hangat dari pengurus RW 03 Padasuka`;
     res.json(data);
   });
 
+  function toRomanMonth(monthNumber: number): string {
+    const romans = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
+    return romans[Math.max(0, Math.min(11, monthNumber - 1))];
+  }
+
+  function getSuratRwCode(jenisSurat: string): string {
+    const normalized = jenisSurat.toLowerCase();
+    if (normalized.includes("undangan klarifikasi")) return "UND-KLR";
+    if (normalized.includes("undangan")) return "UND";
+    if (normalized.includes("tugas")) return "ST";
+    if (normalized.includes("audiensi")) return "AUD";
+    if (normalized.includes("pengajuan perbaikan")) return "PGJ-PBK";
+    if (normalized.includes("pengajuan")) return "PGJ";
+    if (normalized.includes("bantuan")) return "PMB";
+    if (normalized.includes("edaran")) return "SE";
+    return "ADM";
+  }
+
+  app.get("/verify/surat-rw/:id", async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res.status(400).send("<h1>Verifikasi gagal</h1><p>ID surat tidak valid.</p>");
+    }
+
+    const surat = await storage.getSuratRwById(id);
+    if (!surat?.nomorSurat) {
+      return res.status(404).send("<h1>Surat tidak ditemukan</h1><p>Data surat RW tidak tersedia atau belum memiliki nomor resmi.</p>");
+    }
+
+    const expectedNomor = typeof req.query.nomor === "string" ? req.query.nomor : null;
+    const isMatch = !expectedNomor || expectedNomor === surat.nomorSurat;
+    const statusText = isMatch ? "TERVERIFIKASI" : "NOMOR TIDAK SESUAI";
+    const statusColor = isMatch ? "#166534" : "#991b1b";
+    const cardBg = isMatch ? "#f0fdf4" : "#fef2f2";
+    const accent = isMatch ? "#0f766e" : "#b91c1c";
+    const escapedIsi = (surat.isiSurat || "").replace(/[&<>"]/g, (char) => (
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" } as Record<string, string>)[char] || char
+    ));
+
+    res.type("html").send(`<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Verifikasi Surat RW 03</title>
+  <style>
+    :root { color-scheme: light; }
+    body { margin: 0; font-family: Georgia, "Times New Roman", serif; background:
+      radial-gradient(circle at top, rgba(15,118,110,0.10), transparent 30%),
+      linear-gradient(135deg, #e7e5e4, #fafaf9 34%, #f5f5f4);
+      color: #111827; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 32px 20px 56px; }
+    .card { position: relative; background: rgba(255,255,255,0.94); border: 1px solid #d6d3d1; border-radius: 28px; box-shadow: 0 28px 80px rgba(0,0,0,0.12); overflow: hidden; backdrop-filter: blur(10px); }
+    .watermark { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 120px; font-weight: 700; letter-spacing: 0.18em; color: rgba(15,23,42,0.035); transform: rotate(-26deg); pointer-events: none; user-select: none; }
+    .hero { position: relative; padding: 28px 30px 22px; color: white; background:
+      linear-gradient(135deg, rgba(17,24,39,0.96), rgba(31,41,55,0.88)),
+      linear-gradient(90deg, #0f766e, #111827); border-bottom: 1px solid rgba(255,255,255,0.12); }
+    .hero-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .brand { max-width: 70%; }
+    .brand-kicker { font-size: 11px; letter-spacing: 0.32em; text-transform: uppercase; opacity: 0.85; }
+    .brand-title { margin: 10px 0 6px; font-size: 32px; line-height: 1.1; font-weight: 700; }
+    .brand-subtitle { margin: 0; max-width: 620px; line-height: 1.7; color: rgba(255,255,255,0.82); }
+    .seal { min-width: 104px; height: 104px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.34); display: grid; place-items: center; position: relative; }
+    .seal:before { content: ""; position: absolute; inset: 10px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.22); }
+    .seal span { font-size: 11px; text-align: center; line-height: 1.6; letter-spacing: 0.16em; text-transform: uppercase; }
+    .pill { display: inline-block; margin-top: 18px; padding: 8px 14px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: 0.12em; background: ${cardBg}; color: ${statusColor}; }
+    .meta-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin-top: 18px; background: rgba(255,255,255,0.12); border-radius: 18px; overflow: hidden; }
+    .meta-item { padding: 14px 16px; background: rgba(255,255,255,0.04); }
+    .meta-label { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; opacity: 0.75; }
+    .meta-value { margin-top: 6px; font-size: 15px; font-weight: 700; word-break: break-word; }
+    .section { position: relative; padding: 28px 30px 30px; }
+    .section-title { margin: 0 0 18px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.18em; color: ${accent}; }
+    .content-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(260px, 0.85fr); gap: 24px; }
+    .panel { border: 1px solid #e7e5e4; border-radius: 24px; background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(250,250,249,0.92)); padding: 22px; }
+    .grid { display: grid; grid-template-columns: 160px 1fr; gap: 12px 16px; font-size: 15px; }
+    .label { color: #57534e; }
+    .value { font-weight: 600; word-break: break-word; }
+    .isi { margin-top: 18px; padding: 18px 20px; border-radius: 18px; background: #fafaf9; border: 1px solid #e7e5e4; white-space: pre-wrap; line-height: 1.78; min-height: 220px; }
+    .badge { display: inline-flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 18px; background: ${cardBg}; border: 1px solid ${isMatch ? "#bbf7d0" : "#fecaca"}; color: ${statusColor}; font-weight: 700; }
+    .badge-dot { width: 10px; height: 10px; border-radius: 999px; background: currentColor; }
+    .side-copy { margin: 18px 0 0; color: #44403c; line-height: 1.8; }
+    .codebox { margin-top: 18px; padding: 16px 18px; border-radius: 18px; background: #111827; color: #f9fafb; }
+    .codebox-label { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.72; }
+    .codebox-value { margin-top: 8px; font-size: 18px; line-height: 1.5; word-break: break-word; }
+    .footer-note { margin-top: 18px; font-size: 13px; line-height: 1.8; color: #57534e; }
+    @media (max-width: 760px) {
+      .hero-top { flex-direction: column; align-items: flex-start; }
+      .brand { max-width: 100%; }
+      .seal { align-self: flex-start; }
+      .meta-strip, .content-grid { grid-template-columns: 1fr; }
+      .grid { grid-template-columns: 1fr; }
+      .brand-title { font-size: 26px; }
+      .watermark { font-size: 70px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="watermark">CIMAHI</div>
+      <div class="hero">
+        <div class="hero-top">
+          <div class="brand">
+            <div class="brand-kicker">Portal Dokumen Resmi</div>
+            <h1 class="brand-title">Verifikasi Surat RW 03 Padasuka</h1>
+            <p class="brand-subtitle">Validasi administratif digital untuk dokumen resmi RW 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi.</p>
+          </div>
+          <div class="seal"><span>RW 03<br/>Padasuka<br/>Cimahi</span></div>
+        </div>
+        <span class="pill">${statusText}</span>
+        <div class="meta-strip">
+          <div class="meta-item">
+            <div class="meta-label">Nomor Dokumen</div>
+            <div class="meta-value">${surat.nomorSurat}</div>
+          </div>
+          <div class="meta-item">
+            <div class="meta-label">Jenis Surat</div>
+            <div class="meta-value">${surat.jenisSurat}</div>
+          </div>
+          <div class="meta-item">
+            <div class="meta-label">Status Validasi</div>
+            <div class="meta-value">${statusText}</div>
+          </div>
+        </div>
+      </div>
+      <div class="section">
+        <h2 class="section-title">Detail Autentikasi Dokumen</h2>
+        <div class="content-grid">
+          <div class="panel">
+            <div class="grid">
+              <div class="label">Nomor Surat</div><div class="value">${surat.nomorSurat}</div>
+              <div class="label">Jenis Surat</div><div class="value">${surat.jenisSurat}</div>
+              <div class="label">Perihal</div><div class="value">${surat.perihal}</div>
+              <div class="label">Tujuan</div><div class="value">${surat.tujuan || "-"}</div>
+              <div class="label">Tanggal Surat</div><div class="value">${surat.tanggalSurat || "-"}</div>
+              <div class="label">Waktu Terekam</div><div class="value">${surat.createdAt ? new Date(surat.createdAt).toLocaleString("id-ID") : "-"}</div>
+            </div>
+            <div class="isi">${escapedIsi || "Isi surat tidak tersedia."}</div>
+          </div>
+          <div class="panel">
+            <div class="badge"><span class="badge-dot"></span> Status dokumen: ${statusText}</div>
+            <p class="side-copy">Halaman ini menandakan bahwa dokumen telah tercatat dalam administrasi RW 03. Nomor surat, jenis surat, dan isi surat dapat dicocokkan langsung dengan lembar cetak yang diterima.</p>
+            <div class="codebox">
+              <div class="codebox-label">Kode Validasi</div>
+              <div class="codebox-value">${surat.id}-${Buffer.from(surat.nomorSurat).toString("base64").slice(0, 18)}</div>
+            </div>
+            <p class="footer-note">Apabila terdapat perbedaan nomor atau isi dokumen, mohon konfirmasi kembali kepada pengurus RW 03 Kelurahan Padasuka.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`);
+  });
+
   app.post("/api/surat-rw", requireAdmin, async (req, res) => {
     try {
       const parsed = insertSuratRwSchema.parse(req.body);
@@ -1273,9 +1512,11 @@ Salam hangat dari pengurus RW 03 Padasuka`;
 
       const currentCount = await storage.countSuratRwThisYear();
       const seq = String(currentCount + 1).padStart(3, "0");
-      const year = new Date().getFullYear();
-      const month = String(new Date().getMonth() + 1).padStart(2, "0");
-      const nomorSurat = `${seq}/SK-RW/RW-03/${month}/${year}`;
+      const issueDate = parsed.tanggalSurat ? new Date(`${parsed.tanggalSurat}T00:00:00`) : new Date();
+      const year = issueDate.getFullYear();
+      const month = toRomanMonth(issueDate.getMonth() + 1);
+      const code = getSuratRwCode(parsed.jenisSurat);
+      const nomorSurat = `${seq}/${code}/RW.03/KEL.PADASUKA/KEC.CIMAHI-TENGAH/KOTA.CIMAHI/${month}/${year}`;
       await storage.updateSuratRwNomor(data.id, nomorSurat);
       const updated = await storage.getSuratRwById(data.id);
       res.json(updated);
@@ -1837,7 +2078,8 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
       (async () => {
         let successCount = 0;
         try {
-          for (const recipient of recipients) {
+          for (let i = 0; i < recipients.length; i++) {
+            const recipient = recipients[i];
             let personalizedMsg = parsed.pesan;
             const gender = recipient.jenisKelamin === "Perempuan" ? "Ibu" : "Bapak";
             const rtNum = recipient.rt ? `RT ${String(recipient.rt).padStart(2, "0")}` : "RT -";
@@ -1846,7 +2088,16 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
             personalizedMsg = personalizedMsg.replace(/\{rtxx\}/gi, rtNum);
             const success = await sendWhatsApp(recipient.nomorWhatsapp, personalizedMsg);
             if (success) successCount++;
-            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            // Jeda antar pesan: random 4–8 detik agar tidak terdeteksi spam
+            const randomDelay = 4000 + Math.floor(Math.random() * 4000);
+            await new Promise(resolve => setTimeout(resolve, randomDelay));
+
+            // Setiap 10 pesan, jeda 20 detik (jeda batch)
+            if ((i + 1) % 10 === 0 && i + 1 < recipients.length) {
+              console.log(`WA Blast #${blast.id}: jeda batch setelah ${i + 1} pesan...`);
+              await new Promise(resolve => setTimeout(resolve, 20000));
+            }
           }
           await storage.updateWaBlastStatus(blast.id, "terkirim", recipients.length, successCount);
           console.log(`WA Blast #${blast.id} selesai: ${successCount}/${recipients.length} berhasil`);
@@ -1857,99 +2108,6 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
       })();
     } catch (error: any) {
       res.status(400).json({ message: error.message });
-    }
-  });
-
-  const pdfOnlyUpload = multer({
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 2 * 1024 * 1024 },
-    fileFilter: (_req, file, cb) => {
-      if (file.mimetype === "application/pdf") cb(null, true);
-      else cb(new Error("Hanya file PDF yang diizinkan untuk KK dan KTP"));
-    },
-  });
-
-  app.post("/api/upload/kk/:kkId", requireAuth, pdfOnlyUpload.single("file"), async (req: Request, res: Response) => {
-    try {
-      const kkId = parseInt(req.params.kkId as string);
-      if (!req.file) return res.status(400).json({ message: "File PDF harus diunggah" });
-
-      const kk = await storage.getKkById(kkId);
-      if (!kk) return res.status(404).json({ message: "KK tidak ditemukan" });
-
-      if (!req.session.isAdmin && req.session.kkId !== kkId) {
-        return res.status(403).json({ message: "Tidak memiliki akses" });
-      }
-
-      const base64Data = `data:application/pdf;base64,${req.file.buffer.toString("base64")}`;
-      const fileRef = `/api/kk/${kkId}/file`;
-      await storage.updateKk(kkId, { fotoKk: fileRef, fotoKkData: base64Data } as any);
-      res.json({ path: fileRef });
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/kk/:kkId/file", async (req: Request, res: Response) => {
-    try {
-      if (!req.session?.kkId && !req.session?.isAdmin) {
-        return res.status(401).json({ message: "Silakan login terlebih dahulu" });
-      }
-      const kkId = parseInt(req.params.kkId as string);
-      if (!req.session.isAdmin && req.session.kkId !== kkId) {
-        return res.status(403).json({ message: "Tidak memiliki akses" });
-      }
-      const fileData = await storage.getKkFotoData(kkId);
-      if (!fileData) return res.status(404).json({ message: "File tidak ditemukan" });
-      const base64 = fileData.substring(fileData.indexOf(",") + 1);
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `inline; filename="kk-${kkId}.pdf"`);
-      res.send(Buffer.from(base64, "base64"));
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/upload/ktp/:wargaId", requireAuth, pdfOnlyUpload.single("file"), async (req: Request, res: Response) => {
-    try {
-      const wargaId = parseInt(req.params.wargaId as string);
-      if (!req.file) return res.status(400).json({ message: "File PDF harus diunggah" });
-
-      const w = await storage.getWargaById(wargaId);
-      if (!w) return res.status(404).json({ message: "Warga tidak ditemukan" });
-
-      if (!req.session.isAdmin && req.session.kkId !== w.kkId) {
-        return res.status(403).json({ message: "Tidak memiliki akses" });
-      }
-
-      const base64Data = `data:application/pdf;base64,${req.file.buffer.toString("base64")}`;
-      const fileRef = `/api/warga/${wargaId}/ktp-file`;
-      await storage.updateWarga(wargaId, { fotoKtp: fileRef, fotoKtpData: base64Data } as any);
-      res.json({ path: fileRef });
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/warga/:wargaId/ktp-file", async (req: Request, res: Response) => {
-    try {
-      if (!req.session?.kkId && !req.session?.isAdmin) {
-        return res.status(401).json({ message: "Silakan login terlebih dahulu" });
-      }
-      const wargaId = parseInt(req.params.wargaId as string);
-      const w = await storage.getWargaById(wargaId);
-      if (!w) return res.status(404).json({ message: "Warga tidak ditemukan" });
-      if (!req.session.isAdmin && req.session.kkId !== w.kkId) {
-        return res.status(403).json({ message: "Tidak memiliki akses" });
-      }
-      const fileData = await storage.getWargaFotoKtpData(wargaId);
-      if (!fileData) return res.status(404).json({ message: "File tidak ditemukan" });
-      const base64 = fileData.substring(fileData.indexOf(",") + 1);
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `inline; filename="ktp-${wargaId}.pdf"`);
-      res.send(Buffer.from(base64, "base64"));
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
     }
   });
 
@@ -2011,6 +2169,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
     try {
       const kkId = req.session.kkId;
       if (!kkId) return res.status(403).json({ message: "Tidak memiliki akses" });
+      const paymentMethod = String(req.body?.paymentMethod ?? "transfer_manual");
 
       const parsed = insertDonasiSchema.parse({ ...req.body, kkId });
       if (parsed.jumlah <= 0) {
@@ -2023,11 +2182,25 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
         return res.status(400).json({ message: "Campaign tidak ditemukan atau sudah selesai" });
       }
 
-      const result = await storage.createDonasi(parsed);
-
       const formatRupiah = (n: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n);
-      notifyAdmin(`[RW 03 Padasuka - Admin]\n\n💰 *Donasi Baru Masuk!*\n\nDonatur: *${parsed.namaDonatur}*\nKegiatan: *${campaign.judul}*\nJumlah: *${formatRupiah(parsed.jumlah)}*\n\nSegera verifikasi di 👉 rw3padasukacimahi.org`);
+      if (paymentMethod === "rwcoin") {
+        const wargaId = req.session.wargaId;
+        if (!wargaId) return res.status(403).json({ message: "Login warga diperlukan" });
+        const wargaData = await storage.getWargaById(wargaId);
+        if (!wargaData) return res.status(404).json({ message: "Data warga tidak ditemukan" });
+        const result = await storage.createDonasiWithRwcoin({
+          campaignId: parsed.campaignId,
+          kkId,
+          wargaId,
+          namaDonatur: wargaData.namaLengkap,
+          jumlah: parsed.jumlah,
+        });
+        notifyAdmin(`[RW 03 Padasuka - Admin]\n\n💚 *Donasi RWcoin Berhasil!*\n\nDonatur: *${wargaData.namaLengkap}*\nKegiatan: *${campaign.judul}*\nJumlah: *${formatRupiah(parsed.jumlah)}*\nMetode: *RWcoin*\n\nPemasukan kas RW sudah tercatat otomatis.`);
+        return res.json(result);
+      }
 
+      const result = await storage.createDonasi(parsed);
+      notifyAdmin(`[RW 03 Padasuka - Admin]\n\n💰 *Donasi Baru Masuk!*\n\nDonatur: *${parsed.namaDonatur}*\nKegiatan: *${campaign.judul}*\nJumlah: *${formatRupiah(parsed.jumlah)}*\n\nSegera verifikasi di 👉 rw3padasukacimahi.org`);
       res.json(result);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
@@ -2206,6 +2379,19 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
       res.json(data);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/iuran/:id/bayar-rwcoin", requireWarga, async (req, res) => {
+    try {
+      const wargaId = (req.session as any).wargaId as number | undefined;
+      if (!wargaId) return res.status(404).json({ message: "Sesi warga tidak ditemukan, silakan login ulang" });
+      const id = parseInt(req.params.id as string);
+      const tanggalBayar = (req.body?.tanggalBayar as string) || new Date().toISOString().slice(0, 10);
+      const result = await storage.payIuranWithRwcoin(id, wargaId, tanggalBayar);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
     }
   });
 
@@ -3048,6 +3234,149 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
     }
   });
 
+  app.get("/api/rwcoin/tripay/config", requireAdmin, async (req, res) => {
+    try {
+      const base = process.env.APP_BASE_URL ?? `${req.protocol}://${req.get("host")}`;
+      const overview = await getTripayOverview();
+      const secret = process.env.TRIPAY_CALLBACK_SECRET ?? "";
+      res.json({
+        ...getTripayPublicConfig(),
+        callbackUrl: secret ? `${base}/api/tripay/callback?s=${encodeURIComponent(secret)}` : `${base}/api/tripay/callback`,
+        callbackSecretConfigured: Boolean(secret),
+        ...overview,
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/rwcoin/tripay/products", requireAdmin, async (req, res) => {
+    try {
+      const kind = req.query.kind ? String(req.query.kind) as any : undefined;
+      const includeInactive = String(req.query.includeInactive ?? "true") === "true";
+      const rows = await listTripayProducts(kind, includeInactive);
+      res.json(rows);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/rwcoin/tripay/categories", requireAdmin, async (_req, res) => {
+    try {
+      const rows = await listTripayCategories();
+      res.json(rows);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/rwcoin/tripay/categories/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id as string);
+      const isActive = req.body?.isActive != null ? Boolean(req.body.isActive) : undefined;
+      const isVisibleToWarga = req.body?.isVisibleToWarga != null ? Boolean(req.body.isVisibleToWarga) : undefined;
+      const displayOrder = req.body?.displayOrder != null ? parseInt(req.body.displayOrder) : undefined;
+      const iconKey = req.body?.iconKey != null ? String(req.body.iconKey) : undefined;
+      const adminLabel = req.body?.adminLabel != null ? String(req.body.adminLabel) : undefined;
+      const row = await updateTripayCategorySetting(id, { isActive, isVisibleToWarga, displayOrder, iconKey, adminLabel });
+      res.json(row);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/rwcoin/tripay/operators", requireAdmin, async (req, res) => {
+    try {
+      const categoryRefId = req.query.categoryId ? parseInt(String(req.query.categoryId)) : undefined;
+      const rows = await listTripayOperators(categoryRefId);
+      res.json(rows);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/rwcoin/tripay/operators/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id as string);
+      const isActive = req.body?.isActive != null ? Boolean(req.body.isActive) : undefined;
+      const isVisibleToWarga = req.body?.isVisibleToWarga != null ? Boolean(req.body.isVisibleToWarga) : undefined;
+      const displayOrder = req.body?.displayOrder != null ? parseInt(req.body.displayOrder) : undefined;
+      const normalizedName = req.body?.normalizedName != null ? String(req.body.normalizedName) : undefined;
+      const row = await updateTripayOperatorSetting(id, { isActive, isVisibleToWarga, displayOrder, normalizedName });
+      res.json(row);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/rwcoin/tripay/products/sync", requireAdmin, async (_req, res) => {
+    try {
+      const result = await syncTripayProducts();
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/rwcoin/tripay/products/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id as string);
+      const marginFlat = req.body?.marginFlat != null ? parseInt(req.body.marginFlat) : undefined;
+      const isActive = req.body?.isActive != null ? Boolean(req.body.isActive) : undefined;
+      const isVisibleToWarga = req.body?.isVisibleToWarga != null ? Boolean(req.body.isVisibleToWarga) : undefined;
+      const isFeatured = req.body?.isFeatured != null ? Boolean(req.body.isFeatured) : undefined;
+      const isRecommended = req.body?.isRecommended != null ? Boolean(req.body.isRecommended) : undefined;
+      const displayOrder = req.body?.displayOrder != null ? parseInt(req.body.displayOrder) : undefined;
+      const adminNote = req.body?.adminNote != null ? String(req.body.adminNote) : undefined;
+      const kind = req.body?.kind != null ? String(req.body.kind) as any : undefined;
+      const productGroup = req.body?.productGroup != null ? String(req.body.productGroup) : undefined;
+      const operatorNormalized = req.body?.operatorNormalized != null ? String(req.body.operatorNormalized) : undefined;
+      const row = await updateTripayProductSetting(id, { marginFlat, isActive, isVisibleToWarga, isFeatured, isRecommended, displayOrder, adminNote, kind, productGroup, operatorNormalized });
+      res.json(row);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/rwcoin/tripay/products/bulk-update", requireAdmin, async (req, res) => {
+    try {
+      const marginFlat = parseInt(req.body?.marginFlat);
+      if (isNaN(marginFlat) || marginFlat < 0) {
+        return res.status(400).json({ message: "Margin bulk harus angka 0 atau lebih" });
+      }
+      const kind = req.body?.kind ? String(req.body.kind) as any : undefined;
+      const operatorName = req.body?.operatorName ? String(req.body.operatorName) : undefined;
+      const isActive = req.body?.isActive != null ? Boolean(req.body.isActive) : undefined;
+      const result = await bulkUpdateTripayProducts({ marginFlat, kind, operatorName, isActive });
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/rwcoin/tripay/transaksi", requireAdmin, async (_req, res) => {
+    try {
+      const rows = await listTripayTransactions(200);
+      res.json(rows);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/rwcoin/tripay/reconcile", requireAdmin, async (req, res) => {
+    try {
+      const reference = req.body?.reference ? String(req.body.reference) : null;
+      if (reference) {
+        const row = await reconcileTripayTransaction(reference);
+        return res.json({ mode: "single", row });
+      }
+      const result = await reconcilePendingTripayTransactions(50);
+      res.json({ mode: "bulk", ...result });
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
   app.get("/api/rwcoin/transaksi", requireAdmin, async (req, res) => {
     try {
       const list = await storage.getAllRwcoinTransaksi();
@@ -3268,6 +3597,26 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
     return null;
   }
 
+  app.post("/api/tripay/callback", async (req, res) => {
+    try {
+      const expectedSecret = process.env.TRIPAY_CALLBACK_SECRET ?? "";
+      // Terima secret dari query param (URL), header X-Callback-Secret, atau header X_CALLBACK_SECRET
+      const incomingSecret = String(
+        req.query.s ??
+        req.header("X-Callback-Secret") ??
+        req.header("X_CALLBACK_SECRET") ??
+        ""
+      );
+      if (!expectedSecret || !incomingSecret || !safeSecretEqual(expectedSecret, incomingSecret)) {
+        return res.status(403).json({ success: false, message: "Invalid callback secret" });
+      }
+      await handleTripayCallback(req.body);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(400).json({ success: false, message: error.message });
+    }
+  });
+
   // --- Warga: Wallet ---
   app.get("/api/warga/rwcoin/wallet", requireWarga, async (req, res) => {
     try {
@@ -3277,6 +3626,103 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
       res.json({ ...wallet, namaWarga: wargaData.namaLengkap });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/warga/rwcoin/tripay/catalog", requireWarga, async (req, res) => {
+    try {
+      const kind = req.query.kind ? String(req.query.kind) as any : undefined;
+      const rows = await listTripayProducts(kind, false);
+      res.json(rows);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/warga/rwcoin/tripay/catalog/categories", requireWarga, async (_req, res) => {
+    try {
+      const rows = await listTripayCatalogCategoriesForWarga();
+      res.json(rows);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/warga/rwcoin/tripay/catalog/operators", requireWarga, async (req, res) => {
+    try {
+      const categoryId = parseInt(String(req.query.categoryId ?? ""));
+      if (!categoryId) return res.status(400).json({ message: "categoryId wajib diisi" });
+      const rows = await listTripayCatalogOperatorsForWarga(categoryId);
+      res.json(rows);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/warga/rwcoin/tripay/catalog/products", requireWarga, async (req, res) => {
+    try {
+      const categoryId = parseInt(String(req.query.categoryId ?? ""));
+      if (!categoryId) return res.status(400).json({ message: "categoryId wajib diisi" });
+      const operatorId = req.query.operatorId ? parseInt(String(req.query.operatorId)) : undefined;
+      const rows = await listTripayCatalogProductsForWarga({ categoryRefId: categoryId, operatorRefId: operatorId });
+      res.json(rows);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/warga/rwcoin/tripay/transaksi", requireWarga, async (req, res) => {
+    try {
+      const wargaData = await getWargaFromSession(req);
+      if (!wargaData) return res.json([]);
+      const rows = await listTripayTransactionsByWargaId(wargaData.id, 50);
+      res.json(rows);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/warga/rwcoin/tripay/checkout", requireWarga, async (req, res) => {
+    try {
+      const wargaData = await getWargaFromSession(req);
+      if (!wargaData) return res.status(404).json({ message: "Data warga tidak ditemukan" });
+      const { productCode, target, noMeterPln } = req.body;
+      const result = await createTripayPurchase({
+        wargaId: wargaData.id,
+        productCode: String(productCode ?? ""),
+        target: String(target ?? ""),
+        noMeterPln: noMeterPln ? String(noMeterPln) : undefined,
+      });
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/warga/rwcoin/tripay/cek-status", requireWarga, async (req, res) => {
+    try {
+      const wargaData = await getWargaFromSession(req);
+      if (!wargaData) return res.status(404).json({ message: "Data warga tidak ditemukan" });
+      const reference = String(req.body?.reference ?? "").trim();
+      if (!reference) return res.status(400).json({ message: "Reference wajib diisi" });
+
+      // Ambil transaksi, pastikan milik warga ini
+      const { db } = await import("./db");
+      const { tripayTransaction } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+      const [trx] = await db.select().from(tripayTransaction).where(eq(tripayTransaction.reference, reference));
+      if (!trx) return res.status(404).json({ message: "Transaksi tidak ditemukan" });
+      if (trx.wargaId !== wargaData.id) return res.status(403).json({ message: "Bukan transaksi Anda" });
+
+      // Jika sudah final, kembalikan langsung tanpa hit Tripay
+      if (trx.status === "success" || trx.status === "refunded") {
+        return res.json(trx);
+      }
+
+      const updated = await reconcileTripayTransaction(reference);
+      res.json(updated);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
     }
   });
 

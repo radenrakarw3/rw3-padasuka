@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
-import { useState } from "react";
+import { getQueryFn, apiRequest, queryClient, readJsonSafely } from "@/lib/queryClient";
+import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,14 +11,109 @@ import {
   Coins, ShoppingBag, ArrowUpCircle, Tag, TrendingUp,
   CheckCircle2, X, Loader2, AlertCircle, Store,
   Plus, Copy, ArrowLeftRight, User, SendHorizontal, ArrowDownCircle,
+  Smartphone, Wifi, Zap, Receipt, Heart, RefreshCw, XCircle, Clock,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { wargaMitraQueryOptions, wargaVoucherQueryOptions, wargaWalletQueryOptions } from "@/lib/warga-prefetch";
 
 function formatCoin(n: number) { return n.toLocaleString("id-ID"); }
 function formatRp(n: number) { return "Rp " + n.toLocaleString("id-ID"); }
 function formatTgl(ts: string | null) {
   if (!ts) return "-";
   return new Date(ts).toLocaleString("id-ID", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function tripayKindLabel(kind: string) {
+  if (kind === "electricity") return "Token PLN";
+  if (kind === "data") return "Paket Data";
+  return "Pulsa";
+}
+
+function normalizeTripayOperatorLabel(value?: string | null) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (!normalized) return null;
+  const map: Record<string, string> = {
+    pln: "PLN",
+    telkomsel: "Telkomsel",
+    indosat: "Indosat",
+    xl: "XL",
+    axis: "AXIS",
+    tri: "Tri",
+    smartfren: "Smartfren",
+    mobile_legends: "Mobile Legends",
+    free_fire: "Free Fire",
+    pubg: "PUBG",
+    point_blank: "Point Blank",
+    grab_driver: "Grab Driver",
+    call_of_duty: "Call of Duty",
+    roblox: "Roblox",
+    genshin_impact: "Genshin Impact",
+    aov: "AOV",
+    google_play: "Google Play",
+    steam: "Steam",
+    gopay: "GoPay",
+    ovo: "OVO",
+    dana: "DANA",
+    shopeepay: "ShopeePay",
+    linkaja: "LinkAja",
+  };
+  if (map[normalized]) return map[normalized];
+  if (/^operator\b/i.test(normalized) || /tidak dikenal/i.test(normalized)) return null;
+  return normalized
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function tripayOperatorLabel(product: any) {
+  return normalizeTripayOperatorLabel(product?.operatorNormalized)
+    || normalizeTripayOperatorLabel(product?.operatorName)
+    || product?.categoryName
+    || "Tripay";
+}
+
+function tripayCategoryLabel(category: any) {
+  const rawType = String(category?.type ?? "").toUpperCase();
+  const rawName = String(category?.adminLabel || category?.name || "").trim();
+  if (rawName) {
+    if (rawType === "PLN") return "Token PLN";
+    if (rawType === "DATA") return "Paket Data";
+    if (rawType === "PULSA") return "Pulsa";
+    return rawName;
+  }
+  if (rawType === "PLN") return "Token PLN";
+  if (rawType === "DATA") return "Paket Data";
+  if (rawType === "PULSA") return "Pulsa";
+  return "Produk Digital";
+}
+
+function tripayCategoryKey(category: any) {
+  return String(category?.id ?? category?.tripayCategoryId ?? category?.type ?? category?.name ?? "tripay");
+}
+
+function tripayCategoryNeedsMeter(category: any) {
+  const rawType = String(category?.type ?? "").toUpperCase();
+  const rawName = String(category?.name ?? "").toLowerCase();
+  return rawType === "PLN" || rawName.includes("pln") || rawName.includes("listrik");
+}
+
+function tripayCategoryFriendlyKind(category: any): "pulsa" | "data" | "electricity" | "other" {
+  const rawType = String(category?.type ?? "").toUpperCase();
+  if (rawType === "PLN") return "electricity";
+  if (rawType === "DATA") return "data";
+  if (rawType === "PULSA") return "pulsa";
+  return "other";
+}
+
+function tripayTargetLabel(category: any) {
+  const rawType = String(category?.type ?? "").toUpperCase();
+  const name = String(category?.name ?? "").toLowerCase();
+  if (rawType === "PLN" || name.includes("listrik")) return "Nomor HP kontak";
+  if (rawType === "PULSA" || rawType === "DATA") return "Nomor HP tujuan";
+  if (name.includes("game")) return "User ID / tujuan";
+  if (name.includes("wallet") || name.includes("e-wallet")) return "Nomor akun / tujuan";
+  return "Tujuan / ID pelanggan";
 }
 
 // Koin emas RWcoin
@@ -60,20 +155,17 @@ function BayarModal({ wallet, initialVoucherKode, onClose }: { wallet: any; init
   const [suksesTx, setSuksesTx] = useState<any>(null);
 
   const { data: mitraList = [] } = useQuery<any[]>({
-    queryKey: ["/api/warga/rwcoin/mitra"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
+    ...wargaMitraQueryOptions(),
   });
 
   const { data: voucherList = [] } = useQuery<any[]>({
-    queryKey: ["/api/warga/rwcoin/voucher"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
+    ...wargaVoucherQueryOptions(),
   });
 
   const bayarMutation = useMutation({
     mutationFn: async (data: any) => {
       const res = await apiRequest("POST", "/api/warga/rwcoin/bayar-langsung", data);
-      if (!res.ok) { const err = await res.json(); throw new Error(err.message); }
-      return await res.json();
+      return await readJsonSafely(res);
     },
     onSuccess: (data: any) => {
       setSuksesTx(data);
@@ -529,7 +621,7 @@ function TopupModal({ wallet, onClose }: { wallet: any; onClose: () => void }) {
           atasnama: metode.atasnama,
         }),
       });
-      const data = await res.json();
+      const data = await readJsonSafely<any>(res);
       if (!res.ok) throw new Error(data.message ?? `Error ${res.status}`);
       return data;
     },
@@ -762,6 +854,653 @@ function TopupModal({ wallet, onClose }: { wallet: any; onClose: () => void }) {
   );
 }
 
+// Deteksi provider dari prefix nomor HP Indonesia (Kominfo-compliant)
+function detectProvider(phone: string): string | null {
+  // Normalisasi: hapus non-digit, konversi 62xxx → 0xxx
+  let n = phone.replace(/\D/g, "");
+  if (n.startsWith("62")) n = "0" + n.slice(2);
+  const p4 = n.slice(0, 4);
+
+  // Telkomsel: Simpati (0812-0813), Kartu AS (0821-0823), Kartu Halo (0811), by.U (0851-0853)
+  if (["0811","0812","0813","0821","0822","0823","0851","0852","0853"].includes(p4)) return "Telkomsel";
+
+  // Indosat Ooredoo: IM3 (0814-0816, 0857-0858), Mentari (0856), Matrix (0815)
+  if (["0814","0815","0816","0855","0856","0857","0858"].includes(p4)) return "Indosat";
+
+  // XL Axiata: XL (0817-0819, 0877-0878), XLSmart (0859)
+  if (["0817","0818","0819","0859","0877","0878"].includes(p4)) return "XL";
+
+  // AXIS (anak usaha XL, prefix terpisah)
+  if (["0831","0832","0833","0838"].includes(p4)) return "AXIS";
+
+  // Tri / 3 Indonesia (Hutchison)
+  if (["0895","0896","0897","0898","0899"].includes(p4)) return "Tri";
+
+  // Smartfren (0881-0889)
+  if (["0881","0882","0883","0884","0885","0886","0887","0888","0889"].includes(p4)) return "Smartfren";
+
+  return null;
+}
+
+// Cocokkan produk Tripay (operator name + product code + product name) dengan provider yang terdeteksi
+function matchProductByProvider(product: any, provider: string): boolean {
+  const op   = String(product?.operatorNormalized ?? product?.operatorName ?? "").toLowerCase().trim();
+  const code = (product?.productCode ?? "").toLowerCase();
+  const name = (product?.productName ?? "").toLowerCase();
+  const pv   = provider.toLowerCase();
+
+  if (pv === "telkomsel") {
+    const inOp   = op.includes("telkomsel") || op.includes("simpati") || op.includes("kartu as")
+      || op.includes("kartu halo") || op.includes("by.u") || op.includes("byu") || op === "halo";
+    const inCode = code.startsWith("tsel") || code.startsWith("simpati") || code.startsWith("halo")
+      || code.startsWith("byu") || code.startsWith("byu") || code.startsWith("as");
+    const inName = name.includes("telkomsel") || name.includes("simpati") || name.includes("by.u")
+      || name.includes("kartu as") || name.includes("halo");
+    return inOp || inCode || inName;
+  }
+  if (pv === "indosat") {
+    const inOp   = op.includes("indosat") || op.includes("im3") || op.includes("ooredoo")
+      || op.includes("mentari") || op.includes("matrix");
+    const inCode = code.startsWith("isat") || code.startsWith("im3") || code.startsWith("indosat")
+      || code.startsWith("mentari") || code.startsWith("matrix");
+    const inName = name.includes("indosat") || name.includes("im3") || name.includes("ooredoo")
+      || name.includes("mentari");
+    return inOp || inCode || inName;
+  }
+  if (pv === "xl") {
+    const inOp   = (op.includes("xl") && !op.includes("axis")) || op.includes("xtra")
+      || op.includes("xlsmart") || op.includes("xl smart");
+    const inCode = (code.startsWith("xl") && !code.startsWith("xld") && !code.startsWith("xls")) // hindari axis
+      || code.startsWith("xtra");
+    const inName = (name.includes("xl") && !name.includes("axis")) || name.includes("xlsmart")
+      || name.includes("xtra");
+    return inOp || inCode || inName;
+  }
+  if (pv === "axis") {
+    const inOp   = op.includes("axis");
+    const inCode = code.startsWith("axis");
+    const inName = name.includes("axis");
+    return inOp || inCode || inName;
+  }
+  if (pv === "tri") {
+    const inOp   = /\btri\b/.test(op) || op === "3" || op.includes("three")
+      || op.includes("3 indonesia") || op.includes("hutchison") || op.includes("hutch");
+    const inCode = code.startsWith("tri") || code.startsWith("three") || code.startsWith("h3")
+      || code.startsWith("3id") || code.includes("_tri") || code.includes("-tri");
+    const inName = /\btri\b/.test(name) || name.includes("three") || name.includes("hutchison")
+      || name.startsWith("3 ");
+    return inOp || inCode || inName;
+  }
+  if (pv === "smartfren") {
+    const inOp   = op.includes("smartfren") || op.includes("smart");
+    const inCode = code.startsWith("sf") || code.startsWith("smartfren") || code.startsWith("smart");
+    const inName = name.includes("smartfren");
+    return inOp || inCode || inName;
+  }
+  return false;
+}
+
+// Alias backward-compat untuk filter chip (hanya cek operator name)
+function matchOperatorByProvider(operatorName: string, provider: string): boolean {
+  return matchProductByProvider({ operatorName }, provider);
+}
+
+type TripayRecentTarget = {
+  categoryKey: string;
+  target: string;
+  noMeterPln?: string;
+};
+
+const TRIPAY_RECENT_TARGETS_KEY = "rwcoin_tripay_recent_targets";
+
+function readRecentTripayTargets(): TripayRecentTarget[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(TRIPAY_RECENT_TARGETS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map((item) => ({
+      categoryKey: String(item?.categoryKey ?? item?.kind ?? "legacy"),
+      target: String(item?.target ?? ""),
+      noMeterPln: item?.noMeterPln ? String(item.noMeterPln) : undefined,
+    })).filter((item) => item.target) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentTripayTarget(entry: TripayRecentTarget) {
+  if (typeof window === "undefined") return;
+  const current = readRecentTripayTargets();
+  const next = [
+    entry,
+    ...current.filter((item) => !(item.categoryKey === entry.categoryKey && item.target === entry.target && (item.noMeterPln ?? "") === (entry.noMeterPln ?? ""))),
+  ].slice(0, 6);
+  window.localStorage.setItem(TRIPAY_RECENT_TARGETS_KEY, JSON.stringify(next));
+}
+
+function ResultScreen({ result: initialResult, onClose }: { result: any; onClose: () => void }) {
+  const { toast } = useToast();
+  const [result, setResult] = useState(initialResult);
+  const [checking, setChecking] = useState(false);
+
+  const isPending  = result.status === "pending";
+  const isSuccess  = result.status === "success";
+  const isRefunded = result.status === "refunded";
+
+  async function cekStatus() {
+    setChecking(true);
+    try {
+      const res = await apiRequest("POST", "/api/warga/rwcoin/tripay/cek-status", { reference: result.reference });
+      const data = await readJsonSafely<any>(res);
+      setResult(data);
+      if (data.status === "success") {
+        queryClient.invalidateQueries({ queryKey: ["/api/warga/rwcoin/wallet"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/warga/rwcoin/transaksi"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/warga/rwcoin/tripay/transaksi"] });
+        toast({ title: "Transaksi berhasil", description: "Produk sudah dikirim." });
+      } else if (data.status === "refunded") {
+        queryClient.invalidateQueries({ queryKey: ["/api/warga/rwcoin/wallet"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/warga/rwcoin/transaksi"] });
+        toast({ variant: "destructive", title: "Transaksi gagal", description: "Saldo sudah dikembalikan." });
+      } else {
+        toast({ title: "Masih diproses", description: "Tripay belum menyelesaikan transaksi ini." });
+      }
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Gagal cek status", description: e.message });
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  const statusConfig = isSuccess
+    ? { icon: CheckCircle2, iconClass: "bg-green-100 text-green-600", title: "Transaksi Sukses", desc: "Produk digital sudah dikirim." }
+    : isRefunded
+    ? { icon: XCircle, iconClass: "bg-red-100 text-red-500", title: "Transaksi Gagal", desc: "Saldo sudah dikembalikan ke wallet Anda." }
+    : { icon: Clock, iconClass: "bg-amber-100 text-amber-500", title: "Sedang Diproses", desc: "Tripay sedang memproses pesanan ini." };
+
+  const StatusIcon = statusConfig.icon;
+
+  return (
+    <div className="p-5 space-y-4 pb-8">
+      <div className="text-center space-y-2 mt-2">
+        <div className={`w-20 h-20 rounded-full mx-auto flex items-center justify-center ${statusConfig.iconClass}`}>
+          <StatusIcon className="w-10 h-10" />
+        </div>
+        <h3 className="text-lg font-bold">{statusConfig.title}</h3>
+        <p className="text-sm text-muted-foreground">{statusConfig.desc}</p>
+      </div>
+
+      <div className="rounded-2xl p-4 space-y-2.5" style={{ background: "hsl(163,55%,96%)" }}>
+        <div className="flex justify-between text-sm"><span>Produk</span><span className="font-semibold text-right max-w-[60%]">{result.productName}</span></div>
+        <div className="flex justify-between text-[11px] text-muted-foreground"><span>SKU</span><span className="font-mono">{result.productCode}</span></div>
+        <div className="flex justify-between text-sm"><span>Tujuan</span><span>{result.target}</span></div>
+        {result.noMeterPln && <div className="flex justify-between text-sm"><span>No Meter</span><span>{result.noMeterPln}</span></div>}
+        <div className="flex justify-between text-sm"><span>Status</span>
+          <span className={`font-semibold ${isSuccess ? "text-green-600" : isRefunded ? "text-red-500" : "text-amber-600"}`}>
+            {isSuccess ? "Sukses" : isRefunded ? "Refunded" : "Pending"}
+          </span>
+        </div>
+        <div className="flex justify-between text-sm font-bold border-t pt-2.5"><span>Dipotong RWcoin</span><span>{formatCoin(result.hargaJual ?? 0)} <CoinIcon /></span></div>
+        <div className="flex justify-between text-xs text-muted-foreground"><span>Ref</span><span className="font-mono text-[10px]">{result.reference}</span></div>
+        {result.serialNumber && <p className="text-xs text-green-700 font-mono break-all">SN/Token: {result.serialNumber}</p>}
+        {result.note && !isSuccess && <p className="text-[11px] text-muted-foreground border-t pt-2">{result.note}</p>}
+      </div>
+
+      {isPending && (
+        <Button
+          variant="outline"
+          className="w-full h-11 rounded-2xl border-amber-300 text-amber-700 hover:bg-amber-50"
+          onClick={cekStatus}
+          disabled={checking}
+        >
+          {checking ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Mengecek...</> : <><RefreshCw className="w-4 h-4 mr-2" />Cek Status Terbaru</>}
+        </Button>
+      )}
+
+      <Button className="w-full h-12 rounded-2xl" style={{ background: "hsl(163,55%,22%)" }} onClick={onClose}>
+        Selesai
+      </Button>
+    </div>
+  );
+}
+
+function TripayModal({ wallet, onClose, initialKind = "pulsa" }: { wallet: any; onClose: () => void; initialKind?: "pulsa" | "data" | "electricity" }) {
+  const { toast } = useToast();
+  const [selectedCategory, setSelectedCategory] = useState<any>(null);
+  const [selectedOperator, setSelectedOperator] = useState<any>(null);
+  const [target, setTarget] = useState("");
+  const [noMeterPln, setNoMeterPln] = useState("");
+  const [selected, setSelected] = useState<any>(null);
+  const [result, setResult] = useState<any>(null);
+  const [step, setStep] = useState<"browse" | "confirm">("browse");
+  const [recentTargets, setRecentTargets] = useState<TripayRecentTarget[]>([]);
+
+  const { data: categories = [], isLoading: loadingCategories } = useQuery<any[]>({
+    queryKey: ["/api/warga/rwcoin/tripay/catalog/categories"],
+    queryFn: getQueryFn({ on401: "throw" }),
+  });
+
+  const { data: operators = [], isLoading: loadingOperators } = useQuery<any[]>({
+    queryKey: ["/api/warga/rwcoin/tripay/catalog/operators", selectedCategory?.id],
+    enabled: Boolean(selectedCategory?.id),
+    queryFn: async () => {
+      const res = await fetch(`/api/warga/rwcoin/tripay/catalog/operators?categoryId=${encodeURIComponent(String(selectedCategory.id))}`, { credentials: "include" });
+      if (!res.ok) {
+        const err = await readJsonSafely<any>(res);
+        throw new Error(err.message);
+      }
+      return readJsonSafely(res);
+    },
+  });
+
+  useEffect(() => {
+    setRecentTargets(readRecentTripayTargets());
+  }, []);
+
+  useEffect(() => {
+    if (!categories.length || selectedCategory) return;
+    const matched = categories.find((category: any) => tripayCategoryFriendlyKind(category) === initialKind);
+    setSelectedCategory(matched ?? categories[0]);
+  }, [categories, selectedCategory, initialKind]);
+
+  useEffect(() => {
+    setSelectedOperator(null);
+    setSelected(null);
+    setTarget("");
+    setNoMeterPln("");
+    setStep("browse");
+  }, [selectedCategory?.id]);
+
+  useEffect(() => {
+    setSelected(null);
+    setStep("browse");
+  }, [selectedOperator?.id]);
+
+  const { data: products = [], isLoading: loadingProducts } = useQuery<any[]>({
+    queryKey: ["/api/warga/rwcoin/tripay/catalog/products", selectedCategory?.id, selectedOperator?.id ?? "none"],
+    enabled: Boolean(selectedCategory?.id),
+    queryFn: async () => {
+      const params = new URLSearchParams({ categoryId: String(selectedCategory.id) });
+      if (selectedOperator?.id) params.set("operatorId", String(selectedOperator.id));
+      const res = await fetch(`/api/warga/rwcoin/tripay/catalog/products?${params.toString()}`, { credentials: "include" });
+      if (!res.ok) {
+        const err = await readJsonSafely<any>(res);
+        throw new Error(err.message);
+      }
+      return readJsonSafely(res);
+    },
+  });
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/warga/rwcoin/tripay/checkout", {
+        productCode: selected?.productCode,
+        target,
+        noMeterPln: tripayCategoryNeedsMeter(selectedCategory) ? noMeterPln : undefined,
+      });
+      return readJsonSafely(res);
+    },
+    onSuccess: (data: any) => {
+      saveRecentTripayTarget({
+        categoryKey: tripayCategoryKey(selectedCategory),
+        target,
+        noMeterPln: tripayCategoryNeedsMeter(selectedCategory) ? noMeterPln : undefined,
+      });
+      setRecentTargets(readRecentTripayTargets());
+      setResult(data);
+      queryClient.invalidateQueries({ queryKey: ["/api/warga/rwcoin/wallet"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/warga/rwcoin/transaksi"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/warga/rwcoin/tripay/transaksi"] });
+    },
+    onError: (e: any) => toast({ variant: "destructive", title: "Transaksi gagal", description: e.message }),
+  });
+
+  const categoryKind = tripayCategoryFriendlyKind(selectedCategory);
+  const categoryNeedsMeter = tripayCategoryNeedsMeter(selectedCategory);
+  const telcoCategory = categoryKind === "pulsa" || categoryKind === "data";
+  const saldo = wallet?.saldo ?? 0;
+  const hargaJual = selected?.hargaJual ?? 0;
+  const saldoKurang = hargaJual > saldo;
+  const targetMinLength = telcoCategory || categoryNeedsMeter ? 10 : 4;
+  const targetValid = target.trim().length >= targetMinLength;
+  const meterValid = !categoryNeedsMeter || noMeterPln.trim().length >= 8;
+  const canSubmit = selected && targetValid && meterValid && !saldoKurang;
+  const recentTargetsForCategory = recentTargets.filter((item) => item.categoryKey === tripayCategoryKey(selectedCategory)).slice(0, 3);
+  const detectedProvider = telcoCategory && target.length >= 4 ? detectProvider(target) : null;
+
+  useEffect(() => {
+    if (!detectedProvider || !operators.length || selectedOperator) return;
+    const matched = operators.find((operator: any) => matchOperatorByProvider(operator.name, detectedProvider));
+    if (matched) setSelectedOperator(matched);
+  }, [detectedProvider, operators, selectedOperator]);
+
+  const filteredProducts = !targetValid || !selectedCategory
+    ? []
+    : [...products].filter((product: any) => {
+      if (!telcoCategory || !detectedProvider || selectedOperator) return true;
+      return matchProductByProvider(product, detectedProvider);
+    }).sort((a: any, b: any) => {
+    const featuredDelta = Number(Boolean(b.isFeatured)) - Number(Boolean(a.isFeatured));
+    if (featuredDelta !== 0) return featuredDelta;
+    const recommendedDelta = Number(Boolean(b.isRecommended)) - Number(Boolean(a.isRecommended));
+    if (recommendedDelta !== 0) return recommendedDelta;
+    const salesDelta = (b.salesCount ?? 0) - (a.salesCount ?? 0);
+    if (salesDelta !== 0) return salesDelta;
+    return (a.hargaJual ?? 0) - (b.hargaJual ?? 0);
+  });
+
+  return (
+    <>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] bg-black/50" onClick={result ? onClose : undefined} />
+      <motion.div
+        initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+        transition={{ type: "spring", damping: 32, stiffness: 380 }}
+        className="fixed inset-x-0 bottom-0 z-[101] flex flex-col bg-white rounded-t-3xl shadow-2xl"
+        style={{ maxHeight: "94dvh" }}
+      >
+        <div className="flex-shrink-0 px-5 pt-3 pb-3 border-b border-gray-100">
+          <div className="flex justify-center mb-3"><div className="w-10 h-1 bg-gray-200 rounded-full" /></div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground">{result ? "Pesanan Tercatat" : "Beli Produk Digital"}</p>
+              <h2 className="font-bold text-base">Tripay dengan RWcoin</h2>
+            </div>
+            <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+              <X className="w-4 h-4 text-gray-500" />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto overscroll-contain">
+          {result ? (
+            <ResultScreen result={result} onClose={onClose} />
+          ) : (
+            <div className="p-5 space-y-4 pb-8">
+              {/* Saldo */}
+              <div className="flex items-center justify-between px-1">
+                <p className="text-xs text-muted-foreground">Saldo tersedia</p>
+                <p className="text-sm font-bold">{formatCoin(saldo)} <CoinIcon /></p>
+              </div>
+
+              {!result && (
+                <div className="rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-2 text-[11px] font-medium text-muted-foreground">
+                    <span className={`flex-1 rounded-full px-2.5 py-1 text-center ${step === "browse" ? "bg-[hsl(163,55%,22%)] text-white" : "bg-white border border-gray-200"}`}>
+                      1. Isi tujuan & pilih produk
+                    </span>
+                    <span className={`flex-1 rounded-full px-2.5 py-1 text-center ${step === "confirm" ? "bg-[hsl(163,55%,22%)] text-white" : "bg-white border border-gray-200"}`}>
+                      2. Konfirmasi & bayar
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2">
+                {categories.map((category: any) => {
+                  const kind = tripayCategoryFriendlyKind(category);
+                  const Icon = kind === "electricity" ? Zap : kind === "data" ? Wifi : kind === "pulsa" ? Smartphone : Receipt;
+                  return (
+                  <button
+                    key={category.id}
+                    onClick={() => setSelectedCategory(category)}
+                    className={`rounded-2xl border-2 px-3 py-3 text-left transition-colors ${selectedCategory?.id === category.id ? "border-[hsl(163,55%,22%)] bg-[hsl(163,55%,96%)] text-[hsl(163,55%,22%)]" : "border-gray-200 text-muted-foreground"}`}
+                  >
+                    <Icon className="w-5 h-5 mb-1" />
+                    <p className="text-xs font-semibold">{tripayCategoryLabel(category)}</p>
+                    <p className="text-[10px] opacity-70 mt-0.5">{category.productCount ?? 0} produk</p>
+                  </button>
+                )})}
+              </div>
+
+              {step === "browse" ? (
+                <>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold">{tripayTargetLabel(selectedCategory)}</Label>
+                    <div className="relative">
+                      <Input
+                        value={target}
+                        onChange={e => { setTarget(e.target.value.replace(/[^0-9]/g, "")); setSelected(null); }}
+                        placeholder={telcoCategory || categoryNeedsMeter ? "08xxxxxxxxxx" : "Masukkan tujuan / user ID"}
+                        inputMode="numeric"
+                        maxLength={20}
+                        className="h-12 text-base font-mono pr-24"
+                        autoFocus
+                      />
+                      {target.length >= 4 && detectedProvider && telcoCategory && (
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold px-2 py-1 rounded-full bg-[hsl(163,55%,96%)] text-[hsl(163,55%,22%)]">
+                          {detectedProvider}
+                        </span>
+                      )}
+                      {target.length >= 4 && !detectedProvider && telcoCategory && target.length < targetMinLength && (
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">mendeteksi...</span>
+                      )}
+                    </div>
+                    {target.length > 0 && target.length < targetMinLength && (
+                      <p className="text-[11px] text-amber-600">Masukkan minimal {targetMinLength} karakter</p>
+                    )}
+                    {telcoCategory && (
+                      <p className="text-[11px] text-muted-foreground">Nomor ini akan dipakai untuk mengirim pulsa atau paket data.</p>
+                    )}
+                  </div>
+
+                  {recentTargetsForCategory.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-[11px] font-medium text-muted-foreground">Target terakhir</p>
+                      <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                        {recentTargetsForCategory.map((item, idx) => (
+                          <button
+                            key={`${item.categoryKey}-${item.target}-${item.noMeterPln ?? idx}`}
+                            onClick={() => {
+                              setTarget(item.target);
+                              setNoMeterPln(item.noMeterPln ?? "");
+                              setSelected(null);
+                              setStep("browse");
+                            }}
+                            className="flex-shrink-0 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700"
+                          >
+                            {item.target}{item.noMeterPln ? ` · ${item.noMeterPln}` : ""}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {categoryNeedsMeter && (
+                    <div className="space-y-2">
+                      <Label className="text-sm font-semibold">No Meter / ID Pelanggan PLN</Label>
+                      <Input
+                        value={noMeterPln}
+                        onChange={e => { setNoMeterPln(e.target.value.replace(/[^0-9]/g, "")); setSelected(null); }}
+                        placeholder="Contoh: 12345678901"
+                        inputMode="numeric"
+                        maxLength={14}
+                        className="h-12 text-base font-mono"
+                      />
+                      {noMeterPln.length > 0 && noMeterPln.length < 8 && (
+                        <p className="text-[11px] text-amber-600">Minimal 8 digit</p>
+                      )}
+                      <p className="text-[11px] text-muted-foreground">Pastikan ID pelanggan benar karena token akan dikirim ke meter tersebut.</p>
+                    </div>
+                  )}
+
+                  {!targetValid && target.length === 0 && (
+                    <div className="flex flex-col items-center gap-2 py-8 text-center">
+                      <Smartphone className="w-10 h-10 text-gray-200" />
+                      <p className="text-sm text-muted-foreground">
+                        {categoryNeedsMeter
+                          ? "Masukkan nomor kontak dan nomor meter untuk melihat pilihan produk"
+                          : "Masukkan tujuan untuk melihat pilihan produk"}
+                      </p>
+                    </div>
+                  )}
+
+                  {loadingCategories && (
+                    <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+                  )}
+
+                  {operators.length > 0 && (
+                    <div className="space-y-2">
+                      <Label className="text-sm font-semibold">Operator</Label>
+                      <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                        <button
+                          onClick={() => { setSelectedOperator(null); setSelected(null); }}
+                          className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${!selectedOperator ? "bg-[hsl(163,55%,22%)] text-white border-[hsl(163,55%,22%)]" : "bg-white text-muted-foreground border-gray-200"}`}
+                        >
+                          Semua
+                        </button>
+                        {operators.map((operator: any) => (
+                          <button
+                            key={operator.id}
+                            onClick={() => { setSelectedOperator(operator); setSelected(null); }}
+                            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${selectedOperator?.id === operator.id ? "bg-[hsl(163,55%,22%)] text-white border-[hsl(163,55%,22%)]" : "bg-white text-muted-foreground border-gray-200"}`}
+                          >
+                            {operator.name}
+                          </button>
+                        ))}
+                      </div>
+                      {loadingOperators && <p className="text-[11px] text-muted-foreground">Memuat operator...</p>}
+                    </div>
+                  )}
+
+                  {targetValid && meterValid && loadingProducts && (
+                    <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+                  )}
+
+                  {targetValid && meterValid && !loadingProducts && filteredProducts.length === 0 && (
+                    <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-center">
+                      <p className="text-sm font-semibold text-amber-800">Belum ada produk aktif untuk pilihan ini</p>
+                      <p className="text-xs text-amber-600 mt-1">Coba ganti operator atau hubungi admin untuk mengaktifkan kategori ini.</p>
+                    </div>
+                  )}
+
+                  {targetValid && meterValid && !loadingProducts && filteredProducts.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between px-0.5">
+                        <p className="text-sm font-semibold">
+                          {selectedOperator?.name ? `Produk ${selectedOperator.name}` : selectedCategory ? tripayCategoryLabel(selectedCategory) : "Pilih produk"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{filteredProducts.length} pilihan</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {filteredProducts.map((product: any) => (
+                          <button
+                            key={product.id}
+                            onClick={() => setSelected(selected?.id === product.id ? null : product)}
+                            className={`rounded-2xl border-2 p-3 text-left transition-all ${selected?.id === product.id ? "border-[hsl(163,55%,22%)] bg-[hsl(163,55%,97%)] shadow-sm" : "border-gray-200 bg-white"}`}
+                          >
+                            <p className="text-[9px] font-mono text-muted-foreground/60 mb-0.5 truncate">{product.productCode}</p>
+                            <div className="flex items-center gap-1 flex-wrap mb-1">
+                              {product.isFeatured && <Badge className="h-4 text-[9px] bg-amber-100 text-amber-700">Unggulan</Badge>}
+                              {product.isRecommended && <Badge className="h-4 text-[9px] bg-sky-100 text-sky-700">Rekomendasi</Badge>}
+                              {(product.salesCount ?? 0) > 0 && <Badge variant="outline" className="h-4 text-[9px]">Terlaris</Badge>}
+                            </div>
+                            <p className="text-xs font-semibold line-clamp-2 leading-snug">{product.productName}</p>
+                            <p className="text-[10px] text-muted-foreground mt-1">{product.operatorName || product.categoryName || "Tripay"}</p>
+                            <p className="text-xs font-bold text-[hsl(163,55%,22%)] mt-2">{formatCoin(product.hargaJual)} <CoinIcon size={12} /></p>
+                            <p className="text-[10px] text-muted-foreground">{formatRp(product.hargaJual)}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Ringkasan pilihan */}
+                  {selected && (
+                    <div className="rounded-2xl p-4 border border-green-200 bg-green-50 space-y-3">
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm"><span>Produk</span><span className="font-semibold text-right max-w-[60%]">{selected.productName}</span></div>
+                        <div className="flex justify-between text-[11px] text-muted-foreground"><span>SKU</span><span className="font-mono">{selected.productCode}</span></div>
+                        <div className="flex justify-between text-sm"><span>Tujuan</span><span className="font-mono">{target}</span></div>
+                        {noMeterPln && <div className="flex justify-between text-sm"><span>No Meter</span><span className="font-mono">{noMeterPln}</span></div>}
+                        <div className="flex justify-between text-sm font-bold border-t pt-2"><span>Bayar</span><span className="text-[hsl(163,55%,22%)]">{formatCoin(selected.hargaJual)} <CoinIcon /></span></div>
+                        <div className="flex justify-between text-[11px] text-muted-foreground"><span>Sisa saldo</span><span>{formatCoin(Math.max(0, saldo - selected.hargaJual))} <CoinIcon size={11} /></span></div>
+                      </div>
+                      {saldoKurang ? (
+                        <p className="text-xs text-red-600 font-medium">Saldo tidak cukup untuk produk ini.</p>
+                      ) : (
+                        <Button
+                          className="w-full h-11 rounded-2xl text-sm font-semibold"
+                          style={{ background: "hsl(163,55%,22%)" }}
+                          onClick={() => setStep("confirm")}
+                        >
+                          Lanjut ke konfirmasi
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-green-200 bg-green-50 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Ringkasan pesanan</p>
+                        <p className="font-semibold">{selected?.productName}</p>
+                      </div>
+                      <button
+                        onClick={() => setStep("browse")}
+                        className="text-xs font-medium text-[hsl(163,55%,22%)] hover:underline"
+                      >
+                        Ubah
+                      </button>
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between"><span>Kategori</span><span>{selectedCategory ? tripayCategoryLabel(selectedCategory) : "Tripay"}</span></div>
+                      {selectedOperator && <div className="flex justify-between"><span>Operator</span><span>{selectedOperator.name}</span></div>}
+                      <div className="flex justify-between"><span>Tujuan</span><span className="font-mono">{target}</span></div>
+                      {noMeterPln && <div className="flex justify-between"><span>No Meter</span><span className="font-mono">{noMeterPln}</span></div>}
+                      {detectedProvider && telcoCategory && (
+                        <div className="flex justify-between"><span>Operator</span><span>{detectedProvider}</span></div>
+                      )}
+                      <div className="flex justify-between text-[11px] text-muted-foreground"><span>SKU</span><span className="font-mono">{selected?.productCode}</span></div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+                    <p className="text-sm font-semibold text-amber-800">Cek lagi sebelum bayar</p>
+                    <p className="text-xs text-amber-700">Pastikan nomor tujuan dan nomor meter benar. Setelah diproses, pesanan digital umumnya tidak bisa dibatalkan.</p>
+                  </div>
+
+                  <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-2.5">
+                    <div className="flex justify-between text-sm"><span>Harga produk</span><span>{formatCoin(hargaJual)} <CoinIcon /></span></div>
+                    <div className="flex justify-between text-sm"><span>Saldo saat ini</span><span>{formatCoin(saldo)} <CoinIcon /></span></div>
+                    <div className="flex justify-between text-sm font-bold border-t pt-2.5"><span>Sisa saldo setelah bayar</span><span>{formatCoin(Math.max(0, saldo - hargaJual))} <CoinIcon /></span></div>
+                  </div>
+
+                  {saldoKurang && (
+                    <div className="rounded-2xl border border-red-200 bg-red-50 p-3">
+                      <p className="text-xs font-medium text-red-600">Saldo tidak cukup. Silakan kembali dan pilih nominal lain atau topup terlebih dahulu.</p>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1 h-12 rounded-2xl"
+                      onClick={() => setStep("browse")}
+                    >
+                      Kembali
+                    </Button>
+                    <Button
+                      className="flex-[1.4] h-12 rounded-2xl text-base font-semibold shadow-sm"
+                      style={{ background: "hsl(163,55%,22%)" }}
+                      disabled={!canSubmit || mutation.isPending}
+                      onClick={() => mutation.mutate()}
+                    >
+                      {mutation.isPending ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Memproses...</> : "Bayar sekarang"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </>
+  );
+}
+
 // ============ TRANSFER MODAL ============
 function TransferModal({ wallet, onClose }: { wallet: any; onClose: () => void }) {
   const { toast } = useToast();
@@ -781,8 +1520,11 @@ function TransferModal({ wallet, onClose }: { wallet: any; onClose: () => void }
     queryKey: ["/api/warga/rwcoin/wallet-preview", kodeNorm],
     queryFn: async () => {
       const res = await fetch(`/api/warga/rwcoin/wallet-preview/${encodeURIComponent(kodeNorm)}`, { credentials: "include" });
-      if (!res.ok) { const e = await res.json(); throw new Error(e.message); }
-      return res.json();
+      if (!res.ok) {
+        const e = await readJsonSafely<any>(res);
+        throw new Error(e.message);
+      }
+      return readJsonSafely(res);
     },
     enabled: kodeLengkap,
     retry: false,
@@ -811,8 +1553,7 @@ function TransferModal({ wallet, onClose }: { wallet: any; onClose: () => void }
         jumlah: jumlahAngka,
         keterangan: keterangan.trim() || undefined,
       });
-      if (!res.ok) { const err = await res.json(); throw new Error(err.message); }
-      return res.json();
+      return readJsonSafely(res);
     },
     onSuccess: (data: any) => {
       setSuksesTx(data);
@@ -1088,20 +1829,26 @@ export default function WargaRwcoin() {
   const [showBayar, setShowBayar] = useState(false);
   const [showTopup, setShowTopup] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
+  const [showTripay, setShowTripay] = useState(false);
+  const [tripayInitialKind, setTripayInitialKind] = useState<"pulsa" | "data" | "electricity">("pulsa");
   const [bayarVoucher, setBayarVoucher] = useState<string | undefined>(undefined);
 
   const { data: wallet, isLoading: loadingWallet } = useQuery<any>({
-    queryKey: ["/api/warga/rwcoin/wallet"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
+    ...wargaWalletQueryOptions(),
   });
   const { data: transaksiList = [], isLoading: loadingTransaksi } = useQuery<any[]>({
     queryKey: ["/api/warga/rwcoin/transaksi"],
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
   const { data: voucherList = [] } = useQuery<any[]>({
-    queryKey: ["/api/warga/rwcoin/voucher"],
+    ...wargaVoucherQueryOptions(),
+  });
+  const { data: tripayTxList = [] } = useQuery<any[]>({
+    queryKey: ["/api/warga/rwcoin/tripay/transaksi"],
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
+  const tripayPending = tripayTxList.filter((t: any) => t.status === "pending").length;
+  const tripaySuccess = tripayTxList.filter((t: any) => t.status === "success").length;
 
   return (
     <div className="space-y-4">
@@ -1120,6 +1867,9 @@ export default function WargaRwcoin() {
       </AnimatePresence>
       <AnimatePresence>
         {showTransfer && <TransferModal key="modal-transfer" wallet={wallet} onClose={() => setShowTransfer(false)} />}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showTripay && <TripayModal key={`modal-tripay-${tripayInitialKind}`} wallet={wallet} initialKind={tripayInitialKind} onClose={() => setShowTripay(false)} />}
       </AnimatePresence>
 
       {/* Wallet Card */}
@@ -1168,7 +1918,11 @@ export default function WargaRwcoin() {
         </div>
       </motion.div>
 
-      {/* Tombol Aksi */}
+      <div className="space-y-1">
+        <p className="text-sm font-semibold text-[hsl(163,55%,22%)]">Belanja Harian</p>
+        <p className="text-xs text-muted-foreground">Gunakan RWcoin untuk bayar di mitra sekitar atau kirim saldo ke sesama warga.</p>
+      </div>
+
       <div className="grid grid-cols-2 gap-3">
         <motion.div whileTap={{ scale: 0.95 }} transition={{ type: "spring", stiffness: 400, damping: 20 }}>
           <Button
@@ -1193,6 +1947,60 @@ export default function WargaRwcoin() {
           </Button>
         </motion.div>
       </div>
+
+      <div className="space-y-1 pt-1">
+        <p className="text-sm font-semibold text-[hsl(163,55%,22%)]">Produk Digital</p>
+        <p className="text-xs text-muted-foreground">Pulsa, paket data, dan token listrik dengan harga yang sudah disiapkan admin RW.</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <motion.div whileTap={{ scale: 0.95 }} transition={{ type: "spring", stiffness: 400, damping: 20 }}>
+          <Button
+            className="w-full py-5 text-sm font-bold gap-2 rounded-2xl shadow-sm flex-col h-auto items-start text-left"
+            style={{ background: "linear-gradient(135deg, hsl(200,70%,32%), hsl(180,70%,40%))" }}
+            onClick={() => { setTripayInitialKind("pulsa"); setShowTripay(true); }}
+            disabled={!wallet || wallet.saldo <= 0}
+          >
+            <Wifi className="w-5 h-5" />
+            <span>Pulsa & Paket</span>
+            <span className="text-[11px] font-medium opacity-80">Isi pulsa dan kuota internet tanpa transfer bank lagi.</span>
+          </Button>
+        </motion.div>
+        <motion.div whileTap={{ scale: 0.95 }} transition={{ type: "spring", stiffness: 400, damping: 20 }}>
+          <Button
+            className="w-full py-5 text-sm font-bold gap-2 rounded-2xl shadow-sm flex-col h-auto items-start text-left"
+            style={{ background: "linear-gradient(135deg, hsl(38,92%,42%), hsl(48,90%,54%))" }}
+            onClick={() => { setTripayInitialKind("electricity"); setShowTripay(true); }}
+            disabled={!wallet || wallet.saldo <= 0}
+          >
+            <Zap className="w-5 h-5" />
+            <span>Token Listrik</span>
+            <span className="text-[11px] font-medium opacity-80">Pilih nominal token PLN dan pantau status pesanan di aplikasi.</span>
+          </Button>
+        </motion.div>
+      </div>
+
+      <Card className="border-0 shadow-sm bg-gradient-to-r from-cyan-50 to-emerald-50">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-800">Belanja digital lebih tenang</p>
+              <p className="text-xs text-muted-foreground mt-1">Harga sudah final, saldo langsung terpotong, dan status pesanan bisa dipantau dari riwayat Tripay.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-center flex-shrink-0">
+              <div className="rounded-xl bg-white/80 px-3 py-2 min-w-[74px]">
+                <p className="text-base font-bold text-amber-600">{tripayPending}</p>
+                <p className="text-[10px] text-muted-foreground">Pending</p>
+              </div>
+              <div className="rounded-xl bg-white/80 px-3 py-2 min-w-[74px]">
+                <p className="text-base font-bold text-green-600">{tripaySuccess}</p>
+                <p className="text-[10px] text-muted-foreground">Sukses</p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {wallet?.saldo === 0 && (
         <p className="text-center text-xs text-muted-foreground -mt-2">
           Saldo kosong —{" "}
@@ -1267,7 +2075,7 @@ export default function WargaRwcoin() {
             Riwayat Transaksi
           </h3>
           <div className="space-y-2">
-            {transaksiList.map((t: any, txIdx: number) => {
+            {transaksiList.slice(0, 10).map((t: any, txIdx: number) => {
               // Untuk transfer: apakah kita penerima?
               const isTransferMasuk = t.tipe === "transfer" && t.tujuanWargaId != null && t.wargaId !== wallet?.wargaId;
               const isTransferKeluar = t.tipe === "transfer" && !isTransferMasuk;
@@ -1279,6 +2087,12 @@ export default function WargaRwcoin() {
 
               if (t.tipe === "topup") {
                 iconBg = "bg-green-100 text-green-600"; Icon = ArrowUpCircle; label = "Topup Saldo";
+              } else if (t.tipe === "donasi") {
+                iconBg = "bg-rose-100 text-rose-600"; Icon = Heart;
+                label = "Donasi RW"; labelSub = t.keterangan ?? "Campaign RW";
+              } else if (t.tipe === "iuran") {
+                iconBg = "bg-violet-100 text-violet-600"; Icon = Receipt;
+                label = "Bayar Iuran"; labelSub = t.keterangan ?? "Kas RW";
               } else if (isTransferMasuk) {
                 iconBg = "bg-emerald-100 text-emerald-600"; Icon = ArrowDownCircle;
                 label = "Transfer Masuk"; labelSub = t.namaPengirim ? `dari ${t.namaPengirim}` : null;
@@ -1344,15 +2158,53 @@ export default function WargaRwcoin() {
         </CardContent>
       </Card>
 
+      <Card className="border-0 shadow-sm">
+        <CardContent className="p-4">
+          <h3 className="font-semibold text-sm flex items-center gap-2 mb-3">
+            <Smartphone className="w-4 h-4 text-cyan-600" />
+            Riwayat Tripay
+          </h3>
+          <div className="space-y-2">
+            {tripayTxList.map((t: any) => (
+              <div key={t.id} className="flex items-center justify-between py-2.5 border-b last:border-0 gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-medium">{t.productName}</p>
+                    <Badge variant="outline" className="text-[10px]">{tripayKindLabel(t.kind)}</Badge>
+                    <Badge className={`text-[10px] ${t.status === "success" ? "bg-green-100 text-green-700" : t.status === "pending" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`}>
+                      {t.status}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{t.target}{t.noMeterPln ? ` · meter ${t.noMeterPln}` : ""}</p>
+                  <p className="text-xs text-muted-foreground">{formatTgl(t.createdAt)}</p>
+                  {t.serialNumber && <p className="text-[11px] text-green-700 break-all">SN/Token: {t.serialNumber}</p>}
+                  {t.note && <p className="text-[11px] text-muted-foreground">{t.note}</p>}
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-bold text-red-500">-{formatCoin(t.hargaJual ?? 0)} <CoinIcon /></p>
+                  <p className="text-[11px] text-muted-foreground">{t.reference}</p>
+                </div>
+              </div>
+            ))}
+            {tripayTxList.length === 0 && (
+              <div className="text-center py-6 space-y-2">
+                <Smartphone className="w-10 h-10 mx-auto text-muted-foreground opacity-40" />
+                <p className="text-sm text-muted-foreground">Belum ada transaksi Tripay</p>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Tips */}
       <Card className="border-0 shadow-sm" style={{ backgroundColor: "hsl(163,55%,97%)" }}>
         <CardContent className="p-4">
-          <h3 className="font-semibold text-sm text-[hsl(163,55%,22%)] mb-2">Cara Bayar RWcoin</h3>
+          <h3 className="font-semibold text-sm text-[hsl(163,55%,22%)] mb-2">Belanja Nyaman di RWcoin</h3>
           <ol className="space-y-1.5">
             {[
-              "Tap \"Bayar Mitra\" dan pilih toko tujuan",
-              "Masukkan nominal coin dan pilih voucher jika ada",
-              "Tap Bayar — transaksi langsung selesai, kasir otomatis dapat notifikasi WA",
+              "Topup sekali, lalu gunakan saldo untuk belanja berkali-kali tanpa transfer ulang.",
+              "Untuk produk digital, pilih nomor tujuan dengan teliti agar pulsa, paket, atau token masuk ke alamat yang benar.",
+              "Jika transaksi Tripay masih pending, tunggu sebentar dan pantau di riwayat Tripay pada halaman ini.",
             ].map((tip, i) => (
               <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
                 <span className="w-4 h-4 rounded-full bg-[hsl(163,55%,22%)] text-white text-[10px] flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
