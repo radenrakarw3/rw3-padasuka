@@ -1159,7 +1159,7 @@ export default function AdminRwcoin() {
   const pendingTopups = topupRequestList.filter((r: any) => r.status === "pending").length;
 
   return (
-    <div className="space-y-4 max-w-5xl">
+    <div className="space-y-4 max-w-5xl overflow-x-hidden">
       {showTopup && <TopupDialog onClose={() => setShowTopup(false)} />}
 
       {/* Header */}
@@ -1177,10 +1177,10 @@ export default function AdminRwcoin() {
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex gap-1 bg-muted rounded-xl p-1 overflow-x-auto">
+      <div className="grid grid-cols-3 gap-1 bg-muted rounded-xl p-1">
         {tabs.map(t => (
           <button key={t.id} onClick={() => setActiveTab(t.id as any)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors relative ${
+            className={`flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-medium transition-colors relative ${
               activeTab === t.id ? "bg-white shadow text-[hsl(163,55%,22%)]" : "text-muted-foreground hover:text-foreground"
             }`}>
             <t.icon className="w-4 h-4" />
@@ -2160,7 +2160,7 @@ export default function AdminRwcoin() {
               <p className="text-[10px] text-muted-foreground">Daftarkan URL ini di Tripay Enterprise → Pengaturan → Callback URL</p>
             </div>
 
-            <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+            <div className="flex flex-wrap gap-2">
               {([
                 { key: "overview", label: "Overview", icon: BarChart3 },
                 { key: "categories", label: "Kategori", icon: Tag },
@@ -2182,7 +2182,7 @@ export default function AdminRwcoin() {
             {/* Filter kategori */}
             {(tripaySection === "products" || tripaySection === "overview") && (
             <div className="space-y-2">
-              <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+              <div className="flex flex-wrap gap-2">
                 {([
                   { key: "all", label: "Semua", icon: Smartphone },
                   { key: "pulsa", label: "Pulsa", icon: Phone },
@@ -2192,7 +2192,7 @@ export default function AdminRwcoin() {
                   <button
                     key={f.key}
                     onClick={() => setTripayKindFilter(f.key)}
-                    className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${tripayKindFilter === f.key ? "bg-[hsl(163,55%,22%)] text-white border-[hsl(163,55%,22%)]" : "bg-white text-muted-foreground border-gray-200"}`}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${tripayKindFilter === f.key ? "bg-[hsl(163,55%,22%)] text-white border-[hsl(163,55%,22%)]" : "bg-white text-muted-foreground border-gray-200"}`}
                   >
                     <f.icon className="w-3.5 h-3.5" /> {f.label}
                   </button>
@@ -2200,10 +2200,10 @@ export default function AdminRwcoin() {
               </div>
               {/* Filter operator */}
               {allOperatorsInKind.length > 1 && (
-                <div className="flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+                <div className="flex flex-wrap gap-1.5">
                   <button
                     onClick={() => setTripayOperatorFilter("all")}
-                    className={`flex-shrink-0 px-3 py-1 rounded-full text-xs border transition-colors ${tripayOperatorFilter === "all" ? "bg-slate-700 text-white border-slate-700" : "bg-white text-muted-foreground border-gray-200"}`}
+                    className={`px-3 py-1 rounded-full text-xs border transition-colors ${tripayOperatorFilter === "all" ? "bg-slate-700 text-white border-slate-700" : "bg-white text-muted-foreground border-gray-200"}`}
                   >
                     Semua Operator
                   </button>
@@ -2211,7 +2211,7 @@ export default function AdminRwcoin() {
                     <button
                       key={op}
                       onClick={() => setTripayOperatorFilter(op)}
-                      className={`flex-shrink-0 px-3 py-1 rounded-full text-xs border transition-colors ${tripayOperatorFilter === op ? "bg-slate-700 text-white border-slate-700" : "bg-white text-muted-foreground border-gray-200"}`}
+                      className={`px-3 py-1 rounded-full text-xs border transition-colors ${tripayOperatorFilter === op ? "bg-slate-700 text-white border-slate-700" : "bg-white text-muted-foreground border-gray-200"}`}
                     >
                       {op}
                     </button>

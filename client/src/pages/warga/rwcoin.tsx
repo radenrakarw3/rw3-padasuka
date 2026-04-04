@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import {
   Coins, ShoppingBag, ArrowUpCircle, Tag, TrendingUp,
@@ -109,11 +110,27 @@ function tripayCategoryFriendlyKind(category: any): "pulsa" | "data" | "electric
 function tripayTargetLabel(category: any) {
   const rawType = String(category?.type ?? "").toUpperCase();
   const name = String(category?.name ?? "").toLowerCase();
-  if (rawType === "PLN" || name.includes("listrik")) return "Nomor HP kontak";
+  if (rawType === "PLN" || name.includes("listrik")) return "Nomor HP yang bisa dihubungi";
   if (rawType === "PULSA" || rawType === "DATA") return "Nomor HP tujuan";
   if (name.includes("game")) return "User ID / tujuan";
   if (name.includes("wallet") || name.includes("e-wallet")) return "Nomor akun / tujuan";
   return "Tujuan / ID pelanggan";
+}
+
+function tripayTargetPlaceholder(category: any) {
+  const rawType = String(category?.type ?? "").toUpperCase();
+  const name = String(category?.name ?? "").toLowerCase();
+  if (rawType === "PLN" || name.includes("listrik")) return "Contoh: 08xxxxxxxxxx";
+  if (rawType === "PULSA" || rawType === "DATA") return "Contoh: 08xxxxxxxxxx";
+  return "Masukkan tujuan / user ID";
+}
+
+function tripayTargetHint(category: any) {
+  const rawType = String(category?.type ?? "").toUpperCase();
+  const name = String(category?.name ?? "").toLowerCase();
+  if (rawType === "PLN" || name.includes("listrik")) return "Nomor HP ini dipakai sebagai kontak pesanan jika ada kendala.";
+  if (rawType === "PULSA" || rawType === "DATA") return "Nomor ini akan menerima pulsa atau paket data.";
+  return "Pastikan tujuan yang Anda masukkan sudah benar.";
 }
 
 // Koin emas RWcoin
@@ -1168,6 +1185,10 @@ function TripayModal({ wallet, onClose, initialKind = "pulsa" }: { wallet: any; 
   const canSubmit = selected && targetValid && meterValid && !saldoKurang;
   const recentTargetsForCategory = recentTargets.filter((item) => item.categoryKey === tripayCategoryKey(selectedCategory)).slice(0, 3);
   const detectedProvider = telcoCategory && target.length >= 4 ? detectProvider(target) : null;
+  const modalTitle = categoryNeedsMeter ? "Beli Token Listrik" : categoryKind === "data" ? "Beli Paket Data" : "Beli Pulsa";
+  const modalSubtitle = categoryNeedsMeter
+    ? "Isi dua data ini dulu, lalu pilih nominal token yang paling pas."
+    : "Masukkan nomor tujuan dulu, lalu pilih nominal yang diinginkan.";
 
   useEffect(() => {
     if (!detectedProvider || !operators.length || selectedOperator) return;
@@ -1223,6 +1244,11 @@ function TripayModal({ wallet, onClose, initialKind = "pulsa" }: { wallet: any; 
                 <p className="text-sm font-bold">{formatCoin(saldo)} <CoinIcon /></p>
               </div>
 
+              <div className="rounded-2xl border border-[hsl(163,55%,88%)] bg-[hsl(163,55%,97%)] p-4">
+                <p className="text-sm font-semibold text-[hsl(163,55%,22%)]">{modalTitle}</p>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{modalSubtitle}</p>
+              </div>
+
               {!result && (
                 <div className="rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2.5">
                   <div className="flex items-center justify-between gap-2 text-[11px] font-medium text-muted-foreground">
@@ -1236,7 +1262,9 @@ function TripayModal({ wallet, onClose, initialKind = "pulsa" }: { wallet: any; 
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Jenis produk</Label>
+                <div className="grid grid-cols-2 gap-2">
                 {categories.map((category: any) => {
                   const kind = tripayCategoryFriendlyKind(category);
                   const Icon = kind === "electricity" ? Zap : kind === "data" ? Wifi : kind === "pulsa" ? Smartphone : Receipt;
@@ -1251,17 +1279,18 @@ function TripayModal({ wallet, onClose, initialKind = "pulsa" }: { wallet: any; 
                     <p className="text-[10px] opacity-70 mt-0.5">{category.productCount ?? 0} produk</p>
                   </button>
                 )})}
+                </div>
               </div>
 
               {step === "browse" ? (
                 <>
                   <div className="space-y-2">
-                    <Label className="text-sm font-semibold">{tripayTargetLabel(selectedCategory)}</Label>
+                    <Label className="text-sm font-semibold">1. {tripayTargetLabel(selectedCategory)}</Label>
                     <div className="relative">
                       <Input
                         value={target}
                         onChange={e => { setTarget(e.target.value.replace(/[^0-9]/g, "")); setSelected(null); }}
-                        placeholder={telcoCategory || categoryNeedsMeter ? "08xxxxxxxxxx" : "Masukkan tujuan / user ID"}
+                        placeholder={tripayTargetPlaceholder(selectedCategory)}
                         inputMode="numeric"
                         maxLength={20}
                         className="h-12 text-base font-mono pr-24"
@@ -1279,14 +1308,12 @@ function TripayModal({ wallet, onClose, initialKind = "pulsa" }: { wallet: any; 
                     {target.length > 0 && target.length < targetMinLength && (
                       <p className="text-[11px] text-amber-600">Masukkan minimal {targetMinLength} karakter</p>
                     )}
-                    {telcoCategory && (
-                      <p className="text-[11px] text-muted-foreground">Nomor ini akan dipakai untuk mengirim pulsa atau paket data.</p>
-                    )}
+                    <p className="text-[11px] text-muted-foreground">{tripayTargetHint(selectedCategory)}</p>
                   </div>
 
                   {recentTargetsForCategory.length > 0 && (
                     <div className="space-y-2">
-                      <p className="text-[11px] font-medium text-muted-foreground">Target terakhir</p>
+                      <p className="text-[11px] font-medium text-muted-foreground">Gunakan lagi tujuan terakhir</p>
                       <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
                         {recentTargetsForCategory.map((item, idx) => (
                           <button
@@ -1308,7 +1335,7 @@ function TripayModal({ wallet, onClose, initialKind = "pulsa" }: { wallet: any; 
 
                   {categoryNeedsMeter && (
                     <div className="space-y-2">
-                      <Label className="text-sm font-semibold">No Meter / ID Pelanggan PLN</Label>
+                      <Label className="text-sm font-semibold">2. Nomor meter / ID pelanggan PLN</Label>
                       <Input
                         value={noMeterPln}
                         onChange={e => { setNoMeterPln(e.target.value.replace(/[^0-9]/g, "")); setSelected(null); }}
@@ -1320,7 +1347,7 @@ function TripayModal({ wallet, onClose, initialKind = "pulsa" }: { wallet: any; 
                       {noMeterPln.length > 0 && noMeterPln.length < 8 && (
                         <p className="text-[11px] text-amber-600">Minimal 8 digit</p>
                       )}
-                      <p className="text-[11px] text-muted-foreground">Pastikan ID pelanggan benar karena token akan dikirim ke meter tersebut.</p>
+                      <p className="text-[11px] text-muted-foreground">Pastikan nomor meter benar. Token akan diproses untuk pelanggan ini.</p>
                     </div>
                   )}
 
@@ -1329,8 +1356,8 @@ function TripayModal({ wallet, onClose, initialKind = "pulsa" }: { wallet: any; 
                       <Smartphone className="w-10 h-10 text-gray-200" />
                       <p className="text-sm text-muted-foreground">
                         {categoryNeedsMeter
-                          ? "Masukkan nomor kontak dan nomor meter untuk melihat pilihan produk"
-                          : "Masukkan tujuan untuk melihat pilihan produk"}
+                          ? "Isi nomor HP dan nomor meter dulu supaya pilihan token muncul"
+                          : "Isi nomor tujuan dulu supaya pilihan nominal muncul"}
                       </p>
                     </div>
                   )}
@@ -1341,7 +1368,7 @@ function TripayModal({ wallet, onClose, initialKind = "pulsa" }: { wallet: any; 
 
                   {operators.length > 0 && (
                     <div className="space-y-2">
-                      <Label className="text-sm font-semibold">Operator</Label>
+                      <Label className="text-sm font-semibold">{categoryNeedsMeter ? "3. Pilih operator" : "2. Pilih operator"}</Label>
                       <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
                         <button
                           onClick={() => { setSelectedOperator(null); setSelected(null); }}
@@ -1378,27 +1405,33 @@ function TripayModal({ wallet, onClose, initialKind = "pulsa" }: { wallet: any; 
                     <div className="space-y-2">
                       <div className="flex items-center justify-between px-0.5">
                         <p className="text-sm font-semibold">
-                          {selectedOperator?.name ? `Produk ${selectedOperator.name}` : selectedCategory ? tripayCategoryLabel(selectedCategory) : "Pilih produk"}
+                          {categoryNeedsMeter ? "4. Pilih nominal token" : "3. Pilih nominal"}
                         </p>
                         <p className="text-xs text-muted-foreground">{filteredProducts.length} pilihan</p>
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-2">
                         {filteredProducts.map((product: any) => (
                           <button
                             key={product.id}
                             onClick={() => setSelected(selected?.id === product.id ? null : product)}
-                            className={`rounded-2xl border-2 p-3 text-left transition-all ${selected?.id === product.id ? "border-[hsl(163,55%,22%)] bg-[hsl(163,55%,97%)] shadow-sm" : "border-gray-200 bg-white"}`}
+                            className={`w-full rounded-2xl border-2 p-3 text-left transition-all ${selected?.id === product.id ? "border-[hsl(163,55%,22%)] bg-[hsl(163,55%,97%)] shadow-sm" : "border-gray-200 bg-white"}`}
                           >
-                            <p className="text-[9px] font-mono text-muted-foreground/60 mb-0.5 truncate">{product.productCode}</p>
-                            <div className="flex items-center gap-1 flex-wrap mb-1">
-                              {product.isFeatured && <Badge className="h-4 text-[9px] bg-amber-100 text-amber-700">Unggulan</Badge>}
-                              {product.isRecommended && <Badge className="h-4 text-[9px] bg-sky-100 text-sky-700">Rekomendasi</Badge>}
-                              {(product.salesCount ?? 0) > 0 && <Badge variant="outline" className="h-4 text-[9px]">Terlaris</Badge>}
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[9px] font-mono text-muted-foreground/60 mb-1 truncate">{product.productCode}</p>
+                                <div className="flex items-center gap-1 flex-wrap mb-1.5">
+                                  {product.isFeatured && <Badge className="h-4 text-[9px] bg-amber-100 text-amber-700">Unggulan</Badge>}
+                                  {product.isRecommended && <Badge className="h-4 text-[9px] bg-sky-100 text-sky-700">Rekomendasi</Badge>}
+                                  {(product.salesCount ?? 0) > 0 && <Badge variant="outline" className="h-4 text-[9px]">Terlaris</Badge>}
+                                </div>
+                                <p className="text-sm font-semibold leading-snug">{product.productName}</p>
+                                <p className="text-[11px] text-muted-foreground mt-1">{product.operatorName || product.categoryName || "Tripay"}</p>
+                              </div>
+                              <div className="text-right flex-shrink-0">
+                                <p className="text-sm font-bold text-[hsl(163,55%,22%)]">{formatCoin(product.hargaJual)} <CoinIcon size={12} /></p>
+                                <p className="text-[10px] text-muted-foreground">{formatRp(product.hargaJual)}</p>
+                              </div>
                             </div>
-                            <p className="text-xs font-semibold line-clamp-2 leading-snug">{product.productName}</p>
-                            <p className="text-[10px] text-muted-foreground mt-1">{product.operatorName || product.categoryName || "Tripay"}</p>
-                            <p className="text-xs font-bold text-[hsl(163,55%,22%)] mt-2">{formatCoin(product.hargaJual)} <CoinIcon size={12} /></p>
-                            <p className="text-[10px] text-muted-foreground">{formatRp(product.hargaJual)}</p>
                           </button>
                         ))}
                       </div>
@@ -1408,6 +1441,7 @@ function TripayModal({ wallet, onClose, initialKind = "pulsa" }: { wallet: any; 
                   {/* Ringkasan pilihan */}
                   {selected && (
                     <div className="rounded-2xl p-4 border border-green-200 bg-green-50 space-y-3">
+                      <p className="text-xs font-semibold text-[hsl(163,55%,22%)]">Produk yang Anda pilih</p>
                       <div className="space-y-2">
                         <div className="flex justify-between text-sm"><span>Produk</span><span className="font-semibold text-right max-w-[60%]">{selected.productName}</span></div>
                         <div className="flex justify-between text-[11px] text-muted-foreground"><span>SKU</span><span className="font-mono">{selected.productCode}</span></div>
@@ -1459,7 +1493,7 @@ function TripayModal({ wallet, onClose, initialKind = "pulsa" }: { wallet: any; 
 
                   <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 space-y-2">
                     <p className="text-sm font-semibold text-amber-800">Cek lagi sebelum bayar</p>
-                    <p className="text-xs text-amber-700">Pastikan nomor tujuan dan nomor meter benar. Setelah diproses, pesanan digital umumnya tidak bisa dibatalkan.</p>
+                    <p className="text-xs text-amber-700">Pastikan nomor tujuan dan nomor meter benar. Setelah diproses, pulsa, data, atau token umumnya tidak bisa dibatalkan.</p>
                   </div>
 
                   <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-2.5">
@@ -1832,6 +1866,7 @@ export default function WargaRwcoin() {
   const [showTripay, setShowTripay] = useState(false);
   const [tripayInitialKind, setTripayInitialKind] = useState<"pulsa" | "data" | "electricity">("pulsa");
   const [bayarVoucher, setBayarVoucher] = useState<string | undefined>(undefined);
+  const [activeView, setActiveView] = useState<"utama" | "voucher" | "riwayat">("utama");
 
   const { data: wallet, isLoading: loadingWallet } = useQuery<any>({
     ...wargaWalletQueryOptions(),
@@ -1918,89 +1953,6 @@ export default function WargaRwcoin() {
         </div>
       </motion.div>
 
-      <div className="space-y-1">
-        <p className="text-sm font-semibold text-[hsl(163,55%,22%)]">Belanja Harian</p>
-        <p className="text-xs text-muted-foreground">Gunakan RWcoin untuk bayar di mitra sekitar atau kirim saldo ke sesama warga.</p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <motion.div whileTap={{ scale: 0.95 }} transition={{ type: "spring", stiffness: 400, damping: 20 }}>
-          <Button
-            className="w-full py-6 text-sm font-bold gap-2 rounded-2xl shadow-sm flex-col h-auto"
-            style={{ background: "linear-gradient(135deg, hsl(163,55%,22%), hsl(163,55%,32%))" }}
-            onClick={() => setShowBayar(true)}
-            disabled={!wallet || wallet.saldo <= 0}
-          >
-            <Store className="w-5 h-5" />
-            Bayar Mitra
-          </Button>
-        </motion.div>
-        <motion.div whileTap={{ scale: 0.95 }} transition={{ type: "spring", stiffness: 400, damping: 20 }}>
-          <Button
-            className="w-full py-6 text-sm font-bold gap-2 rounded-2xl shadow-sm flex-col h-auto"
-            style={{ background: "linear-gradient(135deg, hsl(40,45%,45%), hsl(40,45%,58%))" }}
-            onClick={() => setShowTransfer(true)}
-            disabled={!wallet || wallet.saldo <= 0}
-          >
-            <ArrowLeftRight className="w-5 h-5" />
-            Transfer
-          </Button>
-        </motion.div>
-      </div>
-
-      <div className="space-y-1 pt-1">
-        <p className="text-sm font-semibold text-[hsl(163,55%,22%)]">Produk Digital</p>
-        <p className="text-xs text-muted-foreground">Pulsa, paket data, dan token listrik dengan harga yang sudah disiapkan admin RW.</p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <motion.div whileTap={{ scale: 0.95 }} transition={{ type: "spring", stiffness: 400, damping: 20 }}>
-          <Button
-            className="w-full py-5 text-sm font-bold gap-2 rounded-2xl shadow-sm flex-col h-auto items-start text-left"
-            style={{ background: "linear-gradient(135deg, hsl(200,70%,32%), hsl(180,70%,40%))" }}
-            onClick={() => { setTripayInitialKind("pulsa"); setShowTripay(true); }}
-            disabled={!wallet || wallet.saldo <= 0}
-          >
-            <Wifi className="w-5 h-5" />
-            <span>Pulsa & Paket</span>
-            <span className="text-[11px] font-medium opacity-80">Isi pulsa dan kuota internet tanpa transfer bank lagi.</span>
-          </Button>
-        </motion.div>
-        <motion.div whileTap={{ scale: 0.95 }} transition={{ type: "spring", stiffness: 400, damping: 20 }}>
-          <Button
-            className="w-full py-5 text-sm font-bold gap-2 rounded-2xl shadow-sm flex-col h-auto items-start text-left"
-            style={{ background: "linear-gradient(135deg, hsl(38,92%,42%), hsl(48,90%,54%))" }}
-            onClick={() => { setTripayInitialKind("electricity"); setShowTripay(true); }}
-            disabled={!wallet || wallet.saldo <= 0}
-          >
-            <Zap className="w-5 h-5" />
-            <span>Token Listrik</span>
-            <span className="text-[11px] font-medium opacity-80">Pilih nominal token PLN dan pantau status pesanan di aplikasi.</span>
-          </Button>
-        </motion.div>
-      </div>
-
-      <Card className="border-0 shadow-sm bg-gradient-to-r from-cyan-50 to-emerald-50">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-slate-800">Belanja digital lebih tenang</p>
-              <p className="text-xs text-muted-foreground mt-1">Harga sudah final, saldo langsung terpotong, dan status pesanan bisa dipantau dari riwayat Tripay.</p>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-center flex-shrink-0">
-              <div className="rounded-xl bg-white/80 px-3 py-2 min-w-[74px]">
-                <p className="text-base font-bold text-amber-600">{tripayPending}</p>
-                <p className="text-[10px] text-muted-foreground">Pending</p>
-              </div>
-              <div className="rounded-xl bg-white/80 px-3 py-2 min-w-[74px]">
-                <p className="text-base font-bold text-green-600">{tripaySuccess}</p>
-                <p className="text-[10px] text-muted-foreground">Sukses</p>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       {wallet?.saldo === 0 && (
         <p className="text-center text-xs text-muted-foreground -mt-2">
           Saldo kosong —{" "}
@@ -2008,212 +1960,328 @@ export default function WargaRwcoin() {
         </p>
       )}
 
-      {/* Stats */}
-      {wallet && (
-        <div className="grid grid-cols-3 gap-2">
-          {[
-            { label: "Total Topup", value: formatCoin(wallet.totalTopup ?? 0), icon: ArrowUpCircle, color: "text-green-600" },
-            { label: "Total Belanja", value: formatCoin(wallet.totalBelanja ?? 0), icon: ShoppingBag, color: "text-blue-600" },
-            { label: "Transaksi", value: transaksiList.length + " tx", icon: TrendingUp, color: "text-purple-600" },
-          ].map((item, i) => (
-            <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07, duration: 0.28 }}>
-              <Card className="border-0 shadow-sm">
-                <CardContent className="p-3 text-center">
-                  <item.icon className={`w-5 h-5 ${item.color} mx-auto mb-1`} />
-                  <p className="text-xs font-bold">{item.value}</p>
-                  <p className="text-[10px] text-muted-foreground">{item.label}</p>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
-        </div>
-      )}
+      <Tabs value={activeView} onValueChange={(value) => setActiveView(value as "utama" | "voucher" | "riwayat")} className="w-full">
+        <TabsList className="grid h-auto w-full grid-cols-3 rounded-2xl bg-[hsl(163,55%,96%)] p-1">
+          <TabsTrigger value="utama" className="rounded-xl py-2 text-xs font-semibold data-[state=active]:text-[hsl(163,55%,22%)]">Utama</TabsTrigger>
+          <TabsTrigger value="voucher" className="rounded-xl py-2 text-xs font-semibold data-[state=active]:text-[hsl(163,55%,22%)]">Voucher</TabsTrigger>
+          <TabsTrigger value="riwayat" className="rounded-xl py-2 text-xs font-semibold data-[state=active]:text-[hsl(163,55%,22%)]">Riwayat</TabsTrigger>
+        </TabsList>
 
-      {/* Voucher Aktif */}
-      {voucherList.length > 0 && (
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-4">
-            <h3 className="font-semibold text-sm flex items-center gap-2 mb-3">
-              <Tag className="w-4 h-4" style={{ color: "hsl(40,45%,55%)" }} />
-              Voucher Tersedia ({voucherList.length})
-            </h3>
-            <div className="space-y-2">
-              {voucherList.map((v: any, vi: number) => (
-                <motion.div key={v.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: vi * 0.06, duration: 0.22 }} className="flex items-center justify-between p-3 rounded-xl" style={{ backgroundColor: "hsl(40,45%,96%)" }}>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-bold text-sm font-mono" style={{ color: "hsl(40,45%,35%)" }}>{v.kode}</p>
-                      {v.berlakuHingga && <p className="text-[11px] text-muted-foreground">s/d {v.berlakuHingga}</p>}
-                    </div>
-                    <p className="text-xs text-muted-foreground">{v.nama}</p>
-                    {v.minTransaksi > 0 && <p className="text-[11px] text-muted-foreground">Min {formatCoin(v.minTransaksi)} <CoinIcon /></p>}
+        <TabsContent value="utama" className="space-y-4">
+          <Card className="border-0 shadow-sm bg-gradient-to-r from-cyan-50 to-emerald-50">
+            <CardContent className="p-4">
+              <p className="text-sm font-semibold text-slate-800">Butuh apa hari ini?</p>
+              <p className="mt-1 text-xs text-muted-foreground">Fokus dulu ke kebutuhan utama. Voucher dan riwayat dipisahkan supaya halaman ini lebih ringan dibaca di HP.</p>
+            </CardContent>
+          </Card>
+
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-[hsl(163,55%,22%)]">Belanja Harian</p>
+            <p className="text-xs text-muted-foreground">Gunakan RWcoin untuk bayar di mitra sekitar atau kirim saldo ke sesama warga.</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <motion.div whileTap={{ scale: 0.95 }} transition={{ type: "spring", stiffness: 400, damping: 20 }}>
+              <Button
+                className="w-full py-6 text-sm font-bold gap-2 rounded-2xl shadow-sm flex-col h-auto"
+                style={{ background: "linear-gradient(135deg, hsl(163,55%,22%), hsl(163,55%,32%))" }}
+                onClick={() => setShowBayar(true)}
+                disabled={!wallet || wallet.saldo <= 0}
+              >
+                <Store className="w-5 h-5" />
+                Bayar Mitra
+              </Button>
+            </motion.div>
+            <motion.div whileTap={{ scale: 0.95 }} transition={{ type: "spring", stiffness: 400, damping: 20 }}>
+              <Button
+                className="w-full py-6 text-sm font-bold gap-2 rounded-2xl shadow-sm flex-col h-auto"
+                style={{ background: "linear-gradient(135deg, hsl(40,45%,45%), hsl(40,45%,58%))" }}
+                onClick={() => setShowTransfer(true)}
+                disabled={!wallet || wallet.saldo <= 0}
+              >
+                <ArrowLeftRight className="w-5 h-5" />
+                Transfer
+              </Button>
+            </motion.div>
+          </div>
+
+          <div className="space-y-1 pt-1">
+            <p className="text-sm font-semibold text-[hsl(163,55%,22%)]">Produk Digital</p>
+            <p className="text-xs text-muted-foreground">Alurnya sekarang lebih sederhana: isi tujuan, pilih nominal, lalu konfirmasi.</p>
+          </div>
+
+          <div className="space-y-3">
+            <motion.div whileTap={{ scale: 0.98 }} transition={{ type: "spring", stiffness: 400, damping: 20 }}>
+              <button
+                className="w-full rounded-2xl p-4 text-left text-white shadow-sm"
+                style={{ background: "linear-gradient(135deg, hsl(200,70%,32%), hsl(180,70%,40%))" }}
+                onClick={() => { setTripayInitialKind("pulsa"); setShowTripay(true); }}
+                disabled={!wallet || wallet.saldo <= 0}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold">Pulsa & Paket Data</p>
+                    <p className="mt-1 text-xs font-medium opacity-85">Masukkan nomor HP dulu, lalu pilih nominal yang Anda butuhkan.</p>
                   </div>
-                  <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                    <Badge className="text-white" style={{ backgroundColor: "hsl(40,45%,55%)" }}>
-                      {v.tipe === "persen" ? `${v.nilai}% OFF` : <>{formatCoin(v.nilai)} <CoinIcon size={12} /></>}
-                    </Badge>
-                    <button
-                      onClick={() => { setBayarVoucher(v.kode); setShowBayar(true); }}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white"
-                      style={{ background: "hsl(163,55%,22%)" }}
-                    >
-                      Pakai
-                    </button>
+                  <Wifi className="mt-0.5 h-5 w-5 flex-shrink-0" />
+                </div>
+              </button>
+            </motion.div>
+
+            <motion.div whileTap={{ scale: 0.98 }} transition={{ type: "spring", stiffness: 400, damping: 20 }}>
+              <button
+                className="w-full rounded-2xl p-4 text-left text-white shadow-sm"
+                style={{ background: "linear-gradient(135deg, hsl(38,92%,42%), hsl(48,90%,54%))" }}
+                onClick={() => { setTripayInitialKind("electricity"); setShowTripay(true); }}
+                disabled={!wallet || wallet.saldo <= 0}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold">Token Listrik</p>
+                    <p className="mt-1 text-xs font-medium opacity-85">Isi nomor HP dan nomor meter, lalu pilih nominal token PLN.</p>
                   </div>
+                  <Zap className="mt-0.5 h-5 w-5 flex-shrink-0" />
+                </div>
+              </button>
+            </motion.div>
+          </div>
+
+          <Card className="border-0 shadow-sm bg-gradient-to-r from-cyan-50 to-emerald-50">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Pantau pembelian digital</p>
+                  <p className="text-xs text-muted-foreground mt-1">Kalau pesanan belum selesai, cek lagi statusnya dari tab Riwayat.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-center flex-shrink-0">
+                  <div className="rounded-xl bg-white/80 px-3 py-2 min-w-[74px]">
+                    <p className="text-base font-bold text-amber-600">{tripayPending}</p>
+                    <p className="text-[10px] text-muted-foreground">Pending</p>
+                  </div>
+                  <div className="rounded-xl bg-white/80 px-3 py-2 min-w-[74px]">
+                    <p className="text-base font-bold text-green-600">{tripaySuccess}</p>
+                    <p className="text-[10px] text-muted-foreground">Sukses</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {wallet && (
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { label: "Total Topup", value: formatCoin(wallet.totalTopup ?? 0), icon: ArrowUpCircle, color: "text-green-600" },
+                { label: "Total Belanja", value: formatCoin(wallet.totalBelanja ?? 0), icon: ShoppingBag, color: "text-blue-600" },
+                { label: "Transaksi", value: transaksiList.length + " tx", icon: TrendingUp, color: "text-purple-600" },
+              ].map((item, i) => (
+                <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07, duration: 0.28 }}>
+                  <Card className="border-0 shadow-sm">
+                    <CardContent className="p-3 text-center">
+                      <item.icon className={`w-5 h-5 ${item.color} mx-auto mb-1`} />
+                      <p className="text-xs font-bold">{item.value}</p>
+                      <p className="text-[10px] text-muted-foreground">{item.label}</p>
+                    </CardContent>
+                  </Card>
                 </motion.div>
               ))}
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
 
-      {/* Riwayat Transaksi */}
-      <Card className="border-0 shadow-sm">
-        <CardContent className="p-4">
-          <h3 className="font-semibold text-sm flex items-center gap-2 mb-3">
-            <ShoppingBag className="w-4 h-4 text-[hsl(163,55%,22%)]" />
-            Riwayat Transaksi
-          </h3>
-          <div className="space-y-2">
-            {transaksiList.slice(0, 10).map((t: any, txIdx: number) => {
-              // Untuk transfer: apakah kita penerima?
-              const isTransferMasuk = t.tipe === "transfer" && t.tujuanWargaId != null && t.wargaId !== wallet?.wargaId;
-              const isTransferKeluar = t.tipe === "transfer" && !isTransferMasuk;
+          <Card className="border-0 shadow-sm" style={{ backgroundColor: "hsl(163,55%,97%)" }}>
+            <CardContent className="p-4">
+              <h3 className="font-semibold text-sm text-[hsl(163,55%,22%)] mb-2">Supaya Tidak Bingung</h3>
+              <ol className="space-y-1.5">
+                {[
+                  "Untuk pulsa atau data: cukup isi nomor HP, lalu pilih nominal.",
+                  "Untuk token listrik: isi nomor HP kontak dan nomor meter dengan teliti.",
+                  "Kalau pembelian masih pending, buka tab Riwayat lalu cek status sampai sukses atau refund.",
+                ].map((tip, i) => (
+                  <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
+                    <span className="w-4 h-4 rounded-full bg-[hsl(163,55%,22%)] text-white text-[10px] flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
+                    {tip}
+                  </li>
+                ))}
+              </ol>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-              let iconBg = "bg-blue-100 text-blue-600";
-              let Icon = ShoppingBag;
-              let label = t.namaUsaha ?? "Belanja";
-              let labelSub: string | null = null;
-
-              if (t.tipe === "topup") {
-                iconBg = "bg-green-100 text-green-600"; Icon = ArrowUpCircle; label = "Topup Saldo";
-              } else if (t.tipe === "donasi") {
-                iconBg = "bg-rose-100 text-rose-600"; Icon = Heart;
-                label = "Donasi RW"; labelSub = t.keterangan ?? "Campaign RW";
-              } else if (t.tipe === "iuran") {
-                iconBg = "bg-violet-100 text-violet-600"; Icon = Receipt;
-                label = "Bayar Iuran"; labelSub = t.keterangan ?? "Kas RW";
-              } else if (isTransferMasuk) {
-                iconBg = "bg-emerald-100 text-emerald-600"; Icon = ArrowDownCircle;
-                label = "Transfer Masuk"; labelSub = t.namaPengirim ? `dari ${t.namaPengirim}` : null;
-              } else if (isTransferKeluar) {
-                iconBg = "bg-amber-100 text-amber-600"; Icon = ArrowLeftRight;
-                label = "Transfer Keluar"; labelSub = t.namaPenerima ? `ke ${t.namaPenerima}` : null;
-              }
-
-              const isPositive = t.tipe === "topup" || isTransferMasuk;
-
-              return (
-                <motion.div
-                  key={t.id}
-                  initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: Math.min(txIdx * 0.04, 0.25), duration: 0.2 }}
-                  className="flex items-center justify-between py-2.5 border-b last:border-0"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${iconBg}`}>
-                      <Icon className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">{label}</p>
-                      {labelSub && <p className="text-xs text-muted-foreground">{labelSub}</p>}
-                      <p className="text-xs text-muted-foreground">{formatTgl(t.createdAt)}</p>
-                      {t.voucherKode && (
-                        <div className="flex items-center gap-1 mt-0.5">
-                          <Tag className="w-2.5 h-2.5 text-[hsl(40,45%,55%)]" />
-                          <span className="text-[11px]" style={{ color: "hsl(40,45%,40%)" }}>{t.voucherKode}</span>
+        <TabsContent value="voucher" className="space-y-4">
+          {voucherList.length > 0 ? (
+            <Card className="border-0 shadow-sm">
+              <CardContent className="p-4">
+                <h3 className="font-semibold text-sm flex items-center gap-2 mb-3">
+                  <Tag className="w-4 h-4" style={{ color: "hsl(40,45%,55%)" }} />
+                  Voucher Tersedia ({voucherList.length})
+                </h3>
+                <div className="space-y-2">
+                  {voucherList.map((v: any, vi: number) => (
+                    <motion.div key={v.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: vi * 0.06, duration: 0.22 }} className="flex items-center justify-between p-3 rounded-xl" style={{ backgroundColor: "hsl(40,45%,96%)" }}>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-bold text-sm font-mono" style={{ color: "hsl(40,45%,35%)" }}>{v.kode}</p>
+                          {v.berlakuHingga && <p className="text-[11px] text-muted-foreground">s/d {v.berlakuHingga}</p>}
                         </div>
-                      )}
-                      {t.keterangan && t.tipe === "transfer" && (
-                        <p className="text-[11px] text-muted-foreground italic">"{t.keterangan}"</p>
-                      )}
-                      <p className="text-[11px] text-muted-foreground font-mono">{t.kodeTransaksi}</p>
+                        <p className="text-xs text-muted-foreground">{v.nama}</p>
+                        {v.minTransaksi > 0 && <p className="text-[11px] text-muted-foreground">Min {formatCoin(v.minTransaksi)} <CoinIcon /></p>}
+                      </div>
+                      <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                        <Badge className="text-white" style={{ backgroundColor: "hsl(40,45%,55%)" }}>
+                          {v.tipe === "persen" ? `${v.nilai}% OFF` : <>{formatCoin(v.nilai)} <CoinIcon size={12} /></>}
+                        </Badge>
+                        <button
+                          onClick={() => { setBayarVoucher(v.kode); setShowBayar(true); }}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white"
+                          style={{ background: "hsl(163,55%,22%)" }}
+                        >
+                          Pakai
+                        </button>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="border-0 shadow-sm">
+              <CardContent className="p-6 text-center space-y-2">
+                <Tag className="mx-auto h-8 w-8 text-muted-foreground opacity-50" />
+                <p className="text-sm font-medium">Belum ada voucher aktif</p>
+                <p className="text-xs text-muted-foreground">Kalau admin RW mengaktifkan voucher baru, daftar kodenya akan tampil di sini.</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="riwayat" className="space-y-4">
+          <Card className="border-0 shadow-sm">
+            <CardContent className="p-4">
+              <h3 className="font-semibold text-sm flex items-center gap-2 mb-3">
+                <ShoppingBag className="w-4 h-4 text-[hsl(163,55%,22%)]" />
+                Riwayat Transaksi RWcoin
+              </h3>
+              <div className="space-y-2">
+                {transaksiList.slice(0, 10).map((t: any, txIdx: number) => {
+                  const isTransferMasuk = t.tipe === "transfer" && t.tujuanWargaId != null && t.wargaId !== wallet?.wargaId;
+                  const isTransferKeluar = t.tipe === "transfer" && !isTransferMasuk;
+
+                  let iconBg = "bg-blue-100 text-blue-600";
+                  let Icon = ShoppingBag;
+                  let label = t.namaUsaha ?? "Belanja";
+                  let labelSub: string | null = null;
+
+                  if (t.tipe === "topup") {
+                    iconBg = "bg-green-100 text-green-600"; Icon = ArrowUpCircle; label = "Topup Saldo";
+                  } else if (t.tipe === "donasi") {
+                    iconBg = "bg-rose-100 text-rose-600"; Icon = Heart;
+                    label = "Donasi RW"; labelSub = t.keterangan ?? "Campaign RW";
+                  } else if (t.tipe === "iuran") {
+                    iconBg = "bg-violet-100 text-violet-600"; Icon = Receipt;
+                    label = "Bayar Iuran"; labelSub = t.keterangan ?? "Kas RW";
+                  } else if (isTransferMasuk) {
+                    iconBg = "bg-emerald-100 text-emerald-600"; Icon = ArrowDownCircle;
+                    label = "Transfer Masuk"; labelSub = t.namaPengirim ? `dari ${t.namaPengirim}` : null;
+                  } else if (isTransferKeluar) {
+                    iconBg = "bg-amber-100 text-amber-600"; Icon = ArrowLeftRight;
+                    label = "Transfer Keluar"; labelSub = t.namaPenerima ? `ke ${t.namaPenerima}` : null;
+                  }
+
+                  const isPositive = t.tipe === "topup" || isTransferMasuk;
+
+                  return (
+                    <motion.div
+                      key={t.id}
+                      initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: Math.min(txIdx * 0.04, 0.25), duration: 0.2 }}
+                      className="flex items-center justify-between py-2.5 border-b last:border-0"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${iconBg}`}>
+                          <Icon className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">{label}</p>
+                          {labelSub && <p className="text-xs text-muted-foreground">{labelSub}</p>}
+                          <p className="text-xs text-muted-foreground">{formatTgl(t.createdAt)}</p>
+                          {t.voucherKode && (
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <Tag className="w-2.5 h-2.5 text-[hsl(40,45%,55%)]" />
+                              <span className="text-[11px]" style={{ color: "hsl(40,45%,40%)" }}>{t.voucherKode}</span>
+                            </div>
+                          )}
+                          {t.keterangan && t.tipe === "transfer" && (
+                            <p className="text-[11px] text-muted-foreground italic">"{t.keterangan}"</p>
+                          )}
+                          <p className="text-[11px] text-muted-foreground font-mono">{t.kodeTransaksi}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-sm font-bold ${isPositive ? "text-green-600" : "text-red-500"}`}>
+                          {isPositive ? "+" : "-"}{formatCoin(t.jumlahBayar)} <CoinIcon />
+                        </p>
+                        {t.jumlahDiskon > 0 && (
+                          <p className="text-[11px] text-emerald-600">hemat {formatCoin(t.jumlahDiskon)} <CoinIcon /></p>
+                        )}
+                      </div>
+                    </motion.div>
+                  );
+                })}
+                {loadingTransaksi && (
+                  <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span className="text-sm">Memuat transaksi...</span>
+                  </div>
+                )}
+                {!loadingTransaksi && transaksiList.length === 0 && (
+                  <div className="text-center py-6 space-y-2">
+                    <Coins className="w-10 h-10 mx-auto text-muted-foreground opacity-40" />
+                    <p className="text-sm text-muted-foreground">Belum ada transaksi</p>
+                    <p className="text-xs text-muted-foreground">Tap "Bayar Mitra" atau "Transfer" untuk mulai</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-0 shadow-sm">
+            <CardContent className="p-4">
+              <h3 className="font-semibold text-sm flex items-center gap-2 mb-3">
+                <Smartphone className="w-4 h-4 text-cyan-600" />
+                Riwayat Tripay
+              </h3>
+              <div className="space-y-2">
+                {tripayTxList.map((t: any) => (
+                  <div key={t.id} className="flex items-center justify-between py-2.5 border-b last:border-0 gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium">{t.productName}</p>
+                        <Badge variant="outline" className="text-[10px]">{tripayKindLabel(t.kind)}</Badge>
+                        <Badge className={`text-[10px] ${t.status === "success" ? "bg-green-100 text-green-700" : t.status === "pending" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`}>
+                          {t.status}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{t.target}{t.noMeterPln ? ` · meter ${t.noMeterPln}` : ""}</p>
+                      <p className="text-xs text-muted-foreground">{formatTgl(t.createdAt)}</p>
+                      {t.serialNumber && <p className="text-[11px] text-green-700 break-all">SN/Token: {t.serialNumber}</p>}
+                      {t.note && <p className="text-[11px] text-muted-foreground">{t.note}</p>}
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold text-red-500">-{formatCoin(t.hargaJual ?? 0)} <CoinIcon /></p>
+                      <p className="text-[11px] text-muted-foreground">{t.reference}</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className={`text-sm font-bold ${isPositive ? "text-green-600" : "text-red-500"}`}>
-                      {isPositive ? "+" : "-"}{formatCoin(t.jumlahBayar)} <CoinIcon />
-                    </p>
-                    {t.jumlahDiskon > 0 && (
-                      <p className="text-[11px] text-emerald-600">hemat {formatCoin(t.jumlahDiskon)} <CoinIcon /></p>
-                    )}
+                ))}
+                {tripayTxList.length === 0 && (
+                  <div className="text-center py-6 space-y-2">
+                    <Smartphone className="w-10 h-10 mx-auto text-muted-foreground opacity-40" />
+                    <p className="text-sm text-muted-foreground">Belum ada transaksi Tripay</p>
                   </div>
-                </motion.div>
-              );
-            })}
-            {loadingTransaksi && (
-              <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span className="text-sm">Memuat transaksi...</span>
+                )}
               </div>
-            )}
-            {!loadingTransaksi && transaksiList.length === 0 && (
-              <div className="text-center py-6 space-y-2">
-                <Coins className="w-10 h-10 mx-auto text-muted-foreground opacity-40" />
-                <p className="text-sm text-muted-foreground">Belum ada transaksi</p>
-                <p className="text-xs text-muted-foreground">Tap "Bayar Mitra" atau "Transfer" untuk mulai</p>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="border-0 shadow-sm">
-        <CardContent className="p-4">
-          <h3 className="font-semibold text-sm flex items-center gap-2 mb-3">
-            <Smartphone className="w-4 h-4 text-cyan-600" />
-            Riwayat Tripay
-          </h3>
-          <div className="space-y-2">
-            {tripayTxList.map((t: any) => (
-              <div key={t.id} className="flex items-center justify-between py-2.5 border-b last:border-0 gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-medium">{t.productName}</p>
-                    <Badge variant="outline" className="text-[10px]">{tripayKindLabel(t.kind)}</Badge>
-                    <Badge className={`text-[10px] ${t.status === "success" ? "bg-green-100 text-green-700" : t.status === "pending" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`}>
-                      {t.status}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{t.target}{t.noMeterPln ? ` · meter ${t.noMeterPln}` : ""}</p>
-                  <p className="text-xs text-muted-foreground">{formatTgl(t.createdAt)}</p>
-                  {t.serialNumber && <p className="text-[11px] text-green-700 break-all">SN/Token: {t.serialNumber}</p>}
-                  {t.note && <p className="text-[11px] text-muted-foreground">{t.note}</p>}
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-bold text-red-500">-{formatCoin(t.hargaJual ?? 0)} <CoinIcon /></p>
-                  <p className="text-[11px] text-muted-foreground">{t.reference}</p>
-                </div>
-              </div>
-            ))}
-            {tripayTxList.length === 0 && (
-              <div className="text-center py-6 space-y-2">
-                <Smartphone className="w-10 h-10 mx-auto text-muted-foreground opacity-40" />
-                <p className="text-sm text-muted-foreground">Belum ada transaksi Tripay</p>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Tips */}
-      <Card className="border-0 shadow-sm" style={{ backgroundColor: "hsl(163,55%,97%)" }}>
-        <CardContent className="p-4">
-          <h3 className="font-semibold text-sm text-[hsl(163,55%,22%)] mb-2">Belanja Nyaman di RWcoin</h3>
-          <ol className="space-y-1.5">
-            {[
-              "Topup sekali, lalu gunakan saldo untuk belanja berkali-kali tanpa transfer ulang.",
-              "Untuk produk digital, pilih nomor tujuan dengan teliti agar pulsa, paket, atau token masuk ke alamat yang benar.",
-              "Jika transaksi Tripay masih pending, tunggu sebentar dan pantau di riwayat Tripay pada halaman ini.",
-            ].map((tip, i) => (
-              <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
-                <span className="w-4 h-4 rounded-full bg-[hsl(163,55%,22%)] text-white text-[10px] flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
-                {tip}
-              </li>
-            ))}
-          </ol>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -137,7 +137,7 @@ async function generateWithGemini(prompt: string, options: number | GeminiOption
   throw new Error("Gemini gagal menghasilkan surat setelah beberapa percobaan");
 }
 
-async function sendWhatsApp(phoneNumber: string, message: string): Promise<boolean> {
+async function sendWhatsApp(phoneNumber: string, message: string, delay = 5): Promise<boolean> {
   const token = process.env.FONNTE_TOKEN;
   if (!token) return false;
 
@@ -147,6 +147,12 @@ async function sendWhatsApp(phoneNumber: string, message: string): Promise<boole
   }
   if (!formattedPhone.startsWith("62")) {
     formattedPhone = "62" + formattedPhone;
+  }
+
+  // Nomor tidak valid jika kurang dari 10 digit (62 + 8 digit minimal)
+  if (formattedPhone.length < 10) {
+    console.error("Fonnte: nomor tidak valid (terlalu pendek):", phoneNumber);
+    return false;
   }
 
   try {
@@ -162,6 +168,7 @@ async function sendWhatsApp(phoneNumber: string, message: string): Promise<boole
         form.append("target", formattedPhone);
         form.append("message", message);
         form.append("countryCode", "62");
+        if (delay > 0) form.append("delay", String(delay));
         return form;
       })(),
       signal: controller.signal,
@@ -492,8 +499,8 @@ const pdfTempPublicDir = path.join(uploadsDir, "pdf-temp");
 
       otpStore.set(nomorKk, { otp, kkId: kk.id, wargaId: target.id, nomorKk: kk.nomorKk, phone: target.nomorWhatsapp, expiresAt, attempts: 0, lastRequestAt: Date.now() });
 
-      const message = `[RW 03 Padasuka]\n\nKode OTP login: *${otp}*\nBerlaku 5 menit.\nJangan berikan kode ini ke siapapun ya.\n\nLogin di web 👉 rw3padasukacimahi.org`;
-      const sent = await sendWhatsApp(target.nomorWhatsapp, message);
+      const message = `[RW 03 Padasuka]\n\nHalo! Kode masuk akun Anda:\n\n${otp}\n\nBerlaku 5 menit. Demi keamanan akun Anda, jangan bagikan kode ini ke siapapun, termasuk petugas RW.\n\nrw3padasukacimahi.org`;
+      const sent = await sendWhatsApp(target.nomorWhatsapp, message, 0);
 
       if (!sent) {
         return res.status(500).json({ message: "Gagal mengirim OTP. Coba lagi nanti." });
@@ -601,8 +608,8 @@ const pdfTempPublicDir = path.join(uploadsDir, "pdf-temp");
 
       waOtpStore.set(normalized, { otp, kkId: kk.id, nomorKk: kk.nomorKk, wargaId: target.id, phone: target.nomorWhatsapp, expiresAt, attempts: 0, lastRequestAt: Date.now() });
 
-      const message = `[RW 03 Padasuka]\n\nKode OTP login: *${otp}*\nBerlaku 5 menit.\nJangan berikan kode ini ke siapapun ya.\n\nLogin di web 👉 rw3padasukacimahi.org`;
-      const sent = await sendWhatsApp(target.nomorWhatsapp, message);
+      const message = `[RW 03 Padasuka]\n\nHalo! Kode masuk akun Anda:\n\n${otp}\n\nBerlaku 5 menit. Demi keamanan akun Anda, jangan bagikan kode ini ke siapapun, termasuk petugas RW.\n\nrw3padasukacimahi.org`;
+      const sent = await sendWhatsApp(target.nomorWhatsapp, message, 0);
 
       if (!sent) return res.status(500).json({ message: "Gagal mengirim OTP. Coba lagi nanti." });
 
@@ -718,8 +725,8 @@ const pdfTempPublicDir = path.join(uploadsDir, "pdf-temp");
       const otp = String(Math.floor(100000 + Math.random() * 900000));
       const expiresAt = Date.now() + 5 * 60 * 1000;
       singgahOtpStore.set(nik, { otp, wargaSinggahId: ws.id, nik: ws.nik, phone: ws.nomorWhatsapp, expiresAt, attempts: 0, lastRequestAt: Date.now() });
-      const message = `[RW 03 Padasuka]\n\nKode OTP login Warga Singgah: *${otp}*\nBerlaku 5 menit.\nJangan berikan kode ini ke siapapun ya.`;
-      const sent = await sendWhatsApp(ws.nomorWhatsapp, message);
+      const message = `[RW 03 Padasuka]\n\nHalo! Kode masuk akun Warga Singgah Anda:\n\n${otp}\n\nBerlaku 5 menit. Jangan bagikan kode ini ke siapapun.`;
+      const sent = await sendWhatsApp(ws.nomorWhatsapp, message, 0);
       if (!sent) {
         return res.status(500).json({ message: "Gagal mengirim OTP. Coba lagi nanti." });
       }
@@ -1996,6 +2003,13 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
 
   app.post("/api/wa-blast", requireAdmin, async (req, res) => {
     try {
+      // Batasi jam blast: 06:00–21:00 WIB (UTC+7)
+      const nowWib = new Date(Date.now() + 7 * 60 * 60 * 1000);
+      const hour = nowWib.getUTCHours();
+      if (hour < 6 || hour >= 21) {
+        return res.status(400).json({ message: "WA Blast hanya bisa dikirim antara jam 06:00–21:00 WIB." });
+      }
+
       const parsed = insertWaBlastSchema.parse(req.body);
       const blast = await storage.createWaBlast(parsed);
 
@@ -3103,7 +3117,7 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
       // Kirim WA notif ke warga (non-blocking)
       const wargaData = await storage.getWargaById(parseInt(wargaId));
       if (wargaData?.nomorWhatsapp) {
-        const pesan = `[RWcoin RW03] Topup Berhasil!\n\nHalo ${wargaData.namaLengkap}, saldo RWcoin Anda telah ditambah:\n\nJumlah: ${parseInt(jumlah).toLocaleString("id")} coin\nSaldo baru: ${saldoBaru.toLocaleString("id")} coin\nKeterangan: ${keterangan || "Topup oleh admin"}\n\nSilakan cek saldo di rw3padasukacimahi.org`;
+        const pesan = `[RWcoin RW 03 Padasuka]\n\nHalo ${wargaData.namaLengkap}, saldo RWcoin Anda baru saja ditambahkan.\n\nJumlah       : +${parseInt(jumlah).toLocaleString("id")} RWcoin\nSaldo baru   : ${saldoBaru.toLocaleString("id")} RWcoin\nKeterangan   : ${keterangan || "Topup oleh admin"}\nID Transaksi : ${transaksi.kodeTransaksi}\n\nSaldo sudah aktif dan siap digunakan. Terima kasih!\n\nrw3padasukacimahi.org`;
         sendWhatsApp(wargaData.nomorWhatsapp, pesan).catch(() => {});
       }
       res.json({ transaksi, saldoBaru });
@@ -3876,11 +3890,16 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
           ? "62" + wargaData.nomorWhatsapp.slice(1)
           : wargaData.nomorWhatsapp;
         const pesanWarga =
-          `Halo ${wargaData.namaLengkap}, permintaan topup RWcoin Anda telah diterima!\n\n` +
-          `Jumlah topup: Rp ${jumlahInt.toLocaleString("id")}\n` +
+          `[RWcoin RW 03 Padasuka]\n\n` +
+          `Halo ${wargaData.namaLengkap}, permintaan topup Anda sudah kami terima dengan baik.\n\n` +
+          `Jumlah topup  : Rp ${jumlahInt.toLocaleString("id")}\n` +
+          `Biaya admin   : Rp ${ADMIN_FEE.toLocaleString("id")}\n` +
           `Total transfer: Rp ${totalTransfer.toLocaleString("id")}\n` +
-          `Via: ${metode} ${rekening} a.n ${atasnama}\n\n` +
-          `Silakan transfer dan kirim bukti transfer ke WA admin RW03. Saldo akan aktif setelah verifikasi.`;
+          `Rekening      : ${metode} ${rekening} a.n ${atasnama}\n` +
+          `ID Permintaan : #${request.id}\n` +
+          `Kode Wallet   : ${wallet.kodeWallet}\n\n` +
+          `Silakan transfer sesuai nominal di atas, lalu kirim bukti ke WA admin RW 03. Saldo aktif setelah diverifikasi.\n\n` +
+          `Ada pertanyaan? Hubungi pengurus RW 03 kapan saja.`;
         sendWhatsApp(noWaFormatted, pesanWarga).catch(() => {});
       }
 
@@ -3911,9 +3930,12 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
       if (request.noWa) {
         const noWaFormatted = request.noWa.startsWith("0") ? "62" + request.noWa.slice(1) : request.noWa;
         const pesan =
-          `Halo ${request.namaWarga}, topup RWcoin Anda telah diaktifkan!\n\n` +
-          `Jumlah: Rp ${request.jumlah.toLocaleString("id")} (${request.jumlah.toLocaleString("id")} RWcoin)\n\n` +
-          `Saldo sudah masuk ke wallet Anda. Terima kasih!`;
+          `[RWcoin RW 03 Padasuka]\n\n` +
+          `Halo ${request.namaWarga}, kabar baik! Topup RWcoin Anda sudah diverifikasi.\n\n` +
+          `Jumlah       : +${request.jumlah.toLocaleString("id")} RWcoin\n` +
+          `ID Transaksi : ${transaksi.kodeTransaksi}\n\n` +
+          `Saldo sudah masuk dan siap digunakan sekarang. Terima kasih sudah percaya RWcoin RW 03!\n\n` +
+          `rw3padasukacimahi.org`;
         sendWhatsApp(noWaFormatted, pesan).catch(() => {});
       }
       res.json({ ok: true, request, transaksi });
@@ -3933,10 +3955,12 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
       if (request.noWa) {
         const noWaFormatted = request.noWa.startsWith("0") ? "62" + request.noWa.slice(1) : request.noWa;
         const pesan =
-          `Halo ${request.namaWarga}, maaf permintaan topup RWcoin Anda ditolak.\n\n` +
-          `Jumlah: Rp ${request.jumlah.toLocaleString("id")}\n` +
-          (catatan ? `Alasan: ${catatan}\n\n` : "\n") +
-          `Silakan hubungi admin RW03 untuk informasi lebih lanjut.`;
+          `[RWcoin RW 03 Padasuka]\n\n` +
+          `Halo ${request.namaWarga}, kami perlu menyampaikan bahwa permintaan topup Anda belum bisa diproses saat ini.\n\n` +
+          `Jumlah        : Rp ${request.jumlah.toLocaleString("id")}\n` +
+          `ID Permintaan : #${id}\n` +
+          (catatan ? `Keterangan    : ${catatan}\n` : "") +
+          `\nTenang, tidak ada saldo yang berkurang. Silakan hubungi pengurus RW 03 jika ada pertanyaan atau ingin mengajukan ulang.`;
         sendWhatsApp(noWaFormatted, pesan).catch(() => {});
       }
       res.json({ ok: true, request });
@@ -3981,13 +4005,15 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
         const noWaFormatted = penerimaWarga.nomorWhatsapp.startsWith("0") ? "62" + penerimaWarga.nomorWhatsapp.slice(1) : penerimaWarga.nomorWhatsapp;
         const tanggal = new Date().toLocaleString("id-ID", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" });
         const pesanPenerima =
-          `[RWcoin RW03] Transfer Masuk\n\n` +
-          `Anda menerima transfer RWcoin dari ${result.namaWarga}.\n\n` +
-          `Jumlah: ${parseInt(jumlah).toLocaleString("id")} RWcoin\n` +
-          (keterangan?.trim() ? `Keterangan: ${keterangan.trim()}\n` : "") +
-          `Kode Transaksi: ${result.transaksi.kodeTransaksi}\n` +
-          `Tanggal: ${tanggal} WIB\n\n` +
-          `Cek saldo Anda di rw3padasukacimahi.org`;
+          `[RWcoin RW 03 Padasuka]\n\n` +
+          `Halo ${penerimaWarga.namaLengkap}, ada RWcoin masuk ke wallet Anda!\n\n` +
+          `Dari         : ${result.namaWarga}\n` +
+          `Jumlah       : +${parseInt(jumlah).toLocaleString("id")} RWcoin\n` +
+          (keterangan?.trim() ? `Keterangan   : ${keterangan.trim()}\n` : "") +
+          `ID Transaksi : ${result.transaksi.kodeTransaksi}\n` +
+          `Waktu        : ${tanggal} WIB\n\n` +
+          `Saldo sudah masuk dan siap digunakan.\n\n` +
+          `rw3padasukacimahi.org`;
         sendWhatsApp(noWaFormatted, pesanPenerima).catch(() => {});
       }
 

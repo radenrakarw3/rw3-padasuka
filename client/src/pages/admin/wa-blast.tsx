@@ -30,29 +30,29 @@ const MESSAGE_TEMPLATES = [
     label: "Undangan Rapat",
     text: `Assalamu'alaikum Wr. Wb.
 
-Wargi RW 03 yang terhormat,
+{gender} {warga} yang terhormat,
 
-Kami mengundang Bapak/Ibu untuk hadir dalam rapat warga:
+Kami mengundang {gender} {warga} untuk hadir dalam rapat warga {rtxx}:
 
 Hari/Tanggal : [ISI TANGGAL]
 Waktu        : [ISI WAKTU] WIB
 Tempat       : [ISI TEMPAT]
 Agenda       : [ISI AGENDA]
 
-Kehadiran Wargi sangat kami harapkan.
+Kehadiran sangat kami harapkan.
 
-Info lengkap bisa dicek di web kita 👉 rw3padasukacimahi.org
+Info lengkap bisa dicek di web kita rw3padasukacimahi.org
 
-Hatur nuhun 🙏
+Hatur nuhun
 Pengurus RW 03 Padasuka`,
   },
   {
     label: "Info Iuran",
     text: `Assalamu'alaikum Wr. Wb.
 
-Wargi RW 03 yang terhormat,
+{gender} {warga} yang terhormat,
 
-Iuran bulanan warga bulan [ISI BULAN] sebesar Rp [ISI NOMINAL] sudah bisa dibayarkan.
+Iuran bulanan warga {rtxx} bulan [ISI BULAN] sebesar Rp [ISI NOMINAL] sudah bisa dibayarkan.
 
 Pembayaran bisa melalui:
 - Ketua RT masing-masing
@@ -60,42 +60,42 @@ Pembayaran bisa melalui:
 
 Mohon bayar sebelum tanggal [ISI BATAS WAKTU] ya.
 
-Cek info warga lainnya di web 👉 rw3padasukacimahi.org
+Cek info warga lainnya di web rw3padasukacimahi.org
 
-Hatur nuhun kerjasamanya Wargi! 🙏
+Hatur nuhun kerjasamanya!
 Pengurus RW 03 Padasuka`,
   },
   {
     label: "Pengumuman Umum",
     text: `Assalamu'alaikum Wr. Wb.
 
-Wargi RW 03 yang terhormat,
+{gender} {warga} yang terhormat,
 
 [ISI PENGUMUMAN]
 
-Info lebih lengkap bisa dicek di web 👉 rw3padasukacimahi.org
+Info lebih lengkap bisa dicek di web rw3padasukacimahi.org
 
-Hatur nuhun perhatiannya Wargi! 🙏
+Hatur nuhun perhatiannya!
 Pengurus RW 03 Padasuka`,
   },
   {
     label: "Info Kegiatan",
     text: `Assalamu'alaikum Wr. Wb.
 
-Wargi RW 03 yang terhormat,
+{gender} {warga} yang terhormat,
 
-Hayu urang ramékeun bareng kegiatan:
+Hayu urang ramékeun bareng kegiatan {rtxx}:
 
 Kegiatan     : [ISI NAMA KEGIATAN]
 Hari/Tanggal : [ISI TANGGAL]
 Waktu        : [ISI WAKTU] WIB
 Tempat       : [ISI TEMPAT]
 
-Urang ramékeun bareng supaya silaturahmi Wargi RW 03 tambah erat! 💪
+Urang ramékeun bareng supaya silaturahmi RW 03 tambah erat!
 
-Info warga lainnya di web 👉 rw3padasukacimahi.org
+Info warga lainnya di web rw3padasukacimahi.org
 
-Hatur nuhun! 🙏
+Hatur nuhun!
 Pengurus RW 03 Padasuka`,
   },
 ];
