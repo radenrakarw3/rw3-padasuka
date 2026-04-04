@@ -2097,7 +2097,7 @@ export default function AdminRwcoin() {
                 </div>
               </div>
               <div className="flex gap-2 flex-wrap">
-                <Button size="sm" variant="outline" onClick={() => reconcileTripayMutation.mutate()} disabled={reconcileTripayMutation.isPending}>
+                <Button size="sm" variant="outline" onClick={() => reconcileTripayMutation.mutate(undefined)} disabled={reconcileTripayMutation.isPending}>
                   {reconcileTripayMutation.isPending ? <RefreshCw className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Clock className="w-3.5 h-3.5 mr-1.5" />}
                   Reconcile
                 </Button>
