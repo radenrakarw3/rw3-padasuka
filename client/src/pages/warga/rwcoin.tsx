@@ -1,4 +1,4 @@
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useQueries, useMutation } from "@tanstack/react-query";
 import { getQueryFn, apiRequest, queryClient, readJsonSafely } from "@/lib/queryClient";
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -74,63 +74,12 @@ function tripayOperatorLabel(product: any) {
     || "Tripay";
 }
 
-function tripayCategoryLabel(category: any) {
-  const rawType = String(category?.type ?? "").toUpperCase();
-  const rawName = String(category?.adminLabel || category?.name || "").trim();
-  if (rawName) {
-    if (rawType === "PLN") return "Token PLN";
-    if (rawType === "DATA") return "Paket Data";
-    if (rawType === "PULSA") return "Pulsa";
-    return rawName;
-  }
-  if (rawType === "PLN") return "Token PLN";
-  if (rawType === "DATA") return "Paket Data";
-  if (rawType === "PULSA") return "Pulsa";
-  return "Produk Digital";
-}
-
-function tripayCategoryKey(category: any) {
-  return String(category?.id ?? category?.tripayCategoryId ?? category?.type ?? category?.name ?? "tripay");
-}
-
-function tripayCategoryNeedsMeter(category: any) {
-  const rawType = String(category?.type ?? "").toUpperCase();
-  const rawName = String(category?.name ?? "").toLowerCase();
-  return rawType === "PLN" || rawName.includes("pln") || rawName.includes("listrik");
-}
-
 function tripayCategoryFriendlyKind(category: any): "pulsa" | "data" | "electricity" | "other" {
   const rawType = String(category?.type ?? "").toUpperCase();
   if (rawType === "PLN") return "electricity";
   if (rawType === "DATA") return "data";
   if (rawType === "PULSA") return "pulsa";
   return "other";
-}
-
-function tripayTargetLabel(category: any) {
-  const rawType = String(category?.type ?? "").toUpperCase();
-  const name = String(category?.name ?? "").toLowerCase();
-  if (rawType === "PLN" || name.includes("listrik")) return "Nomor HP yang bisa dihubungi";
-  if (rawType === "PULSA" || rawType === "DATA") return "Nomor HP tujuan";
-  if (name.includes("game")) return "User ID / tujuan";
-  if (name.includes("wallet") || name.includes("e-wallet")) return "Nomor akun / tujuan";
-  return "Tujuan / ID pelanggan";
-}
-
-function tripayTargetPlaceholder(category: any) {
-  const rawType = String(category?.type ?? "").toUpperCase();
-  const name = String(category?.name ?? "").toLowerCase();
-  if (rawType === "PLN" || name.includes("listrik")) return "Contoh: 08xxxxxxxxxx";
-  if (rawType === "PULSA" || rawType === "DATA") return "Contoh: 08xxxxxxxxxx";
-  return "Masukkan tujuan / user ID";
-}
-
-function tripayTargetHint(category: any) {
-  const rawType = String(category?.type ?? "").toUpperCase();
-  const name = String(category?.name ?? "").toLowerCase();
-  if (rawType === "PLN" || name.includes("listrik")) return "Nomor HP ini dipakai sebagai kontak pesanan jika ada kendala.";
-  if (rawType === "PULSA" || rawType === "DATA") return "Nomor ini akan menerima pulsa atau paket data.";
-  return "Pastikan tujuan yang Anda masukkan sudah benar.";
 }
 
 // Koin emas RWcoin
@@ -957,10 +906,6 @@ function matchProductByProvider(product: any, provider: string): boolean {
   return false;
 }
 
-// Alias backward-compat untuk filter chip (hanya cek operator name)
-function matchOperatorByProvider(operatorName: string, provider: string): boolean {
-  return matchProductByProvider({ operatorName }, provider);
-}
 
 type TripayRecentTarget = {
   categoryKey: string;
@@ -1084,8 +1029,8 @@ function ResultScreen({ result: initialResult, onClose }: { result: any; onClose
 
 function TripayModal({ wallet, onClose, initialKind = "pulsa" }: { wallet: any; onClose: () => void; initialKind?: "pulsa" | "data" | "electricity" }) {
   const { toast } = useToast();
-  const [selectedCategory, setSelectedCategory] = useState<any>(null);
-  const [selectedOperator, setSelectedOperator] = useState<any>(null);
+  const isPlnFlow = initialKind === "electricity";
+
   const [target, setTarget] = useState("");
   const [noMeterPln, setNoMeterPln] = useState("");
   const [selected, setSelected] = useState<any>(null);
@@ -1093,76 +1038,79 @@ function TripayModal({ wallet, onClose, initialKind = "pulsa" }: { wallet: any; 
   const [step, setStep] = useState<"browse" | "confirm">("browse");
   const [recentTargets, setRecentTargets] = useState<TripayRecentTarget[]>([]);
 
+  useEffect(() => { setRecentTargets(readRecentTripayTargets()); }, []);
+
+  // Ambil semua kategori untuk dapat ID-nya
   const { data: categories = [], isLoading: loadingCategories } = useQuery<any[]>({
     queryKey: ["/api/warga/rwcoin/tripay/catalog/categories"],
     queryFn: getQueryFn({ on401: "throw" }),
   });
 
-  const { data: operators = [], isLoading: loadingOperators } = useQuery<any[]>({
-    queryKey: ["/api/warga/rwcoin/tripay/catalog/operators", selectedCategory?.id],
-    enabled: Boolean(selectedCategory?.id),
+  const plnCategoryId = categories.find((c: any) => tripayCategoryFriendlyKind(c) === "electricity")?.id ?? null;
+  const telcoCategoryIds: string[] = categories
+    .filter((c: any) => tripayCategoryFriendlyKind(c) !== "electricity")
+    .map((c: any) => String(c.id));
+
+  // Deteksi provider dari nomor HP (hanya untuk pulsa/data)
+  const detectedProvider = !isPlnFlow && target.length >= 4 ? detectProvider(target) : null;
+
+  const targetValid = target.trim().length >= 10;
+  const meterValid = !isPlnFlow || noMeterPln.trim().length >= 8;
+
+  // PLN: satu query untuk produk token listrik
+  const { data: plnProducts = [], isLoading: loadingPlnProducts } = useQuery<any[]>({
+    queryKey: ["/api/warga/rwcoin/tripay/catalog/products", plnCategoryId, "pln"],
+    enabled: isPlnFlow && Boolean(plnCategoryId) && targetValid && meterValid,
     queryFn: async () => {
-      const res = await fetch(`/api/warga/rwcoin/tripay/catalog/operators?categoryId=${encodeURIComponent(String(selectedCategory.id))}`, { credentials: "include" });
-      if (!res.ok) {
-        const err = await readJsonSafely<any>(res);
-        throw new Error(err.message);
-      }
+      const res = await fetch(`/api/warga/rwcoin/tripay/catalog/products?categoryId=${encodeURIComponent(String(plnCategoryId))}`, { credentials: "include" });
+      if (!res.ok) { const err = await readJsonSafely<any>(res); throw new Error(err.message); }
       return readJsonSafely(res);
     },
   });
 
-  useEffect(() => {
-    setRecentTargets(readRecentTripayTargets());
-  }, []);
-
-  useEffect(() => {
-    if (!categories.length || selectedCategory) return;
-    const matched = categories.find((category: any) => tripayCategoryFriendlyKind(category) === initialKind);
-    setSelectedCategory(matched ?? categories[0]);
-  }, [categories, selectedCategory, initialKind]);
-
-  useEffect(() => {
-    setSelectedOperator(null);
-    setSelected(null);
-    setTarget("");
-    setNoMeterPln("");
-    setStep("browse");
-  }, [selectedCategory?.id]);
-
-  useEffect(() => {
-    setSelected(null);
-    setStep("browse");
-  }, [selectedOperator?.id]);
-
-  const { data: products = [], isLoading: loadingProducts } = useQuery<any[]>({
-    queryKey: ["/api/warga/rwcoin/tripay/catalog/products", selectedCategory?.id, selectedOperator?.id ?? "none"],
-    enabled: Boolean(selectedCategory?.id),
-    queryFn: async () => {
-      const params = new URLSearchParams({ categoryId: String(selectedCategory.id) });
-      if (selectedOperator?.id) params.set("operatorId", String(selectedOperator.id));
-      const res = await fetch(`/api/warga/rwcoin/tripay/catalog/products?${params.toString()}`, { credentials: "include" });
-      if (!res.ok) {
-        const err = await readJsonSafely<any>(res);
-        throw new Error(err.message);
-      }
-      return readJsonSafely(res);
-    },
+  // Telco: ambil semua kategori (pulsa + data) secara paralel, gabung hasilnya
+  const telcoQueries = useQueries({
+    queries: telcoCategoryIds.map((catId) => ({
+      queryKey: ["/api/warga/rwcoin/tripay/catalog/products", catId, "none"],
+      enabled: !isPlnFlow && targetValid && telcoCategoryIds.length > 0,
+      queryFn: async () => {
+        const res = await fetch(`/api/warga/rwcoin/tripay/catalog/products?categoryId=${encodeURIComponent(catId)}`, { credentials: "include" });
+        if (!res.ok) { const err = await readJsonSafely<any>(res); throw new Error(err.message); }
+        return readJsonSafely(res);
+      },
+    })),
   });
+
+  const allTelcoProducts: any[] = telcoQueries.flatMap((q: any) => q.data ?? []);
+  const loadingTelcoProducts = telcoQueries.some((q: any) => q.isLoading);
+
+  const rawProducts = isPlnFlow ? plnProducts : allTelcoProducts;
+  const loadingProducts = isPlnFlow ? loadingPlnProducts : (loadingTelcoProducts || loadingCategories);
+
+  const filteredProducts = [...rawProducts]
+    .filter((p: any) => !detectedProvider || matchProductByProvider(p, detectedProvider))
+    .sort((a: any, b: any) => {
+      const featuredDelta = Number(Boolean(b.isFeatured)) - Number(Boolean(a.isFeatured));
+      if (featuredDelta !== 0) return featuredDelta;
+      const recommendedDelta = Number(Boolean(b.isRecommended)) - Number(Boolean(a.isRecommended));
+      if (recommendedDelta !== 0) return recommendedDelta;
+      return (a.hargaJual ?? 0) - (b.hargaJual ?? 0);
+    });
 
   const mutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/warga/rwcoin/tripay/checkout", {
         productCode: selected?.productCode,
         target,
-        noMeterPln: tripayCategoryNeedsMeter(selectedCategory) ? noMeterPln : undefined,
+        noMeterPln: isPlnFlow ? noMeterPln : undefined,
       });
       return readJsonSafely(res);
     },
     onSuccess: (data: any) => {
       saveRecentTripayTarget({
-        categoryKey: tripayCategoryKey(selectedCategory),
+        categoryKey: isPlnFlow ? "electricity" : "telco",
         target,
-        noMeterPln: tripayCategoryNeedsMeter(selectedCategory) ? noMeterPln : undefined,
+        noMeterPln: isPlnFlow ? noMeterPln : undefined,
       });
       setRecentTargets(readRecentTripayTargets());
       setResult(data);
@@ -1173,43 +1121,15 @@ function TripayModal({ wallet, onClose, initialKind = "pulsa" }: { wallet: any; 
     onError: (e: any) => toast({ variant: "destructive", title: "Transaksi gagal", description: e.message }),
   });
 
-  const categoryKind = tripayCategoryFriendlyKind(selectedCategory);
-  const categoryNeedsMeter = tripayCategoryNeedsMeter(selectedCategory);
-  const telcoCategory = categoryKind === "pulsa" || categoryKind === "data";
   const saldo = wallet?.saldo ?? 0;
   const hargaJual = selected?.hargaJual ?? 0;
   const saldoKurang = hargaJual > saldo;
-  const targetMinLength = telcoCategory || categoryNeedsMeter ? 10 : 4;
-  const targetValid = target.trim().length >= targetMinLength;
-  const meterValid = !categoryNeedsMeter || noMeterPln.trim().length >= 8;
   const canSubmit = selected && targetValid && meterValid && !saldoKurang;
-  const recentTargetsForCategory = recentTargets.filter((item) => item.categoryKey === tripayCategoryKey(selectedCategory)).slice(0, 3);
-  const detectedProvider = telcoCategory && target.length >= 4 ? detectProvider(target) : null;
-  const modalTitle = categoryNeedsMeter ? "Beli Token Listrik" : categoryKind === "data" ? "Beli Paket Data" : "Beli Pulsa";
-  const modalSubtitle = categoryNeedsMeter
-    ? "Isi dua data ini dulu, lalu pilih nominal token yang paling pas."
-    : "Masukkan nomor tujuan dulu, lalu pilih nominal yang diinginkan.";
+  const modalTitle = isPlnFlow ? "Token Listrik PLN" : "Pulsa & Paket Data";
 
-  useEffect(() => {
-    if (!detectedProvider || !operators.length || selectedOperator) return;
-    const matched = operators.find((operator: any) => matchOperatorByProvider(operator.name, detectedProvider));
-    if (matched) setSelectedOperator(matched);
-  }, [detectedProvider, operators, selectedOperator]);
-
-  const filteredProducts = !targetValid || !selectedCategory
-    ? []
-    : [...products].filter((product: any) => {
-      if (!telcoCategory || !detectedProvider || selectedOperator) return true;
-      return matchProductByProvider(product, detectedProvider);
-    }).sort((a: any, b: any) => {
-    const featuredDelta = Number(Boolean(b.isFeatured)) - Number(Boolean(a.isFeatured));
-    if (featuredDelta !== 0) return featuredDelta;
-    const recommendedDelta = Number(Boolean(b.isRecommended)) - Number(Boolean(a.isRecommended));
-    if (recommendedDelta !== 0) return recommendedDelta;
-    const salesDelta = (b.salesCount ?? 0) - (a.salesCount ?? 0);
-    if (salesDelta !== 0) return salesDelta;
-    return (a.hargaJual ?? 0) - (b.hargaJual ?? 0);
-  });
+  const recentTargetsForFlow = recentTargets
+    .filter((item) => item.categoryKey === (isPlnFlow ? "electricity" : "telco"))
+    .slice(0, 3);
 
   return (
     <>
@@ -1224,8 +1144,8 @@ function TripayModal({ wallet, onClose, initialKind = "pulsa" }: { wallet: any; 
           <div className="flex justify-center mb-3"><div className="w-10 h-1 bg-gray-200 rounded-full" /></div>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-muted-foreground">{result ? "Pesanan Tercatat" : "Beli Produk Digital"}</p>
-              <h2 className="font-bold text-base">Tripay dengan RWcoin</h2>
+              <p className="text-xs text-muted-foreground">{result ? "Pesanan Tercatat" : "Bayar dengan RWcoin"}</p>
+              <h2 className="font-bold text-base">{result ? "Detail Pesanan" : modalTitle}</h2>
             </div>
             <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
               <X className="w-4 h-4 text-gray-500" />
@@ -1244,188 +1164,159 @@ function TripayModal({ wallet, onClose, initialKind = "pulsa" }: { wallet: any; 
                 <p className="text-sm font-bold">{formatCoin(saldo)} <CoinIcon /></p>
               </div>
 
-              <div className="rounded-2xl border border-[hsl(163,55%,88%)] bg-[hsl(163,55%,97%)] p-4">
-                <p className="text-sm font-semibold text-[hsl(163,55%,22%)]">{modalTitle}</p>
-                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{modalSubtitle}</p>
-              </div>
-
-              {!result && (
-                <div className="rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2.5">
-                  <div className="flex items-center justify-between gap-2 text-[11px] font-medium text-muted-foreground">
-                    <span className={`flex-1 rounded-full px-2.5 py-1 text-center ${step === "browse" ? "bg-[hsl(163,55%,22%)] text-white" : "bg-white border border-gray-200"}`}>
-                      1. Isi tujuan & pilih produk
-                    </span>
-                    <span className={`flex-1 rounded-full px-2.5 py-1 text-center ${step === "confirm" ? "bg-[hsl(163,55%,22%)] text-white" : "bg-white border border-gray-200"}`}>
-                      2. Konfirmasi & bayar
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold">Jenis produk</Label>
-                <div className="grid grid-cols-2 gap-2">
-                {categories.map((category: any) => {
-                  const kind = tripayCategoryFriendlyKind(category);
-                  const Icon = kind === "electricity" ? Zap : kind === "data" ? Wifi : kind === "pulsa" ? Smartphone : Receipt;
-                  return (
-                  <button
-                    key={category.id}
-                    onClick={() => setSelectedCategory(category)}
-                    className={`rounded-2xl border-2 px-3 py-3 text-left transition-colors ${selectedCategory?.id === category.id ? "border-[hsl(163,55%,22%)] bg-[hsl(163,55%,96%)] text-[hsl(163,55%,22%)]" : "border-gray-200 text-muted-foreground"}`}
-                  >
-                    <Icon className="w-5 h-5 mb-1" />
-                    <p className="text-xs font-semibold">{tripayCategoryLabel(category)}</p>
-                    <p className="text-[10px] opacity-70 mt-0.5">{category.productCount ?? 0} produk</p>
-                  </button>
-                )})}
-                </div>
-              </div>
-
               {step === "browse" ? (
                 <>
-                  <div className="space-y-2">
-                    <Label className="text-sm font-semibold">1. {tripayTargetLabel(selectedCategory)}</Label>
-                    <div className="relative">
-                      <Input
-                        value={target}
-                        onChange={e => { setTarget(e.target.value.replace(/[^0-9]/g, "")); setSelected(null); }}
-                        placeholder={tripayTargetPlaceholder(selectedCategory)}
-                        inputMode="numeric"
-                        maxLength={20}
-                        className="h-12 text-base font-mono pr-24"
-                        autoFocus
-                      />
-                      {target.length >= 4 && detectedProvider && telcoCategory && (
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold px-2 py-1 rounded-full bg-[hsl(163,55%,96%)] text-[hsl(163,55%,22%)]">
-                          {detectedProvider}
-                        </span>
-                      )}
-                      {target.length >= 4 && !detectedProvider && telcoCategory && target.length < targetMinLength && (
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">mendeteksi...</span>
-                      )}
-                    </div>
-                    {target.length > 0 && target.length < targetMinLength && (
-                      <p className="text-[11px] text-amber-600">Masukkan minimal {targetMinLength} karakter</p>
-                    )}
-                    <p className="text-[11px] text-muted-foreground">{tripayTargetHint(selectedCategory)}</p>
-                  </div>
-
-                  {recentTargetsForCategory.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-[11px] font-medium text-muted-foreground">Gunakan lagi tujuan terakhir</p>
-                      <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-                        {recentTargetsForCategory.map((item, idx) => (
-                          <button
-                            key={`${item.categoryKey}-${item.target}-${item.noMeterPln ?? idx}`}
-                            onClick={() => {
-                              setTarget(item.target);
-                              setNoMeterPln(item.noMeterPln ?? "");
-                              setSelected(null);
-                              setStep("browse");
-                            }}
-                            className="flex-shrink-0 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700"
-                          >
-                            {item.target}{item.noMeterPln ? ` · ${item.noMeterPln}` : ""}
-                          </button>
-                        ))}
+                  {isPlnFlow ? (
+                    /* ── TOKEN LISTRIK PLN ── */
+                    <>
+                      <div className="space-y-2">
+                        <Label className="text-sm font-semibold">1. Nomor meter / ID Pelanggan PLN</Label>
+                        <Input
+                          value={noMeterPln}
+                          onChange={e => { setNoMeterPln(e.target.value.replace(/[^0-9]/g, "")); setSelected(null); }}
+                          placeholder="Contoh: 12345678901"
+                          inputMode="numeric"
+                          maxLength={14}
+                          className="h-12 text-base font-mono"
+                          autoFocus
+                        />
+                        {noMeterPln.length > 0 && noMeterPln.length < 8 && (
+                          <p className="text-[11px] text-amber-600">Minimal 8 digit</p>
+                        )}
+                        <p className="text-[11px] text-muted-foreground">Cek di struk tagihan listrik atau app PLN Mobile.</p>
                       </div>
-                    </div>
-                  )}
 
-                  {categoryNeedsMeter && (
-                    <div className="space-y-2">
-                      <Label className="text-sm font-semibold">2. Nomor meter / ID pelanggan PLN</Label>
-                      <Input
-                        value={noMeterPln}
-                        onChange={e => { setNoMeterPln(e.target.value.replace(/[^0-9]/g, "")); setSelected(null); }}
-                        placeholder="Contoh: 12345678901"
-                        inputMode="numeric"
-                        maxLength={14}
-                        className="h-12 text-base font-mono"
-                      />
-                      {noMeterPln.length > 0 && noMeterPln.length < 8 && (
-                        <p className="text-[11px] text-amber-600">Minimal 8 digit</p>
-                      )}
-                      <p className="text-[11px] text-muted-foreground">Pastikan nomor meter benar. Token akan diproses untuk pelanggan ini.</p>
-                    </div>
-                  )}
-
-                  {!targetValid && target.length === 0 && (
-                    <div className="flex flex-col items-center gap-2 py-8 text-center">
-                      <Smartphone className="w-10 h-10 text-gray-200" />
-                      <p className="text-sm text-muted-foreground">
-                        {categoryNeedsMeter
-                          ? "Isi nomor HP dan nomor meter dulu supaya pilihan token muncul"
-                          : "Isi nomor tujuan dulu supaya pilihan nominal muncul"}
-                      </p>
-                    </div>
-                  )}
-
-                  {loadingCategories && (
-                    <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
-                  )}
-
-                  {operators.length > 0 && (
-                    <div className="space-y-2">
-                      <Label className="text-sm font-semibold">{categoryNeedsMeter ? "3. Pilih operator" : "2. Pilih operator"}</Label>
-                      <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-                        <button
-                          onClick={() => { setSelectedOperator(null); setSelected(null); }}
-                          className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${!selectedOperator ? "bg-[hsl(163,55%,22%)] text-white border-[hsl(163,55%,22%)]" : "bg-white text-muted-foreground border-gray-200"}`}
-                        >
-                          Semua
-                        </button>
-                        {operators.map((operator: any) => (
-                          <button
-                            key={operator.id}
-                            onClick={() => { setSelectedOperator(operator); setSelected(null); }}
-                            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${selectedOperator?.id === operator.id ? "bg-[hsl(163,55%,22%)] text-white border-[hsl(163,55%,22%)]" : "bg-white text-muted-foreground border-gray-200"}`}
-                          >
-                            {operator.name}
-                          </button>
-                        ))}
+                      <div className="space-y-2">
+                        <Label className="text-sm font-semibold">2. Nomor HP untuk konfirmasi</Label>
+                        <Input
+                          value={target}
+                          onChange={e => { setTarget(e.target.value.replace(/[^0-9]/g, "")); setSelected(null); }}
+                          placeholder="Contoh: 08xxxxxxxxxx"
+                          inputMode="numeric"
+                          maxLength={15}
+                          className="h-12 text-base font-mono"
+                        />
+                        {target.length > 0 && target.length < 10 && (
+                          <p className="text-[11px] text-amber-600">Minimal 10 digit</p>
+                        )}
+                        <p className="text-[11px] text-muted-foreground">Dipakai admin Tripay untuk menghubungi jika ada kendala.</p>
                       </div>
-                      {loadingOperators && <p className="text-[11px] text-muted-foreground">Memuat operator...</p>}
-                    </div>
+
+                      {recentTargetsForFlow.length > 0 && (
+                        <div className="space-y-1.5">
+                          <p className="text-[11px] font-medium text-muted-foreground">Data terakhir</p>
+                          <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                            {recentTargetsForFlow.map((item, idx) => (
+                              <button
+                                key={idx}
+                                onClick={() => { setTarget(item.target); setNoMeterPln(item.noMeterPln ?? ""); setSelected(null); }}
+                                className="flex-shrink-0 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700"
+                              >
+                                Meter {item.noMeterPln}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {noMeterPln.length === 0 && (
+                        <div className="flex flex-col items-center gap-2 py-6 text-center">
+                          <Zap className="w-10 h-10 text-gray-200" />
+                          <p className="text-sm text-muted-foreground">Isi nomor meter dan nomor HP untuk melihat pilihan token</p>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    /* ── PULSA & PAKET DATA ── */
+                    <>
+                      <div className="space-y-2">
+                        <Label className="text-sm font-semibold">Nomor HP tujuan</Label>
+                        <div className="relative">
+                          <Input
+                            value={target}
+                            onChange={e => { setTarget(e.target.value.replace(/[^0-9]/g, "")); setSelected(null); }}
+                            placeholder="Contoh: 08xxxxxxxxxx"
+                            inputMode="numeric"
+                            maxLength={15}
+                            className="h-12 text-base font-mono pr-28"
+                            autoFocus
+                          />
+                          {target.length >= 4 && detectedProvider && (
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold px-2 py-1 rounded-full bg-[hsl(163,55%,96%)] text-[hsl(163,55%,22%)]">
+                              {detectedProvider}
+                            </span>
+                          )}
+                          {target.length >= 4 && !detectedProvider && target.length < 10 && (
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">mendeteksi...</span>
+                          )}
+                        </div>
+                        {target.length > 0 && target.length < 10 && (
+                          <p className="text-[11px] text-amber-600">Minimal 10 digit</p>
+                        )}
+                        {targetValid && !detectedProvider && (
+                          <p className="text-[11px] text-amber-600">Provider tidak dikenali — semua produk ditampilkan</p>
+                        )}
+                      </div>
+
+                      {recentTargetsForFlow.length > 0 && (
+                        <div className="space-y-1.5">
+                          <p className="text-[11px] font-medium text-muted-foreground">Nomor terakhir</p>
+                          <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                            {recentTargetsForFlow.map((item, idx) => (
+                              <button
+                                key={idx}
+                                onClick={() => { setTarget(item.target); setSelected(null); }}
+                                className="flex-shrink-0 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700"
+                              >
+                                {item.target}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {!targetValid && target.length === 0 && (
+                        <div className="flex flex-col items-center gap-2 py-6 text-center">
+                          <Smartphone className="w-10 h-10 text-gray-200" />
+                          <p className="text-sm text-muted-foreground">Isi nomor HP untuk melihat pilihan pulsa dan paket data</p>
+                        </div>
+                      )}
+                    </>
                   )}
 
+                  {/* Loading produk */}
                   {targetValid && meterValid && loadingProducts && (
                     <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
                   )}
 
+                  {/* Tidak ada produk */}
                   {targetValid && meterValid && !loadingProducts && filteredProducts.length === 0 && (
                     <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-center">
-                      <p className="text-sm font-semibold text-amber-800">Belum ada produk aktif untuk pilihan ini</p>
-                      <p className="text-xs text-amber-600 mt-1">Coba ganti operator atau hubungi admin untuk mengaktifkan kategori ini.</p>
+                      <p className="text-sm font-semibold text-amber-800">Belum ada produk tersedia</p>
+                      <p className="text-xs text-amber-600 mt-1">Hubungi admin RW untuk mengaktifkan produk ini.</p>
                     </div>
                   )}
 
+                  {/* Daftar produk */}
                   {targetValid && meterValid && !loadingProducts && filteredProducts.length > 0 && (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between px-0.5">
-                        <p className="text-sm font-semibold">
-                          {categoryNeedsMeter ? "4. Pilih nominal token" : "3. Pilih nominal"}
-                        </p>
+                        <p className="text-sm font-semibold">{isPlnFlow ? "3. Pilih nominal token" : "Pilih nominal"}</p>
                         <p className="text-xs text-muted-foreground">{filteredProducts.length} pilihan</p>
                       </div>
                       <div className="space-y-2">
                         {filteredProducts.map((product: any) => (
                           <button
-                            key={product.id}
-                            onClick={() => setSelected(selected?.id === product.id ? null : product)}
-                            className={`w-full rounded-2xl border-2 p-3 text-left transition-all ${selected?.id === product.id ? "border-[hsl(163,55%,22%)] bg-[hsl(163,55%,97%)] shadow-sm" : "border-gray-200 bg-white"}`}
+                            key={product.id ?? product.productCode}
+                            onClick={() => setSelected(selected?.productCode === product.productCode ? null : product)}
+                            className={`w-full rounded-2xl border-2 p-3.5 text-left transition-all ${selected?.productCode === product.productCode ? "border-[hsl(163,55%,22%)] bg-[hsl(163,55%,97%)] shadow-sm" : "border-gray-200 bg-white"}`}
                           >
-                            <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center justify-between gap-3">
                               <div className="min-w-0 flex-1">
-                                <p className="text-[9px] font-mono text-muted-foreground/60 mb-1 truncate">{product.productCode}</p>
-                                <div className="flex items-center gap-1 flex-wrap mb-1.5">
-                                  {product.isFeatured && <Badge className="h-4 text-[9px] bg-amber-100 text-amber-700">Unggulan</Badge>}
-                                  {product.isRecommended && <Badge className="h-4 text-[9px] bg-sky-100 text-sky-700">Rekomendasi</Badge>}
-                                  {(product.salesCount ?? 0) > 0 && <Badge variant="outline" className="h-4 text-[9px]">Terlaris</Badge>}
-                                </div>
                                 <p className="text-sm font-semibold leading-snug">{product.productName}</p>
-                                <p className="text-[11px] text-muted-foreground mt-1">{product.operatorName || product.categoryName || "Tripay"}</p>
+                                {!isPlnFlow && product.operatorName && (
+                                  <p className="text-[11px] text-muted-foreground mt-0.5">{product.operatorName}</p>
+                                )}
                               </div>
                               <div className="text-right flex-shrink-0">
                                 <p className="text-sm font-bold text-[hsl(163,55%,22%)]">{formatCoin(product.hargaJual)} <CoinIcon size={12} /></p>
@@ -1438,86 +1329,68 @@ function TripayModal({ wallet, onClose, initialKind = "pulsa" }: { wallet: any; 
                     </div>
                   )}
 
-                  {/* Ringkasan pilihan */}
+                  {/* Tombol lanjut setelah produk dipilih */}
                   {selected && (
-                    <div className="rounded-2xl p-4 border border-green-200 bg-green-50 space-y-3">
-                      <p className="text-xs font-semibold text-[hsl(163,55%,22%)]">Produk yang Anda pilih</p>
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm"><span>Produk</span><span className="font-semibold text-right max-w-[60%]">{selected.productName}</span></div>
-                        <div className="flex justify-between text-[11px] text-muted-foreground"><span>SKU</span><span className="font-mono">{selected.productCode}</span></div>
-                        <div className="flex justify-between text-sm"><span>Tujuan</span><span className="font-mono">{target}</span></div>
-                        {noMeterPln && <div className="flex justify-between text-sm"><span>No Meter</span><span className="font-mono">{noMeterPln}</span></div>}
-                        <div className="flex justify-between text-sm font-bold border-t pt-2"><span>Bayar</span><span className="text-[hsl(163,55%,22%)]">{formatCoin(selected.hargaJual)} <CoinIcon /></span></div>
-                        <div className="flex justify-between text-[11px] text-muted-foreground"><span>Sisa saldo</span><span>{formatCoin(Math.max(0, saldo - selected.hargaJual))} <CoinIcon size={11} /></span></div>
-                      </div>
+                    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
                       {saldoKurang ? (
-                        <p className="text-xs text-red-600 font-medium">Saldo tidak cukup untuk produk ini.</p>
+                        <p className="text-xs text-center text-red-600 font-medium py-2">Saldo tidak cukup untuk produk ini.</p>
                       ) : (
                         <Button
-                          className="w-full h-11 rounded-2xl text-sm font-semibold"
+                          className="w-full h-12 rounded-2xl text-base font-semibold"
                           style={{ background: "hsl(163,55%,22%)" }}
                           onClick={() => setStep("confirm")}
                         >
-                          Lanjut ke konfirmasi
+                          Lanjut — {formatCoin(selected.hargaJual)} <CoinIcon size={14} />
                         </Button>
                       )}
-                    </div>
+                    </motion.div>
                   )}
                 </>
               ) : (
+                /* ── KONFIRMASI ── */
                 <div className="space-y-4">
-                  <div className="rounded-2xl border border-green-200 bg-green-50 p-4 space-y-3">
+                  <div className="rounded-2xl border border-green-200 bg-green-50 p-4 space-y-2.5">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs text-muted-foreground">Ringkasan pesanan</p>
-                        <p className="font-semibold">{selected?.productName}</p>
+                      <p className="text-sm font-semibold">{selected?.productName}</p>
+                      <button onClick={() => setStep("browse")} className="text-xs font-medium text-[hsl(163,55%,22%)]">Ubah</button>
+                    </div>
+                    <div className="space-y-1.5 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">{isPlnFlow ? "No Meter" : "Nomor HP"}</span>
+                        <span className="font-mono">{isPlnFlow ? noMeterPln : target}</span>
                       </div>
-                      <button
-                        onClick={() => setStep("browse")}
-                        className="text-xs font-medium text-[hsl(163,55%,22%)] hover:underline"
-                      >
-                        Ubah
-                      </button>
-                    </div>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between"><span>Kategori</span><span>{selectedCategory ? tripayCategoryLabel(selectedCategory) : "Tripay"}</span></div>
-                      {selectedOperator && <div className="flex justify-between"><span>Operator</span><span>{selectedOperator.name}</span></div>}
-                      <div className="flex justify-between"><span>Tujuan</span><span className="font-mono">{target}</span></div>
-                      {noMeterPln && <div className="flex justify-between"><span>No Meter</span><span className="font-mono">{noMeterPln}</span></div>}
-                      {detectedProvider && telcoCategory && (
-                        <div className="flex justify-between"><span>Operator</span><span>{detectedProvider}</span></div>
+                      {isPlnFlow && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">No HP konfirmasi</span>
+                          <span className="font-mono">{target}</span>
+                        </div>
                       )}
-                      <div className="flex justify-between text-[11px] text-muted-foreground"><span>SKU</span><span className="font-mono">{selected?.productCode}</span></div>
+                      {!isPlnFlow && detectedProvider && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Provider</span>
+                          <span>{detectedProvider}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 space-y-2">
-                    <p className="text-sm font-semibold text-amber-800">Cek lagi sebelum bayar</p>
-                    <p className="text-xs text-amber-700">Pastikan nomor tujuan dan nomor meter benar. Setelah diproses, pulsa, data, atau token umumnya tidak bisa dibatalkan.</p>
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3.5">
+                    <p className="text-xs text-amber-700">Pastikan {isPlnFlow ? "nomor meter" : "nomor HP"} sudah benar. Produk digital tidak bisa dibatalkan setelah diproses.</p>
                   </div>
 
-                  <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-2.5">
-                    <div className="flex justify-between text-sm"><span>Harga produk</span><span>{formatCoin(hargaJual)} <CoinIcon /></span></div>
-                    <div className="flex justify-between text-sm"><span>Saldo saat ini</span><span>{formatCoin(saldo)} <CoinIcon /></span></div>
-                    <div className="flex justify-between text-sm font-bold border-t pt-2.5"><span>Sisa saldo setelah bayar</span><span>{formatCoin(Math.max(0, saldo - hargaJual))} <CoinIcon /></span></div>
+                  <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-2">
+                    <div className="flex justify-between text-sm"><span>Harga</span><span>{formatCoin(hargaJual)} <CoinIcon /></span></div>
+                    <div className="flex justify-between text-sm font-bold border-t pt-2"><span>Sisa saldo</span><span>{formatCoin(Math.max(0, saldo - hargaJual))} <CoinIcon /></span></div>
                   </div>
 
                   {saldoKurang && (
-                    <div className="rounded-2xl border border-red-200 bg-red-50 p-3">
-                      <p className="text-xs font-medium text-red-600">Saldo tidak cukup. Silakan kembali dan pilih nominal lain atau topup terlebih dahulu.</p>
-                    </div>
+                    <p className="text-xs text-center text-red-600 font-medium">Saldo tidak cukup. Pilih nominal lain atau topup dulu.</p>
                   )}
 
                   <div className="flex gap-2">
+                    <Button variant="outline" className="flex-1 h-12 rounded-2xl" onClick={() => setStep("browse")}>Kembali</Button>
                     <Button
-                      variant="outline"
-                      className="flex-1 h-12 rounded-2xl"
-                      onClick={() => setStep("browse")}
-                    >
-                      Kembali
-                    </Button>
-                    <Button
-                      className="flex-[1.4] h-12 rounded-2xl text-base font-semibold shadow-sm"
+                      className="flex-[1.4] h-12 rounded-2xl text-base font-semibold"
                       style={{ background: "hsl(163,55%,22%)" }}
                       disabled={!canSubmit || mutation.isPending}
                       onClick={() => mutation.mutate()}
@@ -1863,8 +1736,8 @@ export default function WargaRwcoin() {
   const [showBayar, setShowBayar] = useState(false);
   const [showTopup, setShowTopup] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
-  const [showTripay, setShowTripay] = useState(false);
-  const [tripayInitialKind, setTripayInitialKind] = useState<"pulsa" | "data" | "electricity">("pulsa");
+  const [showTripayTelco, setShowTripayTelco] = useState(false);
+  const [showTripayPLN, setShowTripayPLN] = useState(false);
   const [bayarVoucher, setBayarVoucher] = useState<string | undefined>(undefined);
   const [activeView, setActiveView] = useState<"utama" | "voucher" | "riwayat">("utama");
 
@@ -1904,7 +1777,10 @@ export default function WargaRwcoin() {
         {showTransfer && <TransferModal key="modal-transfer" wallet={wallet} onClose={() => setShowTransfer(false)} />}
       </AnimatePresence>
       <AnimatePresence>
-        {showTripay && <TripayModal key={`modal-tripay-${tripayInitialKind}`} wallet={wallet} initialKind={tripayInitialKind} onClose={() => setShowTripay(false)} />}
+        {showTripayTelco && <TripayModal key="modal-tripay-telco" wallet={wallet} initialKind="pulsa" onClose={() => setShowTripayTelco(false)} />}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showTripayPLN && <TripayModal key="modal-tripay-pln" wallet={wallet} initialKind="electricity" onClose={() => setShowTripayPLN(false)} />}
       </AnimatePresence>
 
       {/* Wallet Card */}
@@ -2007,7 +1883,7 @@ export default function WargaRwcoin() {
 
           <div className="space-y-1 pt-1">
             <p className="text-sm font-semibold text-[hsl(163,55%,22%)]">Produk Digital</p>
-            <p className="text-xs text-muted-foreground">Alurnya sekarang lebih sederhana: isi tujuan, pilih nominal, lalu konfirmasi.</p>
+            <p className="text-xs text-muted-foreground">Isi nomor tujuan, pilih nominal, lalu konfirmasi. Saldo langsung terpotong otomatis.</p>
           </div>
 
           <div className="space-y-3">
@@ -2015,7 +1891,7 @@ export default function WargaRwcoin() {
               <button
                 className="w-full rounded-2xl p-4 text-left text-white shadow-sm"
                 style={{ background: "linear-gradient(135deg, hsl(200,70%,32%), hsl(180,70%,40%))" }}
-                onClick={() => { setTripayInitialKind("pulsa"); setShowTripay(true); }}
+                onClick={() => setShowTripayTelco(true)}
                 disabled={!wallet || wallet.saldo <= 0}
               >
                 <div className="flex items-start justify-between gap-3">
@@ -2032,7 +1908,7 @@ export default function WargaRwcoin() {
               <button
                 className="w-full rounded-2xl p-4 text-left text-white shadow-sm"
                 style={{ background: "linear-gradient(135deg, hsl(38,92%,42%), hsl(48,90%,54%))" }}
-                onClick={() => { setTripayInitialKind("electricity"); setShowTripay(true); }}
+                onClick={() => setShowTripayPLN(true)}
                 disabled={!wallet || wallet.saldo <= 0}
               >
                 <div className="flex items-start justify-between gap-3">
@@ -2089,12 +1965,12 @@ export default function WargaRwcoin() {
 
           <Card className="border-0 shadow-sm" style={{ backgroundColor: "hsl(163,55%,97%)" }}>
             <CardContent className="p-4">
-              <h3 className="font-semibold text-sm text-[hsl(163,55%,22%)] mb-2">Supaya Tidak Bingung</h3>
+              <h3 className="font-semibold text-sm text-[hsl(163,55%,22%)] mb-2">Panduan Singkat</h3>
               <ol className="space-y-1.5">
                 {[
-                  "Untuk pulsa atau data: cukup isi nomor HP, lalu pilih nominal.",
-                  "Untuk token listrik: isi nomor HP kontak dan nomor meter dengan teliti.",
-                  "Kalau pembelian masih pending, buka tab Riwayat lalu cek status sampai sukses atau refund.",
+                  "Pulsa / paket data: isi nomor HP tujuan → pilih nominal → konfirmasi.",
+                  "Token listrik: isi nomor meter PLN → isi nomor HP kontak → pilih nominal token.",
+                  "Status masih pending? Buka tab Riwayat dan tap 'Cek Status'.",
                 ].map((tip, i) => (
                   <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
                     <span className="w-4 h-4 rounded-full bg-[hsl(163,55%,22%)] text-white text-[10px] flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
