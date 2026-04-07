@@ -25,6 +25,7 @@ const fieldLabels: Record<string, string> = {
   statusPerkawinan: "Status Kawin",
   agama: "Agama",
   kedudukanKeluarga: "Kedudukan",
+  tempatLahir: "Tempat Lahir",
   tanggalLahir: "Tanggal Lahir",
   pekerjaan: "Pekerjaan",
   pendidikan: "Pendidikan",
@@ -144,6 +145,7 @@ export default function WargaProfil() {
       statusPerkawinan: w.statusPerkawinan || "",
       agama: w.agama || "",
       kedudukanKeluarga: w.kedudukanKeluarga || "",
+      tempatLahir: w.tempatLahir || "",
       tanggalLahir: w.tanggalLahir || "",
       pekerjaan: w.pekerjaan || "",
       pendidikan: w.pendidikan || "",
@@ -167,6 +169,7 @@ export default function WargaProfil() {
     if (editData.statusPerkawinan !== (w.statusPerkawinan || "")) changes.statusPerkawinan = editData.statusPerkawinan;
     if (editData.agama !== (w.agama || "")) changes.agama = editData.agama;
     if (editData.kedudukanKeluarga !== (w.kedudukanKeluarga || "")) changes.kedudukanKeluarga = editData.kedudukanKeluarga;
+    if (editData.tempatLahir !== (w.tempatLahir || "")) changes.tempatLahir = editData.tempatLahir;
     if (editData.tanggalLahir !== (w.tanggalLahir || "")) changes.tanggalLahir = editData.tanggalLahir;
     if (editData.pekerjaan !== (w.pekerjaan || "")) changes.pekerjaan = editData.pekerjaan;
     if (editData.pendidikan !== (w.pendidikan || "")) changes.pendidikan = editData.pendidikan;
@@ -545,6 +548,16 @@ export default function WargaProfil() {
                       </Select>
                     </div>
                   </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Tempat Lahir</Label>
+                    <Input
+                      value={editData.tempatLahir}
+                      onChange={(e) => setField("tempatLahir", e.target.value)}
+                      placeholder="Contoh: Bandung"
+                      className="h-10 text-sm"
+                      data-testid={`input-tempat-lahir-${w.id}`}
+                    />
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label className="text-xs font-medium">Tanggal Lahir</Label>
@@ -652,6 +665,15 @@ export default function WargaProfil() {
                       <span className="truncate">{w.pendidikan || <span className="text-muted-foreground">-</span>}</span>
                     </div>
                   </div>
+
+                  {/* Tempat & Tanggal Lahir */}
+                  {(w.tempatLahir || w.tanggalLahir) && (
+                    <div className="text-xs text-muted-foreground">
+                      {w.tempatLahir && w.tanggalLahir
+                        ? `${w.tempatLahir}, ${new Date(w.tanggalLahir).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}`
+                        : w.tempatLahir || (w.tanggalLahir ? new Date(w.tanggalLahir).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }) : "")}
+                    </div>
+                  )}
 
                   {/* Kelamin + Agama */}
                   <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">

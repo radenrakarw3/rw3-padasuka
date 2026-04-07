@@ -58,6 +58,7 @@ type WargaFormValues = {
   statusPerkawinan: string;
   agama: string;
   kedudukanKeluarga: string;
+  tempatLahir: string;
   tanggalLahir: string;
   pekerjaan: string;
   pendidikan: string;
@@ -77,6 +78,7 @@ type WargaWithKk = {
   statusPerkawinan: string;
   agama: string;
   kedudukanKeluarga: string;
+  tempatLahir: string | null;
   tanggalLahir: string | null;
   pekerjaan: string | null;
   pendidikan: string | null;
@@ -97,6 +99,7 @@ const defaultForm: WargaFormValues = {
   statusPerkawinan: "Belum Kawin",
   agama: "Islam",
   kedudukanKeluarga: "Anak",
+  tempatLahir: "",
   tanggalLahir: "",
   pekerjaan: "",
   pendidikan: "",
@@ -116,6 +119,7 @@ function mapWargaToForm(warga: WargaWithKk): WargaFormValues {
     statusPerkawinan: warga.statusPerkawinan || "Belum Kawin",
     agama: warga.agama || "Islam",
     kedudukanKeluarga: warga.kedudukanKeluarga || "Anak",
+    tempatLahir: warga.tempatLahir || "",
     tanggalLahir: warga.tanggalLahir || "",
     pekerjaan: warga.pekerjaan || "",
     pendidikan: warga.pendidikan || "",
@@ -131,6 +135,7 @@ function toWargaPayload(form: WargaFormValues) {
     ...form,
     kkId: parseInt(form.kkId),
     nomorWhatsapp: form.nomorWhatsapp || null,
+    tempatLahir: form.tempatLahir || null,
     tanggalLahir: form.tanggalLahir || null,
     pekerjaan: form.pekerjaan || null,
     pendidikan: form.pendidikan || null,
@@ -652,6 +657,17 @@ function WargaFormFields({
           onChange={(event) => setFormData({ ...formData, nomorWhatsapp: event.target.value })}
           className="h-10"
           data-testid={`input-wa-${testIdPrefix}`}
+        />
+      </div>
+
+      <div className="space-y-1">
+        <Label className="text-sm">Tempat Lahir</Label>
+        <Input
+          value={formData.tempatLahir}
+          onChange={(event) => setFormData({ ...formData, tempatLahir: event.target.value })}
+          placeholder="Contoh: Bandung"
+          className="h-10"
+          data-testid={`input-tempat-lahir-${testIdPrefix}`}
         />
       </div>
 
