@@ -16,5 +16,13 @@ const sslConfig = dbUrl.includes("sslmode=")
 export const pool = new pg.Pool({
   connectionString: dbUrl,
   ...(sslConfig !== undefined && { ssl: sslConfig }),
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
 });
+
+// Cegah crash saat koneksi idle timeout diputus oleh server DB
+pool.on("error", (err) => {
+  console.error("[db] pool error (non-fatal):", err.message);
+});
+
 export const db = drizzle(pool, { schema });

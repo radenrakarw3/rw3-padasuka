@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Edit2, Check, X, MapPin, Clock, Upload, RefreshCw, ChevronDown, ChevronUp, Shield, CheckCircle2, Phone, Briefcase, BookOpen, Wallet } from "lucide-react";
+import { Edit2, Check, X, MapPin, Clock, RefreshCw, ChevronDown, ChevronUp, Shield, CheckCircle2, Phone, Briefcase, BookOpen, Wallet } from "lucide-react";
 import type { KartuKeluarga, Warga, ProfileEditRequest } from "@shared/schema";
 import { pekerjaanOptions, pendidikanOptions, agamaOptions, jenisKelaminOptions, statusPerkawinanOptions, kedudukanKeluargaOptions, statusKependudukanOptions, statusDisabilitasOptions, kondisiKesehatanOptions, penghasilanBulananOptions, kategoriEkonomiOptions } from "@/lib/constants";
 import { useProfileCompleteness } from "@/lib/useProfileCompleteness";
@@ -66,25 +66,16 @@ export default function WargaProfil() {
   const [editData, setEditData] = useState<Record<string, string>>({});
   const [editingEkonomi, setEditingEkonomi] = useState(false);
   const [ekonomiForm, setEkonomiForm] = useState({ penghasilanBulanan: "", kategoriEkonomi: "" });
-  const [uploadingKk, setUploadingKk] = useState(false);
-  const [uploadingKtpId, setUploadingKtpId] = useState<number | null>(null);
-  const [showDokumen, setShowDokumen] = useState(false);
-  const kkFileRef = useRef<HTMLInputElement>(null);
-  const ktpFileRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
-  const { data: kk, isLoading: kkLoading } = useQuery<KartuKeluarga>({
-    ...wargaKkQueryOptions(user?.kkId),
-  });
+  const { data: kk, isLoading: kkLoading } = useQuery(wargaKkQueryOptions(user?.kkId));
 
-  const { data: anggota, isLoading: wargaLoading } = useQuery<Warga[]>({
-    ...wargaAnggotaQueryOptions(user?.kkId),
-  });
+  const { data: anggota, isLoading: wargaLoading } = useQuery(wargaAnggotaQueryOptions(user?.kkId));
 
   const { data: editRequests } = useQuery<ProfileEditRequest[]>({
     queryKey: ["/api/profile-edits"],
   });
 
-  const completeness = useProfileCompleteness(anggota, kk);
+  const completeness = useProfileCompleteness(anggota, kk ?? undefined);
 
   const updateEkonomi = useMutation({
     mutationFn: async () => {
@@ -194,75 +185,6 @@ export default function WargaProfil() {
 
   const getPendingEdit = (wargaId: number) => {
     return editRequests?.find(e => e.wargaId === wargaId && e.status === "pending");
-  };
-
-  const validateFile = (file: File): string | null => {
-    if (file.type !== "application/pdf") return "Hanya file PDF yang diterima untuk KK dan KTP.";
-    if (file.size > 2 * 1024 * 1024) return "File terlalu besar. Maksimal 2MB. Kompres PDF terlebih dahulu.";
-    return null;
-  };
-
-  const handleUploadKk = async (file: File) => {
-    if (!kk) return;
-    const err = validateFile(file);
-    if (err) {
-      toast({ title: "File tidak valid", description: err, variant: "destructive" });
-      if (kkFileRef.current) kkFileRef.current.value = "";
-      return;
-    }
-    setUploadingKk(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch(`/api/upload/kk/${kk.id}`, {
-        method: "POST",
-        body: formData,
-        credentials: "include",
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ message: "Upload gagal" }));
-        throw new Error(err.message);
-      }
-      toast({ title: "Berhasil", description: "Foto KK berhasil diunggah" });
-      queryClient.invalidateQueries({ queryKey: ["/api/kk", user?.kkId] });
-    } catch (err: any) {
-      toast({ title: "Gagal mengunggah", description: err.message, variant: "destructive" });
-    } finally {
-      setUploadingKk(false);
-      if (kkFileRef.current) kkFileRef.current.value = "";
-    }
-  };
-
-  const handleUploadKtp = async (wargaId: number, file: File) => {
-    const err = validateFile(file);
-    if (err) {
-      toast({ title: "File tidak valid", description: err, variant: "destructive" });
-      const input = ktpFileRefs.current[wargaId];
-      if (input) input.value = "";
-      return;
-    }
-    setUploadingKtpId(wargaId);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch(`/api/upload/ktp/${wargaId}`, {
-        method: "POST",
-        body: formData,
-        credentials: "include",
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ message: "Upload gagal" }));
-        throw new Error(err.message);
-      }
-      toast({ title: "Berhasil", description: "Foto KTP berhasil diunggah" });
-      queryClient.invalidateQueries({ queryKey: ["/api/warga/kk", user?.kkId] });
-    } catch (err: any) {
-      toast({ title: "Gagal mengunggah", description: err.message, variant: "destructive" });
-    } finally {
-      setUploadingKtpId(null);
-      const input = ktpFileRefs.current[wargaId];
-      if (input) input.value = "";
-    }
   };
 
   return (
@@ -722,91 +644,6 @@ export default function WargaProfil() {
         );
       })}
 
-      <Card data-testid="card-dokumen">
-        <CardContent className="p-0">
-          <button
-            onClick={() => setShowDokumen(!showDokumen)}
-            className="w-full flex items-center justify-between p-4 text-left"
-            data-testid="button-toggle-dokumen"
-          >
-            <div className="flex items-center gap-2">
-              <Shield className="w-4 h-4 text-muted-foreground" />
-              <span className="text-sm font-semibold">Upload Dokumen</span>
-            </div>
-            {showDokumen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-          </button>
-
-          {showDokumen && (
-            <div className="px-4 pb-4 space-y-4 border-t pt-4">
-              <p className="text-[11px] text-muted-foreground">Dokumen hanya digunakan untuk verifikasi oleh admin dan tidak ditampilkan secara publik.</p>
-
-              <div className="space-y-2">
-                <p className="text-xs font-medium">Kartu Keluarga (KK)</p>
-                <div className="flex items-center gap-3">
-                  <Badge variant={kk?.fotoKk ? "default" : "secondary"} className="text-[10px]">
-                    {kk?.fotoKk ? "Sudah diunggah" : "Belum diunggah"}
-                  </Badge>
-                  <input
-                    ref={kkFileRef}
-                    type="file"
-                    accept="application/pdf"
-                    className="hidden"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) handleUploadKk(f);
-                    }}
-                    data-testid="input-file-kk"
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-xs gap-1 h-7"
-                    disabled={uploadingKk}
-                    onClick={() => kkFileRef.current?.click()}
-                    data-testid="button-upload-kk"
-                  >
-                    {uploadingKk ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
-                    {kk?.fotoKk ? "Ganti" : "Upload"}
-                  </Button>
-                </div>
-              </div>
-
-              {anggota?.map((w) => (
-                <div key={w.id} className="space-y-2">
-                  <p className="text-xs font-medium">KTP — {w.namaLengkap}</p>
-                  <div className="flex items-center gap-3">
-                    <Badge variant={w.fotoKtp ? "default" : "secondary"} className="text-[10px]">
-                      {w.fotoKtp ? "Sudah diunggah" : "Belum diunggah"}
-                    </Badge>
-                    <input
-                      ref={(el) => { ktpFileRefs.current[w.id] = el; }}
-                      type="file"
-                      accept="application/pdf"
-                      className="hidden"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) handleUploadKtp(w.id, f);
-                      }}
-                      data-testid={`input-file-ktp-${w.id}`}
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs gap-1 h-7"
-                      disabled={uploadingKtpId === w.id}
-                      onClick={() => ktpFileRefs.current[w.id]?.click()}
-                      data-testid={`button-upload-ktp-${w.id}`}
-                    >
-                      {uploadingKtpId === w.id ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
-                      {w.fotoKtp ? "Ganti" : "Upload"}
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }
