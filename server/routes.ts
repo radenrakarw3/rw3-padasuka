@@ -12,7 +12,7 @@ import * as XLSX from "xlsx";
 import { storage } from "./storage";
 import { pool } from "./db";
 import { cache, CacheKey, TTL, invalidateWarga, invalidateKk } from "./cache";
-import { insertKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertProfileEditSchema, insertWaBlastSchema, insertPengajuanBansosSchema, insertDonasiCampaignSchema, insertDonasiSchema, insertKasRwSchema, insertPemilikKostSchema, insertWargaSinggahSchema, insertUsahaSchema, insertKaryawanUsahaSchema, insertIzinTetanggaSchema, insertSurveyUsahaSchema, insertProgramRwSchema, insertPesertaProgramSchema } from "@shared/schema";
+import { insertKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertProfileEditSchema, insertWaBlastSchema, insertPengajuanBansosSchema, insertDonasiCampaignSchema, insertDonasiSchema, insertKasRwSchema, insertPemilikKostSchema, insertWargaSinggahSchema, insertUsahaSchema, insertKaryawanUsahaSchema, insertIzinTetanggaSchema, insertSurveyUsahaSchema, insertProgramRwSchema, insertPesertaProgramSchema, insertDenahWilayahSchema, denahWilayahDataSchema } from "@shared/schema";
 import { bulkUpdateTripayProducts, createTripayPurchase, ensureTripaySchema, getTripayOverview, getTripayPublicConfig, handleTripayCallback, listTripayCatalogCategoriesForWarga, listTripayCatalogOperatorsForWarga, listTripayCatalogProductsForWarga, listTripayCategories, listTripayOperators, listTripayProducts, listTripayTransactions, listTripayTransactionsByWargaId, reconcilePendingTripayTransactions, reconcileTripayTransaction, syncTripayProducts, updateTripayCategorySetting, updateTripayOperatorSetting, updateTripayProductSetting } from "./tripay";
 
 function resolveAppVersion() {
@@ -52,6 +52,243 @@ type GeminiOptions = {
   thinkingBudget?: number;
 };
 
+const DEFAULT_DENAH_CENTER = { lat: -6.8736, lng: 107.5548 };
+
+function createEmptyDenahWilayahData() {
+  return denahWilayahDataSchema.parse({
+    meta: {
+      version: 2,
+      basemap: "osm",
+      center: DEFAULT_DENAH_CENTER,
+      zoom: 19,
+    },
+    houses: [],
+    assets: [],
+    lines: [],
+    hazards: [],
+  });
+}
+
+function coerceNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function normalizeLatLng(raw: unknown) {
+  if (!raw || typeof raw !== "object") return null;
+  const lat = coerceNumber((raw as any).lat);
+  const lng = coerceNumber((raw as any).lng);
+  if (lat === null || lng === null) return null;
+  return { lat, lng };
+}
+
+function isValidLatLng(point: { lat: number; lng: number }) {
+  return point.lat >= -90 && point.lat <= 90 && point.lng >= -180 && point.lng <= 180;
+}
+
+function makeLegacyRectanglePolygon(place: any) {
+  const x = coerceNumber(place?.x);
+  const y = coerceNumber(place?.y);
+  const width = coerceNumber(place?.width);
+  const height = coerceNumber(place?.height);
+
+  if ([x, y, width, height].some((value) => value === null)) {
+    return [];
+  }
+
+  return [
+    { lat: y!, lng: x! },
+    { lat: y!, lng: x! + width! },
+    { lat: y! + height!, lng: x! + width! },
+    { lat: y! + height!, lng: x! },
+  ].filter(isValidLatLng);
+}
+
+const wargaBooleanFields = new Set([
+  "ibuHamil",
+  "punyaAktaLahir",
+  "punyaKia",
+  "punyaNpwp",
+  "punyaSim",
+  "punyaPaspor",
+  "sedangSekolah",
+  "sedangKuliah",
+  "punyaUsaha",
+  "punyaBpjsKesehatan",
+  "punyaPenyakitKronis",
+  "butuhPendampinganKesehatan",
+  "lansia",
+  "anakYatimPiatu",
+  "perluBantuanKhusus",
+  "aktifKegiatanRw",
+  "punyaKendaraan",
+]);
+
+const wargaIntegerFields = new Set([
+  "lamaTinggalTahun",
+  "jumlahKendaraan",
+]);
+
+function normalizeProfileEditChanges(changes: Record<string, any>) {
+  return Object.fromEntries(
+    Object.entries(changes).map(([key, value]) => {
+      if (wargaBooleanFields.has(key)) {
+        return [key, value === true || value === "true"];
+      }
+      if (wargaIntegerFields.has(key)) {
+        if (value === "" || value === null || value === undefined) {
+          return [key, null];
+        }
+        const parsed = Number(value);
+        return [key, Number.isFinite(parsed) ? parsed : null];
+      }
+      return [key, value === "" ? null : value];
+    }),
+  );
+}
+
+function normalizeDenahWilayahData(raw: unknown) {
+  const direct = denahWilayahDataSchema.safeParse(raw);
+  if (direct.success) {
+    return direct.data;
+  }
+
+  const legacy = raw && typeof raw === "object" ? (raw as any) : {};
+  const points = Array.isArray(legacy.points) ? legacy.points : [];
+  const pointMap = new Map(
+    points
+      .map((point: any) => {
+        const lat = coerceNumber(point?.y);
+        const lng = coerceNumber(point?.x);
+        if (!point?.id || lat === null || lng === null) return null;
+        if (!isValidLatLng({ lat, lng })) return null;
+        return [String(point.id), { lat, lng }] as const;
+      })
+      .filter(Boolean) as Array<readonly [string, { lat: number; lng: number }]>,
+  );
+
+  const houses = (Array.isArray(legacy.places) ? legacy.places : [])
+    .map((place: any) => {
+      const category = String(place?.category || "");
+      const polygon = makeLegacyRectanglePolygon(place);
+      if (polygon.length < 3) return null;
+      if (!["rumah", "usaha", "kontrakan", "kostan"].includes(category)) return null;
+
+      const kkId = coerceNumber(place?.kkId);
+      const notes = [
+        place?.notes ? String(place.notes) : "",
+        category !== "rumah" ? `Migrasi kategori lama: ${category}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      return {
+        id: String(place?.id || crypto.randomUUID()),
+        type:
+          category === "usaha"
+            ? "usaha"
+            : category === "kostan"
+              ? "kost"
+              : category === "kontrakan"
+                ? "kontrakan"
+                : "rumah",
+        name: String(place?.label || ""),
+        rt: coerceNumber(place?.rt),
+        kkIds: kkId ? [kkId] : [],
+        coordinates: polygon,
+        notes,
+      };
+    })
+    .filter(Boolean);
+
+  const assets = (Array.isArray(legacy.places) ? legacy.places : [])
+    .map((place: any) => {
+      const category = String(place?.category || "");
+      const supportedMap: Record<string, "pju" | "pjg" | "pjl" | "cctv" | "tiang_wifi"> = {
+        pju: "pju",
+        pjg: "pjg",
+        pjl: "pjl",
+        tiang_wifi: "tiang_wifi",
+        tiang_listrik: "tiang_wifi",
+      };
+      const mappedType = supportedMap[category];
+      if (!mappedType) return null;
+
+      const lat = coerceNumber(place?.y);
+      const lng = coerceNumber(place?.x);
+      if (lat === null || lng === null) return null;
+      if (!isValidLatLng({ lat, lng })) return null;
+
+      const notes = [
+        place?.notes ? String(place.notes) : "",
+        category === "tiang_listrik" ? "Migrasi dari kategori lama: tiang_listrik" : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      return {
+        id: String(place?.id || crypto.randomUUID()),
+        type: mappedType,
+        label: String(place?.label || ""),
+        rt: coerceNumber(place?.rt),
+        coordinates: { lat, lng },
+        notes,
+      };
+    })
+    .filter(Boolean);
+
+  const lines = (Array.isArray(legacy.paths) ? legacy.paths : [])
+    .map((path: any) => {
+      const from = pointMap.get(String(path?.fromPointId || ""));
+      const to = pointMap.get(String(path?.toPointId || ""));
+      if (!from || !to) return null;
+
+      const category = String(path?.category || "");
+      const type =
+        category === "sungai"
+          ? "sungai"
+          : category === "drainase"
+            ? "drainase"
+            : "jalan_batas";
+
+      const condition =
+        category === "jalan_rusak"
+          ? "rusak"
+          : type === "jalan_batas"
+            ? "butuh_perhatian"
+            : "baik";
+
+      return {
+        id: String(path?.id || crypto.randomUUID()),
+        type,
+        label: String(path?.label || ""),
+        coordinates: [from, to],
+        condition,
+        notes: ["pjg", "pjl", "jalan", "jalan_rusak"].includes(category)
+          ? `Migrasi kategori lama: ${category}`
+          : "",
+      };
+    })
+    .filter(Boolean);
+
+  return denahWilayahDataSchema.parse({
+    meta: {
+      version: 2,
+      basemap: "osm",
+      center: DEFAULT_DENAH_CENTER,
+      zoom: 19,
+    },
+    houses,
+    assets,
+    lines,
+    hazards: [],
+  });
+}
+
 async function generateWithGemini(prompt: string, options: number | GeminiOptions = 2): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
@@ -72,7 +309,7 @@ async function generateWithGemini(prompt: string, options: number | GeminiOption
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-    let response: Response;
+    let response: globalThis.Response;
     try {
       response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
@@ -114,7 +351,7 @@ async function generateWithGemini(prompt: string, options: number | GeminiOption
       throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
     }
 
-    const data = await response.json();
+    const data: any = await response.json();
     const candidate = data.candidates?.[0];
     const text = candidate?.content?.parts?.[0]?.text || "";
     const finishReason = candidate?.finishReason;
@@ -228,6 +465,11 @@ async function notifyAdmin(message: string) {
 const otpStore = new Map<string, { otp: string; kkId: number; wargaId: number; nomorKk: string; phone: string; expiresAt: number; attempts: number; lastRequestAt: number }>();
 const singgahOtpStore = new Map<string, { otp: string; wargaSinggahId: number; nik: string; phone: string; expiresAt: number; attempts: number; lastRequestAt: number }>();
 const waOtpStore = new Map<string, { otp: string; kkId: number; nomorKk: string; wargaId: number; phone: string; expiresAt: number; attempts: number; lastRequestAt: number }>();
+const LOGIN_OTP_LENGTH = 2;
+
+function generateLoginOtp() {
+  return String(Math.floor(Math.random() * 100)).padStart(LOGIN_OTP_LENGTH, "0");
+}
 
 function normalizePhone(phone: string): string {
   const digits = phone.replace(/\D/g, "");
@@ -494,12 +736,12 @@ const pdfTempPublicDir = path.join(uploadsDir, "pdf-temp");
         return res.status(429).json({ message: "Tunggu 60 detik sebelum meminta OTP lagi" });
       }
 
-      const otp = String(Math.floor(100000 + Math.random() * 900000));
+      const otp = generateLoginOtp();
       const expiresAt = Date.now() + 5 * 60 * 1000;
 
       otpStore.set(nomorKk, { otp, kkId: kk.id, wargaId: target.id, nomorKk: kk.nomorKk, phone: target.nomorWhatsapp, expiresAt, attempts: 0, lastRequestAt: Date.now() });
 
-      const message = `[RW 03 Padasuka]\n\nHalo! Kode masuk akun Anda:\n\n${otp}\n\nBerlaku 5 menit. Demi keamanan akun Anda, jangan bagikan kode ini ke siapapun, termasuk petugas RW.\n\nrw3padasukacimahi.org`;
+      const message = `${otp}\n\nKode login RW03`;
       const sent = await sendWhatsApp(target.nomorWhatsapp, message, 0);
 
       if (!sent) {
@@ -603,12 +845,12 @@ const pdfTempPublicDir = path.join(uploadsDir, "pdf-temp");
       const kk = await storage.getKkById(target.kkId);
       if (!kk) return res.status(404).json({ message: "Data KK tidak ditemukan" });
 
-      const otp = String(Math.floor(100000 + Math.random() * 900000));
+      const otp = generateLoginOtp();
       const expiresAt = Date.now() + 5 * 60 * 1000;
 
       waOtpStore.set(normalized, { otp, kkId: kk.id, nomorKk: kk.nomorKk, wargaId: target.id, phone: target.nomorWhatsapp, expiresAt, attempts: 0, lastRequestAt: Date.now() });
 
-      const message = `[RW 03 Padasuka]\n\nHalo! Kode masuk akun Anda:\n\n${otp}\n\nBerlaku 5 menit. Demi keamanan akun Anda, jangan bagikan kode ini ke siapapun, termasuk petugas RW.\n\nrw3padasukacimahi.org`;
+      const message = `${otp}\n\nKode login RW03`;
       const sent = await sendWhatsApp(target.nomorWhatsapp, message, 0);
 
       if (!sent) return res.status(500).json({ message: "Gagal mengirim OTP. Coba lagi nanti." });
@@ -722,10 +964,10 @@ const pdfTempPublicDir = path.join(uploadsDir, "pdf-temp");
       if (existing && (Date.now() - existing.lastRequestAt) < 60000) {
         return res.status(429).json({ message: "Tunggu 60 detik sebelum meminta OTP lagi" });
       }
-      const otp = String(Math.floor(100000 + Math.random() * 900000));
+      const otp = generateLoginOtp();
       const expiresAt = Date.now() + 5 * 60 * 1000;
       singgahOtpStore.set(nik, { otp, wargaSinggahId: ws.id, nik: ws.nik, phone: ws.nomorWhatsapp, expiresAt, attempts: 0, lastRequestAt: Date.now() });
-      const message = `[RW 03 Padasuka]\n\nHalo! Kode masuk akun Warga Singgah Anda:\n\n${otp}\n\nBerlaku 5 menit. Jangan bagikan kode ini ke siapapun.`;
+      const message = `${otp}\n\nKode login RW03`;
       const sent = await sendWhatsApp(ws.nomorWhatsapp, message, 0);
       if (!sent) {
         return res.status(500).json({ message: "Gagal mengirim OTP. Coba lagi nanti." });
@@ -952,6 +1194,75 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
     }
   });
 
+  app.get("/api/denah-wilayah", requireAdmin, async (_req, res) => {
+    try {
+      const data = await storage.getDenahWilayah();
+      if (!data) {
+        return res.json({
+          nama: "Denah RW 03",
+          data: createEmptyDenahWilayahData(),
+        });
+      }
+      res.json({
+        ...data,
+        data: normalizeDenahWilayahData(data.data),
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Gagal mengambil denah wilayah" });
+    }
+  });
+
+  app.get("/api/denah-wilayah/editor", requireAdmin, async (_req, res) => {
+    try {
+      const [denah, kkList, wargaList] = await Promise.all([
+        storage.getDenahWilayah(),
+        storage.getAllKk(),
+        storage.getAllWarga(),
+      ]);
+
+      const kepalaMap: Record<number, string> = {};
+      const kepalaWaMap: Record<number, string | null> = {};
+      wargaList.forEach((item) => {
+        if (item.kedudukanKeluarga === "Kepala Keluarga") {
+          kepalaMap[item.kkId] = item.namaLengkap;
+          kepalaWaMap[item.kkId] = item.nomorWhatsapp || null;
+        }
+      });
+
+      res.json({
+        map: denah
+          ? { ...denah, data: normalizeDenahWilayahData(denah.data) }
+          : { nama: "Denah RW 03", data: createEmptyDenahWilayahData() },
+        kkOptions: kkList.map((kk) => ({
+          id: kk.id,
+          nomorKk: kk.nomorKk,
+          alamat: kk.alamat,
+          rt: kk.rt,
+          kepalaKeluarga: kepalaMap[kk.id] || null,
+          nomorWhatsapp: kepalaWaMap[kk.id] || null,
+        })),
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Gagal mengambil data editor peta" });
+    }
+  });
+
+  app.put("/api/denah-wilayah", requireAdmin, async (req, res) => {
+    try {
+      const parsed = insertDenahWilayahSchema.parse(req.body);
+      const data = await storage.upsertDenahWilayah({
+        ...parsed,
+        data: normalizeDenahWilayahData(parsed.data),
+      });
+      res.json({
+        ...data,
+        data: normalizeDenahWilayahData(data.data),
+      });
+    } catch (error: any) {
+      res.status(400).json({ message: error.message || "Gagal menyimpan denah wilayah" });
+    }
+  });
+
   app.get("/api/kk", requireAuth, async (req, res) => {
     if (req.session.isAdmin) {
       const key = CacheKey.kkList();
@@ -1108,8 +1419,14 @@ Salam hangat dari pengurus RW 03 Padasuka`;
   app.patch("/api/warga/:id", requireAdmin, async (req, res) => {
     try {
       const wargaId = parseInt(req.params.id as string);
-      const parsed = insertWargaSchema.partial().parse(req.body);
       const before = await storage.getWargaById(wargaId);
+      if (!before) return res.status(404).json({ message: "Warga tidak ditemukan" });
+      const parsed = insertWargaSchema.parse({
+        ...before,
+        ...req.body,
+        id: undefined,
+        createdAt: undefined,
+      });
       const data = await storage.updateWarga(wargaId, parsed);
       if (!data) return res.status(404).json({ message: "Warga tidak ditemukan" });
       const kk = await storage.getKkById(data.kkId);
@@ -1569,7 +1886,7 @@ Salam hangat dari pengurus RW 03 Padasuka`;
     if (!edit) return res.status(404).json({ message: "Edit request tidak ditemukan" });
 
     if (status === "disetujui") {
-      const changes = edit.fieldChanges as Record<string, any>;
+      const changes = normalizeProfileEditChanges(edit.fieldChanges as Record<string, any>);
       await storage.updateWarga(edit.wargaId, changes);
       const fieldList = Object.entries(changes).map(([k, v]) => `- ${k}: ${v}`).join("\n");
       notifyWarga(edit.wargaId, `[RW 03 Padasuka]\n\nPerubahan data profil Wargi telah *DISETUJUI* ✅\n\nData yang diperbarui:\n${fieldList}\n\nCek profil terbaru langsung di web 👉 rw3padasukacimahi.org\n\nHatur nuhun! 🙏`);
@@ -3964,6 +4281,22 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
         sendWhatsApp(noWaFormatted, pesan).catch(() => {});
       }
       res.json({ ok: true, request });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Warga: Cari wallet tujuan transfer berdasarkan nama warga
+  app.get("/api/warga/rwcoin/wallet-search", requireWarga, async (req, res) => {
+    try {
+      const wargaData = await getWargaFromSession(req);
+      if (!wargaData) return res.status(404).json({ message: "Data warga tidak ditemukan" });
+
+      const q = String(req.query.q ?? "").trim();
+      if (q.length < 2) return res.json([]);
+
+      const results = await storage.searchWargaWalletByName(q, wargaData.id);
+      res.json(results);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

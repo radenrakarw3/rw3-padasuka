@@ -47,25 +47,6 @@ Hatur nuhun
 Pengurus RW 03 Padasuka`,
   },
   {
-    label: "Info Iuran",
-    text: `Assalamu'alaikum Wr. Wb.
-
-{gender} {warga} yang terhormat,
-
-Iuran bulanan warga {rtxx} bulan [ISI BULAN] sebesar Rp [ISI NOMINAL] sudah bisa dibayarkan.
-
-Pembayaran bisa melalui:
-- Ketua RT masing-masing
-- Transfer ke rekening: [ISI REKENING]
-
-Mohon bayar sebelum tanggal [ISI BATAS WAKTU] ya.
-
-Cek info warga lainnya di web rw3padasukacimahi.org
-
-Hatur nuhun kerjasamanya!
-Pengurus RW 03 Padasuka`,
-  },
-  {
     label: "Pengumuman Umum",
     text: `Assalamu'alaikum Wr. Wb.
 

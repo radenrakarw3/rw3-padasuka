@@ -431,7 +431,7 @@ const jenisSuratConfigs: JenisSuratConfig[] = [
     value: "Surat Edaran",
     label: "Surat Edaran",
     perihalLabel: "Perihal Edaran",
-    perihalPlaceholder: "Contoh: Jadwal Kerja Bakti, Himbauan Keamanan, Info Pembayaran Iuran",
+    perihalPlaceholder: "Contoh: Jadwal Kerja Bakti, Himbauan Keamanan, Informasi Lingkungan",
     fields: [
       { key: "tujuan", label: "Ditujukan Kepada", placeholder: "Contoh: Seluruh Warga RW 03, Ketua RT 01-07", required: true },
       { key: "isiEdaran", label: "Isi / Pesan Edaran", placeholder: "Jelaskan informasi yang ingin diedarkan", type: "textarea", required: true },

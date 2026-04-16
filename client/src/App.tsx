@@ -10,28 +10,18 @@ const LoginPage = lazy(() => import("@/pages/login"));
 const WargaLayout = lazy(() => import("@/components/warga-layout"));
 const WargaBeranda = lazy(() => import("@/pages/warga/beranda"));
 const WargaProfil = lazy(() => import("@/pages/warga/profil"));
-const WargaLayanan = lazy(() => import("@/pages/warga/layanan"));
-const WargaKeuanganDonasi = lazy(() => import("@/pages/warga/donasi"));
 const WargaRwcoin = lazy(() => import("@/pages/warga/rwcoin"));
 const AdminLayout = lazy(() => import("@/components/admin-layout"));
 const AdminDashboard = lazy(() => import("@/pages/admin/dashboard"));
 const AdminKelolaKK = lazy(() => import("@/pages/admin/kelola-kk"));
 const AdminKelolaWarga = lazy(() => import("@/pages/admin/kelola-warga"));
-const AdminKelolaLaporan = lazy(() => import("@/pages/admin/kelola-laporan"));
-const AdminKelolaSurat = lazy(() => import("@/pages/admin/kelola-surat"));
+const AdminPeta = lazy(() => import("@/pages/admin/peta"));
 const AdminSuratRw = lazy(() => import("@/pages/admin/surat-rw"));
 const AdminProfilEdit = lazy(() => import("@/pages/admin/profil-edit"));
 const AdminWaBlast = lazy(() => import("@/pages/admin/wa-blast"));
-const AdminArsipSurat = lazy(() => import("@/pages/admin/arsip-surat"));
-const AdminBansos = lazy(() => import("@/pages/admin/bansos"));
-const AdminDonasi = lazy(() => import("@/pages/admin/donasi"));
-const AdminKeuangan = lazy(() => import("@/pages/admin/keuangan"));
 const AdminPemilikKost = lazy(() => import("@/pages/admin/kelola-pemilik-kost"));
 const AdminWargaSinggah = lazy(() => import("@/pages/admin/kelola-warga-singgah"));
-const AdminKelolaUsaha = lazy(() => import("@/pages/admin/kelola-usaha"));
-const AdminProgramRw = lazy(() => import("@/pages/admin/program-rw"));
 const AdminRwcoin = lazy(() => import("@/pages/admin/rwcoin"));
-const AdminIuran = lazy(() => import("@/pages/admin/iuran"));
 const SinggahLayout = lazy(() => import("@/components/singgah-layout"));
 const SinggahBeranda = lazy(() => import("@/pages/singgah/beranda"));
 const SinggahLaporan = lazy(() => import("@/pages/singgah/laporan"));
@@ -100,8 +90,6 @@ function WargaRoutes() {
       <Switch>
         <Route path="/warga" component={WargaBeranda} />
         <Route path="/warga/profil" component={WargaProfil} />
-        <Route path="/warga/layanan" component={WargaLayanan} />
-        <Route path="/warga/donasi" component={WargaKeuanganDonasi} />
         <Route path="/warga/rwcoin" component={WargaRwcoin} />
         <Route>{() => <Redirect to="/warga" />}</Route>
       </Switch>
@@ -191,22 +179,14 @@ function AdminRoutes() {
     <AdminLayout>
       <Switch>
         <Route path="/admin" component={AdminDashboard} />
+        <Route path="/admin/peta" component={AdminPeta} />
         <Route path="/admin/kk" component={AdminKelolaKK} />
         <Route path="/admin/warga" component={AdminKelolaWarga} />
-        <Route path="/admin/laporan" component={AdminKelolaLaporan} />
-        <Route path="/admin/surat" component={AdminKelolaSurat} />
         <Route path="/admin/surat-rw" component={AdminSuratRw} />
         <Route path="/admin/profil-edit" component={AdminProfilEdit} />
         <Route path="/admin/wa-blast" component={AdminWaBlast} />
-        <Route path="/admin/arsip-surat" component={AdminArsipSurat} />
-        <Route path="/admin/bansos" component={AdminBansos} />
-        <Route path="/admin/donasi" component={AdminDonasi} />
-        <Route path="/admin/keuangan" component={AdminKeuangan} />
-        <Route path="/admin/iuran" component={AdminIuran} />
         <Route path="/admin/pemilik-kost" component={AdminPemilikKost} />
         <Route path="/admin/warga-singgah" component={AdminWargaSinggah} />
-        <Route path="/admin/usaha" component={AdminKelolaUsaha} />
-        <Route path="/admin/program-rw" component={AdminProgramRw} />
         <Route path="/admin/rwcoin" component={AdminRwcoin} />
         <Route>{() => <Redirect to="/admin" />}</Route>
       </Switch>

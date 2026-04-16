@@ -12,6 +12,7 @@ import type { Warga, KartuKeluarga } from "@shared/schema";
 export interface RequiredField {
   key: string;
   label: string;
+  section?: string;
   /** Fungsi cek custom. Default: nilai tidak kosong dan bukan string kosong */
   check?: (value: unknown) => boolean;
 }
@@ -22,19 +23,33 @@ export interface RequiredField {
  * Anggota lain: hanya nomorWhatsapp & tanggalLahir yang wajib (jika usia >= 16).
  */
 export const REQUIRED_WARGA_FIELDS: RequiredField[] = [
-  { key: "nomorWhatsapp", label: "No. WhatsApp" },
-  { key: "tanggalLahir", label: "Tanggal Lahir" },
-  { key: "pekerjaan", label: "Pekerjaan" },
-  { key: "pendidikan", label: "Pendidikan Terakhir" },
-  { key: "kondisiKesehatan", label: "Kondisi Kesehatan", check: (v) => !!v && v !== "" },
+  { key: "nomorWhatsapp", label: "No. WhatsApp", section: "kontak" },
+  { key: "nomorWhatsappAlternatif", label: "No. WhatsApp Alternatif", section: "kontak" },
+  { key: "tanggalLahir", label: "Tanggal Lahir", section: "identitas" },
+  { key: "golonganDarah", label: "Golongan Darah", section: "identitas" },
+  { key: "kewarganegaraan", label: "Kewarganegaraan", section: "identitas" },
+  { key: "statusEktp", label: "Status e-KTP", section: "dokumen" },
+  { key: "alamatDomisili", label: "Alamat Domisili", section: "domisili" },
+  { key: "statusTinggalIndividu", label: "Status Tinggal", section: "domisili" },
+  { key: "namaKontakDarurat", label: "Nama Kontak Darurat", section: "kontak" },
+  { key: "nomorKontakDarurat", label: "No. Kontak Darurat", section: "kontak" },
+  { key: "pekerjaan", label: "Pekerjaan", section: "pekerjaan" },
+  { key: "statusPekerjaan", label: "Status Pekerjaan", section: "pekerjaan" },
+  { key: "pendidikan", label: "Pendidikan Terakhir", section: "pendidikan" },
+  { key: "keahlian", label: "Keahlian", section: "pendidikan" },
+  { key: "kondisiKesehatan", label: "Kondisi Kesehatan", section: "kesehatan", check: (v) => !!v && v !== "" },
+  { key: "statusDisabilitas", label: "Status Disabilitas", section: "kesehatan", check: (v) => !!v && v !== "" },
+  { key: "punyaBpjsKesehatan", label: "Status BPJS Kesehatan", section: "kesehatan", check: () => true },
+  { key: "statusBansosIndividu", label: "Status Bansos Individu", section: "sosial" },
+  { key: "aktifKegiatanRw", label: "Partisipasi Kegiatan RW", section: "partisipasi", check: () => true },
   // Tambah field wajib baru di sini — cukup satu baris:
   // { key: "namaFieldBaru", label: "Label yang tampil ke warga" },
 ];
 
 /** Field wajib di level KK (bisa diisi warga via upload/form ekonomi) */
 export const REQUIRED_KK_FIELDS: RequiredField[] = [
-  { key: "fotoKk", label: "Scan/Foto KK (PDF)" },
-  { key: "penghasilanBulanan", label: "Penghasilan Bulanan Keluarga" },
+  { key: "fotoKk", label: "Scan/Foto KK (PDF)", section: "dokumen" },
+  { key: "penghasilanBulanan", label: "Penghasilan Bulanan Keluarga", section: "ekonomi" },
 ];
 
 export interface MissingField {

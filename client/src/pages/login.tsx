@@ -17,6 +17,9 @@ interface WaContact {
   kkId?: number;
 }
 
+const LOGIN_OTP_LENGTH = 2;
+const LOGIN_OTP_PLACEHOLDER = "__";
+
 function parseErrorMsg(error: any): string {
   const msg = error.message.includes(":")
     ? error.message.split(":").slice(1).join(":").trim()
@@ -420,17 +423,17 @@ export default function LoginPage() {
           id="otp-input"
           type="text"
           inputMode="numeric"
-          maxLength={6}
-          placeholder="______"
+          maxLength={LOGIN_OTP_LENGTH}
+          placeholder={LOGIN_OTP_PLACEHOLDER}
           value={opts.otpValue}
-          onChange={(e) => opts.setOtpValue(e.target.value.replace(/\D/g, "").slice(0, 6))}
+          onChange={(e) => opts.setOtpValue(e.target.value.replace(/\D/g, "").slice(0, LOGIN_OTP_LENGTH))}
           className="h-14 text-2xl text-center tracking-[0.5em] font-bold"
           data-testid="input-otp"
         />
-        <p className="text-xs text-muted-foreground text-center">Masukkan 6 digit kode dari WhatsApp</p>
+        <p className="text-xs text-muted-foreground text-center">Masukkan 2 digit kode dari WhatsApp</p>
       </div>
 
-      <Button type="submit" className="w-full h-12 text-base font-semibold" disabled={loading || opts.otpValue.length < 6} data-testid="button-verify-otp">
+      <Button type="submit" className="w-full h-12 text-base font-semibold" disabled={loading || opts.otpValue.length < LOGIN_OTP_LENGTH} data-testid="button-verify-otp">
         {loading ? <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Memverifikasi...</span>
           : <span className="flex items-center gap-2"><LogIn className="w-5 h-5" />Masuk</span>}
       </Button>
@@ -658,12 +661,12 @@ export default function LoginPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="singgah-otp" className="text-base font-medium">Kode OTP</Label>
-                    <Input ref={singgahOtpRef} id="singgah-otp" type="text" inputMode="numeric" maxLength={6} placeholder="______"
-                      value={singgahOtp} onChange={(e) => setSinggahOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    <Input ref={singgahOtpRef} id="singgah-otp" type="text" inputMode="numeric" maxLength={LOGIN_OTP_LENGTH} placeholder={LOGIN_OTP_PLACEHOLDER}
+                      value={singgahOtp} onChange={(e) => setSinggahOtp(e.target.value.replace(/\D/g, "").slice(0, LOGIN_OTP_LENGTH))}
                       className="h-14 text-2xl text-center tracking-[0.5em] font-bold" data-testid="input-singgah-otp" />
                     <p className="text-xs text-muted-foreground text-center">Masukkan 2 digit kode dari WhatsApp</p>
                   </div>
-                  <Button type="submit" className="w-full h-12 text-base font-semibold" disabled={loading || singgahOtp.length < 6} data-testid="button-singgah-verify">
+                  <Button type="submit" className="w-full h-12 text-base font-semibold" disabled={loading || singgahOtp.length < LOGIN_OTP_LENGTH} data-testid="button-singgah-verify">
                     {loading ? <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Memverifikasi...</span>
                       : <span className="flex items-center gap-2"><LogIn className="w-5 h-5" />Masuk</span>}
                   </Button>

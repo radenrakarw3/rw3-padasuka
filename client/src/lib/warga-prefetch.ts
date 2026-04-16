@@ -19,7 +19,7 @@ type MitraRwcoinData = Array<Record<string, unknown>>;
 type VoucherRwcoinData = Array<Record<string, unknown>>;
 type PrefetchableQuery = {
   queryKey: QueryKey;
-  queryFn?: (...args: any[]) => Promise<unknown>;
+  queryFn?: ReturnType<typeof getQueryFn<unknown>>;
   staleTime?: number;
 };
 
@@ -47,7 +47,7 @@ export type WargaCoreUser = Pick<AuthUser, "type" | "kkId"> | null | undefined;
 
 export function wargaKkQueryOptions(
   kkId: number | null | undefined,
-): UseQueryOptions<KartuKeluarga | null, Error, KartuKeluarga | null, [string, number | undefined]> {
+): UseQueryOptions<KartuKeluarga | null, Error, KartuKeluarga | null, readonly [string, number | undefined]> {
   return {
     queryKey: ["/api/kk", kkId ?? undefined],
     queryFn: kkQueryFn,
@@ -57,7 +57,7 @@ export function wargaKkQueryOptions(
 
 export function wargaAnggotaQueryOptions(
   kkId: number | null | undefined,
-): UseQueryOptions<Warga[], Error, Warga[], [string, number | undefined]> {
+): UseQueryOptions<Warga[], Error, Warga[], readonly [string, number | undefined]> {
   return {
     queryKey: ["/api/warga/kk", kkId ?? undefined],
     queryFn: anggotaQueryFn,
@@ -65,14 +65,14 @@ export function wargaAnggotaQueryOptions(
   };
 }
 
-export function wargaWalletQueryOptions(): UseQueryOptions<WalletData, Error, WalletData, [string]> {
+export function wargaWalletQueryOptions(): UseQueryOptions<WalletData, Error, WalletData, readonly [string]> {
   return {
     queryKey: ["/api/warga/rwcoin/wallet"],
     queryFn: walletQueryFn,
   };
 }
 
-export function wargaCurhatKuotaQueryOptions(): UseQueryOptions<CurhatKuotaData, Error, CurhatKuotaData, [string]> {
+export function wargaCurhatKuotaQueryOptions(): UseQueryOptions<CurhatKuotaData, Error, CurhatKuotaData, readonly [string]> {
   return {
     queryKey: ["/api/warga/curhat/kuota"],
     queryFn: kuotaQueryFn,
@@ -80,7 +80,7 @@ export function wargaCurhatKuotaQueryOptions(): UseQueryOptions<CurhatKuotaData,
   };
 }
 
-export function wargaMitraQueryOptions(): UseQueryOptions<MitraRwcoinData, Error, MitraRwcoinData, [string]> {
+export function wargaMitraQueryOptions(): UseQueryOptions<MitraRwcoinData, Error, MitraRwcoinData, readonly [string]> {
   return {
     queryKey: ["/api/warga/rwcoin/mitra"],
     queryFn: mitraQueryFn,
@@ -88,7 +88,7 @@ export function wargaMitraQueryOptions(): UseQueryOptions<MitraRwcoinData, Error
   };
 }
 
-export function wargaVoucherQueryOptions(): UseQueryOptions<VoucherRwcoinData, Error, VoucherRwcoinData, [string]> {
+export function wargaVoucherQueryOptions(): UseQueryOptions<VoucherRwcoinData, Error, VoucherRwcoinData, readonly [string]> {
   return {
     queryKey: ["/api/warga/rwcoin/voucher"],
     queryFn: voucherQueryFn,
@@ -133,13 +133,20 @@ export function prefetchWargaCoreData(queryClient: QueryClient, user: WargaCoreU
 
   async function runBatches() {
     if (cancelled) return;
+    const wallet = wargaWalletQueryOptions();
+    const anggota = wargaAnggotaQueryOptions(user.kkId);
+    const kk = wargaKkQueryOptions(user.kkId);
+    const kuota = wargaCurhatKuotaQueryOptions();
+    const mitra = wargaMitraQueryOptions();
+    const voucher = wargaVoucherQueryOptions();
+
     await prefetchBatch(queryClient, [
-      wargaWalletQueryOptions(),
-      wargaAnggotaQueryOptions(user.kkId),
-      wargaKkQueryOptions(user.kkId),
-      wargaCurhatKuotaQueryOptions(),
-      wargaMitraQueryOptions(),
-      wargaVoucherQueryOptions(),
+      { queryKey: wallet.queryKey, queryFn: wallet.queryFn, staleTime: wallet.staleTime },
+      { queryKey: anggota.queryKey, queryFn: anggota.queryFn, staleTime: anggota.staleTime },
+      { queryKey: kk.queryKey, queryFn: kk.queryFn, staleTime: kk.staleTime },
+      { queryKey: kuota.queryKey, queryFn: kuota.queryFn, staleTime: kuota.staleTime },
+      { queryKey: mitra.queryKey, queryFn: mitra.queryFn, staleTime: mitra.staleTime },
+      { queryKey: voucher.queryKey, queryFn: voucher.queryFn, staleTime: voucher.staleTime },
     ]);
   }
 

@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
-import { User, FileText, LogOut, Home, Wallet, Coins } from "lucide-react";
+import { User, LogOut, Home, Coins } from "lucide-react";
 import { prefetchWargaCoreData, wargaWalletQueryOptions } from "@/lib/warga-prefetch";
 import logoGold from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
 
@@ -23,9 +23,7 @@ function GoldCoin({ size = 14 }: { size?: number }) {
 
 const navItems = [
   { path: "/warga", icon: Home, label: "Beranda" },
-  { path: "/warga/layanan", icon: FileText, label: "Layanan" },
   { path: "/warga/rwcoin", icon: Coins, label: "RWcoin" },
-  { path: "/warga/donasi", icon: Wallet, label: "Keuangan" },
   { path: "/warga/profil", icon: User, label: "Profil" },
 ];
 
@@ -33,7 +31,7 @@ export default function WargaLayout({ children }: { children: React.ReactNode })
   const { logout, user } = useAuth();
   const [location, setLocation] = useLocation();
 
-  const { data: wallet } = useQuery<any>({
+  const { data: wallet } = useQuery({
     ...wargaWalletQueryOptions(),
     enabled: user?.type === "warga",
     staleTime: 30000,
@@ -49,31 +47,31 @@ export default function WargaLayout({ children }: { children: React.ReactNode })
   }, [user?.type, user?.kkId]);
 
   return (
-    <div className="min-h-screen flex flex-col bg-background pb-20">
-      <header className="sticky top-0 z-50 bg-[hsl(163,55%,22%)] text-white px-4 py-3 shadow-md">
+    <div className="min-h-screen flex flex-col bg-background pb-24">
+      <header className="sticky top-0 z-50 bg-[hsl(163,55%,22%)] text-white px-4 py-4 shadow-md">
         <div className="flex items-center justify-between gap-2 max-w-lg mx-auto">
           <div className="flex items-center gap-2 min-w-0">
-            <img src={logoGold} alt="Logo RW 03" className="w-8 h-8 object-contain flex-shrink-0" />
+            <img src={logoGold} alt="Logo RW 03" className="w-10 h-10 object-contain flex-shrink-0" />
             <div className="min-w-0">
-              <h1 className="text-sm font-bold truncate" data-testid="text-header-title">RW 03 Padasuka</h1>
-              <p className="text-[10px] text-[hsl(40,30%,80%)] truncate">Sistem Informasi Warga</p>
+              <h1 className="text-base font-bold truncate" data-testid="text-header-title">RW 03 Padasuka</h1>
+              <p className="text-sm text-[hsl(40,30%,80%)] truncate">Portal warga RW 03 Padasuka</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             {wallet != null && (
               <button
                 onClick={() => setLocation("/warga/rwcoin")}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 transition-colors"
+                className="flex min-h-12 items-center gap-2 px-3 py-2 rounded-xl bg-white/15 hover:bg-white/25 transition-colors"
               >
-                <GoldCoin size={15} />
-                <span className="text-xs font-bold" style={{ color: "hsl(40,80%,75%)" }}>
+                <GoldCoin size={18} />
+                <span className="text-sm font-bold" style={{ color: "hsl(40,80%,75%)" }}>
                   {wallet.saldo?.toLocaleString("id-ID")}
                 </span>
               </button>
             )}
             <button
               onClick={async () => { await logout(); setLocation("/"); }}
-              className="flex items-center gap-1 text-xs bg-white/10 px-3 py-2 rounded-md"
+              className="flex min-h-12 items-center gap-2 text-sm font-medium bg-white/10 px-4 py-2 rounded-xl"
               data-testid="button-logout"
             >
               <LogOut className="w-4 h-4" />
@@ -83,12 +81,12 @@ export default function WargaLayout({ children }: { children: React.ReactNode })
         </div>
       </header>
 
-      <main className="flex-1 max-w-lg mx-auto w-full px-4 py-4">
+      <main className="flex-1 max-w-lg mx-auto w-full px-4 py-5">
         {children}
       </main>
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-border shadow-lg">
-        <div className="flex items-center justify-around max-w-lg mx-auto py-1">
+        <div className="flex items-stretch justify-around max-w-lg mx-auto px-2 py-2">
           {navItems.map((item) => {
             const isActive = location === item.path || (item.path !== "/warga" && location.startsWith(item.path));
             const isHome = item.path === "/warga" && location === "/warga";
@@ -97,19 +95,19 @@ export default function WargaLayout({ children }: { children: React.ReactNode })
               <button
                 key={item.path}
                 onClick={() => setLocation(item.path)}
-                className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-lg transition-colors min-w-[60px] ${
+                className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-1 px-2 py-2 rounded-xl transition-colors ${
                   active
-                    ? "text-[hsl(163,55%,22%)]"
+                    ? "bg-[hsl(163,55%,96%)] text-[hsl(163,55%,22%)]"
                     : "text-muted-foreground"
                 }`}
                 data-testid={`nav-${item.label.toLowerCase()}`}
               >
                 <item.icon className={`w-5 h-5 ${active ? "stroke-[2.5]" : ""}`} />
-                <span className={`text-[10px] ${active ? "font-bold" : "font-medium"}`}>
+                <span className={`text-sm leading-none ${active ? "font-bold" : "font-medium"}`}>
                   {item.label}
                 </span>
                 {active && (
-                  <div className="w-4 h-0.5 bg-[hsl(163,55%,22%)] rounded-full" />
+                  <div className="w-5 h-1 bg-[hsl(163,55%,22%)] rounded-full" />
                 )}
               </button>
             );

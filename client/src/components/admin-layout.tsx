@@ -2,31 +2,23 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import {
-  LayoutDashboard, Users, FileText, ClipboardList, ScrollText,
-  MessageSquare, LogOut, Menu, X, Home as HomeIcon, Archive, HandCoins, Heart, Wallet, Building2, UserCheck, Store, CalendarDays, Coins, Receipt
+  LayoutDashboard, Users, ScrollText,
+  MessageSquare, LogOut, Menu, X, Home as HomeIcon, Building2, UserCheck, Coins, Map
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import logoGold from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
 
 const navItems = [
   { path: "/admin", icon: LayoutDashboard, label: "Dashboard" },
+  { path: "/admin/peta", icon: Map, label: "Peta" },
   { path: "/admin/rwcoin", icon: Coins, label: "RWcoin" },
   { path: "/admin/kk", icon: HomeIcon, label: "Kartu Keluarga" },
   { path: "/admin/warga", icon: Users, label: "Data Warga" },
-  { path: "/admin/laporan", icon: ClipboardList, label: "Laporan" },
-  { path: "/admin/surat", icon: FileText, label: "Surat Warga" },
   { path: "/admin/surat-rw", icon: ScrollText, label: "Surat RW" },
-  { path: "/admin/arsip-surat", icon: Archive, label: "Arsip Surat" },
   { path: "/admin/profil-edit", icon: Users, label: "Edit Profil" },
-  { path: "/admin/bansos", icon: HandCoins, label: "Bansos" },
-  { path: "/admin/donasi", icon: Heart, label: "Donasi" },
-  { path: "/admin/keuangan", icon: Wallet, label: "Keuangan" },
-  { path: "/admin/iuran", icon: Receipt, label: "Iuran Warga" },
   { path: "/admin/wa-blast", icon: MessageSquare, label: "WA Blast" },
   { path: "/admin/pemilik-kost", icon: Building2, label: "Pemilik Kost" },
   { path: "/admin/warga-singgah", icon: UserCheck, label: "Warga Singgah" },
-  { path: "/admin/usaha", icon: Store, label: "Kelola Usaha" },
-  { path: "/admin/program-rw", icon: CalendarDays, label: "Program RW" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

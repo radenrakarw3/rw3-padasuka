@@ -1,4 +1,4 @@
-import { eq, and, or, desc, sql, count, gte } from "drizzle-orm";
+import { eq, and, or, desc, sql, count, gte, asc, getTableColumns } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "./db";
 import {
@@ -6,7 +6,7 @@ import {
   profileEditRequest, adminUser, waBlast, pengajuanBansos, donasiCampaign, donasi, kasRw,
   pemilikKost, wargaSinggah, riwayatKontrak,
   usaha, karyawanUsaha, izinTetangga, surveyUsaha, riwayatStiker, monthlySnapshot,
-  programRw, pesertaProgram,
+  programRw, pesertaProgram, denahWilayah,
   mitra, rwcoinWallet, rwcoinTransaksi, mitraVoucher, mitraDiskon, rwcoinWithdraw, rwcoinOtp, rwcoinPendingTransaksi, kasRwcoin, rwcoinTopupRequest, wargaSavedLogin, curhatWarga,
   iuranKk, iuranSetting, rwcoinSettings,
   type KartuKeluarga, type InsertKartuKeluarga,
@@ -33,6 +33,7 @@ import {
   type MonthlySnapshot, type InsertMonthlySnapshot,
   type ProgramRw, type InsertProgramRw,
   type PesertaProgram, type InsertPesertaProgram,
+  type DenahWilayah, type InsertDenahWilayah,
   type Mitra, type RwcoinWallet, type RwcoinTransaksi, type KasRwcoin,
   type MitraVoucher, type MitraDiskon, type RwcoinWithdraw, type RwcoinOtp, type RwcoinPendingTransaksi,
   type RwcoinTopupRequest, type CurhatWarga,
@@ -46,6 +47,21 @@ function normalizeStoredPhone(phone?: string | null): string | null {
   if (digits.startsWith("62")) return `0${digits.slice(2)}`;
   if (digits.startsWith("8")) return `0${digits}`;
   return digits;
+}
+
+function normalizeWargaPayload<T extends Partial<InsertWarga>>(data: T): T {
+  return {
+    ...data,
+    ...(Object.prototype.hasOwnProperty.call(data, "nomorWhatsapp")
+      ? { nomorWhatsapp: normalizeStoredPhone(data.nomorWhatsapp) }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(data, "nomorWhatsappAlternatif")
+      ? { nomorWhatsappAlternatif: normalizeStoredPhone(data.nomorWhatsappAlternatif) }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(data, "nomorKontakDarurat")
+      ? { nomorKontakDarurat: normalizeStoredPhone(data.nomorKontakDarurat) }
+      : {}),
+  };
 }
 
 export interface IStorage {
@@ -208,6 +224,8 @@ export interface IStorage {
   createProgramRw(data: InsertProgramRw): Promise<ProgramRw>;
   updateProgramRw(id: number, data: Partial<InsertProgramRw>): Promise<ProgramRw | undefined>;
   deleteProgramRw(id: number): Promise<void>;
+  getDenahWilayah(): Promise<DenahWilayah | undefined>;
+  upsertDenahWilayah(data: InsertDenahWilayah): Promise<DenahWilayah>;
 
   getPesertaByProgramId(programId: number): Promise<(PesertaProgram & { nomorKk: string | null; alamat: string | null; kepalaKeluarga: string | null })[]>;
   addPesertaProgram(data: InsertPesertaProgram): Promise<PesertaProgram>;
@@ -226,6 +244,7 @@ export interface IStorage {
   getOrCreateMitraWallet(mitraId: number): Promise<RwcoinWallet>;
   getWalletByKode(kodeWallet: string): Promise<RwcoinWallet | undefined>;
   getWargaWalletPreview(kodeWallet: string): Promise<{ kodeWallet: string; namaWarga: string; rt: number } | null>;
+  searchWargaWalletByName(nama: string, excludeWargaId?: number): Promise<{ kodeWallet: string; namaWarga: string; rt: number }[]>;
   getWalletByWargaId(wargaId: number): Promise<RwcoinWallet | undefined>;
   getWalletByMitraId(mitraId: number): Promise<RwcoinWallet | undefined>;
 
@@ -358,6 +377,29 @@ export interface DashboardStats {
 }
 
 export class DatabaseStorage implements IStorage {
+  private denahBootstrapPromise: Promise<void> | null = null;
+
+  private async ensureDenahWilayahTable(): Promise<void> {
+    if (!this.denahBootstrapPromise) {
+      this.denahBootstrapPromise = (async () => {
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS denah_wilayah (
+            id serial PRIMARY KEY,
+            nama text NOT NULL DEFAULT 'Denah RW 03',
+            data jsonb NOT NULL DEFAULT '{}'::jsonb,
+            created_at timestamp DEFAULT now(),
+            updated_at timestamp DEFAULT now()
+          )
+        `);
+      })().catch((error) => {
+        this.denahBootstrapPromise = null;
+        throw error;
+      });
+    }
+
+    await this.denahBootstrapPromise;
+  }
+
   private async ensureRwcoinWalletTx(
     tx: any,
     owner: { ownerType: "warga"; wargaId: number } | { ownerType: "mitra"; mitraId: number },
@@ -470,21 +512,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createWarga(data: InsertWarga): Promise<Warga> {
-    const payload = {
-      ...data,
-      nomorWhatsapp: normalizeStoredPhone(data.nomorWhatsapp),
-    };
+    const payload = normalizeWargaPayload(data);
     const [result] = await db.insert(warga).values(payload).returning();
     return result;
   }
 
   async updateWarga(id: number, data: Partial<InsertWarga>): Promise<Warga | undefined> {
-    const payload = {
-      ...data,
-      ...(Object.prototype.hasOwnProperty.call(data, "nomorWhatsapp")
-        ? { nomorWhatsapp: normalizeStoredPhone(data.nomorWhatsapp) }
-        : {}),
-    };
+    const payload = normalizeWargaPayload(data);
     const [result] = await db.update(warga).set(payload).where(eq(warga.id, id)).returning();
     return result;
   }
@@ -610,24 +644,7 @@ export class DatabaseStorage implements IStorage {
 
   async getWargaByRt(rt: number): Promise<(Warga & { nomorKk: string; rt: number })[]> {
     const results = await db.select({
-      id: warga.id,
-      kkId: warga.kkId,
-      namaLengkap: warga.namaLengkap,
-      nik: warga.nik,
-      nomorWhatsapp: warga.nomorWhatsapp,
-      jenisKelamin: warga.jenisKelamin,
-      statusPerkawinan: warga.statusPerkawinan,
-      agama: warga.agama,
-      kedudukanKeluarga: warga.kedudukanKeluarga,
-      tempatLahir: warga.tempatLahir,
-      tanggalLahir: warga.tanggalLahir,
-      pekerjaan: warga.pekerjaan,
-      pendidikan: warga.pendidikan,
-      statusKependudukan: warga.statusKependudukan,
-      statusDisabilitas: warga.statusDisabilitas,
-      kondisiKesehatan: warga.kondisiKesehatan,
-      ibuHamil: warga.ibuHamil,
-      createdAt: warga.createdAt,
+      ...getTableColumns(warga),
       nomorKk: kartuKeluarga.nomorKk,
       rt: kartuKeluarga.rt,
     }).from(warga)
@@ -638,24 +655,7 @@ export class DatabaseStorage implements IStorage {
 
   async getAllWargaWithKk(): Promise<(Warga & { nomorKk: string; rt: number; alamat: string })[]> {
     const results = await db.select({
-      id: warga.id,
-      kkId: warga.kkId,
-      namaLengkap: warga.namaLengkap,
-      nik: warga.nik,
-      nomorWhatsapp: warga.nomorWhatsapp,
-      jenisKelamin: warga.jenisKelamin,
-      statusPerkawinan: warga.statusPerkawinan,
-      agama: warga.agama,
-      kedudukanKeluarga: warga.kedudukanKeluarga,
-      tempatLahir: warga.tempatLahir,
-      tanggalLahir: warga.tanggalLahir,
-      pekerjaan: warga.pekerjaan,
-      pendidikan: warga.pendidikan,
-      statusKependudukan: warga.statusKependudukan,
-      statusDisabilitas: warga.statusDisabilitas,
-      kondisiKesehatan: warga.kondisiKesehatan,
-      ibuHamil: warga.ibuHamil,
-      createdAt: warga.createdAt,
+      ...getTableColumns(warga),
       nomorKk: kartuKeluarga.nomorKk,
       rt: kartuKeluarga.rt,
       alamat: kartuKeluarga.alamat,
@@ -1086,6 +1086,18 @@ export class DatabaseStorage implements IStorage {
       belum: allWarga.filter(w => !w.nomorWhatsapp).length,
     };
 
+    // Field upload KTP/foto KK tidak lagi ada di schema utama.
+    // Sementara ini dashboard menganggapnya belum terunggah agar endpoint tetap stabil.
+    const ktpOwnership = {
+      punya: 0,
+      belum: totalWarga,
+    };
+
+    const kkFotoOwnership = {
+      punya: 0,
+      belum: totalKk,
+    };
+
     const statusRumah = countByField(allKk, "statusRumah");
     const kondisiBangunan = countByField(allKk, "kondisiBangunan");
     const sumberAir = countByField(allKk, "sumberAir");
@@ -1158,6 +1170,8 @@ export class DatabaseStorage implements IStorage {
     const totalUsahaBerizin = filteredUsaha.filter(u => u.status === "disetujui").length;
     const capaian = {
       waPercent: totalWarga > 0 ? Math.round((waOwnership.punya / totalWarga) * 100) : 0,
+      ktpPercent: totalWarga > 0 ? Math.round((ktpOwnership.punya / totalWarga) * 100) : 0,
+      kkFotoPercent: totalKk > 0 ? Math.round((kkFotoOwnership.punya / totalKk) * 100) : 0,
       bansosPercent: allKk.length > 0 ? Math.round((bansos.penerima / allKk.length) * 100) : 0,
       usahaBerizinPercent: filteredUsaha.length > 0 ? Math.round((totalUsahaBerizin / filteredUsaha.length) * 100) : 0,
       totalUsahaTarget: filteredUsaha.length,
@@ -1926,6 +1940,44 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
+  async getDenahWilayah(): Promise<DenahWilayah | undefined> {
+    await this.ensureDenahWilayahTable();
+    const [result] = await db
+      .select()
+      .from(denahWilayah)
+      .orderBy(desc(denahWilayah.updatedAt), desc(denahWilayah.id))
+      .limit(1);
+    return result;
+  }
+
+  async upsertDenahWilayah(data: InsertDenahWilayah): Promise<DenahWilayah> {
+    await this.ensureDenahWilayahTable();
+    const existing = await this.getDenahWilayah();
+
+    if (existing) {
+      const [updated] = await db
+        .update(denahWilayah)
+        .set({
+          nama: data.nama,
+          data: data.data,
+          updatedAt: new Date(),
+        })
+        .where(eq(denahWilayah.id, existing.id))
+        .returning();
+      return updated;
+    }
+
+    const [created] = await db
+      .insert(denahWilayah)
+      .values({
+        nama: data.nama,
+        data: data.data,
+        updatedAt: new Date(),
+      })
+      .returning();
+    return created;
+  }
+
   async getPesertaByProgramId(programId: number): Promise<(PesertaProgram & { nomorKk: string | null; alamat: string | null; kepalaKeluarga: string | null })[]> {
     const results = await db.select({
       id: pesertaProgram.id,
@@ -2048,6 +2100,37 @@ export class DatabaseStorage implements IStorage {
       .where(eq(warga.id, w.wargaId));
     if (!wargaData) return null;
     return { kodeWallet: kode, namaWarga: wargaData.namaLengkap, rt: wargaData.rt ?? 0 };
+  }
+
+  async searchWargaWalletByName(nama: string, excludeWargaId?: number): Promise<{ kodeWallet: string; namaWarga: string; rt: number }[]> {
+    const keyword = nama.trim().toLowerCase();
+    if (keyword.length < 2) return [];
+
+    const results = await db.select({
+      kodeWallet: rwcoinWallet.kodeWallet,
+      namaWarga: warga.namaLengkap,
+      rt: kartuKeluarga.rt,
+    }).from(warga)
+      .innerJoin(rwcoinWallet, and(
+        eq(rwcoinWallet.ownerType, "warga"),
+        eq(rwcoinWallet.wargaId, warga.id),
+      ))
+      .leftJoin(kartuKeluarga, eq(warga.kkId, kartuKeluarga.id))
+      .where(and(
+        sql`LOWER(${warga.namaLengkap}) LIKE ${`%${keyword}%`}`,
+        excludeWargaId ? sql`${warga.id} <> ${excludeWargaId}` : sql`true`,
+      ))
+      .orderBy(
+        sql`CASE WHEN LOWER(${warga.namaLengkap}) LIKE ${`${keyword}%`} THEN 0 ELSE 1 END`,
+        asc(warga.namaLengkap),
+      )
+      .limit(3);
+
+    return results.map((item) => ({
+      kodeWallet: item.kodeWallet,
+      namaWarga: item.namaWarga,
+      rt: item.rt ?? 0,
+    }));
   }
 
   async getWalletByWargaId(wargaId: number): Promise<RwcoinWallet | undefined> {
@@ -2301,7 +2384,9 @@ export class DatabaseStorage implements IStorage {
     });
 
     const [pengirimData] = await db.select({ nama: warga.namaLengkap }).from(warga).where(eq(warga.id, pengirimWargaId));
-    const [penerimaData] = await db.select({ nama: warga.namaLengkap, noWa: warga.nomorWhatsapp }).from(warga).where(eq(warga.id, walletTujuan.wargaId));
+    const [penerimaData] = walletTujuan.wargaId == null
+      ? []
+      : await db.select({ nama: warga.namaLengkap, noWa: warga.nomorWhatsapp }).from(warga).where(eq(warga.id, walletTujuan.wargaId));
 
     return {
       transaksi,

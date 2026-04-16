@@ -15,6 +15,21 @@ import {
 } from "lucide-react";
 import type { Warga } from "@shared/schema";
 
+type CurhatKuota = {
+  sudahCurhatHariIni: boolean;
+  coinDiberikan: number;
+  balasanGemini: string | null;
+} | null;
+
+type MitraItem = {
+  id: number;
+  namaUsaha: string;
+  kategori: string;
+  rt: number;
+  alamat?: string | null;
+  kodeWallet: string;
+};
+
 function CoinIcon({ size = 16 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 20 20" style={{ display: "inline-block", verticalAlign: "-0.18em", flexShrink: 0 }}>
@@ -260,18 +275,14 @@ export default function WargaBeranda() {
   const [slideDir, setSlideDir] = useState<"fwd" | "bwd">("fwd");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const { data: anggota, isLoading } = useQuery<Warga[]>({
-    ...wargaAnggotaQueryOptions(user?.kkId),
-  });
+  const { data: anggota, isLoading } = useQuery(wargaAnggotaQueryOptions(user?.kkId));
 
-  const { data: kuota } = useQuery<{ sudahCurhatHariIni: boolean; coinDiberikan: number; balasanGemini: string | null }>({
+  const { data: kuota } = useQuery({
     ...wargaCurhatKuotaQueryOptions(),
     enabled: !!user,
   });
 
-  const { data: mitraList = [] } = useQuery<any[]>({
-    ...wargaMitraQueryOptions(),
-  });
+  const { data: mitraData } = useQuery(wargaMitraQueryOptions());
 
   const curhatMutation = useMutation({
     mutationFn: async (itemsList: string[]) => {
@@ -316,7 +327,9 @@ export default function WargaBeranda() {
     ?? anggota?.[0]
   )?.namaLengkap?.split(" ")[0] ?? "Kamu";
 
-  const sudahCurhat = kuota?.sudahCurhatHariIni ?? false;
+  const mitraList = (mitraData ?? []) as MitraItem[];
+  const curhatKuota = kuota as CurhatKuota;
+  const sudahCurhat = curhatKuota?.sudahCurhatHariIni ?? false;
 
   const kontakPenting = [
     { jabatan: "Sekretaris 1", nama: "Pak Iwan", nomor: "082129674194" },
@@ -333,8 +346,8 @@ export default function WargaBeranda() {
   }
 
   // ---- Kartu syukur ----
-  const coinHariIni = hasil ? hasil.coin : (kuota?.coinDiberikan ?? 0);
-  const balasanHariIni = hasil ? hasil.balasan : (kuota?.balasanGemini ?? null);
+  const coinHariIni = hasil ? hasil.coin : (curhatKuota?.coinDiberikan ?? 0);
+  const balasanHariIni = hasil ? hasil.balasan : (curhatKuota?.balasanGemini ?? null);
   const tanggalHariIni = formatTanggalHariIni();
 
   const kat = KATEGORI_SYUKUR[step];
@@ -357,53 +370,53 @@ export default function WargaBeranda() {
       <Card className="border-0 overflow-hidden shadow-sm">
         <button
           onClick={() => setShowDetailCurhat((v) => !v)}
-          className="w-full bg-gradient-to-br from-[hsl(163,55%,22%)] to-[hsl(163,55%,15%)] px-5 py-3.5 flex items-center justify-between"
+          className="w-full bg-gradient-to-br from-[hsl(163,55%,22%)] to-[hsl(163,55%,15%)] px-5 py-4 flex items-center justify-between gap-3"
         >
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-full bg-white/15 flex items-center justify-center flex-shrink-0">
-              <Star className="w-3.5 h-3.5 text-[hsl(40,45%,65%)]" fill="currentColor" />
+            <div className="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center flex-shrink-0">
+              <Star className="w-5 h-5 text-[hsl(40,45%,65%)]" fill="currentColor" />
             </div>
             <div className="text-left">
-              <p className="text-white font-semibold text-sm leading-tight">Jurnal Syukur, {namaDepan}</p>
-              <p className="text-white/50 text-[10px]">{tanggalHariIni}</p>
+              <p className="text-white font-semibold text-base leading-tight">Jurnal Syukur, {namaDepan}</p>
+              <p className="text-white/70 text-sm">{tanggalHariIni}</p>
             </div>
             {coinHariIni > 0 && (
-              <span className="flex items-center gap-1 bg-white/15 rounded-full px-2 py-0.5 text-[10px] text-white/90 font-medium ml-1">
-                +{coinHariIni.toLocaleString("id-ID")} <CoinIcon size={10} />
+              <span className="flex items-center gap-1.5 bg-white/15 rounded-full px-3 py-1 text-sm text-white/90 font-medium ml-1">
+                +{coinHariIni.toLocaleString("id-ID")} <CoinIcon size={12} />
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1 text-white/50 text-[11px]">
+          <div className="flex items-center gap-1 text-white/80 text-sm font-medium">
             <span>{showDetailCurhat ? "Tutup" : "Lihat"}</span>
-            {showDetailCurhat ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            {showDetailCurhat ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </div>
         </button>
         {showDetailCurhat && (
-          <CardContent className="p-4 space-y-3">
-            <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl p-3.5">
+          <CardContent className="p-5 space-y-4">
+            <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl p-4">
               <div className="w-11 h-11 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
                 <CoinIcon size={26} />
               </div>
               <div>
-                <p className="text-[11px] text-amber-700">Hadiah syukur hari ini</p>
+                <p className="text-sm font-medium text-amber-700">Hadiah syukur hari ini</p>
                 <p className="text-xl font-bold text-amber-800 leading-tight">
                   +{coinHariIni.toLocaleString("id-ID")} <span className="text-sm font-semibold">RWcoin</span>
                 </p>
-                <p className="text-[10px] text-amber-600 mt-0.5">Sudah masuk ke dompetmu</p>
+                <p className="text-sm text-amber-700 mt-1">Sudah masuk ke dompet Anda.</p>
               </div>
             </div>
             {balasanHariIni && (
-              <div className="bg-[hsl(163,55%,22%)]/5 border border-[hsl(163,55%,22%)]/15 rounded-xl p-4">
+              <div className="bg-[hsl(163,55%,22%)]/5 border border-[hsl(163,55%,22%)]/15 rounded-2xl p-4">
                 <div className="flex items-start gap-2 mb-2">
-                  <MessageCircleHeart className="w-3.5 h-3.5 text-[hsl(163,55%,22%)] mt-0.5 flex-shrink-0" />
-                  <p className="text-[11px] font-semibold text-[hsl(163,55%,22%)]">Apresiasi untukmu</p>
+                  <MessageCircleHeart className="w-4 h-4 text-[hsl(163,55%,22%)] mt-0.5 flex-shrink-0" />
+                  <p className="text-sm font-semibold text-[hsl(163,55%,22%)]">Pesan apresiasi untuk Anda</p>
                 </div>
-                <p className="text-sm leading-relaxed">{balasanHariIni}</p>
+                <p className="text-base leading-relaxed">{balasanHariIni}</p>
               </div>
             )}
-            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
-              <Lock className="w-3 h-3 flex-shrink-0" />
-              <span>Selesai hari ini. Jurnal besok buka lagi pukul 00:00.</span>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/40 rounded-xl px-4 py-3">
+              <Lock className="w-4 h-4 flex-shrink-0" />
+              <span>Jurnal hari ini sudah selesai. Besok Anda bisa isi lagi mulai pukul 00.00.</span>
             </div>
           </CardContent>
         )}
@@ -420,10 +433,10 @@ export default function WargaBeranda() {
         `}</style>
 
         {/* Header: tanggal + progress */}
-        <div className="bg-gradient-to-br from-[hsl(163,55%,22%)] to-[hsl(163,55%,15%)] px-5 pt-4 pb-4">
+        <div className="bg-gradient-to-br from-[hsl(163,55%,22%)] to-[hsl(163,55%,15%)] px-5 pt-5 pb-4">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-white/60 text-[11px]">{tanggalHariIni}</span>
-            <span className="text-white/60 text-[11px]">{step + 1} dari 5</span>
+            <span className="text-white/80 text-sm">{tanggalHariIni}</span>
+            <span className="text-white/80 text-sm font-medium">Langkah {step + 1} dari 5</span>
           </div>
           {/* Progress bar */}
           <div className="flex gap-1.5">
@@ -451,16 +464,16 @@ export default function WargaBeranda() {
             style={{ background: `${kat.dotColor}10` }}
           >
             <div
-              className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0"
+              className="w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0"
               style={{ background: `${kat.dotColor}20` }}
             >
-              <kat.Icon className="w-7 h-7" style={{ color: kat.dotColor }} />
+              <kat.Icon className="w-8 h-8" style={{ color: kat.dotColor }} />
             </div>
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: kat.dotColor }}>
+              <p className="text-sm font-semibold uppercase tracking-wide" style={{ color: kat.dotColor }}>
                 {kat.label}
               </p>
-              <p className="text-base font-bold text-foreground leading-snug mt-0.5">
+              <p className="text-lg font-bold text-foreground leading-snug mt-1">
                 {[
                   "Apa yang terjadi hari ini yang bikin kamu lega atau senang?",
                   "Siapa yang hadir dan berarti bagimu hari ini?",
@@ -474,6 +487,9 @@ export default function WargaBeranda() {
 
           {/* Textarea */}
           <div className="px-5 py-4">
+            <p className="text-sm text-muted-foreground mb-3">
+              Tulis singkat saja. Satu atau dua kalimat sudah cukup.
+            </p>
             <Textarea
               ref={textareaRef}
               value={items[step]}
@@ -484,10 +500,10 @@ export default function WargaBeranda() {
               }}
               placeholder={kat.placeholder}
               rows={4}
-              className="text-sm resize-none leading-relaxed w-full border-muted-foreground/20 focus:border-[hsl(163,55%,22%)]/50"
+              className="resize-none leading-relaxed w-full border-muted-foreground/20 focus:border-[hsl(163,55%,22%)]/50"
               disabled={curhatMutation.isPending}
             />
-            <p className="text-[10px] text-muted-foreground mt-1.5">
+            <p className="text-sm text-muted-foreground mt-2">
               {[
                 "Contoh: rapat lancar, dapat rezeki tak terduga, sembuh dari sakit...",
                 "Contoh: teman yang menghibur, keluarga yang menemani, tetangga yang baik...",
@@ -500,7 +516,7 @@ export default function WargaBeranda() {
 
           {/* Error */}
           {curhatMutation.isError && isLastStep && (
-            <p className="text-xs text-destructive px-5 pb-2">{(curhatMutation.error as Error).message}</p>
+            <p className="text-sm text-destructive px-5 pb-2">{(curhatMutation.error as Error).message}</p>
           )}
 
           {/* Navigation */}
@@ -508,7 +524,8 @@ export default function WargaBeranda() {
             {step > 0 ? (
               <Button
                 variant="outline"
-                className="flex-1 h-12 gap-2"
+                size="warga"
+                className="flex-1 gap-2"
                 onClick={goPrev}
                 disabled={curhatMutation.isPending}
               >
@@ -520,7 +537,8 @@ export default function WargaBeranda() {
 
             {!isLastStep ? (
               <Button
-                className="flex-1 h-12 gap-2 font-semibold"
+                size="warga"
+                className="flex-1 gap-2"
                 style={{ background: stepFilled ? kat.dotColor : undefined }}
                 onClick={goNext}
                 disabled={!stepFilled}
@@ -529,7 +547,8 @@ export default function WargaBeranda() {
               </Button>
             ) : (
               <Button
-                className="flex-1 h-12 gap-2 bg-[hsl(163,55%,22%)] hover:bg-[hsl(163,55%,18%)] text-white font-semibold"
+                size="warga"
+                className="flex-1 gap-2 bg-[hsl(163,55%,22%)] hover:bg-[hsl(163,55%,18%)] text-white"
                 onClick={() => curhatMutation.mutate(items)}
                 disabled={curhatMutation.isPending || !stepFilled}
               >
@@ -552,7 +571,7 @@ export default function WargaBeranda() {
   const mitraHalaman = mitraFiltered.slice((halamanMitra - 1) * MITRA_PER_PAGE, halamanMitra * MITRA_PER_PAGE);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {celebration && (
         <CelebrationOverlay
           coin={celebration.coin}
@@ -563,46 +582,47 @@ export default function WargaBeranda() {
 
       {/* Banner UMKM */}
       <Card className="border-0 shadow-sm overflow-hidden">
-        <div className="bg-gradient-to-br from-[hsl(40,45%,55%)] to-[hsl(40,45%,45%)] px-5 py-4 flex items-center justify-between gap-3">
+        <div className="bg-gradient-to-br from-[hsl(40,45%,55%)] to-[hsl(40,45%,45%)] px-5 py-5 flex items-center justify-between gap-3">
           <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
-              <ShoppingBag className="w-5 h-5 text-white" />
+            <div className="w-11 h-11 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+              <ShoppingBag className="w-6 h-6 text-white" />
             </div>
             <div>
-              <p className="text-white font-bold text-sm leading-tight">Ayo Belanja di UMKM RW 03!</p>
-              <p className="text-white/80 text-[11px] mt-0.5 leading-relaxed">
-                Dukung usaha warga sekitar — bayar pakai RWcoin, dapat keuntungan lebih!
+              <p className="text-white font-bold text-lg leading-tight">Belanja di UMKM RW 03</p>
+              <p className="text-white/90 text-sm mt-1 leading-relaxed">
+                Dukung usaha tetangga sekitar. Anda bisa bayar pakai RWcoin dengan lebih mudah.
               </p>
             </div>
           </div>
-          <button
+          <Button
             onClick={() => setLocation("/warga/rwcoin")}
-            className="flex-shrink-0 bg-white text-[hsl(40,45%,40%)] font-semibold text-[11px] px-3 py-2 rounded-lg hover:bg-white/90 transition-colors whitespace-nowrap"
+            size="warga"
+            className="flex-shrink-0 bg-white text-[hsl(40,45%,40%)] hover:bg-white/90 whitespace-nowrap"
           >
-            Belanja Sekarang
-          </button>
+            Buka RWcoin
+          </Button>
         </div>
       </Card>
 
       {/* Daftar Mitra RWcoin */}
       <Card className="border-0 shadow-sm">
-        <CardContent className="p-4">
+        <CardContent className="p-5">
           <div className="flex items-center gap-2 mb-3">
-            <Store className="w-4 h-4 text-[hsl(163,55%,22%)]" />
-            <h3 className="font-semibold text-sm text-[hsl(163,55%,22%)]">Mitra RWcoin</h3>
+            <Store className="w-5 h-5 text-[hsl(163,55%,22%)]" />
+            <h3 className="font-semibold text-lg text-[hsl(163,55%,22%)]">Mitra RWcoin</h3>
             {mitraList.length > 0 && (
-              <span className="ml-auto text-[11px] text-muted-foreground">{mitraFiltered.length} toko</span>
+              <span className="ml-auto text-sm text-muted-foreground">{mitraFiltered.length} toko</span>
             )}
           </div>
           <div className="flex items-center justify-between mb-3">
-            <p className="text-[11px] text-muted-foreground">
-              Toko & usaha warga yang menerima pembayaran RWcoin.
+            <p className="text-sm text-muted-foreground">
+              Toko dan usaha warga yang menerima pembayaran RWcoin.
             </p>
             <a
               href="https://wa.me/62895424577140?text=Halo%20Admin%2C%20saya%20ingin%20mendaftarkan%20usaha%20saya%20sebagai%20Mitra%20RWcoin%20RW%2003%20Padasuka."
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-shrink-0 ml-3 flex items-center gap-1.5 text-[11px] font-semibold text-white bg-[hsl(163,55%,22%)] hover:bg-[hsl(163,55%,18%)] rounded-full px-3 py-1.5 transition-colors"
+              className="flex-shrink-0 ml-3 flex min-h-11 items-center gap-1.5 text-sm font-semibold text-white bg-[hsl(163,55%,22%)] hover:bg-[hsl(163,55%,18%)] rounded-full px-4 py-2 transition-colors"
             >
               <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
@@ -614,12 +634,12 @@ export default function WargaBeranda() {
 
           {/* Filter Kategori */}
           {kategoriList.length > 1 && (
-            <div className="flex gap-1.5 flex-wrap mb-3">
+            <div className="flex gap-2 flex-wrap mb-4">
               {kategoriList.map((k) => (
                 <button
                   key={k}
                   onClick={() => { setFilterKategori(k); setHalamanMitra(1); }}
-                  className={`px-3 py-1 rounded-full text-[11px] font-medium transition-colors ${
+                  className={`min-h-11 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                     filterKategori === k
                       ? "bg-[hsl(163,55%,22%)] text-white"
                       : "bg-muted text-muted-foreground hover:bg-muted/80"
@@ -640,26 +660,26 @@ export default function WargaBeranda() {
           ) : mitraHalaman.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">Tidak ada mitra di kategori ini</p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {mitraHalaman.map((m: any) => (
-                <div key={m.id} className="flex items-start gap-3 py-2.5 border-b last:border-0">
-                  <div className="w-9 h-9 rounded-full bg-[hsl(163,55%,22%)] text-white flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">
+                <div key={m.id} className="flex items-start gap-3 py-3 border-b last:border-0">
+                  <div className="w-11 h-11 rounded-full bg-[hsl(163,55%,22%)] text-white flex items-center justify-center text-base font-bold flex-shrink-0 mt-0.5">
                     {m.namaUsaha[0]}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold leading-tight truncate">{m.namaUsaha}</p>
-                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                      <span className="text-[10px] bg-[hsl(163,55%,22%)]/10 text-[hsl(163,55%,22%)] px-2 py-0.5 rounded-full font-medium">{m.kategori}</span>
-                      <span className="text-[11px] text-muted-foreground">RT {String(m.rt).padStart(2, "0")}</span>
+                    <p className="text-base font-semibold leading-tight truncate">{m.namaUsaha}</p>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <span className="text-sm bg-[hsl(163,55%,22%)]/10 text-[hsl(163,55%,22%)] px-3 py-1 rounded-full font-medium">{m.kategori}</span>
+                      <span className="text-sm text-muted-foreground">RT {String(m.rt).padStart(2, "0")}</span>
                     </div>
                     {m.alamat && (
-                      <div className="flex items-center gap-1 mt-0.5">
-                        <MapPin className="w-2.5 h-2.5 text-muted-foreground flex-shrink-0" />
-                        <p className="text-[11px] text-muted-foreground truncate">{m.alamat}</p>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <MapPin className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                        <p className="text-sm text-muted-foreground truncate">{m.alamat}</p>
                       </div>
                     )}
                   </div>
-                  <p className="text-[11px] font-mono text-muted-foreground flex-shrink-0 mt-1">{m.kodeWallet}</p>
+                  <p className="text-sm font-mono text-muted-foreground flex-shrink-0 mt-1">{m.kodeWallet}</p>
                 </div>
               ))}
             </div>
@@ -671,15 +691,15 @@ export default function WargaBeranda() {
               <button
                 onClick={() => setHalamanMitra((p) => Math.max(1, p - 1))}
                 disabled={halamanMitra === 1}
-                className="flex items-center gap-1 text-xs font-medium text-[hsl(163,55%,22%)] disabled:text-muted-foreground disabled:cursor-not-allowed"
+                className="flex min-h-11 items-center gap-1 rounded-xl px-3 text-sm font-medium text-[hsl(163,55%,22%)] disabled:text-muted-foreground disabled:cursor-not-allowed"
               >
                 <ChevronLeft className="w-4 h-4" /> Sebelumnya
               </button>
-              <span className="text-xs text-muted-foreground">{halamanMitra} / {totalHalamanMitra}</span>
+              <span className="text-sm text-muted-foreground">Halaman {halamanMitra} / {totalHalamanMitra}</span>
               <button
                 onClick={() => setHalamanMitra((p) => Math.min(totalHalamanMitra, p + 1))}
                 disabled={halamanMitra === totalHalamanMitra}
-                className="flex items-center gap-1 text-xs font-medium text-[hsl(163,55%,22%)] disabled:text-muted-foreground disabled:cursor-not-allowed"
+                className="flex min-h-11 items-center gap-1 rounded-xl px-3 text-sm font-medium text-[hsl(163,55%,22%)] disabled:text-muted-foreground disabled:cursor-not-allowed"
               >
                 Berikutnya <ChevronRight className="w-4 h-4" />
               </button>
@@ -690,26 +710,26 @@ export default function WargaBeranda() {
 
       {/* Nomor Penting Perangkat RW */}
       <Card className="border-0 shadow-sm">
-        <CardContent className="p-4">
+        <CardContent className="p-5">
           <div className="flex items-center gap-2 mb-3">
-            <Phone className="w-4 h-4 text-[hsl(163,55%,22%)]" />
-            <h3 className="font-semibold text-sm text-[hsl(163,55%,22%)]">Kontak Perangkat RW 03</h3>
+            <Phone className="w-5 h-5 text-[hsl(163,55%,22%)]" />
+            <h3 className="font-semibold text-lg text-[hsl(163,55%,22%)]">Kontak Perangkat RW 03</h3>
           </div>
-          <p className="text-[11px] text-muted-foreground mb-3">
-            Hubungi langsung via WhatsApp untuk keperluan administrasi, keamanan, atau layanan warga.
+          <p className="text-sm text-muted-foreground mb-4">
+            Hubungi lewat WhatsApp untuk keperluan administrasi umum, keamanan, atau koordinasi warga.
           </p>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {kontakPenting.map((k) => (
-              <div key={k.nomor} className="flex items-center justify-between py-2 border-b last:border-0">
+              <div key={k.nomor} className="flex items-center justify-between py-3 border-b last:border-0">
                 <div>
-                  <p className="text-sm font-medium leading-tight">{k.nama}</p>
-                  <p className="text-[11px] text-muted-foreground">{k.jabatan}</p>
+                  <p className="text-base font-medium leading-tight">{k.nama}</p>
+                  <p className="text-sm text-muted-foreground mt-1">{k.jabatan}</p>
                 </div>
                 <a
                   href={toWaLink(k.nomor)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 text-[11px] font-medium text-white bg-[hsl(163,55%,22%)] hover:bg-[hsl(163,55%,18%)] rounded-full px-3 py-1.5 transition-colors flex-shrink-0"
+                  className="flex min-h-11 items-center gap-1.5 text-sm font-medium text-white bg-[hsl(163,55%,22%)] hover:bg-[hsl(163,55%,18%)] rounded-full px-4 py-2 transition-colors flex-shrink-0"
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>

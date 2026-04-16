@@ -148,14 +148,13 @@ function BayarModal({ wallet, initialVoucherKode, onClose }: { wallet: any; init
   const mitraIdStr = String(mitraSelected?.id ?? "");
   const today = new Date().toISOString().split("T")[0];
 
-  const numpadKeysBayar = ["1","2","3","4","5","6","7","8","9","","0","del"];
-  function handleNumKeyBayar(k: string) {
-    if (k === "del") { setDigits(d => d.slice(0, -1)); }
-    else if (digits.length < 8) {
-      const next = digits + k;
-      if (parseInt(next) <= saldo) setDigits(next);
-      else setDigits(String(saldo));
+  function handleJumlahBayarChange(value: string) {
+    const cleaned = value.replace(/\D/g, "").slice(0, 8);
+    if (!cleaned) {
+      setDigits("");
+      return;
     }
+    setDigits(cleaned);
   }
   function addPresetBayar(n: number) { setDigits(String(Math.min(jumlahAngka + n, saldo))); }
 
@@ -300,6 +299,16 @@ function BayarModal({ wallet, initialVoucherKode, onClose }: { wallet: any; init
               {/* Nominal — amount display */}
               <div className="text-center py-2">
                 <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Nominal Bayar</p>
+                <div className="mb-3">
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="Masukkan nominal"
+                    value={digits}
+                    onChange={(e) => handleJumlahBayarChange(e.target.value)}
+                    className="h-12 text-center text-lg font-semibold border-2 focus:border-[hsl(163,55%,22%)]"
+                  />
+                </div>
                 <motion.div key={digits} initial={{ scale: 0.94 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 500, damping: 24 }}>
                   <p className={`text-5xl font-black tracking-tight ${saldoKurang ? "text-red-500" : jumlahAngka > 0 ? "text-[hsl(163,55%,22%)]" : "text-gray-300"}`}>
                     {formatCoin(jumlahAngka || 0)}
@@ -323,18 +332,6 @@ function BayarModal({ wallet, initialVoucherKode, onClose }: { wallet: any; init
                     Maks
                   </motion.button>
                 )}
-              </div>
-
-              {/* Numpad */}
-              <div className="grid grid-cols-3 gap-2">
-                {numpadKeysBayar.map((k, idx) => (
-                  <motion.button key={idx} whileTap={{ scale: 0.85, backgroundColor: k === "del" ? "#fee2e2" : "#d1fae5" }}
-                    onClick={() => k && handleNumKeyBayar(k)} disabled={!k}
-                    className={`h-13 rounded-2xl text-xl font-bold select-none transition-colors ${k === "del" ? "bg-red-50 text-red-400 hover:bg-red-100" : !k ? "invisible" : "bg-gray-100 text-gray-800 hover:bg-gray-200"}`}
-                    style={{ height: "52px" }}>
-                    {k === "del" ? "⌫" : k}
-                  </motion.button>
-                ))}
               </div>
 
               {/* Voucher */}
@@ -1302,13 +1299,25 @@ function TripayModal({ wallet, onClose, initialKind = "pulsa" }: { wallet: any; 
                     <div className="space-y-2">
                       <div className="flex items-center justify-between px-0.5">
                         <p className="text-sm font-semibold">{isPlnFlow ? "3. Pilih nominal token" : "Pilih nominal"}</p>
-                        <p className="text-xs text-muted-foreground">{filteredProducts.length} pilihan</p>
+                        {selected ? (
+                          <button
+                            type="button"
+                            onClick={() => setSelected(null)}
+                            className="text-xs font-medium text-[hsl(163,55%,22%)]"
+                          >
+                            Ganti paket
+                          </button>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">{filteredProducts.length} pilihan</p>
+                        )}
                       </div>
                       <div className="space-y-2">
-                        {filteredProducts.map((product: any) => (
+                        {(selected ? [selected] : filteredProducts).map((product: any) => (
                           <button
                             key={product.id ?? product.productCode}
-                            onClick={() => setSelected(selected?.productCode === product.productCode ? null : product)}
+                            onClick={() => {
+                              if (!selected) setSelected(product);
+                            }}
                             className={`w-full rounded-2xl border-2 p-3.5 text-left transition-all ${selected?.productCode === product.productCode ? "border-[hsl(163,55%,22%)] bg-[hsl(163,55%,97%)] shadow-sm" : "border-gray-200 bg-white"}`}
                           >
                             <div className="flex items-center justify-between gap-3">
@@ -1323,6 +1332,12 @@ function TripayModal({ wallet, onClose, initialKind = "pulsa" }: { wallet: any; 
                                 <p className="text-[10px] text-muted-foreground">{formatRp(product.hargaJual)}</p>
                               </div>
                             </div>
+                            {selected?.productCode === product.productCode && (
+                              <div className="mt-2 flex items-center justify-between border-t border-green-200 pt-2">
+                                <p className="text-[11px] font-medium text-[hsl(163,55%,22%)]">Paket dipilih</p>
+                                <span className="text-[11px] text-muted-foreground">Daftar lain disembunyikan</span>
+                              </div>
+                            )}
                           </button>
                         ))}
                       </div>
@@ -1412,42 +1427,42 @@ function TripayModal({ wallet, onClose, initialKind = "pulsa" }: { wallet: any; 
 function TransferModal({ wallet, onClose }: { wallet: any; onClose: () => void }) {
   const { toast } = useToast();
   const [step, setStep] = useState<"form" | "sukses">("form");
-  const [kodeWallet, setKodeWallet] = useState("");
+  const [namaPenerima, setNamaPenerima] = useState("");
+  const [selectedPenerima, setSelectedPenerima] = useState<any>(null);
   const [digits, setDigits] = useState("");
   const [keterangan, setKeterangan] = useState("");
   const [suksesTx, setSuksesTx] = useState<any>(null);
 
-  const kodeNorm = kodeWallet.trim().toUpperCase();
-  const kodeLengkap = kodeNorm.length >= 6 && kodeNorm.startsWith("WG");
+  const namaQuery = namaPenerima.trim();
   const jumlahAngka = parseInt(digits) || 0;
   const saldo = wallet?.saldo ?? 0;
   const saldoKurang = jumlahAngka > saldo;
 
-  const { data: previewPenerima, isFetching: loadingPreview } = useQuery<any>({
-    queryKey: ["/api/warga/rwcoin/wallet-preview", kodeNorm],
+  const { data: hasilPencarian = [], isFetching: loadingPencarian } = useQuery<any[]>({
+    queryKey: ["/api/warga/rwcoin/wallet-search", namaQuery],
     queryFn: async () => {
-      const res = await fetch(`/api/warga/rwcoin/wallet-preview/${encodeURIComponent(kodeNorm)}`, { credentials: "include" });
+      const res = await fetch(`/api/warga/rwcoin/wallet-search?q=${encodeURIComponent(namaQuery)}`, { credentials: "include" });
       if (!res.ok) {
         const e = await readJsonSafely<any>(res);
         throw new Error(e.message);
       }
       return readJsonSafely(res);
     },
-    enabled: kodeLengkap,
+    enabled: namaQuery.length >= 2 && !selectedPenerima,
     retry: false,
   });
 
+  const previewPenerima = selectedPenerima;
   const isSendiri = previewPenerima?.kodeWallet === wallet?.kodeWallet;
-  const transferDisabled = !kodeLengkap || !previewPenerima || isSendiri || jumlahAngka < 100 || saldoKurang;
+  const transferDisabled = !previewPenerima || isSendiri || jumlahAngka < 100 || saldoKurang;
 
-  function handleNumKey(k: string) {
-    if (k === "del") {
-      setDigits(d => d.slice(0, -1));
-    } else if (digits.length < 8) {
-      const next = digits + k;
-      if (parseInt(next) <= saldo) setDigits(next);
-      else setDigits(String(saldo));
+  function handleJumlahTransferChange(value: string) {
+    const cleaned = value.replace(/\D/g, "").slice(0, 8);
+    if (!cleaned) {
+      setDigits("");
+      return;
     }
+    setDigits(cleaned);
   }
   function addPreset(n: number) {
     setDigits(String(Math.min(jumlahAngka + n, saldo)));
@@ -1456,7 +1471,7 @@ function TransferModal({ wallet, onClose }: { wallet: any; onClose: () => void }
   const transferMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/warga/rwcoin/transfer", {
-        kodeWalletTujuan: kodeNorm,
+        kodeWalletTujuan: previewPenerima?.kodeWallet,
         jumlah: jumlahAngka,
         keterangan: keterangan.trim() || undefined,
       });
@@ -1470,9 +1485,6 @@ function TransferModal({ wallet, onClose }: { wallet: any; onClose: () => void }
     },
     onError: (e: any) => toast({ variant: "destructive", title: "Transfer Gagal", description: e.message }),
   });
-
-  const numpadKeys = ["1","2","3","4","5","6","7","8","9","","0","del"];
-
   return (
     <>
       <motion.div
@@ -1552,7 +1564,7 @@ function TransferModal({ wallet, onClose }: { wallet: any; onClose: () => void }
             </motion.div>
           )}
 
-          {/* FORM — numpad layout */}
+          {/* FORM */}
           {step === "form" && (
             <motion.div
               key="transfer-form"
@@ -1565,17 +1577,38 @@ function TransferModal({ wallet, onClose }: { wallet: any; onClose: () => void }
                 <div className="relative">
                   <User className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
                   <Input
-                    placeholder="Kode wallet penerima: WG0001"
-                    value={kodeWallet}
-                    onChange={e => setKodeWallet(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
-                    className="pl-9 uppercase font-mono border-2 focus:border-[hsl(163,55%,22%)] h-11 tracking-widest"
+                    placeholder="Cari nama penerima"
+                    value={namaPenerima}
+                    onChange={e => {
+                      setNamaPenerima(e.target.value);
+                      setSelectedPenerima(null);
+                    }}
+                    className="pl-9 border-2 focus:border-[hsl(163,55%,22%)] h-11"
                     autoFocus
-                    maxLength={8}
+                    maxLength={80}
                   />
-                  {loadingPreview && <Loader2 className="absolute right-3 top-3 w-4 h-4 animate-spin text-muted-foreground" />}
+                  {loadingPencarian && <Loader2 className="absolute right-3 top-3 w-4 h-4 animate-spin text-muted-foreground" />}
                 </div>
+                {!selectedPenerima && namaQuery.length >= 2 && hasilPencarian.length > 0 && (
+                  <div className="mt-2 rounded-xl border border-gray-200 bg-white overflow-hidden">
+                    {hasilPencarian.slice(0, 3).map((item: any) => (
+                      <button
+                        key={item.kodeWallet}
+                        type="button"
+                        onClick={() => {
+                          setSelectedPenerima(item);
+                          setNamaPenerima(item.namaWarga);
+                        }}
+                        className="w-full px-3 py-2.5 text-left hover:bg-green-50 transition border-b border-gray-100 last:border-b-0"
+                      >
+                        <p className="text-sm font-semibold text-foreground">{item.namaWarga}</p>
+                        <p className="text-xs text-muted-foreground">RT {String(item.rt).padStart(2, "0")}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <AnimatePresence>
-                  {kodeLengkap && !loadingPreview && previewPenerima && !isSendiri && (
+                  {previewPenerima && !isSendiri && (
                     <motion.div
                       initial={{ opacity: 0, height: 0, marginTop: 0 }} animate={{ opacity: 1, height: "auto", marginTop: 8 }} exit={{ opacity: 0, height: 0, marginTop: 0 }}
                       transition={{ duration: 0.2 }}
@@ -1586,7 +1619,7 @@ function TransferModal({ wallet, onClose }: { wallet: any; onClose: () => void }
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-green-700">{previewPenerima.namaWarga}</p>
-                        <p className="text-xs text-muted-foreground">RT {String(previewPenerima.rt).padStart(2,"0")} · {previewPenerima.kodeWallet}</p>
+                        <p className="text-xs text-muted-foreground">RT {String(previewPenerima.rt).padStart(2,"0")}</p>
                       </div>
                       <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
                     </motion.div>
@@ -1597,13 +1630,14 @@ function TransferModal({ wallet, onClose }: { wallet: any; onClose: () => void }
                       <p className="text-xs text-red-600">Tidak bisa transfer ke diri sendiri</p>
                     </motion.div>
                   )}
-                  {kodeLengkap && !loadingPreview && !previewPenerima && (
+                  {!selectedPenerima && namaQuery.length >= 2 && !loadingPencarian && hasilPencarian.length === 0 && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-2 flex items-center gap-2 px-3 py-2 rounded-xl bg-red-50 border border-red-200">
                       <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-                      <p className="text-xs text-red-600">Kode wallet tidak ditemukan</p>
+                      <p className="text-xs text-red-600">Nama warga tidak ditemukan</p>
                     </motion.div>
                   )}
                 </AnimatePresence>
+                <p className="mt-2 text-[11px] text-muted-foreground">Pilih dari maksimal 3 nama teratas yang muncul.</p>
               </div>
 
               <div className="h-px bg-gray-100 mx-5" />
@@ -1611,6 +1645,16 @@ function TransferModal({ wallet, onClose }: { wallet: any; onClose: () => void }
               {/* Amount display */}
               <div className="px-5 py-5 text-center">
                 <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Jumlah Transfer</p>
+                <div className="mb-3">
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="Masukkan jumlah"
+                    value={digits}
+                    onChange={(e) => handleJumlahTransferChange(e.target.value)}
+                    className="h-12 text-center text-lg font-semibold border-2 focus:border-[hsl(163,55%,22%)]"
+                  />
+                </div>
                 <motion.div
                   key={digits}
                   initial={{ scale: 0.94 }} animate={{ scale: 1 }}
@@ -1653,25 +1697,6 @@ function TransferModal({ wallet, onClose }: { wallet: any; onClose: () => void }
                     Maks
                   </motion.button>
                 )}
-              </div>
-
-              {/* Numpad */}
-              <div className="grid grid-cols-3 gap-2.5 px-5 pb-3">
-                {numpadKeys.map((k, idx) => (
-                  <motion.button
-                    key={idx}
-                    whileTap={{ scale: 0.85, backgroundColor: k === "del" ? "#fee2e2" : "#d1fae5" }}
-                    onClick={() => k && handleNumKey(k)}
-                    disabled={!k}
-                    className={`h-14 rounded-2xl text-xl font-bold select-none transition-colors ${
-                      k === "del" ? "bg-red-50 text-red-400 hover:bg-red-100" :
-                      !k ? "invisible" :
-                      "bg-gray-100 text-gray-800 hover:bg-gray-200"
-                    }`}
-                  >
-                    {k === "del" ? "⌫" : k}
-                  </motion.button>
-                ))}
               </div>
 
               {/* Saldo setelah + keterangan + CTA */}
@@ -2050,10 +2075,10 @@ export default function WargaRwcoin() {
                     iconBg = "bg-green-100 text-green-600"; Icon = ArrowUpCircle; label = "Topup Saldo";
                   } else if (t.tipe === "donasi") {
                     iconBg = "bg-rose-100 text-rose-600"; Icon = Heart;
-                    label = "Donasi RW"; labelSub = t.keterangan ?? "Campaign RW";
+                    label = "Kontribusi RW"; labelSub = t.keterangan ?? "Transaksi kontribusi";
                   } else if (t.tipe === "iuran") {
                     iconBg = "bg-violet-100 text-violet-600"; Icon = Receipt;
-                    label = "Bayar Iuran"; labelSub = t.keterangan ?? "Kas RW";
+                    label = "Setoran RT"; labelSub = t.keterangan ?? "Transaksi setoran";
                   } else if (isTransferMasuk) {
                     iconBg = "bg-emerald-100 text-emerald-600"; Icon = ArrowDownCircle;
                     label = "Transfer Masuk"; labelSub = t.namaPengirim ? `dari ${t.namaPengirim}` : null;

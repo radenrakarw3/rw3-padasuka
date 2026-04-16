@@ -293,6 +293,126 @@ export const kondisiKesehatanOptions = [
   "Membutuhkan Perawatan Rutin",
 ];
 
+export const statusEktpOptions = [
+  "Sudah Rekam",
+  "Belum Rekam",
+  "Belum Wajib",
+];
+
+export const kewarganegaraanOptions = [
+  "WNI",
+  "WNA",
+];
+
+export const golonganDarahOptions = [
+  "A",
+  "B",
+  "AB",
+  "O",
+  "Tidak Tahu",
+];
+
+export const statusTinggalIndividuOptions = [
+  "Tinggal dengan Orang Tua",
+  "Tinggal dengan Keluarga",
+  "Kontrak/Sewa",
+  "Menumpang",
+  "Asrama",
+  "Kost",
+  "Lainnya",
+];
+
+export const hubunganKontakDaruratOptions = [
+  "Orang Tua",
+  "Pasangan",
+  "Saudara Kandung",
+  "Anak",
+  "Tetangga",
+  "Kerabat",
+  "Lainnya",
+];
+
+export const statusPekerjaanOptions = [
+  "Belum Bekerja",
+  "Mencari Kerja",
+  "Bekerja",
+  "Wiraswasta",
+  "Pelaku Usaha",
+  "Pekerja Lepas",
+  "Ibu Rumah Tangga",
+  "Pelajar/Mahasiswa",
+  "Pensiun",
+];
+
+export const penghasilanPribadiOptions = [
+  "Tidak Ada",
+  "< Rp 500.000",
+  "Rp 500.000 - Rp 1.500.000",
+  "Rp 1.500.000 - Rp 3.000.000",
+  "Rp 3.000.000 - Rp 5.000.000",
+  "> Rp 5.000.000",
+];
+
+export const jenisSimOptions = [
+  "SIM A",
+  "SIM B1",
+  "SIM B2",
+  "SIM C",
+  "SIM D",
+];
+
+export const jenjangSekolahOptions = [
+  "PAUD/TK",
+  "SD/Sederajat",
+  "SMP/Sederajat",
+  "SMA/SMK/Sederajat",
+  "Perguruan Tinggi",
+];
+
+export const semesterOptions = Array.from({ length: 14 }, (_, i) => `Semester ${i + 1}`);
+
+export const statusVerifikasiDataOptions = [
+  "Belum Diverifikasi",
+  "Sudah Diverifikasi",
+  "Perlu Tinjau Ulang",
+];
+
+export const statusBansosIndividuOptions = [
+  "Bukan Penerima",
+  "Penerima",
+  "Diusulkan",
+];
+
+export const jenisBansosIndividuOptions = [
+  "PKH",
+  "BPNT/Sembako",
+  "PBI-JKN",
+  "PIP",
+  "BST",
+  "BLT",
+  "Lainnya",
+];
+
+export const bidangPartisipasiOptions = [
+  "Keamanan",
+  "Kebersihan",
+  "Sosial",
+  "Keagamaan",
+  "Kepemudaan",
+  "Pendidikan",
+  "Kesehatan",
+  "UMKM",
+  "Lainnya",
+];
+
+export const jenisKendaraanOptions = [
+  "Sepeda",
+  "Motor",
+  "Mobil",
+  "Angkutan Usaha",
+  "Lainnya",
+];
+
 export const kategoriProgramOptions = [
   "semua",
   "pemukiman",

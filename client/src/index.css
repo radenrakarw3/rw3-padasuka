@@ -218,3 +218,28 @@
     inset: -1px;
   }
 }
+
+.house-label-tooltip {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+.house-label-tooltip::before {
+  display: none;
+}
+
+.house-label-tooltip .leaflet-tooltip-content {
+  margin: 0;
+}
+
+.house-info-popup .leaflet-popup-content-wrapper {
+  border-radius: 18px;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.16);
+  max-width: 180px;
+}
+
+.house-info-popup .leaflet-popup-content {
+  margin: 8px 10px;
+}
