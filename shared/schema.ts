@@ -183,8 +183,31 @@ export const waBlast = pgTable("wa_blast", {
   filterRt: integer("filter_rt"),
   jumlahPenerima: integer("jumlah_penerima").notNull().default(0),
   jumlahBerhasil: integer("jumlah_berhasil").notNull().default(0),
+  jumlahPending: integer("jumlah_pending").notNull().default(0),
+  jumlahGagal: integer("jumlah_gagal").notNull().default(0),
+  jumlahDilewati: integer("jumlah_dilewati").notNull().default(0),
   status: text("status").notNull().default("pending"),
+  lastError: text("last_error"),
+  startedAt: timestamp("started_at"),
+  finishedAt: timestamp("finished_at"),
   createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const waBlastRecipient = pgTable("wa_blast_recipient", {
+  id: serial("id").primaryKey(),
+  blastId: integer("blast_id").notNull().references(() => waBlast.id),
+  recipientType: text("recipient_type").notNull().default("warga"),
+  recipientId: integer("recipient_id"),
+  nama: text("nama").notNull(),
+  nomorWhatsapp: text("nomor_whatsapp").notNull(),
+  rt: integer("rt"),
+  pesanPersonal: text("pesan_personal").notNull(),
+  status: text("status").notNull().default("pending"),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  lastError: text("last_error"),
+  sentAt: timestamp("sent_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const pengajuanBansos = pgTable("pengajuan_bansos", {
@@ -345,7 +368,19 @@ export const insertSuratWargaSchema = createInsertSchema(suratWarga).omit({ id: 
 export const insertSuratRwSchema = createInsertSchema(suratRw).omit({ id: true, createdAt: true });
 export const insertProfileEditSchema = createInsertSchema(profileEditRequest).omit({ id: true, createdAt: true, status: true });
 export const insertAdminSchema = createInsertSchema(adminUser).omit({ id: true, createdAt: true });
-export const insertWaBlastSchema = createInsertSchema(waBlast).omit({ id: true, createdAt: true, jumlahPenerima: true, jumlahBerhasil: true, status: true });
+export const insertWaBlastSchema = createInsertSchema(waBlast).omit({
+  id: true,
+  createdAt: true,
+  jumlahPenerima: true,
+  jumlahBerhasil: true,
+  jumlahPending: true,
+  jumlahGagal: true,
+  jumlahDilewati: true,
+  status: true,
+  lastError: true,
+  startedAt: true,
+  finishedAt: true,
+});
 export const insertPengajuanBansosSchema = createInsertSchema(pengajuanBansos).omit({ id: true, createdAt: true, status: true });
 export const insertDonasiCampaignSchema = createInsertSchema(donasiCampaign).omit({ id: true, createdAt: true, status: true });
 export const insertDonasiSchema = createInsertSchema(donasi).omit({ id: true, createdAt: true, status: true });
@@ -376,6 +411,8 @@ export type AdminUser = typeof adminUser.$inferSelect;
 export type InsertAdminUser = z.infer<typeof insertAdminSchema>;
 export type WaBlast = typeof waBlast.$inferSelect;
 export type InsertWaBlast = z.infer<typeof insertWaBlastSchema>;
+export type WaBlastRecipient = typeof waBlastRecipient.$inferSelect;
+export type InsertWaBlastRecipient = typeof waBlastRecipient.$inferInsert;
 export type PengajuanBansos = typeof pengajuanBansos.$inferSelect;
 export type InsertPengajuanBansos = z.infer<typeof insertPengajuanBansosSchema>;
 export type DonasiCampaign = typeof donasiCampaign.$inferSelect;

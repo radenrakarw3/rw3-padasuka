@@ -3,7 +3,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { db } from "./db";
 import {
   kartuKeluarga, warga, rtData, laporan, suratWarga, suratRw,
-  profileEditRequest, adminUser, waBlast, pengajuanBansos, donasiCampaign, donasi, kasRw,
+  profileEditRequest, adminUser, waBlast, waBlastRecipient, pengajuanBansos, donasiCampaign, donasi, kasRw,
   pemilikKost, wargaSinggah, riwayatKontrak,
   usaha, karyawanUsaha, izinTetangga, surveyUsaha, riwayatStiker, monthlySnapshot,
   programRw, pesertaProgram, denahWilayah,
@@ -17,7 +17,7 @@ import {
   type SuratRw, type InsertSuratRw,
   type ProfileEditRequest, type InsertProfileEditRequest,
   type AdminUser, type InsertAdminUser,
-  type WaBlast, type InsertWaBlast,
+  type WaBlast, type InsertWaBlast, type WaBlastRecipient, type InsertWaBlastRecipient,
   type PengajuanBansos, type InsertPengajuanBansos,
   type DonasiCampaign, type InsertDonasiCampaign,
   type Donasi, type InsertDonasi,
@@ -106,8 +106,17 @@ export interface IStorage {
   updateProfileEditStatus(id: number, status: string): Promise<ProfileEditRequest | undefined>;
 
   getAllWaBlast(): Promise<WaBlast[]>;
+  getWaBlastById(id: number): Promise<WaBlast | undefined>;
   createWaBlast(data: InsertWaBlast): Promise<WaBlast>;
-  updateWaBlastStatus(id: number, status: string, jumlahPenerima: number, jumlahBerhasil: number): Promise<WaBlast | undefined>;
+  createWaBlastWithRecipients(data: InsertWaBlast, recipients: Omit<InsertWaBlastRecipient, "blastId">[]): Promise<WaBlast>;
+  updateWaBlastStatus(id: number, status: string, jumlahPenerima: number, jumlahBerhasil: number, extra?: Partial<WaBlast>): Promise<WaBlast | undefined>;
+  createWaBlastRecipients(data: InsertWaBlastRecipient[]): Promise<WaBlastRecipient[]>;
+  getWaBlastRecipients(blastId: number): Promise<WaBlastRecipient[]>;
+  getNextWaBlastRecipient(blastId: number): Promise<WaBlastRecipient | undefined>;
+  updateWaBlastRecipient(id: number, data: Partial<WaBlastRecipient>): Promise<WaBlastRecipient | undefined>;
+  resetWaBlastRetryableRecipients(blastId: number): Promise<void>;
+  cancelPendingWaBlastRecipients(blastId: number): Promise<void>;
+  refreshWaBlastSummary(blastId: number, status?: string, lastError?: string | null): Promise<WaBlast | undefined>;
 
   getWargaByRt(rt: number): Promise<(Warga & { nomorKk: string; rt: number })[]>;
   getAllWargaWithKk(): Promise<(Warga & { nomorKk: string; rt: number; alamat: string })[]>;
@@ -632,13 +641,134 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(waBlast).orderBy(desc(waBlast.createdAt));
   }
 
+  async getWaBlastById(id: number): Promise<WaBlast | undefined> {
+    const [result] = await db.select().from(waBlast).where(eq(waBlast.id, id));
+    return result;
+  }
+
   async createWaBlast(data: InsertWaBlast): Promise<WaBlast> {
     const [result] = await db.insert(waBlast).values(data).returning();
     return result;
   }
 
-  async updateWaBlastStatus(id: number, status: string, jumlahPenerima: number, jumlahBerhasil: number): Promise<WaBlast | undefined> {
-    const [result] = await db.update(waBlast).set({ status, jumlahPenerima, jumlahBerhasil }).where(eq(waBlast.id, id)).returning();
+  async createWaBlastWithRecipients(data: InsertWaBlast, recipients: Omit<InsertWaBlastRecipient, "blastId">[]): Promise<WaBlast> {
+    return db.transaction(async (tx) => {
+      const [blast] = await tx.insert(waBlast).values(data).returning();
+      if (recipients.length > 0) {
+        await tx.insert(waBlastRecipient).values(recipients.map(recipient => ({
+          ...recipient,
+          blastId: blast.id,
+        })));
+      }
+      const [updated] = await tx.update(waBlast)
+        .set({
+          status: recipients.length > 0 ? "mengirim" : "selesai",
+          jumlahPenerima: recipients.length,
+          jumlahBerhasil: 0,
+          jumlahPending: recipients.length,
+          jumlahGagal: 0,
+          jumlahDilewati: 0,
+          startedAt: new Date(),
+          finishedAt: recipients.length > 0 ? null : new Date(),
+          lastError: null,
+        })
+        .where(eq(waBlast.id, blast.id))
+        .returning();
+      return updated ?? blast;
+    });
+  }
+
+  async updateWaBlastStatus(id: number, status: string, jumlahPenerima: number, jumlahBerhasil: number, extra: Partial<WaBlast> = {}): Promise<WaBlast | undefined> {
+    const [result] = await db.update(waBlast).set({ ...extra, status, jumlahPenerima, jumlahBerhasil }).where(eq(waBlast.id, id)).returning();
+    return result;
+  }
+
+  async createWaBlastRecipients(data: InsertWaBlastRecipient[]): Promise<WaBlastRecipient[]> {
+    if (data.length === 0) return [];
+    return db.insert(waBlastRecipient).values(data).returning();
+  }
+
+  async getWaBlastRecipients(blastId: number): Promise<WaBlastRecipient[]> {
+    return db.select().from(waBlastRecipient)
+      .where(eq(waBlastRecipient.blastId, blastId))
+      .orderBy(asc(waBlastRecipient.id));
+  }
+
+  async getNextWaBlastRecipient(blastId: number): Promise<WaBlastRecipient | undefined> {
+    const [result] = await db.select().from(waBlastRecipient)
+      .where(and(
+        eq(waBlastRecipient.blastId, blastId),
+        sql`${waBlastRecipient.status} in ('pending', 'retry')`,
+      ))
+      .orderBy(asc(waBlastRecipient.id))
+      .limit(1);
+    return result;
+  }
+
+  async updateWaBlastRecipient(id: number, data: Partial<WaBlastRecipient>): Promise<WaBlastRecipient | undefined> {
+    const [result] = await db.update(waBlastRecipient)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(waBlastRecipient.id, id))
+      .returning();
+    return result;
+  }
+
+  async resetWaBlastRetryableRecipients(blastId: number): Promise<void> {
+    await db.update(waBlastRecipient)
+      .set({ status: "pending", lastError: null, updatedAt: new Date() })
+      .where(and(
+        eq(waBlastRecipient.blastId, blastId),
+        sql`${waBlastRecipient.status} in ('sending', 'retry')`,
+      ));
+  }
+
+  async cancelPendingWaBlastRecipients(blastId: number): Promise<void> {
+    await db.update(waBlastRecipient)
+      .set({ status: "skipped", lastError: "Dibatalkan admin", updatedAt: new Date() })
+      .where(and(
+        eq(waBlastRecipient.blastId, blastId),
+        sql`${waBlastRecipient.status} in ('pending', 'retry', 'sending')`,
+      ));
+  }
+
+  async refreshWaBlastSummary(blastId: number, status?: string, lastError?: string | null): Promise<WaBlast | undefined> {
+    const rows = await db.select({
+      status: waBlastRecipient.status,
+      total: count(),
+    }).from(waBlastRecipient)
+      .where(eq(waBlastRecipient.blastId, blastId))
+      .groupBy(waBlastRecipient.status);
+
+    if (rows.length === 0) {
+      const updateData: Partial<WaBlast> = {};
+      if (status) updateData.status = status;
+      if (lastError !== undefined) updateData.lastError = lastError;
+      if (Object.keys(updateData).length === 0) return this.getWaBlastById(blastId);
+      const [result] = await db.update(waBlast).set(updateData).where(eq(waBlast.id, blastId)).returning();
+      return result;
+    }
+
+    const totals = new Map(rows.map(r => [r.status, Number(r.total)]));
+    const sent = totals.get("sent") ?? 0;
+    const pending = (totals.get("pending") ?? 0) + (totals.get("retry") ?? 0) + (totals.get("sending") ?? 0);
+    const failed = totals.get("failed") ?? 0;
+    const skipped = totals.get("skipped") ?? 0;
+    const total = rows.reduce((sum, row) => sum + Number(row.total), 0);
+
+    const updateData: Partial<WaBlast> = {
+      jumlahPenerima: total,
+      jumlahBerhasil: sent,
+      jumlahPending: pending,
+      jumlahGagal: failed,
+      jumlahDilewati: skipped,
+    };
+    if (status) updateData.status = status;
+    if (lastError !== undefined) updateData.lastError = lastError;
+    if (status && ["selesai", "sebagian_gagal", "gagal", "terkirim"].includes(status)) {
+      updateData.finishedAt = new Date();
+    }
+
+    const [result] = await db.update(waBlast).set(updateData).where(eq(waBlast.id, blastId)).returning();
     return result;
   }
 

@@ -18,7 +18,7 @@ Website publik: **rw3padasukacimahi.org**
 | ORM | Drizzle ORM |
 | Database | PostgreSQL (Railway) |
 | Auth | Passport.js + express-session |
-| WA API | StarSender (env: `STARSENDER_API_KEY`, `STARSENDER_DEVICE_ID`) |
+| WA API | Fonnte (env: `FONNTE_TOKEN`) |
 | AI | Google Gemini 2.5 Flash (env: `GEMINI_API_KEY`) |
 
 ---
@@ -86,7 +86,7 @@ Website publik: **rw3padasukacimahi.org**
 
 - Semua label/teks UI memakai **Bahasa Indonesia**
 - Warna brand: `hsl(163,55%,22%)` (hijau tua) dan `hsl(40,45%,55%)` (emas)
-- Format nomor WA: `0812xxxx` disimpan → dikonversi ke `62812xxxx` saat kirim ke StarSender
+- Format nomor WA: `0812xxxx` disimpan → dikonversi ke `62812xxxx` saat kirim ke Fonnte
 - Pesan WhatsApp tidak boleh memakai markdown (tanpa `*bold*`), teks biasa saja
 - Railway: filesystem bersifat ephemeral → simpan file/foto ke PostgreSQL (base64 `_data` fields)
 
@@ -97,8 +97,7 @@ Website publik: **rw3padasukacimahi.org**
 ```
 DATABASE_URL
 SESSION_SECRET
-STARSENDER_API_KEY
-STARSENDER_DEVICE_ID
+FONNTE_TOKEN
 GEMINI_API_KEY
 ```
 

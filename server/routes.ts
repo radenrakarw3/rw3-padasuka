@@ -374,9 +374,28 @@ async function generateWithGemini(prompt: string, options: number | GeminiOption
   throw new Error("Gemini gagal menghasilkan surat setelah beberapa percobaan");
 }
 
-async function sendWhatsApp(phoneNumber: string, message: string, delay = 5): Promise<boolean> {
+type WaSendFailureKind = "invalid_number" | "disconnected" | "rate_limited" | "temporary" | "provider_error";
+type WaSendResult = { ok: true } | { ok: false; kind: WaSendFailureKind; message: string };
+
+function classifyFonnteError(message: string, httpStatus?: number): WaSendFailureKind {
+  const lower = message.toLowerCase();
+  if (httpStatus === 429 || lower.includes("limit") || lower.includes("rate")) return "rate_limited";
+  if (
+    lower.includes("logout") ||
+    lower.includes("disconnect") ||
+    lower.includes("device") ||
+    lower.includes("auth") ||
+    lower.includes("token") ||
+    lower.includes("unauthorized")
+  ) return "disconnected";
+  if (lower.includes("invalid") || lower.includes("nomor") || lower.includes("number")) return "invalid_number";
+  if (lower.includes("timeout") || lower.includes("network") || lower.includes("fetch")) return "temporary";
+  return "provider_error";
+}
+
+async function sendWhatsApp(phoneNumber: string, message: string, delay = 5): Promise<WaSendResult> {
   const token = process.env.FONNTE_TOKEN;
-  if (!token) return false;
+  if (!token) return { ok: false, kind: "disconnected", message: "FONNTE_TOKEN belum dikonfigurasi" };
 
   let formattedPhone = phoneNumber.replace(/[^0-9]/g, "");
   if (formattedPhone.startsWith("0")) {
@@ -389,7 +408,7 @@ async function sendWhatsApp(phoneNumber: string, message: string, delay = 5): Pr
   // Nomor tidak valid jika kurang dari 10 digit (62 + 8 digit minimal)
   if (formattedPhone.length < 10) {
     console.error("Fonnte: nomor tidak valid (terlalu pendek):", phoneNumber);
-    return false;
+    return { ok: false, kind: "invalid_number", message: "Nomor WhatsApp terlalu pendek" };
   }
 
   try {
@@ -413,12 +432,15 @@ async function sendWhatsApp(phoneNumber: string, message: string, delay = 5): Pr
     clearTimeout(timeout);
     const result = await response.json() as { status: boolean; reason?: string; detail?: string };
     if (!result.status) {
-      console.error("Fonnte error:", result.reason || result.detail || JSON.stringify(result));
+      const errorMessage = result.reason || result.detail || JSON.stringify(result);
+      console.error("Fonnte error:", errorMessage);
+      return { ok: false, kind: classifyFonnteError(errorMessage, response.status), message: errorMessage };
     }
-    return result.status === true;
+    return { ok: true };
   } catch (error) {
     console.error("WhatsApp send error:", error);
-    return false;
+    const messageText = error instanceof Error ? error.message : "Gagal mengirim WhatsApp";
+    return { ok: false, kind: classifyFonnteError(messageText), message: messageText };
   }
 }
 
@@ -566,6 +588,30 @@ export async function registerRoutes(
     ALTER TABLE mitra ADD COLUMN IF NOT EXISTS nomor_wa_kasir_tambahan text;
     ALTER TABLE mitra ADD COLUMN IF NOT EXISTS nama_owner text;
     ALTER TABLE mitra ADD COLUMN IF NOT EXISTS nomor_wa_owner text;
+    ALTER TABLE wa_blast ADD COLUMN IF NOT EXISTS jumlah_pending integer NOT NULL DEFAULT 0;
+    ALTER TABLE wa_blast ADD COLUMN IF NOT EXISTS jumlah_gagal integer NOT NULL DEFAULT 0;
+    ALTER TABLE wa_blast ADD COLUMN IF NOT EXISTS jumlah_dilewati integer NOT NULL DEFAULT 0;
+    ALTER TABLE wa_blast ADD COLUMN IF NOT EXISTS last_error text;
+    ALTER TABLE wa_blast ADD COLUMN IF NOT EXISTS started_at timestamp;
+    ALTER TABLE wa_blast ADD COLUMN IF NOT EXISTS finished_at timestamp;
+    CREATE TABLE IF NOT EXISTS wa_blast_recipient (
+      id serial PRIMARY KEY,
+      blast_id integer NOT NULL REFERENCES wa_blast(id),
+      recipient_type text NOT NULL DEFAULT 'warga',
+      recipient_id integer,
+      nama text NOT NULL,
+      nomor_whatsapp text NOT NULL,
+      rt integer,
+      pesan_personal text NOT NULL,
+      status text NOT NULL DEFAULT 'pending',
+      attempt_count integer NOT NULL DEFAULT 0,
+      last_error text,
+      sent_at timestamp,
+      created_at timestamp DEFAULT now(),
+      updated_at timestamp DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS wa_blast_recipient_blast_status_idx
+      ON wa_blast_recipient (blast_id, status);
   `).catch(() => {});
   await ensureTripaySchema().catch((error) => {
     console.error("Tripay schema init error:", error);
@@ -744,7 +790,7 @@ const pdfTempPublicDir = path.join(uploadsDir, "pdf-temp");
       const message = `${otp}\n\nKode login RW03`;
       const sent = await sendWhatsApp(target.nomorWhatsapp, message, 0);
 
-      if (!sent) {
+      if (!sent.ok) {
         return res.status(500).json({ message: "Gagal mengirim OTP. Coba lagi nanti." });
       }
 
@@ -853,7 +899,7 @@ const pdfTempPublicDir = path.join(uploadsDir, "pdf-temp");
       const message = `${otp}\n\nKode login RW03`;
       const sent = await sendWhatsApp(target.nomorWhatsapp, message, 0);
 
-      if (!sent) return res.status(500).json({ message: "Gagal mengirim OTP. Coba lagi nanti." });
+      if (!sent.ok) return res.status(500).json({ message: "Gagal mengirim OTP. Coba lagi nanti." });
 
       const maskedPhone = target.nomorWhatsapp.replace(/(\d{4})(\d+)(\d{3})/, "$1****$3");
       return res.json({ message: "OTP terkirim", phone: maskedPhone, nama: target.namaLengkap });
@@ -969,7 +1015,7 @@ const pdfTempPublicDir = path.join(uploadsDir, "pdf-temp");
       singgahOtpStore.set(nik, { otp, wargaSinggahId: ws.id, nik: ws.nik, phone: ws.nomorWhatsapp, expiresAt, attempts: 0, lastRequestAt: Date.now() });
       const message = `${otp}\n\nKode login RW03`;
       const sent = await sendWhatsApp(ws.nomorWhatsapp, message, 0);
-      if (!sent) {
+      if (!sent.ok) {
         return res.status(500).json({ message: "Gagal mengirim OTP. Coba lagi nanti." });
       }
       const maskedPhone = ws.nomorWhatsapp.replace(/(\d{4})(\d+)(\d{3})/, "$1****$3");
@@ -1998,7 +2044,18 @@ Salam hangat dari pengurus RW 03 Padasuka`;
 
   app.get("/api/wa-blast", requireAdmin, async (_req, res) => {
     const data = await storage.getAllWaBlast();
-    res.json(data);
+    const normalized = await Promise.all(data.map(async (blast) => {
+      if (blast.status !== "mengirim" || activeWaBlastWorkers.has(blast.id)) return blast;
+      const recipients = await storage.getWaBlastRecipients(blast.id);
+      if (recipients.length === 0) return blast;
+      await storage.resetWaBlastRetryableRecipients(blast.id);
+      return await storage.refreshWaBlastSummary(
+        blast.id,
+        "terjeda",
+        "Pengiriman terhenti karena server restart. Klik Lanjutkan untuk meneruskan sisa penerima.",
+      ) ?? blast;
+    }));
+    res.json(normalized);
   });
 
   app.post("/api/wa-blast/generate", requireAdmin, async (req, res) => {
@@ -2056,80 +2113,237 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
     return age;
   }
 
+  const validWaBlastKategori = ["semua", "per_rt", "kepala_keluarga", "penerima_bansos", "pemukiman", "perumahan", "pemilik_kost", "warga_singgah", "anak", "remaja", "dewasa", "lansia"];
+  const activeWaBlastWorkers = new Set<number>();
+  const MAX_WA_BLAST_ATTEMPTS = 3;
+
+  type WaBlastRecipientDraft = {
+    recipientType: string;
+    recipientId: number | null;
+    nama: string;
+    nomorWhatsapp: string;
+    jenisKelamin?: string | null;
+    rt?: number | null;
+  };
+
+  function normalizeBlastPhone(phone: string) {
+    const digits = phone.replace(/[^0-9]/g, "");
+    if (digits.startsWith("0")) return `62${digits.slice(1)}`;
+    if (digits.startsWith("8")) return `62${digits}`;
+    return digits;
+  }
+
+  function personalizeWaBlastMessage(template: string, recipient: WaBlastRecipientDraft) {
+    const gender = recipient.jenisKelamin === "Perempuan" ? "Ibu" : "Bapak";
+    const rtNum = recipient.rt ? `RT ${String(recipient.rt).padStart(2, "0")}` : "RT -";
+    return template
+      .replace(/\{gender\}/gi, gender)
+      .replace(/\{warga\}/gi, recipient.nama || "Warga")
+      .replace(/\{rtxx\}/gi, rtNum);
+  }
+
+  async function buildWaBlastRecipients(kategori: string, filterRt?: number | null): Promise<WaBlastRecipientDraft[]> {
+    const pemukimanRt = [1, 2, 3, 4];
+    const perumahanRt = [5, 6, 7];
+    const uniquePhones = new Set<string>();
+    const recipients: WaBlastRecipientDraft[] = [];
+
+    const pushUnique = (recipient: WaBlastRecipientDraft) => {
+      if (!recipient.nomorWhatsapp) return;
+      const normalized = normalizeBlastPhone(recipient.nomorWhatsapp);
+      if (!normalized || uniquePhones.has(normalized)) return;
+      uniquePhones.add(normalized);
+      recipients.push(recipient);
+    };
+
+    if (kategori === "pemilik_kost") {
+      const allPemilik = await storage.getAllPemilikKost();
+      for (const p of allPemilik) {
+        pushUnique({
+          recipientType: "pemilik_kost",
+          recipientId: p.id,
+          nama: p.namaPemilik,
+          nomorWhatsapp: p.nomorWaPemilik,
+          rt: p.rt,
+        });
+      }
+      return recipients;
+    }
+
+    if (kategori === "warga_singgah") {
+      const allWs = await storage.getAllWargaSinggah();
+      for (const ws of allWs) {
+        if (ws.status !== "aktif") continue;
+        pushUnique({
+          recipientType: "warga_singgah",
+          recipientId: ws.id,
+          nama: ws.namaLengkap,
+          nomorWhatsapp: ws.nomorWhatsapp,
+          rt: ws.rtKost,
+        });
+      }
+      return recipients;
+    }
+
+    let wargaList: any[] = [];
+    if (kategori === "semua") {
+      wargaList = await storage.getAllWargaWithKk();
+    } else if (kategori === "per_rt" && filterRt) {
+      wargaList = await storage.getWargaByRt(filterRt);
+    } else if (kategori === "pemukiman") {
+      const all = await storage.getAllWargaWithKk();
+      wargaList = all.filter(w => pemukimanRt.includes(w.rt));
+    } else if (kategori === "perumahan") {
+      const all = await storage.getAllWargaWithKk();
+      wargaList = all.filter(w => perumahanRt.includes(w.rt));
+    } else if (kategori === "kepala_keluarga") {
+      const all = await storage.getAllWargaWithKk();
+      wargaList = all.filter(w => w.kedudukanKeluarga === "Kepala Keluarga");
+    } else if (kategori === "penerima_bansos") {
+      const allKk = await storage.getAllKk();
+      const bansosKkIds = allKk.filter(k => k.penerimaBansos).map(k => k.id);
+      const all = await storage.getAllWargaWithKk();
+      wargaList = all.filter(w => bansosKkIds.includes(w.kkId) && w.kedudukanKeluarga === "Kepala Keluarga");
+    } else if (kategori === "anak") {
+      const all = await storage.getAllWargaWithKk();
+      wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age < 18; });
+    } else if (kategori === "remaja") {
+      const all = await storage.getAllWargaWithKk();
+      wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age >= 18 && age < 30; });
+    } else if (kategori === "dewasa") {
+      const all = await storage.getAllWargaWithKk();
+      wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age >= 30 && age <= 60; });
+    } else if (kategori === "lansia") {
+      const all = await storage.getAllWargaWithKk();
+      wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age > 60; });
+    } else {
+      wargaList = await storage.getAllWargaWithKk();
+    }
+
+    for (const w of wargaList) {
+      pushUnique({
+        recipientType: "warga",
+        recipientId: w.id,
+        nama: w.namaLengkap,
+        nomorWhatsapp: w.nomorWhatsapp,
+        jenisKelamin: w.jenisKelamin,
+        rt: w.rt,
+      });
+    }
+    return recipients;
+  }
+
+  function randomMs(min: number, max: number) {
+    return min + Math.floor(Math.random() * (max - min + 1));
+  }
+
+  async function delayMs(ms: number) {
+    await new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  async function finalizeWaBlastIfDone(blastId: number) {
+    const recipients = await storage.getWaBlastRecipients(blastId);
+    const pending = recipients.filter(r => ["pending", "retry", "sending"].includes(r.status)).length;
+    if (pending > 0) return false;
+    const sent = recipients.filter(r => r.status === "sent").length;
+    const failed = recipients.filter(r => r.status === "failed").length;
+    const skipped = recipients.filter(r => r.status === "skipped").length;
+    const finalStatus = sent === 0 && (failed > 0 || skipped > 0)
+      ? "gagal"
+      : failed > 0 || skipped > 0
+        ? "sebagian_gagal"
+        : "selesai";
+    await storage.refreshWaBlastSummary(blastId, finalStatus, null);
+    return true;
+  }
+
+  function startWaBlastWorker(blastId: number) {
+    if (activeWaBlastWorkers.has(blastId)) return;
+    activeWaBlastWorkers.add(blastId);
+
+    (async () => {
+      let processedInRun = 0;
+      try {
+        await storage.resetWaBlastRetryableRecipients(blastId);
+        const current = await storage.getWaBlastById(blastId);
+        if (!current || ["selesai", "sebagian_gagal", "gagal"].includes(current.status)) return;
+        await storage.updateWaBlastStatus(blastId, "mengirim", current.jumlahPenerima, current.jumlahBerhasil, {
+          startedAt: current.startedAt ?? new Date(),
+          finishedAt: null,
+          lastError: null,
+        });
+
+        while (true) {
+          const done = await finalizeWaBlastIfDone(blastId);
+          if (done) break;
+
+          const recipient = await storage.getNextWaBlastRecipient(blastId);
+          if (!recipient) break;
+
+          const sendingAttempt = recipient.attemptCount + 1;
+          await storage.updateWaBlastRecipient(recipient.id, {
+            status: "sending",
+            attemptCount: sendingAttempt,
+            lastError: null,
+          });
+
+          const result = await sendWhatsApp(recipient.nomorWhatsapp, recipient.pesanPersonal, 0);
+          processedInRun++;
+
+          if (result.ok) {
+            await storage.updateWaBlastRecipient(recipient.id, {
+              status: "sent",
+              sentAt: new Date(),
+              lastError: null,
+            });
+            await storage.refreshWaBlastSummary(blastId, "mengirim", null);
+          } else if (result.kind === "invalid_number") {
+            await storage.updateWaBlastRecipient(recipient.id, {
+              status: "skipped",
+              lastError: result.message,
+            });
+            await storage.refreshWaBlastSummary(blastId, "mengirim", result.message);
+          } else if (result.kind === "disconnected") {
+            await storage.updateWaBlastRecipient(recipient.id, {
+              status: sendingAttempt >= MAX_WA_BLAST_ATTEMPTS ? "failed" : "retry",
+              lastError: result.message,
+            });
+            await storage.refreshWaBlastSummary(blastId, "terjeda", result.message);
+            break;
+          } else {
+            await storage.updateWaBlastRecipient(recipient.id, {
+              status: sendingAttempt >= MAX_WA_BLAST_ATTEMPTS ? "failed" : "retry",
+              lastError: result.message,
+            });
+            await storage.refreshWaBlastSummary(blastId, "mengirim", result.message);
+          }
+
+          if (await finalizeWaBlastIfDone(blastId)) break;
+          const pause = processedInRun % 10 === 0 ? randomMs(60000, 120000) : randomMs(12000, 25000);
+          await delayMs(pause);
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Worker WA Blast berhenti";
+        console.error(`WA Blast #${blastId} worker error:`, error);
+        await storage.refreshWaBlastSummary(blastId, "terjeda", message);
+      } finally {
+        activeWaBlastWorkers.delete(blastId);
+      }
+    })();
+  }
+
   app.get("/api/wa-blast/preview", requireAdmin, async (req, res) => {
     try {
       const kategori = (req.query.kategori as string) || "semua";
-      const validKategori = ["semua", "per_rt", "kepala_keluarga", "penerima_bansos", "pemukiman", "perumahan", "pemilik_kost", "warga_singgah", "anak", "remaja", "dewasa", "lansia"];
-      if (!validKategori.includes(kategori)) {
+      if (!validWaBlastKategori.includes(kategori)) {
         return res.status(400).json({ message: "Kategori tidak valid" });
       }
       const rt = req.query.rt ? parseInt(req.query.rt as string) : undefined;
       if (kategori === "per_rt" && (!rt || rt < 1 || isNaN(rt))) {
         return res.status(400).json({ message: "Nomor RT tidak valid" });
       }
-
-      if (kategori === "pemilik_kost") {
-        const allPemilik = await storage.getAllPemilikKost();
-        const uniquePhones = new Set<string>();
-        for (const p of allPemilik) {
-          if (p.nomorWaPemilik) uniquePhones.add(p.nomorWaPemilik);
-        }
-        return res.json({ total: uniquePhones.size });
-      }
-
-      if (kategori === "warga_singgah") {
-        const allWs = await storage.getAllWargaSinggah();
-        const uniquePhones = new Set<string>();
-        for (const ws of allWs) {
-          if (ws.status === "aktif" && ws.nomorWhatsapp) uniquePhones.add(ws.nomorWhatsapp);
-        }
-        return res.json({ total: uniquePhones.size });
-      }
-
-      const pemukimanRt = [1, 2, 3, 4];
-      const perumahanRt = [5, 6, 7];
-
-      let wargaList: any[] = [];
-      if (kategori === "semua") {
-        wargaList = await storage.getAllWargaWithKk();
-      } else if (kategori === "per_rt" && rt) {
-        wargaList = await storage.getWargaByRt(rt);
-      } else if (kategori === "pemukiman") {
-        const all = await storage.getAllWargaWithKk();
-        wargaList = all.filter(w => pemukimanRt.includes(w.rt));
-      } else if (kategori === "perumahan") {
-        const all = await storage.getAllWargaWithKk();
-        wargaList = all.filter(w => perumahanRt.includes(w.rt));
-      } else if (kategori === "kepala_keluarga") {
-        const all = await storage.getAllWargaWithKk();
-        wargaList = all.filter(w => w.kedudukanKeluarga === "Kepala Keluarga");
-      } else if (kategori === "penerima_bansos") {
-        const allKk = await storage.getAllKk();
-        const bansosKkIds = allKk.filter(k => k.penerimaBansos).map(k => k.id);
-        const all = await storage.getAllWargaWithKk();
-        wargaList = all.filter(w => bansosKkIds.includes(w.kkId) && w.kedudukanKeluarga === "Kepala Keluarga");
-      } else if (kategori === "anak") {
-        const all = await storage.getAllWargaWithKk();
-        wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age < 18; });
-      } else if (kategori === "remaja") {
-        const all = await storage.getAllWargaWithKk();
-        wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age >= 18 && age < 30; });
-      } else if (kategori === "dewasa") {
-        const all = await storage.getAllWargaWithKk();
-        wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age >= 30 && age <= 60; });
-      } else if (kategori === "lansia") {
-        const all = await storage.getAllWargaWithKk();
-        wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age > 60; });
-      } else {
-        wargaList = await storage.getAllWargaWithKk();
-      }
-
-      const uniquePhones = new Set<string>();
-      for (const w of wargaList) {
-        if (w.nomorWhatsapp) uniquePhones.add(w.nomorWhatsapp);
-      }
-
-      res.json({ total: uniquePhones.size });
+      const recipients = await buildWaBlastRecipients(kategori, rt);
+      res.json({ total: recipients.length });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
@@ -2328,120 +2542,107 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
       }
 
       const parsed = insertWaBlastSchema.parse(req.body);
-      const blast = await storage.createWaBlast(parsed);
-
-      let wargaList: any[] = [];
-
-      const pemukimanRt = [1, 2, 3, 4];
-      const perumahanRt = [5, 6, 7];
-
-      let useCustomRecipients = false;
-      let customRecipients: { nomorWhatsapp: string; namaLengkap: string; jenisKelamin?: string; rt?: number }[] = [];
-
-      if (parsed.kategoriFilter === "pemilik_kost") {
-        const allPemilik = await storage.getAllPemilikKost();
-        const uniquePhones = new Set<string>();
-        for (const p of allPemilik) {
-          if (p.nomorWaPemilik && !uniquePhones.has(p.nomorWaPemilik)) {
-            uniquePhones.add(p.nomorWaPemilik);
-            customRecipients.push({ nomorWhatsapp: p.nomorWaPemilik, namaLengkap: p.namaPemilik, rt: p.rt });
-          }
-        }
-        useCustomRecipients = true;
-      } else if (parsed.kategoriFilter === "warga_singgah") {
-        const allWs = await storage.getAllWargaSinggah();
-        const uniquePhones = new Set<string>();
-        for (const ws of allWs) {
-          if (ws.status === "aktif" && ws.nomorWhatsapp && !uniquePhones.has(ws.nomorWhatsapp)) {
-            uniquePhones.add(ws.nomorWhatsapp);
-            customRecipients.push({ nomorWhatsapp: ws.nomorWhatsapp, namaLengkap: ws.namaLengkap });
-          }
-        }
-        useCustomRecipients = true;
-      } else if (parsed.kategoriFilter === "semua") {
-        wargaList = await storage.getAllWargaWithKk();
-      } else if (parsed.kategoriFilter === "per_rt" && parsed.filterRt) {
-        wargaList = await storage.getWargaByRt(parsed.filterRt);
-      } else if (parsed.kategoriFilter === "pemukiman") {
-        const all = await storage.getAllWargaWithKk();
-        wargaList = all.filter(w => pemukimanRt.includes(w.rt));
-      } else if (parsed.kategoriFilter === "perumahan") {
-        const all = await storage.getAllWargaWithKk();
-        wargaList = all.filter(w => perumahanRt.includes(w.rt));
-      } else if (parsed.kategoriFilter === "kepala_keluarga") {
-        const all = await storage.getAllWargaWithKk();
-        wargaList = all.filter(w => w.kedudukanKeluarga === "Kepala Keluarga");
-      } else if (parsed.kategoriFilter === "penerima_bansos") {
-        const allKk = await storage.getAllKk();
-        const bansosKkIds = allKk.filter(k => k.penerimaBansos).map(k => k.id);
-        const all = await storage.getAllWargaWithKk();
-        wargaList = all.filter(w => bansosKkIds.includes(w.kkId) && w.kedudukanKeluarga === "Kepala Keluarga");
-      } else if (parsed.kategoriFilter === "anak") {
-        const all = await storage.getAllWargaWithKk();
-        wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age < 18; });
-      } else if (parsed.kategoriFilter === "remaja") {
-        const all = await storage.getAllWargaWithKk();
-        wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age >= 18 && age < 30; });
-      } else if (parsed.kategoriFilter === "dewasa") {
-        const all = await storage.getAllWargaWithKk();
-        wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age >= 30 && age <= 60; });
-      } else if (parsed.kategoriFilter === "lansia") {
-        const all = await storage.getAllWargaWithKk();
-        wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age > 60; });
-      } else {
-        wargaList = await storage.getAllWargaWithKk();
+      const kategoriFilter = parsed.kategoriFilter ?? "semua";
+      const filterRt = parsed.filterRt ?? null;
+      if (!validWaBlastKategori.includes(kategoriFilter)) {
+        return res.status(400).json({ message: "Kategori tidak valid" });
+      }
+      if (kategoriFilter === "per_rt" && (!filterRt || filterRt < 1)) {
+        return res.status(400).json({ message: "Nomor RT tidak valid" });
       }
 
-      let recipients: any[];
-      if (useCustomRecipients) {
-        recipients = customRecipients;
-      } else {
-        const uniquePhones = new Set<string>();
-        recipients = [];
-        for (const w of wargaList) {
-          if (w.nomorWhatsapp && !uniquePhones.has(w.nomorWhatsapp)) {
-            uniquePhones.add(w.nomorWhatsapp);
-            recipients.push(w);
-          }
-        }
+      const recipients = await buildWaBlastRecipients(kategoriFilter, filterRt);
+      if (recipients.length === 0) {
+        return res.status(400).json({ message: "Tidak ada nomor WhatsApp valid untuk kategori ini." });
       }
+      const blast = await storage.createWaBlastWithRecipients({ ...parsed, kategoriFilter, filterRt }, recipients.map(recipient => ({
+        recipientType: recipient.recipientType,
+        recipientId: recipient.recipientId,
+        nama: recipient.nama,
+        nomorWhatsapp: recipient.nomorWhatsapp,
+        rt: recipient.rt ?? null,
+        pesanPersonal: personalizeWaBlastMessage(parsed.pesan, recipient),
+        status: "pending",
+      })));
+      startWaBlastWorker(blast.id);
 
-      await storage.updateWaBlastStatus(blast.id, "mengirim", recipients.length, 0);
-      res.json({ message: "Blast sedang dikirim", total: recipients.length, blastId: blast.id });
-
-      (async () => {
-        let successCount = 0;
-        try {
-          for (let i = 0; i < recipients.length; i++) {
-            const recipient = recipients[i];
-            let personalizedMsg = parsed.pesan;
-            const gender = recipient.jenisKelamin === "Perempuan" ? "Ibu" : "Bapak";
-            const rtNum = recipient.rt ? `RT ${String(recipient.rt).padStart(2, "0")}` : "RT -";
-            personalizedMsg = personalizedMsg.replace(/\{gender\}/gi, gender);
-            personalizedMsg = personalizedMsg.replace(/\{warga\}/gi, recipient.namaLengkap || "Warga");
-            personalizedMsg = personalizedMsg.replace(/\{rtxx\}/gi, rtNum);
-            const success = await sendWhatsApp(recipient.nomorWhatsapp, personalizedMsg);
-            if (success) successCount++;
-
-            // Jeda antar pesan: random 4–8 detik agar tidak terdeteksi spam
-            const randomDelay = 4000 + Math.floor(Math.random() * 4000);
-            await new Promise(resolve => setTimeout(resolve, randomDelay));
-
-            // Setiap 10 pesan, jeda 20 detik (jeda batch)
-            if ((i + 1) % 10 === 0 && i + 1 < recipients.length) {
-              console.log(`WA Blast #${blast.id}: jeda batch setelah ${i + 1} pesan...`);
-              await new Promise(resolve => setTimeout(resolve, 20000));
-            }
-          }
-          await storage.updateWaBlastStatus(blast.id, "terkirim", recipients.length, successCount);
-          console.log(`WA Blast #${blast.id} selesai: ${successCount}/${recipients.length} berhasil`);
-        } catch (err) {
-          await storage.updateWaBlastStatus(blast.id, "terkirim", recipients.length, successCount);
-          console.error(`WA Blast #${blast.id} error setelah ${successCount} terkirim:`, err);
-        }
-      })();
+      const estimatedSeconds = recipients.length * 19 + Math.floor(recipients.length / 10) * 90;
+      res.json({ message: "Blast masuk antrian dan sedang dikirim", total: recipients.length, blastId: blast.id, estimatedSeconds });
     } catch (error: any) {
       res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/wa-blast/:id/recipients", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id as string);
+      if (isNaN(id)) return res.status(400).json({ message: "ID blast tidak valid" });
+      const blast = await storage.getWaBlastById(id);
+      if (!blast) return res.status(404).json({ message: "WA Blast tidak ditemukan" });
+      const recipients = await storage.getWaBlastRecipients(id);
+      res.json(recipients);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/wa-blast/:id/resume", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id as string);
+      if (isNaN(id)) return res.status(400).json({ message: "ID blast tidak valid" });
+      const blast = await storage.getWaBlastById(id);
+      if (!blast) return res.status(404).json({ message: "WA Blast tidak ditemukan" });
+      if (!["terjeda", "sebagian_gagal", "gagal", "mengirim"].includes(blast.status)) {
+        return res.status(400).json({ message: "Blast ini tidak bisa dilanjutkan" });
+      }
+      const recipients = await storage.getWaBlastRecipients(id);
+      const retryable = recipients.filter(r => ["pending", "retry", "sending", "failed"].includes(r.status) && r.attemptCount < MAX_WA_BLAST_ATTEMPTS);
+      for (const r of retryable) {
+        await storage.updateWaBlastRecipient(r.id, { status: "pending", lastError: null });
+      }
+      await storage.refreshWaBlastSummary(id, "mengirim", null);
+      startWaBlastWorker(id);
+      res.json({ message: "WA Blast dilanjutkan", blastId: id, total: retryable.length });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/wa-blast/:id/cancel", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id as string);
+      if (isNaN(id)) return res.status(400).json({ message: "ID blast tidak valid" });
+      const blast = await storage.getWaBlastById(id);
+      if (!blast) return res.status(404).json({ message: "WA Blast tidak ditemukan" });
+      await storage.cancelPendingWaBlastRecipients(id);
+      const updated = await storage.refreshWaBlastSummary(id, "sebagian_gagal", "Dibatalkan admin");
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/wa-blast/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id as string);
+      if (isNaN(id)) return res.status(400).json({ message: "ID blast tidak valid" });
+      let blast = await storage.getWaBlastById(id);
+      if (!blast) return res.status(404).json({ message: "WA Blast tidak ditemukan" });
+      if (blast.status === "mengirim" && !activeWaBlastWorkers.has(id)) {
+        const recipients = await storage.getWaBlastRecipients(id);
+        if (recipients.length > 0) {
+          await storage.resetWaBlastRetryableRecipients(id);
+          blast = await storage.refreshWaBlastSummary(
+            id,
+            "terjeda",
+            "Pengiriman terhenti karena server restart. Klik Lanjutkan untuk meneruskan sisa penerima.",
+          ) ?? blast;
+        }
+      }
+      const refreshed = await storage.refreshWaBlastSummary(id);
+      res.json(refreshed ?? blast);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
     }
   });
 

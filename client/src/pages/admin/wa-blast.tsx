@@ -114,6 +114,23 @@ interface NomorKosongData {
   duplikat: DuplikatGroup[];
 }
 
+interface WaBlastRecipient {
+  id: number;
+  blastId: number;
+  recipientType: string;
+  recipientId: number | null;
+  nama: string;
+  nomorWhatsapp: string;
+  rt: number | null;
+  pesanPersonal: string;
+  status: "pending" | "sending" | "sent" | "failed" | "retry" | "skipped";
+  attemptCount: number;
+  lastError: string | null;
+  sentAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
 const KATEGORI_LABELS: Record<string, string> = {
   semua: "Semua Warga",
   pemukiman: "Pemukiman (RT 01-04)",
@@ -127,6 +144,8 @@ const KATEGORI_LABELS: Record<string, string> = {
   dewasa: "Dewasa (30-60 Tahun)",
   lansia: "Lansia (> 60 Tahun)",
 };
+
+const ACTIVE_BLAST_STATUSES = ["mengirim", "terjeda"] as const;
 
 function formatRt(rt: number | string | null | undefined) {
   if (!rt) return "RT -";
@@ -556,7 +575,24 @@ export default function AdminWaBlast() {
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [topikAi, setTopikAi] = useState("");
 
-  const { data: blastList, isLoading } = useQuery<WaBlast[]>({ queryKey: ["/api/wa-blast"] });
+  const { data: blastList, isLoading } = useQuery<WaBlast[]>({
+    queryKey: ["/api/wa-blast"],
+    refetchInterval: (query) => {
+      const list = query.state.data as WaBlast[] | undefined;
+      return list?.some(b => ACTIVE_BLAST_STATUSES.includes(b.status as any)) ? 5000 : false;
+    },
+  });
+
+  const { data: expandedRecipients, isFetching: isFetchingRecipients } = useQuery<WaBlastRecipient[]>({
+    queryKey: ["/api/wa-blast", expandedId, "recipients"],
+    enabled: expandedId !== null,
+    queryFn: async () => {
+      const res = await fetch(`/api/wa-blast/${expandedId}/recipients`, { credentials: "include" });
+      if (!res.ok) throw new Error("Gagal memuat detail penerima");
+      return readJsonSafely<WaBlastRecipient[]>(res);
+    },
+    refetchInterval: expandedId !== null ? 5000 : false,
+  });
 
   const previewUrl = kategori === "per_rt"
     ? `/api/wa-blast/preview?kategori=${kategori}&rt=${filterRt}`
@@ -594,14 +630,34 @@ export default function AdminWaBlast() {
       setPesan("");
       setSelectedTemplate("");
       queryClient.invalidateQueries({ queryKey: ["/api/wa-blast"] });
-      const pollInterval = setInterval(async () => {
-        await queryClient.invalidateQueries({ queryKey: ["/api/wa-blast"] });
-      }, 5000);
-      // Estimasi waktu: rata-rata 6 detik/pesan + jeda batch 20 detik tiap 10 pesan
-      const batchPauses = Math.floor(data.total / 10) * 20000;
-      setTimeout(() => clearInterval(pollInterval), data.total * 6000 + batchPauses + 15000);
     },
     onError: (err: any) => toast({ title: "Gagal", description: err.message, variant: "destructive" }),
+  });
+
+  const resumeMutation = useMutation({
+    mutationFn: async (blastId: number) => {
+      const res = await apiRequest("POST", `/api/wa-blast/${blastId}/resume`, {});
+      return readJsonSafely<any>(res);
+    },
+    onSuccess: () => {
+      toast({ title: "WA Blast dilanjutkan", description: "Sisa penerima masuk antrian lagi." });
+      queryClient.invalidateQueries({ queryKey: ["/api/wa-blast"] });
+      if (expandedId !== null) queryClient.invalidateQueries({ queryKey: ["/api/wa-blast", expandedId, "recipients"] });
+    },
+    onError: (err: any) => toast({ title: "Gagal melanjutkan", description: err.message, variant: "destructive" }),
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: async (blastId: number) => {
+      const res = await apiRequest("POST", `/api/wa-blast/${blastId}/cancel`, {});
+      return readJsonSafely<any>(res);
+    },
+    onSuccess: () => {
+      toast({ title: "WA Blast dihentikan", description: "Sisa penerima ditandai dilewati." });
+      queryClient.invalidateQueries({ queryKey: ["/api/wa-blast"] });
+      if (expandedId !== null) queryClient.invalidateQueries({ queryKey: ["/api/wa-blast", expandedId, "recipients"] });
+    },
+    onError: (err: any) => toast({ title: "Gagal menghentikan", description: err.message, variant: "destructive" }),
   });
 
   const generateMutation = useMutation({
@@ -617,7 +673,7 @@ export default function AdminWaBlast() {
     onError: (err: any) => toast({ title: "Gagal Generate", description: err.message, variant: "destructive" }),
   });
 
-  const sendingCount = blastList?.filter(b => b.status === "mengirim").length ?? 0;
+  const sendingCount = blastList?.filter(b => ACTIVE_BLAST_STATUSES.includes(b.status as any)).length ?? 0;
   const riwayatCount = blastList?.length ?? 0;
 
   return (
@@ -818,8 +874,36 @@ export default function AdminWaBlast() {
             <div className="space-y-2">
               {blastList?.map(b => {
                 const isExpanded = expandedId === b.id;
-                const gagal = (b.jumlahPenerima || 0) - (b.jumlahBerhasil || 0);
                 const createdDate = b.createdAt ? new Date(b.createdAt) : null;
+                const total = b.jumlahPenerima || 0;
+                const berhasil = b.jumlahBerhasil || 0;
+                const pending = (b as any).jumlahPending || 0;
+                const gagal = (b as any).jumlahGagal || 0;
+                const dilewati = (b as any).jumlahDilewati || 0;
+                const progress = total > 0 ? Math.round(((berhasil + gagal + dilewati) / total) * 100) : 0;
+                const lastError = (b as any).lastError as string | null | undefined;
+                const isPaused = b.status === "terjeda";
+                const canResume = pending > 0 && (isPaused || b.status === "sebagian_gagal" || b.status === "gagal");
+                const canCancel = pending > 0 && ["mengirim", "terjeda"].includes(b.status);
+                const problemRecipients = isExpanded
+                  ? (expandedRecipients ?? []).filter(r => ["failed", "skipped", "retry"].includes(r.status))
+                  : [];
+                const statusClass = b.status === "selesai" || b.status === "terkirim"
+                  ? "bg-green-100 text-green-800"
+                  : b.status === "mengirim"
+                    ? "bg-blue-100 text-blue-800"
+                    : b.status === "terjeda"
+                      ? "bg-orange-100 text-orange-800"
+                      : b.status === "sebagian_gagal" || b.status === "gagal"
+                        ? "bg-red-100 text-red-800"
+                        : "bg-yellow-100 text-yellow-800";
+                const statusLabel = b.status === "mengirim"
+                  ? "sedang mengirim..."
+                  : b.status === "selesai" || b.status === "terkirim"
+                    ? "selesai"
+                    : b.status === "sebagian_gagal"
+                      ? "sebagian gagal"
+                      : b.status;
 
                 return (
                   <Card
@@ -834,37 +918,37 @@ export default function AdminWaBlast() {
                           {b.pesan}
                         </p>
                         <div className="flex items-center gap-1 flex-shrink-0">
-                          <Badge className={`text-[10px] gap-0.5 ${
-                            b.status === "terkirim" ? "bg-green-100 text-green-800" : b.status === "mengirim" ? "bg-blue-100 text-blue-800" : "bg-yellow-100 text-yellow-800"
-                          }`}>
-                            {b.status === "terkirim" ? <CheckCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                            {b.status === "mengirim" ? "sedang mengirim..." : b.status}
+                          <Badge className={`text-[10px] gap-0.5 ${statusClass}`}>
+                            {b.status === "selesai" || b.status === "terkirim" ? <CheckCircle className="w-3 h-3" /> : isPaused ? <AlertCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                            {statusLabel}
                           </Badge>
                           {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
                         </div>
                       </div>
+                      <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-2">
+                        <div
+                          className={`h-full transition-all ${isPaused || gagal > 0 ? "bg-orange-500" : "bg-[hsl(163,55%,22%)]"}`}
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
                         <span className="flex items-center gap-0.5">
                           <Users className="w-3 h-3" />
-                          {b.jumlahPenerima} penerima
+                          {total} penerima
                         </span>
-                        {b.status === "terkirim" && (
-                          <>
-                            <span>·</span>
-                            <span className="flex items-center gap-0.5 text-green-700">
-                              <CheckCircle className="w-3 h-3" />
-                              {b.jumlahBerhasil || 0} berhasil
-                            </span>
-                            {gagal > 0 && (
-                              <>
-                                <span>·</span>
-                                <span className="flex items-center gap-0.5 text-red-600">
-                                  <XCircle className="w-3 h-3" />
-                                  {gagal} gagal
-                                </span>
-                              </>
-                            )}
-                          </>
+                        <span>·</span>
+                        <span className="flex items-center gap-0.5 text-green-700">
+                          <CheckCircle className="w-3 h-3" />
+                          {berhasil} berhasil
+                        </span>
+                        {pending > 0 && (
+                          <><span>·</span><span className="flex items-center gap-0.5 text-blue-700"><Clock className="w-3 h-3" />{pending} pending</span></>
+                        )}
+                        {gagal > 0 && (
+                          <><span>·</span><span className="flex items-center gap-0.5 text-red-600"><XCircle className="w-3 h-3" />{gagal} gagal</span></>
+                        )}
+                        {dilewati > 0 && (
+                          <><span>·</span><span className="flex items-center gap-0.5 text-orange-700"><AlertTriangle className="w-3 h-3" />{dilewati} dilewati</span></>
                         )}
                         <span>·</span>
                         <span>{getKategoriLabel(b.kategoriFilter, b.filterRt)}</span>
@@ -878,6 +962,64 @@ export default function AdminWaBlast() {
                             : ""}
                         </span>
                       </div>
+                      {lastError && (
+                        <div className="mt-2 flex items-start gap-1.5 rounded-md bg-orange-50 border border-orange-100 p-2 text-[10px] text-orange-800">
+                          <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                          <span>{lastError}</span>
+                        </div>
+                      )}
+                      {isExpanded && (
+                        <div className="mt-3 space-y-2" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex flex-wrap gap-2">
+                            {canResume && (
+                              <Button
+                                size="sm"
+                                className="h-8 text-xs gap-1.5"
+                                onClick={() => resumeMutation.mutate(b.id)}
+                                disabled={resumeMutation.isPending}
+                              >
+                                {resumeMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                                Lanjutkan
+                              </Button>
+                            )}
+                            {canCancel && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 text-xs gap-1.5 text-red-600 border-red-200 hover:bg-red-50"
+                                onClick={() => cancelMutation.mutate(b.id)}
+                                disabled={cancelMutation.isPending}
+                              >
+                                {cancelMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                                Hentikan Sisa
+                              </Button>
+                            )}
+                          </div>
+                          {isFetchingRecipients ? (
+                            <Skeleton className="h-16 rounded-lg" />
+                          ) : problemRecipients.length > 0 ? (
+                            <div className="rounded-lg border border-red-100 overflow-hidden">
+                              <div className="px-2.5 py-2 bg-red-50 text-[10px] font-semibold text-red-700">
+                                Penerima Bermasalah
+                              </div>
+                              <div className="divide-y divide-red-50 max-h-56 overflow-y-auto">
+                                {problemRecipients.slice(0, 20).map(r => (
+                                  <div key={r.id} className="px-2.5 py-2 text-[10px] flex items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                      <p className="font-medium text-gray-800 truncate">{r.nama}</p>
+                                      <p className="text-muted-foreground">{r.nomorWhatsapp} · {r.rt ? formatRt(r.rt) : "RT -"}</p>
+                                      {r.lastError && <p className="text-red-600 mt-0.5 line-clamp-2">{r.lastError}</p>}
+                                    </div>
+                                    <Badge variant="outline" className="text-[9px] flex-shrink-0">{r.status}</Badge>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-[10px] text-muted-foreground">Belum ada penerima bermasalah.</p>
+                          )}
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 );
