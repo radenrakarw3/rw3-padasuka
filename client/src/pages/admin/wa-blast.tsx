@@ -147,6 +147,10 @@ const KATEGORI_LABELS: Record<string, string> = {
 
 const ACTIVE_BLAST_STATUSES = ["mengirim", "terjeda"] as const;
 
+function isActiveBlast(blast: WaBlast) {
+  return ACTIVE_BLAST_STATUSES.includes(blast.status as any) && ((blast as any).jumlahPending || 0) > 0;
+}
+
 function formatRt(rt: number | string | null | undefined) {
   if (!rt) return "RT -";
   return `RT ${String(rt).padStart(2, "0")}`;
@@ -579,7 +583,7 @@ export default function AdminWaBlast() {
     queryKey: ["/api/wa-blast"],
     refetchInterval: (query) => {
       const list = query.state.data as WaBlast[] | undefined;
-      return list?.some(b => ACTIVE_BLAST_STATUSES.includes(b.status as any)) ? 5000 : false;
+      return list?.some(isActiveBlast) ? 5000 : false;
     },
   });
 
@@ -673,7 +677,7 @@ export default function AdminWaBlast() {
     onError: (err: any) => toast({ title: "Gagal Generate", description: err.message, variant: "destructive" }),
   });
 
-  const sendingCount = blastList?.filter(b => ACTIVE_BLAST_STATUSES.includes(b.status as any)).length ?? 0;
+  const sendingCount = blastList?.filter(isActiveBlast).length ?? 0;
   const riwayatCount = blastList?.length ?? 0;
 
   return (

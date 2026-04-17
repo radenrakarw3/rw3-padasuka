@@ -2047,7 +2047,12 @@ Salam hangat dari pengurus RW 03 Padasuka`;
     const normalized = await Promise.all(data.map(async (blast) => {
       if (blast.status !== "mengirim" || activeWaBlastWorkers.has(blast.id)) return blast;
       const recipients = await storage.getWaBlastRecipients(blast.id);
-      if (recipients.length === 0) return blast;
+      if (recipients.length === 0) {
+        if ((blast.jumlahPending ?? 0) === 0) {
+          return await storage.updateWaBlastStatus(blast.id, "terkirim", blast.jumlahPenerima, blast.jumlahBerhasil) ?? blast;
+        }
+        return blast;
+      }
       await storage.resetWaBlastRetryableRecipients(blast.id);
       return await storage.refreshWaBlastSummary(
         blast.id,
@@ -2637,6 +2642,8 @@ Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
             "terjeda",
             "Pengiriman terhenti karena server restart. Klik Lanjutkan untuk meneruskan sisa penerima.",
           ) ?? blast;
+        } else if ((blast.jumlahPending ?? 0) === 0) {
+          blast = await storage.updateWaBlastStatus(id, "terkirim", blast.jumlahPenerima, blast.jumlahBerhasil) ?? blast;
         }
       }
       const refreshed = await storage.refreshWaBlastSummary(id);
