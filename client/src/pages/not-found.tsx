@@ -7,7 +7,7 @@ export default function NotFound() {
   const [location, setLocation] = useLocation();
 
   const isAdmin = location.startsWith("/admin");
-  const homePath = isAdmin ? "/admin" : "/warga";
+  const homePath = isAdmin ? "/admin" : "/";
   const homeLabel = isAdmin ? "Dashboard Admin" : "Beranda";
 
   return (

@@ -3,11 +3,32 @@ import type { AuthUser } from "@/lib/auth";
 import { getQueryFn } from "@/lib/queryClient";
 import type { KartuKeluarga, Warga } from "@shared/schema";
 
-type WalletData = {
-  saldo?: number;
-  namaWarga?: string;
-  [key: string]: unknown;
+export type WalletData = {
+  saldo: number;
+  kodeWallet: string;
+  namaWarga: string;
+  totalTopup?: number;
+  totalBelanja?: number;
+  wargaId?: number;
 } | null;
+
+export type RwcoinMitra = {
+  id: number;
+  namaUsaha: string;
+  kodeWallet?: string;
+};
+
+export type RwcoinVoucher = {
+  kode: string;
+  isActive: boolean;
+  berlakuHingga?: string | null;
+  kuota?: number | null;
+  terpakai: number;
+  mitraId?: number | null;
+  nilai: number;
+  minTransaksi?: number;
+  tipe?: string;
+};
 
 type CurhatKuotaData = {
   sudahCurhatHariIni: boolean;
@@ -15,14 +36,8 @@ type CurhatKuotaData = {
   balasanGemini: string | null;
 } | null;
 
-type MitraRwcoinData = Array<Record<string, unknown>>;
-type VoucherRwcoinData = Array<Record<string, unknown>>;
-type PrefetchableQuery = {
-  queryKey: QueryKey;
-  queryFn?: ReturnType<typeof getQueryFn<unknown>>;
-  staleTime?: number;
-};
-
+type MitraRwcoinData = RwcoinMitra[];
+type VoucherRwcoinData = RwcoinVoucher[];
 type IdleHandle = number;
 type IdleDeadline = {
   didTimeout: boolean;
@@ -99,16 +114,20 @@ function isWargaReady(user: WargaCoreUser): user is Pick<AuthUser, "type" | "kkI
   return user?.type === "warga" && !!user.kkId;
 }
 
-function prefetchBatch(queryClient: QueryClient, batch: PrefetchableQuery[]) {
-  return Promise.allSettled(
-    batch.map((query) =>
-      queryClient.prefetchQuery({
-        queryKey: query.queryKey,
-        queryFn: query.queryFn,
-        staleTime: query.staleTime,
-      }),
-    ),
-  );
+type PrefetchQueryOpts = {
+  queryKey: QueryKey;
+  queryFn?: unknown;
+  staleTime?: unknown;
+};
+
+function prefetchFromOptions(queryClient: QueryClient, opts: PrefetchQueryOpts) {
+  if (typeof opts.queryFn !== "function") return Promise.resolve();
+  const staleTime = typeof opts.staleTime === "number" ? opts.staleTime : undefined;
+  return queryClient.prefetchQuery({
+    queryKey: opts.queryKey,
+    queryFn: opts.queryFn as (ctx: { queryKey: QueryKey; signal: AbortSignal }) => Promise<unknown>,
+    staleTime,
+  });
 }
 
 export function prefetchWargaCoreData(queryClient: QueryClient, user: WargaCoreUser): () => void {
@@ -116,6 +135,7 @@ export function prefetchWargaCoreData(queryClient: QueryClient, user: WargaCoreU
     return () => {};
   }
 
+  const wargaUser = user;
   const win = window as WindowWithIdleCallback;
   let cancelled = false;
   let started = false;
@@ -133,20 +153,19 @@ export function prefetchWargaCoreData(queryClient: QueryClient, user: WargaCoreU
 
   async function runBatches() {
     if (cancelled) return;
-    const wallet = wargaWalletQueryOptions();
-    const anggota = wargaAnggotaQueryOptions(user.kkId);
-    const kk = wargaKkQueryOptions(user.kkId);
-    const kuota = wargaCurhatKuotaQueryOptions();
-    const mitra = wargaMitraQueryOptions();
-    const voucher = wargaVoucherQueryOptions();
+    const toPrefetch = (o: {
+      queryKey: QueryKey;
+      queryFn?: unknown;
+      staleTime?: unknown;
+    }): PrefetchQueryOpts => o;
 
-    await prefetchBatch(queryClient, [
-      { queryKey: wallet.queryKey, queryFn: wallet.queryFn, staleTime: wallet.staleTime },
-      { queryKey: anggota.queryKey, queryFn: anggota.queryFn, staleTime: anggota.staleTime },
-      { queryKey: kk.queryKey, queryFn: kk.queryFn, staleTime: kk.staleTime },
-      { queryKey: kuota.queryKey, queryFn: kuota.queryFn, staleTime: kuota.staleTime },
-      { queryKey: mitra.queryKey, queryFn: mitra.queryFn, staleTime: mitra.staleTime },
-      { queryKey: voucher.queryKey, queryFn: voucher.queryFn, staleTime: voucher.staleTime },
+    await Promise.allSettled([
+      prefetchFromOptions(queryClient, toPrefetch(wargaWalletQueryOptions())),
+      prefetchFromOptions(queryClient, toPrefetch(wargaAnggotaQueryOptions(wargaUser.kkId))),
+      prefetchFromOptions(queryClient, toPrefetch(wargaKkQueryOptions(wargaUser.kkId))),
+      prefetchFromOptions(queryClient, toPrefetch(wargaCurhatKuotaQueryOptions())),
+      prefetchFromOptions(queryClient, toPrefetch(wargaMitraQueryOptions())),
+      prefetchFromOptions(queryClient, toPrefetch(wargaVoucherQueryOptions())),
     ]);
   }
 

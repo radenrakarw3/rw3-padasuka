@@ -4,7 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const backendPort = process.env.PORT || "3000";
+const backendPort = process.env.PORT || "5000";
 
 export default defineConfig({
   plugins: [

@@ -57,6 +57,35 @@
   --tracking-normal: 0em;
   --spacing: 0.25rem;
 
+  /* Govtech / kiosk tokens */
+  --brand-primary: 163 55% 22%;
+  --brand-primary-foreground: 40 30% 97%;
+  --brand-accent: 40 45% 55%;
+  --brand-accent-muted: 40 45% 70%;
+  --surface-kiosk-from: 163 55% 14%;
+  --surface-kiosk-mid: 163 55% 26%;
+  --surface-kiosk-to: 163 40% 20%;
+  --surface-elevated: 0 0% 100%;
+  --space-page: 1.5rem;
+  --space-section: 1rem;
+  --space-field: 0.75rem;
+  --text-display-size: 1.75rem;
+  --text-display-line: 1.2;
+  --text-title-size: 1.125rem;
+  --text-title-line: 1.35;
+  --text-body-size: 0.9375rem;
+  --text-body-line: 1.55;
+  --text-caption-size: 0.75rem;
+  --text-caption-line: 1.4;
+  --focus-ring: 163 55% 22%;
+  --success: 152 55% 32%;
+  --success-foreground: 0 0% 100%;
+  --warning: 38 92% 45%;
+  --warning-foreground: 38 10% 12%;
+  --info: 210 55% 42%;
+  --info-foreground: 0 0% 100%;
+  --touch-min: 2.75rem;
+
   --sidebar-primary-border: hsl(var(--sidebar-primary));
   --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
   --sidebar-accent-border: hsl(var(--sidebar-accent));
@@ -146,6 +175,52 @@
   body {
     @apply font-sans antialiased bg-background text-foreground;
   }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--focus-ring));
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .surface-kiosk {
+    background: linear-gradient(
+      165deg,
+      hsl(var(--surface-kiosk-from)) 0%,
+      hsl(var(--surface-kiosk-mid)) 55%,
+      hsl(var(--surface-kiosk-to)) 100%
+    );
+  }
+
+  .prose-gov {
+    font-size: var(--text-body-size);
+    line-height: var(--text-body-line);
+    max-width: 65ch;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .text-display {
+    font-size: var(--text-display-size);
+    line-height: var(--text-display-line);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .text-title {
+    font-size: var(--text-title-size);
+    line-height: var(--text-title-line);
+    font-weight: 600;
+  }
+
+  .text-caption {
+    font-size: var(--text-caption-size);
+    line-height: var(--text-caption-line);
+  }
+
+  .touch-target {
+    min-height: var(--touch-min);
+    min-width: var(--touch-min);
+  }
 }
 
 @layer utilities {
@@ -217,29 +292,4 @@
   .border.hover-elevate:not(.no-hover-interaction-elevate)::after {
     inset: -1px;
   }
-}
-
-.house-label-tooltip {
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-  padding: 0;
-}
-
-.house-label-tooltip::before {
-  display: none;
-}
-
-.house-label-tooltip .leaflet-tooltip-content {
-  margin: 0;
-}
-
-.house-info-popup .leaflet-popup-content-wrapper {
-  border-radius: 18px;
-  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.16);
-  max-width: 180px;
-}
-
-.house-info-popup .leaflet-popup-content {
-  margin: 8px 10px;
 }

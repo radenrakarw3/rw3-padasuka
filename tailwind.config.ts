@@ -81,6 +81,29 @@ export default {
           busy: "rgb(239 68 68)",
           offline: "rgb(156 163 175)",
         },
+        brand: {
+          DEFAULT: "hsl(var(--brand-primary) / <alpha-value>)",
+          foreground: "hsl(var(--brand-primary-foreground) / <alpha-value>)",
+          accent: "hsl(var(--brand-accent) / <alpha-value>)",
+          "accent-muted": "hsl(var(--brand-accent-muted) / <alpha-value>)",
+        },
+        success: {
+          DEFAULT: "hsl(var(--success) / <alpha-value>)",
+          foreground: "hsl(var(--success-foreground) / <alpha-value>)",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning) / <alpha-value>)",
+          foreground: "hsl(var(--warning-foreground) / <alpha-value>)",
+        },
+        info: {
+          DEFAULT: "hsl(var(--info) / <alpha-value>)",
+          foreground: "hsl(var(--info-foreground) / <alpha-value>)",
+        },
+      },
+      spacing: {
+        page: "var(--space-page)",
+        section: "var(--space-section)",
+        field: "var(--space-field)",
       },
       fontFamily: {
         sans: ["var(--font-sans)"],

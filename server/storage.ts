@@ -1,12 +1,13 @@
-import { eq, and, or, desc, sql, count, gte, asc, getTableColumns } from "drizzle-orm";
+import { eq, and, or, desc, sql, count, gte, asc, getTableColumns, inArray } from "drizzle-orm";
+import { ACTIVE_RT_NUMBERS } from "@shared/rt";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "./db";
 import {
   kartuKeluarga, warga, rtData, laporan, suratWarga, suratRw,
   profileEditRequest, adminUser, waBlast, waBlastRecipient, pengajuanBansos, donasiCampaign, donasi, kasRw,
-  pemilikKost, wargaSinggah, riwayatKontrak,
+  pemilikKost, wargaSinggah, riwayatKontrak, visitrw3Pengajuan,
   usaha, karyawanUsaha, izinTetangga, surveyUsaha, riwayatStiker, monthlySnapshot,
-  programRw, pesertaProgram, denahWilayah,
+  programRw, pesertaProgram,
   mitra, rwcoinWallet, rwcoinTransaksi, mitraVoucher, mitraDiskon, rwcoinWithdraw, rwcoinOtp, rwcoinPendingTransaksi, kasRwcoin, rwcoinTopupRequest, wargaSavedLogin, curhatWarga,
   iuranKk, iuranSetting, rwcoinSettings,
   type KartuKeluarga, type InsertKartuKeluarga,
@@ -33,7 +34,6 @@ import {
   type MonthlySnapshot, type InsertMonthlySnapshot,
   type ProgramRw, type InsertProgramRw,
   type PesertaProgram, type InsertPesertaProgram,
-  type DenahWilayah, type InsertDenahWilayah,
   type Mitra, type RwcoinWallet, type RwcoinTransaksi, type KasRwcoin,
   type MitraVoucher, type MitraDiskon, type RwcoinWithdraw, type RwcoinOtp, type RwcoinPendingTransaksi,
   type RwcoinTopupRequest, type CurhatWarga,
@@ -75,6 +75,7 @@ export interface IStorage {
   getWargaByKkId(kkId: number): Promise<Warga[]>;
   getWargaById(id: number): Promise<Warga | undefined>;
   getWargaByNomorWa(nomorWa: string): Promise<(Pick<Warga, "id" | "kkId" | "namaLengkap" | "kedudukanKeluarga"> & { nomorKk: string; rt: number })[]>;
+  validateWargaIdentity(nik: string, nomorWa: string): Promise<{ wargaId: number; kkId: number; namaLengkap: string; rt: number; nomorKk: string } | null>;
   getAllWarga(): Promise<Warga[]>;
   createWarga(data: InsertWarga): Promise<Warga>;
   updateWarga(id: number, data: Partial<InsertWarga>): Promise<Warga | undefined>;
@@ -84,6 +85,7 @@ export interface IStorage {
   getRtByNomor(nomor: number): Promise<RtData | undefined>;
   createRt(data: InsertRtData): Promise<RtData>;
   updateRt(id: number, data: Partial<InsertRtData>): Promise<RtData | undefined>;
+  deleteRtByNomor(nomor: number): Promise<void>;
 
   getLaporanByKkId(kkId: number): Promise<Laporan[]>;
   getAllLaporan(): Promise<Laporan[]>;
@@ -182,6 +184,12 @@ export interface IStorage {
   createPemilikKost(data: InsertPemilikKost): Promise<PemilikKost>;
   updatePemilikKost(id: number, data: Partial<InsertPemilikKost>): Promise<PemilikKost | undefined>;
   deletePemilikKost(id: number): Promise<void>;
+  resetVisitrw3MasterData(): Promise<{
+    pengajuan: number;
+    riwayatKontrak: number;
+    wargaSinggah: number;
+    pemilikKost: number;
+  }>;
 
   getAllWargaSinggah(): Promise<(WargaSinggah & { namaKost: string; namaPemilik: string; rtKost: number })[]>;
   getWargaSinggahById(id: number): Promise<WargaSinggah | undefined>;
@@ -233,8 +241,6 @@ export interface IStorage {
   createProgramRw(data: InsertProgramRw): Promise<ProgramRw>;
   updateProgramRw(id: number, data: Partial<InsertProgramRw>): Promise<ProgramRw | undefined>;
   deleteProgramRw(id: number): Promise<void>;
-  getDenahWilayah(): Promise<DenahWilayah | undefined>;
-  upsertDenahWilayah(data: InsertDenahWilayah): Promise<DenahWilayah>;
 
   getPesertaByProgramId(programId: number): Promise<(PesertaProgram & { nomorKk: string | null; alamat: string | null; kepalaKeluarga: string | null })[]>;
   addPesertaProgram(data: InsertPesertaProgram): Promise<PesertaProgram>;
@@ -386,29 +392,6 @@ export interface DashboardStats {
 }
 
 export class DatabaseStorage implements IStorage {
-  private denahBootstrapPromise: Promise<void> | null = null;
-
-  private async ensureDenahWilayahTable(): Promise<void> {
-    if (!this.denahBootstrapPromise) {
-      this.denahBootstrapPromise = (async () => {
-        await db.execute(sql`
-          CREATE TABLE IF NOT EXISTS denah_wilayah (
-            id serial PRIMARY KEY,
-            nama text NOT NULL DEFAULT 'Denah RW 03',
-            data jsonb NOT NULL DEFAULT '{}'::jsonb,
-            created_at timestamp DEFAULT now(),
-            updated_at timestamp DEFAULT now()
-          )
-        `);
-      })().catch((error) => {
-        this.denahBootstrapPromise = null;
-        throw error;
-      });
-    }
-
-    await this.denahBootstrapPromise;
-  }
-
   private async ensureRwcoinWalletTx(
     tx: any,
     owner: { ownerType: "warga"; wargaId: number } | { ownerType: "mitra"; mitraId: number },
@@ -516,6 +499,30 @@ export class DatabaseStorage implements IStorage {
     return results;
   }
 
+  async validateWargaIdentity(nik: string, nomorWa: string): Promise<{ wargaId: number; kkId: number; namaLengkap: string; rt: number; nomorKk: string } | null> {
+    const trimmedNik = String(nik || "").trim();
+    const normalizedWa = normalizeStoredPhone(nomorWa);
+    if (!/^\d{16}$/.test(trimmedNik) || !normalizedWa) return null;
+
+    const [w] = await db.select().from(warga).where(eq(warga.nik, trimmedNik)).limit(1);
+    if (!w) return null;
+
+    const mainWa = normalizeStoredPhone(w.nomorWhatsapp);
+    const altWa = normalizeStoredPhone(w.nomorWhatsappAlternatif);
+    if (normalizedWa !== mainWa && normalizedWa !== altWa) return null;
+
+    const kk = await this.getKkById(w.kkId);
+    if (!kk) return null;
+
+    return {
+      wargaId: w.id,
+      kkId: w.kkId,
+      namaLengkap: w.namaLengkap,
+      rt: kk.rt,
+      nomorKk: kk.nomorKk,
+    };
+  }
+
   async getAllWarga(): Promise<Warga[]> {
     return db.select().from(warga).orderBy(warga.id);
   }
@@ -542,7 +549,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllRt(): Promise<RtData[]> {
-    return db.select().from(rtData).orderBy(rtData.nomorRt);
+    return db
+      .select()
+      .from(rtData)
+      .where(inArray(rtData.nomorRt, [...ACTIVE_RT_NUMBERS]))
+      .orderBy(rtData.nomorRt);
   }
 
   async getRtByNomor(nomor: number): Promise<RtData | undefined> {
@@ -558,6 +569,10 @@ export class DatabaseStorage implements IStorage {
   async updateRt(id: number, data: Partial<InsertRtData>): Promise<RtData | undefined> {
     const [result] = await db.update(rtData).set(data).where(eq(rtData.id, id)).returning();
     return result;
+  }
+
+  async deleteRtByNomor(nomor: number): Promise<void> {
+    await db.delete(rtData).where(eq(rtData.nomorRt, nomor));
   }
 
   async getLaporanByKkId(kkId: number): Promise<Laporan[]> {
@@ -1097,7 +1112,7 @@ export class DatabaseStorage implements IStorage {
     ] = await Promise.all([
       db.select().from(kartuKeluarga),
       db.select().from(warga),
-      db.select().from(rtData).orderBy(rtData.nomorRt),
+      db.select().from(rtData).where(inArray(rtData.nomorRt, [...ACTIVE_RT_NUMBERS])).orderBy(rtData.nomorRt),
       db.select().from(laporan),
       db.select().from(suratWarga),
       db.select().from(suratRw),
@@ -1646,11 +1661,41 @@ export class DatabaseStorage implements IStorage {
   async deletePemilikKost(id: number): Promise<void> {
     await db.transaction(async (tx) => {
       const wsList = await tx.select({ id: wargaSinggah.id }).from(wargaSinggah).where(eq(wargaSinggah.pemilikKostId, id));
+      const wsIds = wsList.map((w) => w.id);
+
+      if (wsIds.length > 0) {
+        await tx
+          .update(visitrw3Pengajuan)
+          .set({ wargaSinggahId: null })
+          .where(inArray(visitrw3Pengajuan.wargaSinggahId, wsIds));
+      }
+
+      await tx.delete(visitrw3Pengajuan).where(eq(visitrw3Pengajuan.pemilikKostId, id));
+
       for (const ws of wsList) {
         await tx.delete(riwayatKontrak).where(eq(riwayatKontrak.wargaSinggahId, ws.id));
       }
       await tx.delete(wargaSinggah).where(eq(wargaSinggah.pemilikKostId, id));
       await tx.delete(pemilikKost).where(eq(pemilikKost.id, id));
+    });
+  }
+
+  /** Hapus semua properti, penghuni, pengajuan Visit RW3 (mulai dari nol). Kas RW tidak dihapus. */
+  async resetVisitrw3MasterData() {
+    return db.transaction(async (tx) => {
+      await tx.update(visitrw3Pengajuan).set({ wargaSinggahId: null, pemilikKostId: null });
+
+      const pengajuanDeleted = await tx.delete(visitrw3Pengajuan).returning({ id: visitrw3Pengajuan.id });
+      const riwayatDeleted = await tx.delete(riwayatKontrak).returning({ id: riwayatKontrak.id });
+      const wargaDeleted = await tx.delete(wargaSinggah).returning({ id: wargaSinggah.id });
+      const propertiDeleted = await tx.delete(pemilikKost).returning({ id: pemilikKost.id });
+
+      return {
+        pengajuan: pengajuanDeleted.length,
+        riwayatKontrak: riwayatDeleted.length,
+        wargaSinggah: wargaDeleted.length,
+        pemilikKost: propertiDeleted.length,
+      };
     });
   }
 
@@ -1667,6 +1712,9 @@ export class DatabaseStorage implements IStorage {
       jumlahPenghuni: wargaSinggah.jumlahPenghuni,
       keperluanTinggal: wargaSinggah.keperluanTinggal,
       status: wargaSinggah.status,
+      nomorVisitrw3: wargaSinggah.nomorVisitrw3,
+      pengajuanId: wargaSinggah.pengajuanId,
+      terminBulan: wargaSinggah.terminBulan,
       createdAt: wargaSinggah.createdAt,
       namaKost: pemilikKost.namaKost,
       namaPemilik: pemilikKost.namaPemilik,
@@ -1704,6 +1752,10 @@ export class DatabaseStorage implements IStorage {
 
   async deleteWargaSinggah(id: number): Promise<void> {
     await db.transaction(async (tx) => {
+      await tx
+        .update(visitrw3Pengajuan)
+        .set({ wargaSinggahId: null })
+        .where(eq(visitrw3Pengajuan.wargaSinggahId, id));
       await tx.delete(riwayatKontrak).where(eq(riwayatKontrak.wargaSinggahId, id));
       await tx.delete(wargaSinggah).where(eq(wargaSinggah.id, id));
     });
@@ -1753,6 +1805,9 @@ export class DatabaseStorage implements IStorage {
       jumlahPenghuni: wargaSinggah.jumlahPenghuni,
       keperluanTinggal: wargaSinggah.keperluanTinggal,
       status: wargaSinggah.status,
+      nomorVisitrw3: wargaSinggah.nomorVisitrw3,
+      pengajuanId: wargaSinggah.pengajuanId,
+      terminBulan: wargaSinggah.terminBulan,
       createdAt: wargaSinggah.createdAt,
       namaKost: pemilikKost.namaKost,
       namaPemilik: pemilikKost.namaPemilik,
@@ -2068,44 +2123,6 @@ export class DatabaseStorage implements IStorage {
       await tx.delete(pesertaProgram).where(eq(pesertaProgram.programId, id));
       await tx.delete(programRw).where(eq(programRw.id, id));
     });
-  }
-
-  async getDenahWilayah(): Promise<DenahWilayah | undefined> {
-    await this.ensureDenahWilayahTable();
-    const [result] = await db
-      .select()
-      .from(denahWilayah)
-      .orderBy(desc(denahWilayah.updatedAt), desc(denahWilayah.id))
-      .limit(1);
-    return result;
-  }
-
-  async upsertDenahWilayah(data: InsertDenahWilayah): Promise<DenahWilayah> {
-    await this.ensureDenahWilayahTable();
-    const existing = await this.getDenahWilayah();
-
-    if (existing) {
-      const [updated] = await db
-        .update(denahWilayah)
-        .set({
-          nama: data.nama,
-          data: data.data,
-          updatedAt: new Date(),
-        })
-        .where(eq(denahWilayah.id, existing.id))
-        .returning();
-      return updated;
-    }
-
-    const [created] = await db
-      .insert(denahWilayah)
-      .values({
-        nama: data.nama,
-        data: data.data,
-        updatedAt: new Date(),
-      })
-      .returning();
-    return created;
   }
 
   async getPesertaByProgramId(programId: number): Promise<(PesertaProgram & { nomorKk: string | null; alamat: string | null; kepalaKeluarga: string | null })[]> {

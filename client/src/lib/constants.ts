@@ -166,7 +166,7 @@ export const listrikOptions = [
   "Tidak Ada",
 ];
 
-export const rtOptions = [1, 2, 3, 4, 5, 6, 7];
+export const rtOptions = [1, 2, 3, 4];
 
 export const jenisBansosOptions = [
   "PKH",
@@ -248,6 +248,30 @@ export const posisiTetanggaOptions = [
   "Depan",
   "Belakang",
 ];
+
+export const visitrw3JenisTempatUsahaOptions = [
+  { value: "lapak", label: "Lapak" },
+  { value: "kiosk", label: "Kiosk" },
+  { value: "lainnya", label: "Lainnya" },
+] as const;
+
+export const jenisPropertiOptions = [
+  { value: "kost", label: "Kost" },
+  { value: "kontrakan", label: "Kontrakan" },
+  { value: "kiosk", label: "Kiosk" },
+  { value: "lapak", label: "Lapak" },
+] as const;
+
+/** Jenjang pendidikan anak pada formulir Visit RW3 pengajuan */
+export const visitrw3JenjangAnakOptions = [
+  "Belum sekolah",
+  "PAUD",
+  "TK",
+  "SD",
+  "SMP",
+  "SMA",
+  "Kuliah",
+] as const;
 
 export const jabatanKaryawanOptions = [
   "Pemilik",
@@ -416,7 +440,6 @@ export const jenisKendaraanOptions = [
 export const kategoriProgramOptions = [
   "semua",
   "pemukiman",
-  "perumahan",
   "lansia",
   "balita",
   "remaja",

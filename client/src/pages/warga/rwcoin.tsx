@@ -120,13 +120,9 @@ function BayarModal({ wallet, initialVoucherKode, onClose }: { wallet: any; init
   const [voucherKode, setVoucherKode] = useState(initialVoucherKode ?? "");
   const [suksesTx, setSuksesTx] = useState<any>(null);
 
-  const { data: mitraList = [] } = useQuery<any[]>({
-    ...wargaMitraQueryOptions(),
-  });
+  const { data: mitraList = [] } = useQuery(wargaMitraQueryOptions());
 
-  const { data: voucherList = [] } = useQuery<any[]>({
-    ...wargaVoucherQueryOptions(),
-  });
+  const { data: voucherList = [] } = useQuery(wargaVoucherQueryOptions());
 
   const bayarMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -367,10 +363,10 @@ function BayarModal({ wallet, initialVoucherKode, onClose }: { wallet: any; init
                     </div>
                   </div>
                 )}
-                {voucherDipilih && diskonPreview === 0 && jumlahAngka > 0 && voucherDipilih.minTransaksi > jumlahAngka && (
+                {voucherDipilih && diskonPreview === 0 && jumlahAngka > 0 && (voucherDipilih.minTransaksi ?? 0) > jumlahAngka && (
                   <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200">
                     <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />
-                    <p className="text-xs text-amber-700">Min. belanja {formatCoin(voucherDipilih.minTransaksi)} <CoinIcon /> untuk voucher ini</p>
+                    <p className="text-xs text-amber-700">Min. belanja {formatCoin(voucherDipilih.minTransaksi ?? 0)} <CoinIcon /> untuk voucher ini</p>
                   </div>
                 )}
                 {voucherTidakValid && (
@@ -1766,16 +1762,12 @@ export default function WargaRwcoin() {
   const [bayarVoucher, setBayarVoucher] = useState<string | undefined>(undefined);
   const [activeView, setActiveView] = useState<"utama" | "voucher" | "riwayat">("utama");
 
-  const { data: wallet, isLoading: loadingWallet } = useQuery<any>({
-    ...wargaWalletQueryOptions(),
-  });
+  const { data: wallet, isLoading: loadingWallet } = useQuery(wargaWalletQueryOptions());
   const { data: transaksiList = [], isLoading: loadingTransaksi } = useQuery<any[]>({
     queryKey: ["/api/warga/rwcoin/transaksi"],
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
-  const { data: voucherList = [] } = useQuery<any[]>({
-    ...wargaVoucherQueryOptions(),
-  });
+  const { data: voucherList = [] } = useQuery(wargaVoucherQueryOptions());
   const { data: tripayTxList = [] } = useQuery<any[]>({
     queryKey: ["/api/warga/rwcoin/tripay/transaksi"],
     queryFn: getQueryFn({ on401: "returnNull" }),

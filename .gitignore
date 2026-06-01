@@ -7,3 +7,7 @@ vite.config.ts.*
 .env
 uploads/
 .local/
+.cursor/
+debug*.log
+*.log
+!docs/**/*.log

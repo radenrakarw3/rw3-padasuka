@@ -3,22 +3,18 @@ import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import {
   LayoutDashboard, Users, ScrollText,
-  MessageSquare, LogOut, Menu, X, Home as HomeIcon, Building2, UserCheck, Coins, Map
+  LogOut, Menu, X, Home as HomeIcon, Building2, Wallet
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import logoGold from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
 
 const navItems = [
   { path: "/admin", icon: LayoutDashboard, label: "Dashboard" },
-  { path: "/admin/peta", icon: Map, label: "Peta" },
-  { path: "/admin/rwcoin", icon: Coins, label: "RWcoin" },
+  { path: "/admin/keuangan", icon: Wallet, label: "Kas RW" },
   { path: "/admin/kk", icon: HomeIcon, label: "Kartu Keluarga" },
   { path: "/admin/warga", icon: Users, label: "Data Warga" },
   { path: "/admin/surat-rw", icon: ScrollText, label: "Surat RW" },
-  { path: "/admin/profil-edit", icon: Users, label: "Edit Profil" },
-  { path: "/admin/wa-blast", icon: MessageSquare, label: "WA Blast" },
-  { path: "/admin/pemilik-kost", icon: Building2, label: "Pemilik Kost" },
-  { path: "/admin/warga-singgah", icon: UserCheck, label: "Warga Singgah" },
+  { path: "/admin/visitrw3", icon: Building2, label: "Visit RW3" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -72,7 +68,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         >
           <nav className="p-3 space-y-1">
             {navItems.map((item) => {
-              const active = location === item.path;
+              const active =
+                item.path === "/admin/visitrw3"
+                  ? location === item.path || location.startsWith("/admin/visitrw3/")
+                  : location === item.path;
               return (
                 <button
                   key={item.path}

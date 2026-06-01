@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest, getQueryFn } from "@/lib/queryClient";
+import { queryClient, apiRequest, getApiErrorMessage, getQueryFn, readJsonSafely } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { pekerjaanOptions, keperluanTinggalOptions, rtOptions } from "@/lib/constants";
+import { Visitrw3AdminNav } from "@/components/admin/visitrw3-admin-nav";
 import { Plus, Pencil, Trash2, User, Phone, Briefcase, Calendar, Users as UsersIcon, X, RefreshCw, History } from "lucide-react";
 
 interface PemilikKost {
@@ -65,7 +66,7 @@ function getDaysRemaining(tanggalHabis: string): number {
   return Math.ceil((habis.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-export default function KelolaWargaSinggah() {
+export default function AdminVisitrw3Penghuni() {
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
   const [editData, setEditData] = useState<WargaSinggahItem | null>(null);
@@ -112,46 +113,49 @@ export default function KelolaWargaSinggah() {
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
       const res = await apiRequest("POST", "/api/warga-singgah", data);
-      return res.json();
+      return readJsonSafely(res);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/warga-singgah"] });
       toast({ title: "Berhasil", description: "Warga singgah berhasil ditambahkan" });
       resetForm();
     },
-    onError: (e: any) => toast({ title: "Gagal", description: e.message, variant: "destructive" }),
+    onError: (e: unknown) =>
+      toast({ title: "Gagal", description: getApiErrorMessage(e), variant: "destructive" }),
   });
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: any }) => {
       const res = await apiRequest("PUT", `/api/warga-singgah/${id}`, data);
-      return res.json();
+      return readJsonSafely(res);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/warga-singgah"] });
       toast({ title: "Berhasil", description: "Data warga singgah berhasil diperbarui" });
       resetForm();
     },
-    onError: (e: any) => toast({ title: "Gagal", description: e.message, variant: "destructive" }),
+    onError: (e: unknown) =>
+      toast({ title: "Gagal", description: getApiErrorMessage(e), variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       const res = await apiRequest("DELETE", `/api/warga-singgah/${id}`);
-      return res.json();
+      return readJsonSafely(res);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/warga-singgah"] });
       toast({ title: "Berhasil", description: "Warga singgah berhasil dihapus" });
       setDeleteTarget(null);
     },
-    onError: (e: any) => toast({ title: "Gagal", description: e.message, variant: "destructive" }),
+    onError: (e: unknown) =>
+      toast({ title: "Gagal", description: getApiErrorMessage(e), variant: "destructive" }),
   });
 
   const perpanjangMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: any }) => {
       const res = await apiRequest("PATCH", `/api/warga-singgah/${id}/perpanjang`, data);
-      return res.json();
+      return readJsonSafely(res);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/warga-singgah"] });
@@ -159,7 +163,8 @@ export default function KelolaWargaSinggah() {
       setPerpanjangTarget(null);
       setPerpanjangData({ tanggalMulaiBaru: "", tanggalHabisBaru: "" });
     },
-    onError: (e: any) => toast({ title: "Gagal", description: e.message, variant: "destructive" }),
+    onError: (e: unknown) =>
+      toast({ title: "Gagal", description: getApiErrorMessage(e), variant: "destructive" }),
   });
 
   function resetForm() {
@@ -220,15 +225,15 @@ export default function KelolaWargaSinggah() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-bold" data-testid="text-title-warga-singgah">Kelola Warga Singgah</h2>
-          <p className="text-xs text-muted-foreground">Total: {wargaList?.length || 0} warga singgah</p>
-        </div>
-        <Button size="sm" onClick={() => { resetForm(); setShowForm(true); }} data-testid="button-tambah-warga-singgah">
-          <Plus className="w-4 h-4 mr-1" /> Tambah
-        </Button>
-      </div>
+      <Visitrw3AdminNav
+        title="Penghuni & kontrak"
+        description={`${wargaList?.length || 0} penghuni aktif · edit, perpanjang, atau hapus manual`}
+        actions={
+          <Button size="sm" onClick={() => { resetForm(); setShowForm(true); }} data-testid="button-tambah-warga-singgah">
+            <Plus className="w-4 h-4 mr-1" /> Tambah penghuni
+          </Button>
+        }
+      />
 
       <div className="flex gap-2 flex-wrap">
         <Input
@@ -266,7 +271,7 @@ export default function KelolaWargaSinggah() {
         <Card>
           <CardContent className="pt-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold">{editData ? "Edit Warga Singgah" : "Tambah Warga Singgah"}</h3>
+              <h3 className="text-sm font-semibold">{editData ? "Edit penghuni" : "Tambah penghuni"}</h3>
               <Button size="icon" variant="ghost" onClick={resetForm}><X className="w-4 h-4" /></Button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-3">

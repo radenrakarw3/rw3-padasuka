@@ -4,8 +4,8 @@ import { Home, FileText, LogOut } from "lucide-react";
 import logoGold from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
 
 const navItems = [
-  { path: "/singgah", icon: Home, label: "Beranda" },
-  { path: "/singgah/laporan", icon: FileText, label: "Laporan" },
+  { path: "/visitrw3", icon: Home, label: "Beranda" },
+  { path: "/visitrw3/laporan", icon: FileText, label: "Laporan" },
 ];
 
 export default function SinggahLayout({ children }: { children: React.ReactNode }) {
@@ -20,7 +20,7 @@ export default function SinggahLayout({ children }: { children: React.ReactNode 
             <img src={logoGold} alt="Logo RW 03" className="w-8 h-8 object-contain flex-shrink-0" />
             <div className="min-w-0">
               <h1 className="text-sm font-bold truncate" data-testid="text-header-title">RW 03 Padasuka</h1>
-              <p className="text-[10px] text-[hsl(40,30%,80%)] truncate">Portal Warga Singgah</p>
+              <p className="text-[10px] text-[hsl(40,30%,80%)] truncate">Visit RW3 · Warga Singgah</p>
             </div>
           </div>
           <button
@@ -41,8 +41,8 @@ export default function SinggahLayout({ children }: { children: React.ReactNode 
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-border shadow-lg">
         <div className="flex items-center justify-around max-w-lg mx-auto py-1">
           {navItems.map((item) => {
-            const isActive = location === item.path || (item.path !== "/singgah" && location.startsWith(item.path));
-            const isHome = item.path === "/singgah" && location === "/singgah";
+            const isActive = location === item.path || (item.path !== "/visitrw3" && location.startsWith(item.path));
+            const isHome = item.path === "/visitrw3" && location === "/visitrw3";
             const active = isActive || isHome;
             return (
               <button

@@ -102,7 +102,7 @@ async function seedAdminsAndRt() {
       if (fields.length < 3) continue;
       const nomorRt = parseInt(fields[rtIdx]?.replace(/"/g, "").trim());
       const namaKetua = fields[ketuaIdx]?.replace(/"/g, "").trim();
-      if (!nomorRt || !namaKetua) continue;
+      if (!nomorRt || !namaKetua || nomorRt > 4) continue;
       const existing = await storage.getRtByNomor(nomorRt);
       if (!existing) {
         await storage.createRt({ nomorRt, namaKetua });
@@ -111,6 +111,24 @@ async function seedAdminsAndRt() {
       }
     }
     console.log("RT data seeded from CSV");
+  }
+
+  const rtWhatsappByNomor: Record<number, string> = {
+    1: "082312984697",
+    2: "081910038787",
+    3: "085860605992",
+    4: "083854136870",
+  };
+  for (const [nomorStr, wa] of Object.entries(rtWhatsappByNomor)) {
+    const nomorRt = parseInt(nomorStr, 10);
+    const existing = await storage.getRtByNomor(nomorRt);
+    if (existing) {
+      await storage.updateRt(existing.id, { nomorWhatsapp: wa });
+    }
+  }
+
+  for (const nomorRt of [5, 6, 7]) {
+    await storage.deleteRtByNomor(nomorRt);
   }
 }
 

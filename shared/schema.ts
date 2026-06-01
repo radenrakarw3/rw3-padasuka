@@ -253,12 +253,24 @@ export const kasRw = pgTable("kas_rw", {
 
 export const pemilikKost = pgTable("pemilik_kost", {
   id: serial("id").primaryKey(),
+  nomorPendaftaran: text("nomor_pendaftaran").unique(),
   namaKost: text("nama_kost").notNull(),
   namaPemilik: text("nama_pemilik").notNull(),
   nomorWaPemilik: text("nomor_wa_pemilik").notNull(),
+  namaPenanggungJawab: text("nama_penanggung_jawab"),
+  nomorWaPenanggungJawab: text("nomor_wa_penanggung_jawab"),
   rt: integer("rt").notNull(),
   alamatLengkap: text("alamat_lengkap").notNull(),
   jumlahPintu: integer("jumlah_pintu").notNull().default(1),
+  izinTinggal: boolean("izin_tinggal").notNull().default(true),
+  izinBisnis: boolean("izin_bisnis").notNull().default(false),
+  jenisProperti: text("jenis_properti").notNull().default("kost"),
+  statusProperti: text("status_properti").notNull().default("aktif"),
+  catatanPemohon: text("catatan_pemohon"),
+  setujuTataTertib: boolean("setuju_tata_tertib").notNull().default(false),
+  settingsVersi: text("settings_versi"),
+  estimasiKontribusi: integer("estimasi_kontribusi"),
+  kasRwId: integer("kas_rw_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -274,7 +286,76 @@ export const wargaSinggah = pgTable("warga_singgah", {
   jumlahPenghuni: integer("jumlah_penghuni").notNull().default(1),
   keperluanTinggal: text("keperluan_tinggal").notNull(),
   status: text("status").notNull().default("aktif"),
+  nomorVisitrw3: text("nomor_visitrw3"),
+  pengajuanId: integer("pengajuan_id"),
+  terminBulan: integer("termin_bulan"),
   createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const visitrw3Pengajuan = pgTable("visitrw3_pengajuan", {
+  id: serial("id").primaryKey(),
+  nomorVisitrw3: text("nomor_visitrw3").notNull().unique(),
+  tipe: text("tipe").notNull(),
+  status: text("status").notNull().default("menunggu_survey"),
+  keperluanPengajuan: text("keperluan_pengajuan").notNull(),
+  pemilikKostId: integer("pemilik_kost_id").references(() => pemilikKost.id),
+  rt: integer("rt").notNull(),
+  namaUsaha: text("nama_usaha"),
+  jenisUsaha: text("jenis_usaha"),
+  jenisTempatUsaha: text("jenis_tempat_usaha"),
+  jenisTempatUsahaLain: text("jenis_tempat_usaha_lain"),
+  tinggalDiWilayahRw3: boolean("tinggal_di_wilayah_rw3"),
+  jamBuka: text("jam_buka"),
+  jamTutup: text("jam_tutup"),
+  alamatUsaha: text("alamat_usaha"),
+  persetujuanTetangga: text("persetujuan_tetangga"),
+  penanggungJawab: text("penanggung_jawab"),
+  nomorUnit: text("nomor_unit"),
+  jumlahPenghuni: integer("jumlah_penghuni").notNull(),
+  tanggalBayar: text("tanggal_bayar").notNull(),
+  terminBulan: integer("termin_bulan").notNull(),
+  tanggalBerlakuSampai: text("tanggal_berlaku_sampai").notNull(),
+  wargaSinggahId: integer("warga_singgah_id").references(() => wargaSinggah.id),
+  catatanPemohon: text("catatan_pemohon"),
+  catatanSurvey: text("catatan_survey"),
+  alasanTolak: text("alasan_tolak"),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewedBy: text("reviewed_by"),
+  setujuTataTertib: boolean("setuju_tata_tertib").notNull().default(false),
+  settingsVersi: text("settings_versi"),
+  estimasiKontribusi: integer("estimasi_kontribusi"),
+  rincianKontribusi: text("rincian_kontribusi"),
+  kasRwId: integer("kas_rw_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const visitrw3Settings = pgTable("visitrw3_settings", {
+  id: serial("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  value: text("value").notNull(),
+  label: text("label").notNull(),
+  keterangan: text("keterangan"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const visitrw3Penghuni = pgTable("visitrw3_penghuni", {
+  id: serial("id").primaryKey(),
+  pengajuanId: integer("pengajuan_id").notNull().references(() => visitrw3Pengajuan.id, { onDelete: "cascade" }),
+  namaLengkap: text("nama_lengkap").notNull(),
+  tanggalLahir: text("tanggal_lahir").notNull(),
+  isAnak: boolean("is_anak").notNull().default(false),
+  nik: text("nik"),
+  nomorWhatsapp: text("nomor_whatsapp"),
+  jenisKelamin: text("jenis_kelamin"),
+  pekerjaan: text("pekerjaan"),
+  keperluanTinggal: text("keperluan_tinggal"),
+  namaTempatKerja: text("nama_tempat_kerja"),
+  namaSekolah: text("nama_sekolah"),
+  punyaKendaraan: boolean("punya_kendaraan").notNull().default(false),
+  jenisKendaraan: text("jenis_kendaraan"),
+  platNomor: text("plat_nomor"),
+  fotoKtpPath: text("foto_ktp_path"),
+  urutan: integer("urutan").notNull().default(0),
 });
 
 export const riwayatKontrak = pgTable("riwayat_kontrak", {
@@ -550,140 +631,6 @@ export type ProgramRw = typeof programRw.$inferSelect;
 export type InsertProgramRw = z.infer<typeof insertProgramRwSchema>;
 export type PesertaProgram = typeof pesertaProgram.$inferSelect;
 export type InsertPesertaProgram = z.infer<typeof insertPesertaProgramSchema>;
-
-export const denahLatLngSchema = z.object({
-  lat: z.number().min(-90).max(90),
-  lng: z.number().min(-180).max(180),
-});
-
-export const denahBasemapSchema = z.enum(["osm"]);
-
-export const denahAssetTypeSchema = z.enum([
-  "pju",
-  "pjg",
-  "pjl",
-  "cctv",
-  "tiang_wifi",
-]);
-
-export const denahLineTypeSchema = z.enum([
-  "sungai",
-  "drainase",
-  "jalan_batas",
-]);
-
-export const denahLineConditionSchema = z.enum([
-  "baik",
-  "butuh_perhatian",
-  "rusak",
-]);
-
-export const denahHazardTypeSchema = z.enum([
-  "jalan_buruk",
-  "drainase_buruk",
-  "titik_bahaya",
-]);
-
-export const denahHazardSeveritySchema = z.enum([
-  "rendah",
-  "sedang",
-  "tinggi",
-]);
-
-export const denahMetaSchema = z.object({
-  version: z.literal(2).default(2),
-  basemap: denahBasemapSchema.default("osm"),
-  center: denahLatLngSchema.default({ lat: -6.8736, lng: 107.5548 }),
-  zoom: z.number().min(3).max(23).default(19),
-});
-
-export const denahBuildingTypeSchema = z.enum([
-  "rumah",
-  "usaha",
-  "kost",
-  "kontrakan",
-]);
-
-export const denahHouseFeatureSchema = z.object({
-  id: z.string().min(1),
-  type: denahBuildingTypeSchema.default("rumah"),
-  name: z.string().optional().default(""),
-  rt: z.number().int().nullable().optional(),
-  kkIds: z.array(z.number().int()).default([]),
-  coordinates: z.array(denahLatLngSchema).min(3),
-  notes: z.string().optional().default(""),
-});
-
-export const denahAssetFeatureSchema = z.object({
-  id: z.string().min(1),
-  type: denahAssetTypeSchema,
-  label: z.string().optional().default(""),
-  rt: z.number().int().nullable().optional(),
-  coordinates: denahLatLngSchema,
-  notes: z.string().optional().default(""),
-});
-
-export const denahLineFeatureSchema = z.object({
-  id: z.string().min(1),
-  type: denahLineTypeSchema,
-  label: z.string().optional().default(""),
-  coordinates: z.array(denahLatLngSchema).min(2),
-  condition: denahLineConditionSchema.default("baik"),
-  notes: z.string().optional().default(""),
-});
-
-export const denahHazardFeatureSchema = z.object({
-  id: z.string().min(1),
-  type: denahHazardTypeSchema,
-  severity: denahHazardSeveritySchema.default("sedang"),
-  label: z.string().optional().default(""),
-  rt: z.number().int().nullable().optional(),
-  coordinates: denahLatLngSchema,
-  notes: z.string().optional().default(""),
-});
-
-export const denahWilayahDataSchema = z.object({
-  meta: denahMetaSchema.default({
-    version: 2,
-    basemap: "osm",
-    center: { lat: -6.8736, lng: 107.5548 },
-    zoom: 19,
-  }),
-  houses: z.array(denahHouseFeatureSchema).default([]),
-  assets: z.array(denahAssetFeatureSchema).default([]),
-  lines: z.array(denahLineFeatureSchema).default([]),
-  hazards: z.array(denahHazardFeatureSchema).default([]),
-});
-
-export const denahWilayah = pgTable("denah_wilayah", {
-  id: serial("id").primaryKey(),
-  nama: text("nama").notNull().default("Denah RW 03"),
-  data: jsonb("data").$type<z.infer<typeof denahWilayahDataSchema>>().notNull().default(sql`'{}'::jsonb`),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-export const insertDenahWilayahSchema = z.object({
-  nama: z.string().min(1).max(120).default("Denah RW 03"),
-  data: denahWilayahDataSchema,
-});
-
-export type DenahLatLng = z.infer<typeof denahLatLngSchema>;
-export type DenahBasemap = z.infer<typeof denahBasemapSchema>;
-export type DenahBuildingType = z.infer<typeof denahBuildingTypeSchema>;
-export type DenahAssetType = z.infer<typeof denahAssetTypeSchema>;
-export type DenahLineType = z.infer<typeof denahLineTypeSchema>;
-export type DenahLineCondition = z.infer<typeof denahLineConditionSchema>;
-export type DenahHazardType = z.infer<typeof denahHazardTypeSchema>;
-export type DenahHazardSeverity = z.infer<typeof denahHazardSeveritySchema>;
-export type DenahMeta = z.infer<typeof denahMetaSchema>;
-export type DenahHouseFeature = z.infer<typeof denahHouseFeatureSchema>;
-export type DenahAssetFeature = z.infer<typeof denahAssetFeatureSchema>;
-export type DenahLineFeature = z.infer<typeof denahLineFeatureSchema>;
-export type DenahHazardFeature = z.infer<typeof denahHazardFeatureSchema>;
-export type DenahWilayahData = z.infer<typeof denahWilayahDataSchema>;
-export type DenahWilayah = typeof denahWilayah.$inferSelect;
-export type InsertDenahWilayah = z.infer<typeof insertDenahWilayahSchema>;
 
 // ===================== RWCOIN ECOSYSTEM =====================
 
@@ -1007,6 +954,16 @@ export type CurhatWarga = typeof curhatWarga.$inferSelect;
 export const insertPemilikKostSchema = createInsertSchema(pemilikKost).omit({ id: true, createdAt: true });
 export const insertWargaSinggahSchema = createInsertSchema(wargaSinggah).omit({ id: true, createdAt: true, status: true });
 export const insertRiwayatKontrakSchema = createInsertSchema(riwayatKontrak).omit({ id: true, createdAt: true });
+export const insertVisitrw3PengajuanSchema = createInsertSchema(visitrw3Pengajuan).omit({
+  id: true,
+  createdAt: true,
+  status: true,
+  reviewedAt: true,
+  reviewedBy: true,
+  alasanTolak: true,
+  catatanSurvey: true,
+});
+export const insertVisitrw3PenghuniSchema = createInsertSchema(visitrw3Penghuni).omit({ id: true });
 
 export const insertUsahaSchema = createInsertSchema(usaha).omit({ id: true, createdAt: true, status: true, nomorStiker: true, tanggalStikerTerbit: true, tanggalStikerExpired: true, alasanPenolakan: true });
 export const insertKaryawanUsahaSchema = createInsertSchema(karyawanUsaha).omit({ id: true, createdAt: true });
@@ -1020,6 +977,11 @@ export type WargaSinggah = typeof wargaSinggah.$inferSelect;
 export type InsertWargaSinggah = z.infer<typeof insertWargaSinggahSchema>;
 export type RiwayatKontrak = typeof riwayatKontrak.$inferSelect;
 export type InsertRiwayatKontrak = z.infer<typeof insertRiwayatKontrakSchema>;
+export type Visitrw3Pengajuan = typeof visitrw3Pengajuan.$inferSelect;
+export type Visitrw3Settings = typeof visitrw3Settings.$inferSelect;
+export type Visitrw3Penghuni = typeof visitrw3Penghuni.$inferSelect;
+export type InsertVisitrw3Pengajuan = z.infer<typeof insertVisitrw3PengajuanSchema>;
+export type InsertVisitrw3Penghuni = z.infer<typeof insertVisitrw3PenghuniSchema>;
 
 export type Usaha = typeof usaha.$inferSelect;
 export type InsertUsaha = z.infer<typeof insertUsahaSchema>;

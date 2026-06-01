@@ -12,8 +12,10 @@ import * as XLSX from "xlsx";
 import { storage } from "./storage";
 import { pool } from "./db";
 import { cache, CacheKey, TTL, invalidateWarga, invalidateKk } from "./cache";
-import { insertKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertProfileEditSchema, insertWaBlastSchema, insertPengajuanBansosSchema, insertDonasiCampaignSchema, insertDonasiSchema, insertKasRwSchema, insertPemilikKostSchema, insertWargaSinggahSchema, insertUsahaSchema, insertKaryawanUsahaSchema, insertIzinTetanggaSchema, insertSurveyUsahaSchema, insertProgramRwSchema, insertPesertaProgramSchema, insertDenahWilayahSchema, denahWilayahDataSchema } from "@shared/schema";
+import { insertKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertProfileEditSchema, insertPengajuanBansosSchema, insertDonasiCampaignSchema, insertDonasiSchema, insertKasRwSchema, insertPemilikKostSchema, insertWargaSinggahSchema, insertUsahaSchema, insertKaryawanUsahaSchema, insertIzinTetanggaSchema, insertSurveyUsahaSchema, insertProgramRwSchema, insertPesertaProgramSchema } from "@shared/schema";
 import { bulkUpdateTripayProducts, createTripayPurchase, ensureTripaySchema, getTripayOverview, getTripayPublicConfig, handleTripayCallback, listTripayCatalogCategoriesForWarga, listTripayCatalogOperatorsForWarga, listTripayCatalogProductsForWarga, listTripayCategories, listTripayOperators, listTripayProducts, listTripayTransactions, listTripayTransactionsByWargaId, reconcilePendingTripayTransactions, reconcileTripayTransaction, syncTripayProducts, updateTripayCategorySetting, updateTripayOperatorSetting, updateTripayProductSetting } from "./tripay";
+import { sendWhatsApp } from "./starsender";
+import { z } from "zod";
 
 function resolveAppVersion() {
   const productionIndexPath = path.resolve(process.cwd(), "dist", "public", "index.html");
@@ -51,62 +53,6 @@ type GeminiOptions = {
   timeoutMs?: number;
   thinkingBudget?: number;
 };
-
-const DEFAULT_DENAH_CENTER = { lat: -6.8736, lng: 107.5548 };
-
-function createEmptyDenahWilayahData() {
-  return denahWilayahDataSchema.parse({
-    meta: {
-      version: 2,
-      basemap: "osm",
-      center: DEFAULT_DENAH_CENTER,
-      zoom: 19,
-    },
-    houses: [],
-    assets: [],
-    lines: [],
-    hazards: [],
-  });
-}
-
-function coerceNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
-
-function normalizeLatLng(raw: unknown) {
-  if (!raw || typeof raw !== "object") return null;
-  const lat = coerceNumber((raw as any).lat);
-  const lng = coerceNumber((raw as any).lng);
-  if (lat === null || lng === null) return null;
-  return { lat, lng };
-}
-
-function isValidLatLng(point: { lat: number; lng: number }) {
-  return point.lat >= -90 && point.lat <= 90 && point.lng >= -180 && point.lng <= 180;
-}
-
-function makeLegacyRectanglePolygon(place: any) {
-  const x = coerceNumber(place?.x);
-  const y = coerceNumber(place?.y);
-  const width = coerceNumber(place?.width);
-  const height = coerceNumber(place?.height);
-
-  if ([x, y, width, height].some((value) => value === null)) {
-    return [];
-  }
-
-  return [
-    { lat: y!, lng: x! },
-    { lat: y!, lng: x! + width! },
-    { lat: y! + height!, lng: x! + width! },
-    { lat: y! + height!, lng: x! },
-  ].filter(isValidLatLng);
-}
 
 const wargaBooleanFields = new Set([
   "ibuHamil",
@@ -149,144 +95,6 @@ function normalizeProfileEditChanges(changes: Record<string, any>) {
       return [key, value === "" ? null : value];
     }),
   );
-}
-
-function normalizeDenahWilayahData(raw: unknown) {
-  const direct = denahWilayahDataSchema.safeParse(raw);
-  if (direct.success) {
-    return direct.data;
-  }
-
-  const legacy = raw && typeof raw === "object" ? (raw as any) : {};
-  const points = Array.isArray(legacy.points) ? legacy.points : [];
-  const pointMap = new Map(
-    points
-      .map((point: any) => {
-        const lat = coerceNumber(point?.y);
-        const lng = coerceNumber(point?.x);
-        if (!point?.id || lat === null || lng === null) return null;
-        if (!isValidLatLng({ lat, lng })) return null;
-        return [String(point.id), { lat, lng }] as const;
-      })
-      .filter(Boolean) as Array<readonly [string, { lat: number; lng: number }]>,
-  );
-
-  const houses = (Array.isArray(legacy.places) ? legacy.places : [])
-    .map((place: any) => {
-      const category = String(place?.category || "");
-      const polygon = makeLegacyRectanglePolygon(place);
-      if (polygon.length < 3) return null;
-      if (!["rumah", "usaha", "kontrakan", "kostan"].includes(category)) return null;
-
-      const kkId = coerceNumber(place?.kkId);
-      const notes = [
-        place?.notes ? String(place.notes) : "",
-        category !== "rumah" ? `Migrasi kategori lama: ${category}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n");
-
-      return {
-        id: String(place?.id || crypto.randomUUID()),
-        type:
-          category === "usaha"
-            ? "usaha"
-            : category === "kostan"
-              ? "kost"
-              : category === "kontrakan"
-                ? "kontrakan"
-                : "rumah",
-        name: String(place?.label || ""),
-        rt: coerceNumber(place?.rt),
-        kkIds: kkId ? [kkId] : [],
-        coordinates: polygon,
-        notes,
-      };
-    })
-    .filter(Boolean);
-
-  const assets = (Array.isArray(legacy.places) ? legacy.places : [])
-    .map((place: any) => {
-      const category = String(place?.category || "");
-      const supportedMap: Record<string, "pju" | "pjg" | "pjl" | "cctv" | "tiang_wifi"> = {
-        pju: "pju",
-        pjg: "pjg",
-        pjl: "pjl",
-        tiang_wifi: "tiang_wifi",
-        tiang_listrik: "tiang_wifi",
-      };
-      const mappedType = supportedMap[category];
-      if (!mappedType) return null;
-
-      const lat = coerceNumber(place?.y);
-      const lng = coerceNumber(place?.x);
-      if (lat === null || lng === null) return null;
-      if (!isValidLatLng({ lat, lng })) return null;
-
-      const notes = [
-        place?.notes ? String(place.notes) : "",
-        category === "tiang_listrik" ? "Migrasi dari kategori lama: tiang_listrik" : "",
-      ]
-        .filter(Boolean)
-        .join("\n");
-
-      return {
-        id: String(place?.id || crypto.randomUUID()),
-        type: mappedType,
-        label: String(place?.label || ""),
-        rt: coerceNumber(place?.rt),
-        coordinates: { lat, lng },
-        notes,
-      };
-    })
-    .filter(Boolean);
-
-  const lines = (Array.isArray(legacy.paths) ? legacy.paths : [])
-    .map((path: any) => {
-      const from = pointMap.get(String(path?.fromPointId || ""));
-      const to = pointMap.get(String(path?.toPointId || ""));
-      if (!from || !to) return null;
-
-      const category = String(path?.category || "");
-      const type =
-        category === "sungai"
-          ? "sungai"
-          : category === "drainase"
-            ? "drainase"
-            : "jalan_batas";
-
-      const condition =
-        category === "jalan_rusak"
-          ? "rusak"
-          : type === "jalan_batas"
-            ? "butuh_perhatian"
-            : "baik";
-
-      return {
-        id: String(path?.id || crypto.randomUUID()),
-        type,
-        label: String(path?.label || ""),
-        coordinates: [from, to],
-        condition,
-        notes: ["pjg", "pjl", "jalan", "jalan_rusak"].includes(category)
-          ? `Migrasi kategori lama: ${category}`
-          : "",
-      };
-    })
-    .filter(Boolean);
-
-  return denahWilayahDataSchema.parse({
-    meta: {
-      version: 2,
-      basemap: "osm",
-      center: DEFAULT_DENAH_CENTER,
-      zoom: 19,
-    },
-    houses,
-    assets,
-    lines,
-    hazards: [],
-  });
 }
 
 async function generateWithGemini(prompt: string, options: number | GeminiOptions = 2): Promise<string> {
@@ -372,76 +180,6 @@ async function generateWithGemini(prompt: string, options: number | GeminiOption
   }
 
   throw new Error("Gemini gagal menghasilkan surat setelah beberapa percobaan");
-}
-
-type WaSendFailureKind = "invalid_number" | "disconnected" | "rate_limited" | "temporary" | "provider_error";
-type WaSendResult = { ok: true } | { ok: false; kind: WaSendFailureKind; message: string };
-
-function classifyFonnteError(message: string, httpStatus?: number): WaSendFailureKind {
-  const lower = message.toLowerCase();
-  if (httpStatus === 429 || lower.includes("limit") || lower.includes("rate")) return "rate_limited";
-  if (
-    lower.includes("logout") ||
-    lower.includes("disconnect") ||
-    lower.includes("device") ||
-    lower.includes("auth") ||
-    lower.includes("token") ||
-    lower.includes("unauthorized")
-  ) return "disconnected";
-  if (lower.includes("invalid") || lower.includes("nomor") || lower.includes("number")) return "invalid_number";
-  if (lower.includes("timeout") || lower.includes("network") || lower.includes("fetch")) return "temporary";
-  return "provider_error";
-}
-
-async function sendWhatsApp(phoneNumber: string, message: string, delay = 5): Promise<WaSendResult> {
-  const token = process.env.FONNTE_TOKEN;
-  if (!token) return { ok: false, kind: "disconnected", message: "FONNTE_TOKEN belum dikonfigurasi" };
-
-  let formattedPhone = phoneNumber.replace(/[^0-9]/g, "");
-  if (formattedPhone.startsWith("0")) {
-    formattedPhone = "62" + formattedPhone.substring(1);
-  }
-  if (!formattedPhone.startsWith("62")) {
-    formattedPhone = "62" + formattedPhone;
-  }
-
-  // Nomor tidak valid jika kurang dari 10 digit (62 + 8 digit minimal)
-  if (formattedPhone.length < 10) {
-    console.error("Fonnte: nomor tidak valid (terlalu pendek):", phoneNumber);
-    return { ok: false, kind: "invalid_number", message: "Nomor WhatsApp terlalu pendek" };
-  }
-
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
-    const response = await fetch("https://api.fonnte.com/send", {
-      method: "POST",
-      headers: {
-        "Authorization": token,
-      },
-      body: (() => {
-        const form = new URLSearchParams();
-        form.append("target", formattedPhone);
-        form.append("message", message);
-        form.append("countryCode", "62");
-        if (delay > 0) form.append("delay", String(delay));
-        return form;
-      })(),
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-    const result = await response.json() as { status: boolean; reason?: string; detail?: string };
-    if (!result.status) {
-      const errorMessage = result.reason || result.detail || JSON.stringify(result);
-      console.error("Fonnte error:", errorMessage);
-      return { ok: false, kind: classifyFonnteError(errorMessage, response.status), message: errorMessage };
-    }
-    return { ok: true };
-  } catch (error) {
-    console.error("WhatsApp send error:", error);
-    const messageText = error instanceof Error ? error.message : "Gagal mengirim WhatsApp";
-    return { ok: false, kind: classifyFonnteError(messageText), message: messageText };
-  }
 }
 
 const jenisSuratLabels: Record<string, string> = {
@@ -588,33 +326,33 @@ export async function registerRoutes(
     ALTER TABLE mitra ADD COLUMN IF NOT EXISTS nomor_wa_kasir_tambahan text;
     ALTER TABLE mitra ADD COLUMN IF NOT EXISTS nama_owner text;
     ALTER TABLE mitra ADD COLUMN IF NOT EXISTS nomor_wa_owner text;
-    ALTER TABLE wa_blast ADD COLUMN IF NOT EXISTS jumlah_pending integer NOT NULL DEFAULT 0;
-    ALTER TABLE wa_blast ADD COLUMN IF NOT EXISTS jumlah_gagal integer NOT NULL DEFAULT 0;
-    ALTER TABLE wa_blast ADD COLUMN IF NOT EXISTS jumlah_dilewati integer NOT NULL DEFAULT 0;
-    ALTER TABLE wa_blast ADD COLUMN IF NOT EXISTS last_error text;
-    ALTER TABLE wa_blast ADD COLUMN IF NOT EXISTS started_at timestamp;
-    ALTER TABLE wa_blast ADD COLUMN IF NOT EXISTS finished_at timestamp;
-    CREATE TABLE IF NOT EXISTS wa_blast_recipient (
-      id serial PRIMARY KEY,
-      blast_id integer NOT NULL REFERENCES wa_blast(id),
-      recipient_type text NOT NULL DEFAULT 'warga',
-      recipient_id integer,
-      nama text NOT NULL,
-      nomor_whatsapp text NOT NULL,
-      rt integer,
-      pesan_personal text NOT NULL,
-      status text NOT NULL DEFAULT 'pending',
-      attempt_count integer NOT NULL DEFAULT 0,
-      last_error text,
-      sent_at timestamp,
-      created_at timestamp DEFAULT now(),
-      updated_at timestamp DEFAULT now()
-    );
-    CREATE INDEX IF NOT EXISTS wa_blast_recipient_blast_status_idx
-      ON wa_blast_recipient (blast_id, status);
   `).catch(() => {});
   await ensureTripaySchema().catch((error) => {
     console.error("Tripay schema init error:", error);
+  });
+
+  const RWCOIN_DISABLED_MSG =
+    "Sistem RWcoin telah dinonaktifkan. Kontribusi Visit RW3 dicatat ke Kas RW melalui menu admin Keuangan.";
+  const rwcoinDisabledPaths = [
+    /^\/api\/rwcoin(?:\/|$)/,
+    /^\/api\/warga\/rwcoin(?:\/|$)/,
+    /^\/api\/mitra(?:\/|$)/,
+    /^\/api\/iuran\/\d+\/bayar-rwcoin$/,
+  ];
+  app.use((req, res, next) => {
+    if (rwcoinDisabledPaths.some((re) => re.test(req.path))) {
+      return res.status(410).json({ message: RWCOIN_DISABLED_MSG });
+    }
+    next();
+  });
+
+  const { ensureVisitrw3Schema, registerVisitrw3Routes } = await import("./visitrw3-routes");
+  const { ensureVisitrw3SettingsTable } = await import("./visitrw3-settings");
+  await ensureVisitrw3SettingsTable().catch((error) => {
+    console.error("Visit RW3 settings table init error:", error);
+  });
+  await ensureVisitrw3Schema().catch((error) => {
+    console.error("Visit RW3 schema init error:", error);
   });
 
   const isProduction = process.env.NODE_ENV === "production";
@@ -964,7 +702,10 @@ const pdfTempPublicDir = path.join(uploadsDir, "pdf-temp");
           req.session.adminNama = adminAccount.namaLengkap;
           req.session.kkId = undefined;
           return req.session.save((err) => {
-            if (err) { console.error("Session save error:", err); return res.status(500).json({ message: `Session error: ${err.message}` }); }
+            if (err) {
+              console.error("Session save error:", err);
+              return res.status(500).json({ message: `Session error: ${err.message}` });
+            }
             return res.json({ type: "admin", message: "Login admin berhasil", adminId: adminAccount.id, username: adminAccount.username, namaLengkap: adminAccount.namaLengkap });
           });
         }
@@ -1240,75 +981,6 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
     }
   });
 
-  app.get("/api/denah-wilayah", requireAdmin, async (_req, res) => {
-    try {
-      const data = await storage.getDenahWilayah();
-      if (!data) {
-        return res.json({
-          nama: "Denah RW 03",
-          data: createEmptyDenahWilayahData(),
-        });
-      }
-      res.json({
-        ...data,
-        data: normalizeDenahWilayahData(data.data),
-      });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message || "Gagal mengambil denah wilayah" });
-    }
-  });
-
-  app.get("/api/denah-wilayah/editor", requireAdmin, async (_req, res) => {
-    try {
-      const [denah, kkList, wargaList] = await Promise.all([
-        storage.getDenahWilayah(),
-        storage.getAllKk(),
-        storage.getAllWarga(),
-      ]);
-
-      const kepalaMap: Record<number, string> = {};
-      const kepalaWaMap: Record<number, string | null> = {};
-      wargaList.forEach((item) => {
-        if (item.kedudukanKeluarga === "Kepala Keluarga") {
-          kepalaMap[item.kkId] = item.namaLengkap;
-          kepalaWaMap[item.kkId] = item.nomorWhatsapp || null;
-        }
-      });
-
-      res.json({
-        map: denah
-          ? { ...denah, data: normalizeDenahWilayahData(denah.data) }
-          : { nama: "Denah RW 03", data: createEmptyDenahWilayahData() },
-        kkOptions: kkList.map((kk) => ({
-          id: kk.id,
-          nomorKk: kk.nomorKk,
-          alamat: kk.alamat,
-          rt: kk.rt,
-          kepalaKeluarga: kepalaMap[kk.id] || null,
-          nomorWhatsapp: kepalaWaMap[kk.id] || null,
-        })),
-      });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message || "Gagal mengambil data editor peta" });
-    }
-  });
-
-  app.put("/api/denah-wilayah", requireAdmin, async (req, res) => {
-    try {
-      const parsed = insertDenahWilayahSchema.parse(req.body);
-      const data = await storage.upsertDenahWilayah({
-        ...parsed,
-        data: normalizeDenahWilayahData(parsed.data),
-      });
-      res.json({
-        ...data,
-        data: normalizeDenahWilayahData(data.data),
-      });
-    } catch (error: any) {
-      res.status(400).json({ message: error.message || "Gagal menyimpan denah wilayah" });
-    }
-  });
-
   app.get("/api/kk", requireAuth, async (req, res) => {
     if (req.session.isAdmin) {
       const key = CacheKey.kkList();
@@ -1508,6 +1180,71 @@ Salam hangat dari pengurus RW 03 Padasuka`;
     cache.set(key, data, TTL.WARGA_WITH_KK);
     res.json(data);
   });
+
+  const publicWargaIdentitySchema = z.object({
+    nik: z.string().regex(/^\d{16}$/, "NIK harus 16 digit"),
+    nomorWa: z.string().min(9, "Nomor WhatsApp tidak valid"),
+  });
+
+  const publicLaporanSchema = z.object({
+    nomorWa: z.string().min(9, "Nomor WhatsApp tidak valid"),
+    jenisLaporan: z.string().min(1),
+    judul: z.string().min(3),
+    isi: z.string().min(10),
+  });
+
+  app.post("/api/public/validate-warga", async (req, res) => {
+    try {
+      const parsed = publicWargaIdentitySchema.parse(req.body);
+      const identity = await storage.validateWargaIdentity(parsed.nik, parsed.nomorWa);
+      if (!identity) {
+        return res.status(401).json({ message: "NIK dan nomor WhatsApp tidak cocok dengan data warga RW" });
+      }
+      return res.json(identity);
+    } catch (error: any) {
+      return res.status(400).json({ message: error.message || "Data tidak valid" });
+    }
+  });
+
+  app.get("/api/public/rt-pelayanan", async (_req, res) => {
+    try {
+      const list = await storage.getAllRt();
+      return res.json(
+        list.map((rt) => ({
+          nomorRt: rt.nomorRt,
+          namaKetua: rt.namaKetua,
+          nomorWhatsapp: rt.nomorWhatsapp,
+          tersedia: Boolean(rt.nomorWhatsapp && rt.nomorWhatsapp.replace(/\D/g, "").length >= 9),
+        })),
+      );
+    } catch (error: any) {
+      return res.status(500).json({ message: error.message || "Gagal memuat data RT" });
+    }
+  });
+
+  app.post("/api/public/laporan", async (req, res) => {
+    try {
+      const parsed = publicLaporanSchema.parse(req.body);
+      const nomorWa = parsed.nomorWa.trim();
+
+      const data = await storage.createLaporan({
+        jenisLaporan: parsed.jenisLaporan,
+        judul: parsed.judul,
+        isi: `[Kontak WA: ${nomorWa}]\n\n${parsed.isi}`,
+      });
+
+      const jenisLabel = jenisLaporanLabels[parsed.jenisLaporan] || parsed.jenisLaporan;
+      notifyAdmin(
+        `[RW 03 Padasuka - Admin]\n\nLaporan baru dari kiosk publik\n\nWA: ${nomorWa}\nJudul: ${parsed.judul}\nKategori: ${jenisLabel}`,
+      );
+
+      return res.json(data);
+    } catch (error: any) {
+      return res.status(400).json({ message: error.message || "Gagal mengirim laporan" });
+    }
+  });
+
+  registerVisitrw3Routes(app, notifyAdmin);
 
   app.get("/api/rt", async (_req, res) => {
     const data = await storage.getAllRt();
@@ -2037,617 +1774,6 @@ Salam hangat dari pengurus RW 03 Padasuka`;
       }
 
       res.json(updated);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/wa-blast", requireAdmin, async (_req, res) => {
-    const data = await storage.getAllWaBlast();
-    const normalized = await Promise.all(data.map(async (blast) => {
-      if (blast.status !== "mengirim" || activeWaBlastWorkers.has(blast.id)) return blast;
-      const recipients = await storage.getWaBlastRecipients(blast.id);
-      if (recipients.length === 0) {
-        if ((blast.jumlahPending ?? 0) === 0) {
-          return await storage.updateWaBlastStatus(blast.id, "terkirim", blast.jumlahPenerima, blast.jumlahBerhasil) ?? blast;
-        }
-        return blast;
-      }
-      await storage.resetWaBlastRetryableRecipients(blast.id);
-      return await storage.refreshWaBlastSummary(
-        blast.id,
-        "terjeda",
-        "Pengiriman terhenti karena server restart. Klik Lanjutkan untuk meneruskan sisa penerima.",
-      ) ?? blast;
-    }));
-    res.json(normalized);
-  });
-
-  app.post("/api/wa-blast/generate", requireAdmin, async (req, res) => {
-    try {
-      const { topik } = req.body;
-      if (!topik || typeof topik !== "string") {
-        return res.status(400).json({ message: "Topik pesan harus diisi" });
-      }
-
-      const prompt = `Kamu adalah Raden Raka, Ketua RW 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi.
-Umur kamu masih 23 tahun, jadi gaya bicara kamu santai, hangat, dekat sama warga, tapi tetap sopan dan menghormati.
-Kamu suka pakai sapaan "Wargi" untuk warga. Sesekali boleh pakai bahasa Sunda ringan biar akrab.
-
-Buatkan pesan WhatsApp broadcast untuk warga RW 03 dengan topik: "${topik}"
-
-ATURAN PENTING:
-1. Gunakan placeholder berikut yang WAJIB ada dalam pesan:
-   - {gender} = akan otomatis diganti jadi "Bapak" atau "Ibu" sesuai jenis kelamin penerima
-   - {warga} = akan otomatis diganti jadi nama lengkap penerima
-   - {rtxx} = akan otomatis diganti jadi nomor RT penerima (contoh: RT 03)
-2. Awali dengan salam "Assalamu'alaikum Wr. Wb." dan sapaan "{gender} {warga} Wargi {rtxx} yang terhormat,"
-3. Akhiri dengan ajakan cek web: "Info lengkap bisa dicek di web kita 👉 rw3padasukacimahi.org"
-4. Tutup dengan "Hatur nuhun! 🙏" dan tanda tangan "Raden Raka - Ketua RW 03 Padasuka"
-5. Jangan terlalu kaku/formal. Bayangkan kamu ngobrol santai tapi sopan ke warga yang sebagian besar lebih tua dari kamu.
-6. Jangan pakai markdown (tanpa tanda *). Gunakan teks biasa saja.
-7. Pesan harus singkat, padat, dan jelas. Maksimal 15 baris.
-8. Jika ada informasi yang perlu diisi (tanggal, waktu, tempat dll), gunakan format [ISI ...] sebagai placeholder yang bisa diedit admin.
-
-Langsung tulis pesannya saja tanpa penjelasan tambahan.`;
-
-      let result = await generateWithGemini(prompt);
-      result = result.trim();
-
-      if (!result.includes("{gender}") || !result.includes("{warga}") || !result.includes("{rtxx}")) {
-        const header = `Assalamu'alaikum Wr. Wb.\n\n{gender} {warga} Wargi {rtxx} yang terhormat,\n\n`;
-        if (!result.includes("{gender}")) {
-          result = header + result;
-        }
-      }
-
-      res.json({ pesan: result });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  function hitungUmur(tanggalLahir: string | null): number | null {
-    if (!tanggalLahir) return null;
-    const lahir = new Date(tanggalLahir);
-    if (isNaN(lahir.getTime())) return null;
-    const today = new Date();
-    let age = today.getFullYear() - lahir.getFullYear();
-    const m = today.getMonth() - lahir.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < lahir.getDate())) age--;
-    return age;
-  }
-
-  const validWaBlastKategori = ["semua", "per_rt", "kepala_keluarga", "penerima_bansos", "pemukiman", "perumahan", "pemilik_kost", "warga_singgah", "anak", "remaja", "dewasa", "lansia"];
-  const activeWaBlastWorkers = new Set<number>();
-  const MAX_WA_BLAST_ATTEMPTS = 3;
-
-  type WaBlastRecipientDraft = {
-    recipientType: string;
-    recipientId: number | null;
-    nama: string;
-    nomorWhatsapp: string;
-    jenisKelamin?: string | null;
-    rt?: number | null;
-  };
-
-  function normalizeBlastPhone(phone: string) {
-    const digits = phone.replace(/[^0-9]/g, "");
-    if (digits.startsWith("0")) return `62${digits.slice(1)}`;
-    if (digits.startsWith("8")) return `62${digits}`;
-    return digits;
-  }
-
-  function personalizeWaBlastMessage(template: string, recipient: WaBlastRecipientDraft) {
-    const gender = recipient.jenisKelamin === "Perempuan" ? "Ibu" : "Bapak";
-    const rtNum = recipient.rt ? `RT ${String(recipient.rt).padStart(2, "0")}` : "RT -";
-    return template
-      .replace(/\{gender\}/gi, gender)
-      .replace(/\{warga\}/gi, recipient.nama || "Warga")
-      .replace(/\{rtxx\}/gi, rtNum);
-  }
-
-  async function buildWaBlastRecipients(kategori: string, filterRt?: number | null): Promise<WaBlastRecipientDraft[]> {
-    const pemukimanRt = [1, 2, 3, 4];
-    const perumahanRt = [5, 6, 7];
-    const uniquePhones = new Set<string>();
-    const recipients: WaBlastRecipientDraft[] = [];
-
-    const pushUnique = (recipient: WaBlastRecipientDraft) => {
-      if (!recipient.nomorWhatsapp) return;
-      const normalized = normalizeBlastPhone(recipient.nomorWhatsapp);
-      if (!normalized || uniquePhones.has(normalized)) return;
-      uniquePhones.add(normalized);
-      recipients.push(recipient);
-    };
-
-    if (kategori === "pemilik_kost") {
-      const allPemilik = await storage.getAllPemilikKost();
-      for (const p of allPemilik) {
-        pushUnique({
-          recipientType: "pemilik_kost",
-          recipientId: p.id,
-          nama: p.namaPemilik,
-          nomorWhatsapp: p.nomorWaPemilik,
-          rt: p.rt,
-        });
-      }
-      return recipients;
-    }
-
-    if (kategori === "warga_singgah") {
-      const allWs = await storage.getAllWargaSinggah();
-      for (const ws of allWs) {
-        if (ws.status !== "aktif") continue;
-        pushUnique({
-          recipientType: "warga_singgah",
-          recipientId: ws.id,
-          nama: ws.namaLengkap,
-          nomorWhatsapp: ws.nomorWhatsapp,
-          rt: ws.rtKost,
-        });
-      }
-      return recipients;
-    }
-
-    let wargaList: any[] = [];
-    if (kategori === "semua") {
-      wargaList = await storage.getAllWargaWithKk();
-    } else if (kategori === "per_rt" && filterRt) {
-      wargaList = await storage.getWargaByRt(filterRt);
-    } else if (kategori === "pemukiman") {
-      const all = await storage.getAllWargaWithKk();
-      wargaList = all.filter(w => pemukimanRt.includes(w.rt));
-    } else if (kategori === "perumahan") {
-      const all = await storage.getAllWargaWithKk();
-      wargaList = all.filter(w => perumahanRt.includes(w.rt));
-    } else if (kategori === "kepala_keluarga") {
-      const all = await storage.getAllWargaWithKk();
-      wargaList = all.filter(w => w.kedudukanKeluarga === "Kepala Keluarga");
-    } else if (kategori === "penerima_bansos") {
-      const allKk = await storage.getAllKk();
-      const bansosKkIds = allKk.filter(k => k.penerimaBansos).map(k => k.id);
-      const all = await storage.getAllWargaWithKk();
-      wargaList = all.filter(w => bansosKkIds.includes(w.kkId) && w.kedudukanKeluarga === "Kepala Keluarga");
-    } else if (kategori === "anak") {
-      const all = await storage.getAllWargaWithKk();
-      wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age < 18; });
-    } else if (kategori === "remaja") {
-      const all = await storage.getAllWargaWithKk();
-      wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age >= 18 && age < 30; });
-    } else if (kategori === "dewasa") {
-      const all = await storage.getAllWargaWithKk();
-      wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age >= 30 && age <= 60; });
-    } else if (kategori === "lansia") {
-      const all = await storage.getAllWargaWithKk();
-      wargaList = all.filter(w => { const age = hitungUmur(w.tanggalLahir ?? null); return age !== null && age > 60; });
-    } else {
-      wargaList = await storage.getAllWargaWithKk();
-    }
-
-    for (const w of wargaList) {
-      pushUnique({
-        recipientType: "warga",
-        recipientId: w.id,
-        nama: w.namaLengkap,
-        nomorWhatsapp: w.nomorWhatsapp,
-        jenisKelamin: w.jenisKelamin,
-        rt: w.rt,
-      });
-    }
-    return recipients;
-  }
-
-  function randomMs(min: number, max: number) {
-    return min + Math.floor(Math.random() * (max - min + 1));
-  }
-
-  async function delayMs(ms: number) {
-    await new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  async function finalizeWaBlastIfDone(blastId: number) {
-    const recipients = await storage.getWaBlastRecipients(blastId);
-    const pending = recipients.filter(r => ["pending", "retry", "sending"].includes(r.status)).length;
-    if (pending > 0) return false;
-    const sent = recipients.filter(r => r.status === "sent").length;
-    const failed = recipients.filter(r => r.status === "failed").length;
-    const skipped = recipients.filter(r => r.status === "skipped").length;
-    const finalStatus = sent === 0 && (failed > 0 || skipped > 0)
-      ? "gagal"
-      : failed > 0 || skipped > 0
-        ? "sebagian_gagal"
-        : "selesai";
-    await storage.refreshWaBlastSummary(blastId, finalStatus, null);
-    return true;
-  }
-
-  function startWaBlastWorker(blastId: number) {
-    if (activeWaBlastWorkers.has(blastId)) return;
-    activeWaBlastWorkers.add(blastId);
-
-    (async () => {
-      let processedInRun = 0;
-      try {
-        await storage.resetWaBlastRetryableRecipients(blastId);
-        const current = await storage.getWaBlastById(blastId);
-        if (!current || ["selesai", "sebagian_gagal", "gagal"].includes(current.status)) return;
-        await storage.updateWaBlastStatus(blastId, "mengirim", current.jumlahPenerima, current.jumlahBerhasil, {
-          startedAt: current.startedAt ?? new Date(),
-          finishedAt: null,
-          lastError: null,
-        });
-
-        while (true) {
-          const done = await finalizeWaBlastIfDone(blastId);
-          if (done) break;
-
-          const recipient = await storage.getNextWaBlastRecipient(blastId);
-          if (!recipient) break;
-
-          const sendingAttempt = recipient.attemptCount + 1;
-          await storage.updateWaBlastRecipient(recipient.id, {
-            status: "sending",
-            attemptCount: sendingAttempt,
-            lastError: null,
-          });
-
-          const result = await sendWhatsApp(recipient.nomorWhatsapp, recipient.pesanPersonal, 0);
-          processedInRun++;
-
-          if (result.ok) {
-            await storage.updateWaBlastRecipient(recipient.id, {
-              status: "sent",
-              sentAt: new Date(),
-              lastError: null,
-            });
-            await storage.refreshWaBlastSummary(blastId, "mengirim", null);
-          } else if (result.kind === "invalid_number") {
-            await storage.updateWaBlastRecipient(recipient.id, {
-              status: "skipped",
-              lastError: result.message,
-            });
-            await storage.refreshWaBlastSummary(blastId, "mengirim", result.message);
-          } else if (result.kind === "disconnected") {
-            await storage.updateWaBlastRecipient(recipient.id, {
-              status: sendingAttempt >= MAX_WA_BLAST_ATTEMPTS ? "failed" : "retry",
-              lastError: result.message,
-            });
-            await storage.refreshWaBlastSummary(blastId, "terjeda", result.message);
-            break;
-          } else {
-            await storage.updateWaBlastRecipient(recipient.id, {
-              status: sendingAttempt >= MAX_WA_BLAST_ATTEMPTS ? "failed" : "retry",
-              lastError: result.message,
-            });
-            await storage.refreshWaBlastSummary(blastId, "mengirim", result.message);
-          }
-
-          if (await finalizeWaBlastIfDone(blastId)) break;
-          const pause = processedInRun % 10 === 0 ? randomMs(60000, 120000) : randomMs(12000, 25000);
-          await delayMs(pause);
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Worker WA Blast berhenti";
-        console.error(`WA Blast #${blastId} worker error:`, error);
-        await storage.refreshWaBlastSummary(blastId, "terjeda", message);
-      } finally {
-        activeWaBlastWorkers.delete(blastId);
-      }
-    })();
-  }
-
-  app.get("/api/wa-blast/preview", requireAdmin, async (req, res) => {
-    try {
-      const kategori = (req.query.kategori as string) || "semua";
-      if (!validWaBlastKategori.includes(kategori)) {
-        return res.status(400).json({ message: "Kategori tidak valid" });
-      }
-      const rt = req.query.rt ? parseInt(req.query.rt as string) : undefined;
-      if (kategori === "per_rt" && (!rt || rt < 1 || isNaN(rt))) {
-        return res.status(400).json({ message: "Nomor RT tidak valid" });
-      }
-      const recipients = await buildWaBlastRecipients(kategori, rt);
-      res.json({ total: recipients.length });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/wa-blast/nomor-kosong", requireAdmin, async (_req, res) => {
-    try {
-      const key = CacheKey.nomorKosong();
-      const cached = cache.get(key);
-      if (cached) return res.json(cached);
-      const allWarga = await storage.getAllWargaWithKk();
-
-      // Kelompokkan warga per KK untuk mencari kepala keluarga
-      const perKk = new Map<number, typeof allWarga>();
-      for (const w of allWarga) {
-        if (!perKk.has(w.kkId)) perKk.set(w.kkId, []);
-        perKk.get(w.kkId)!.push(w);
-      }
-
-      // Filter warga yang belum punya nomor WA
-      const wargaKosong = allWarga.filter(w => !w.nomorWhatsapp);
-
-      const data = wargaKosong.map(w => {
-        const umur = hitungUmur(w.tanggalLahir ?? null);
-        const isAnak = umur !== null && umur < 16;
-        const kkMembers = perKk.get(w.kkId) || [];
-        const kk = kkMembers.find(m => m.kedudukanKeluarga === "Kepala Keluarga");
-        return {
-          id: w.id, namaLengkap: w.namaLengkap, nik: w.nik, umur,
-          jenisKelamin: w.jenisKelamin, kedudukanKeluarga: w.kedudukanKeluarga,
-          rt: w.rt, alamat: w.alamat, kkId: w.kkId, nomorKk: w.nomorKk, isAnak,
-          kepalaKeluarga: kk ? { id: kk.id, namaLengkap: kk.namaLengkap, nomorWhatsapp: kk.nomorWhatsapp } : null,
-        };
-      });
-
-      // Deteksi duplikat nomor WA (warga yang punya WA tapi nomornya sama dengan orang lain)
-      const phoneMap = new Map<string, typeof allWarga>();
-      for (const w of allWarga) {
-        if (!w.nomorWhatsapp) continue;
-        const norm = w.nomorWhatsapp.replace(/[^0-9]/g, "");
-        if (!phoneMap.has(norm)) phoneMap.set(norm, []);
-        phoneMap.get(norm)!.push(w);
-      }
-      const duplikatGroups = Array.from(phoneMap.entries())
-        .filter(([, members]) => members.length > 1)
-        .map(([nomor, members]) => ({
-          nomor,
-          jumlah: members.length,
-          warga: members.map(w => ({
-            id: w.id,
-            namaLengkap: w.namaLengkap,
-            rt: w.rt,
-            kedudukanKeluarga: w.kedudukanKeluarga,
-            nomorKk: w.nomorKk,
-          })),
-        }))
-        .sort((a, b) => b.jumlah - a.jumlah);
-
-      const rtList = [1, 2, 3, 4, 5, 6, 7];
-      const stats = {
-        totalKosong: data.length,
-        totalAnak: data.filter(w => w.isAnak).length,
-        totalPerluDiisi: data.filter(w => !w.isAnak).length,
-        totalDuplikat: duplikatGroups.length,
-        byRt: rtList
-          .map(rt => ({
-            rt,
-            total: data.filter(w => w.rt === rt).length,
-            anak: data.filter(w => w.rt === rt && w.isAnak).length,
-            perluDiisi: data.filter(w => w.rt === rt && !w.isAnak).length,
-          }))
-          .filter(r => r.total > 0),
-      };
-
-      const result = { stats, data, duplikat: duplikatGroups };
-      cache.set(key, result, TTL.NOMOR_KOSONG);
-      res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/wa-blast/nomor-kosong/export", requireAdmin, async (req, res) => {
-    try {
-      const allWarga = await storage.getAllWargaWithKk();
-
-      const perKk = new Map<number, typeof allWarga>();
-      for (const w of allWarga) {
-        if (!perKk.has(w.kkId)) perKk.set(w.kkId, []);
-        perKk.get(w.kkId)!.push(w);
-      }
-
-      const filterRtParam = req.query.rt ? parseInt(req.query.rt as string) : undefined;
-      let wargaKosong = allWarga.filter(w => !w.nomorWhatsapp);
-      if (filterRtParam && !isNaN(filterRtParam)) {
-        wargaKosong = wargaKosong.filter(w => w.rt === filterRtParam);
-      }
-
-      const rows = wargaKosong.map(w => {
-        const umur = hitungUmur(w.tanggalLahir ?? null);
-        const isAnak = umur !== null && umur < 16;
-        const kkMembers = perKk.get(w.kkId) || [];
-        const kk = kkMembers.find(m => m.kedudukanKeluarga === "Kepala Keluarga");
-        return {
-          "Nama Lengkap": w.namaLengkap,
-          "NIK": w.nik,
-          "RT": `RT ${String(w.rt).padStart(2, "0")}`,
-          "Alamat": w.alamat,
-          "No. KK": w.nomorKk,
-          "Kedudukan Keluarga": w.kedudukanKeluarga,
-          "Jenis Kelamin": w.jenisKelamin,
-          "Umur": umur !== null ? `${umur} tahun` : "-",
-          "Kategori": isAnak ? "Anak < 16 thn (Tidak punya WA)" : "Perlu diisi",
-          "Nomor WA": "",
-          "Nama Kepala Keluarga": kk?.namaLengkap ?? "-",
-          "WA Kepala Keluarga": kk?.nomorWhatsapp ?? "-",
-        };
-      });
-
-      // Duplikat nomor WA (semua RT, tidak difilter)
-      const phoneMap2 = new Map<string, typeof allWarga>();
-      for (const w of allWarga) {
-        if (!w.nomorWhatsapp) continue;
-        const norm = w.nomorWhatsapp.replace(/[^0-9]/g, "");
-        if (!phoneMap2.has(norm)) phoneMap2.set(norm, []);
-        phoneMap2.get(norm)!.push(w);
-      }
-      const dupRows: Record<string, string>[] = [];
-      for (const [nomor, members] of phoneMap2.entries()) {
-        if (members.length < 2) continue;
-        members.forEach((w, idx) => {
-          dupRows.push({
-            "Nomor WA (Duplikat)": idx === 0 ? nomor : "",
-            "Jumlah Pemakai": idx === 0 ? String(members.length) : "",
-            "Nama Warga": w.namaLengkap,
-            "RT": `RT ${String(w.rt).padStart(2, "0")}`,
-            "No. KK": w.nomorKk,
-            "Kedudukan Keluarga": w.kedudukanKeluarga,
-          });
-        });
-        dupRows.push({ "Nomor WA (Duplikat)": "", "Jumlah Pemakai": "", "Nama Warga": "", "RT": "", "No. KK": "", "Kedudukan Keluarga": "" });
-      }
-
-      const wb = XLSX.utils.book_new();
-
-      // Sheet 1: WA Kosong
-      const ws = XLSX.utils.json_to_sheet(rows);
-      ws["!cols"] = [
-        { wch: 30 }, { wch: 20 }, { wch: 8 }, { wch: 35 }, { wch: 20 },
-        { wch: 22 }, { wch: 14 }, { wch: 10 }, { wch: 30 }, { wch: 18 },
-        { wch: 30 }, { wch: 20 },
-      ];
-      XLSX.utils.book_append_sheet(wb, ws, "Nomor WA Kosong");
-
-      // Sheet 2: Duplikat WA
-      if (dupRows.length > 0) {
-        const wsDup = XLSX.utils.json_to_sheet(dupRows);
-        wsDup["!cols"] = [{ wch: 20 }, { wch: 14 }, { wch: 30 }, { wch: 8 }, { wch: 20 }, { wch: 22 }];
-        XLSX.utils.book_append_sheet(wb, wsDup, "Duplikat Nomor WA");
-      }
-
-      // Sheet 3: Info
-      const infoData = [
-        ["Laporan Nomor WA Bermasalah - RW 03 Padasuka"],
-        [`Tanggal Export: ${new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}`],
-        [`Filter RT: ${filterRtParam ? `RT ${String(filterRtParam).padStart(2, "0")}` : "Semua RT"}`],
-        [`WA Kosong: ${rows.length} warga`],
-        [`Duplikat Nomor WA: ${dupRows.length > 0 ? Math.floor(dupRows.length / 2) : 0} nomor`],
-        [],
-        ["Sheet 'Nomor WA Kosong': Isi kolom 'Nomor WA' lalu input ulang ke sistem."],
-        ["Sheet 'Duplikat Nomor WA': Cek dan perbaiki nomor yang dipakai lebih dari 1 warga."],
-      ];
-      const wsInfo = XLSX.utils.aoa_to_sheet(infoData);
-      wsInfo["!cols"] = [{ wch: 70 }];
-      XLSX.utils.book_append_sheet(wb, wsInfo, "Info");
-
-      const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
-      const rtLabel = filterRtParam ? `-RT${String(filterRtParam).padStart(2, "0")}` : "-semua-rt";
-      const filename = `nomor-wa-kosong${rtLabel}-${new Date().toISOString().slice(0, 10)}.xlsx`;
-
-      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-      res.send(buf);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/wa-blast", requireAdmin, async (req, res) => {
-    try {
-      // Batasi jam blast: 06:00–21:00 WIB (UTC+7)
-      const nowWib = new Date(Date.now() + 7 * 60 * 60 * 1000);
-      const hour = nowWib.getUTCHours();
-      if (hour < 6 || hour >= 21) {
-        return res.status(400).json({ message: "WA Blast hanya bisa dikirim antara jam 06:00–21:00 WIB." });
-      }
-
-      const parsed = insertWaBlastSchema.parse(req.body);
-      const kategoriFilter = parsed.kategoriFilter ?? "semua";
-      const filterRt = parsed.filterRt ?? null;
-      if (!validWaBlastKategori.includes(kategoriFilter)) {
-        return res.status(400).json({ message: "Kategori tidak valid" });
-      }
-      if (kategoriFilter === "per_rt" && (!filterRt || filterRt < 1)) {
-        return res.status(400).json({ message: "Nomor RT tidak valid" });
-      }
-
-      const recipients = await buildWaBlastRecipients(kategoriFilter, filterRt);
-      if (recipients.length === 0) {
-        return res.status(400).json({ message: "Tidak ada nomor WhatsApp valid untuk kategori ini." });
-      }
-      const blast = await storage.createWaBlastWithRecipients({ ...parsed, kategoriFilter, filterRt }, recipients.map(recipient => ({
-        recipientType: recipient.recipientType,
-        recipientId: recipient.recipientId,
-        nama: recipient.nama,
-        nomorWhatsapp: recipient.nomorWhatsapp,
-        rt: recipient.rt ?? null,
-        pesanPersonal: personalizeWaBlastMessage(parsed.pesan, recipient),
-        status: "pending",
-      })));
-      startWaBlastWorker(blast.id);
-
-      const estimatedSeconds = recipients.length * 19 + Math.floor(recipients.length / 10) * 90;
-      res.json({ message: "Blast masuk antrian dan sedang dikirim", total: recipients.length, blastId: blast.id, estimatedSeconds });
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/wa-blast/:id/recipients", requireAdmin, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id as string);
-      if (isNaN(id)) return res.status(400).json({ message: "ID blast tidak valid" });
-      const blast = await storage.getWaBlastById(id);
-      if (!blast) return res.status(404).json({ message: "WA Blast tidak ditemukan" });
-      const recipients = await storage.getWaBlastRecipients(id);
-      res.json(recipients);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/wa-blast/:id/resume", requireAdmin, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id as string);
-      if (isNaN(id)) return res.status(400).json({ message: "ID blast tidak valid" });
-      const blast = await storage.getWaBlastById(id);
-      if (!blast) return res.status(404).json({ message: "WA Blast tidak ditemukan" });
-      if (!["terjeda", "sebagian_gagal", "gagal", "mengirim"].includes(blast.status)) {
-        return res.status(400).json({ message: "Blast ini tidak bisa dilanjutkan" });
-      }
-      const recipients = await storage.getWaBlastRecipients(id);
-      const retryable = recipients.filter(r => ["pending", "retry", "sending", "failed"].includes(r.status) && r.attemptCount < MAX_WA_BLAST_ATTEMPTS);
-      for (const r of retryable) {
-        await storage.updateWaBlastRecipient(r.id, { status: "pending", lastError: null });
-      }
-      await storage.refreshWaBlastSummary(id, "mengirim", null);
-      startWaBlastWorker(id);
-      res.json({ message: "WA Blast dilanjutkan", blastId: id, total: retryable.length });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/wa-blast/:id/cancel", requireAdmin, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id as string);
-      if (isNaN(id)) return res.status(400).json({ message: "ID blast tidak valid" });
-      const blast = await storage.getWaBlastById(id);
-      if (!blast) return res.status(404).json({ message: "WA Blast tidak ditemukan" });
-      await storage.cancelPendingWaBlastRecipients(id);
-      const updated = await storage.refreshWaBlastSummary(id, "sebagian_gagal", "Dibatalkan admin");
-      res.json(updated);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/wa-blast/:id", requireAdmin, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id as string);
-      if (isNaN(id)) return res.status(400).json({ message: "ID blast tidak valid" });
-      let blast = await storage.getWaBlastById(id);
-      if (!blast) return res.status(404).json({ message: "WA Blast tidak ditemukan" });
-      if (blast.status === "mengirim" && !activeWaBlastWorkers.has(id)) {
-        const recipients = await storage.getWaBlastRecipients(id);
-        if (recipients.length > 0) {
-          await storage.resetWaBlastRetryableRecipients(id);
-          blast = await storage.refreshWaBlastSummary(
-            id,
-            "terjeda",
-            "Pengiriman terhenti karena server restart. Klik Lanjutkan untuk meneruskan sisa penerima.",
-          ) ?? blast;
-        } else if ((blast.jumlahPending ?? 0) === 0) {
-          blast = await storage.updateWaBlastStatus(id, "terkirim", blast.jumlahPenerima, blast.jumlahBerhasil) ?? blast;
-        }
-      }
-      const refreshed = await storage.refreshWaBlastSummary(id);
-      res.json(refreshed ?? blast);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

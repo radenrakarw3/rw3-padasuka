@@ -7,6 +7,30 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+/** Parse pesan error dari apiRequest / fetch (format "status: {...json}"). */
+export function getApiErrorMessage(error: unknown, fallback = "Terjadi kesalahan. Silakan coba lagi."): string {
+  if (!error || typeof error !== "object") {
+    return typeof error === "string" ? error : fallback;
+  }
+  const raw = (error as { message?: string }).message ?? "";
+  if (!raw) return fallback;
+  const jsonPart = raw.includes(":") ? raw.split(":").slice(1).join(":").trim() : raw;
+  try {
+    const parsed = JSON.parse(jsonPart) as { message?: string } | { message?: string }[];
+    if (Array.isArray(parsed)) {
+      const zodMsgs = parsed.map((e) => e.message).filter(Boolean) as string[];
+      if (zodMsgs.length) return zodMsgs.join(" ");
+    }
+    if (parsed && typeof parsed === "object" && "message" in parsed && typeof parsed.message === "string") {
+      return parsed.message;
+    }
+  } catch {
+    /* plain text */
+  }
+  if (jsonPart && jsonPart.length < 200) return jsonPart;
+  return fallback;
+}
+
 export async function readJsonSafely<T = any>(res: Response): Promise<T> {
   const text = await res.text();
   if (!text) {
@@ -27,9 +51,10 @@ export async function apiRequest(
   data?: unknown | undefined,
   options?: { timeoutMs?: number },
 ): Promise<Response> {
-  const controller = options?.timeoutMs ? new AbortController() : undefined;
+  const timeoutMs = options?.timeoutMs;
+  const controller = timeoutMs != null ? new AbortController() : undefined;
   const timeout = controller
-    ? setTimeout(() => controller.abort(), options.timeoutMs)
+    ? setTimeout(() => controller.abort(), timeoutMs)
     : undefined;
 
   let res: Response;
