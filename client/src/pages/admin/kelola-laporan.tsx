@@ -167,7 +167,7 @@ export default function AdminKelolaLaporan() {
     updateMutation.mutate({ id, status, tanggapanText: tanggapan[id] });
   };
 
-  const pendingCount = laporanList?.filter((l) => l.status === "pending").length ?? 0;
+  const pendingCount = laporanList?.filter((l) => l.status === "pending")?.length ?? 0;
 
   const filteredLaporan = useMemo(() => {
     if (!laporanList) return [];

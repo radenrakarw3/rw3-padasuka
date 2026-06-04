@@ -279,7 +279,14 @@ export async function registerRoutes(
               console.error("Session save error:", err);
               return res.status(500).json({ message: `Session error: ${err.message}` });
             }
-            return res.json({ type: "admin", message: "Login admin berhasil", adminId: adminAccount.id, username: adminAccount.username, namaLengkap: adminAccount.namaLengkap });
+            return res.json({
+              type: "admin",
+              isAdmin: true,
+              message: "Login admin berhasil",
+              adminId: adminAccount.id,
+              username: adminAccount.username,
+              namaLengkap: adminAccount.namaLengkap,
+            });
           });
         }
       }

@@ -191,6 +191,9 @@ export function SectionPanel({
   onDrill?: (sectionKey: string, field: string, value: string) => void;
 }) {
   const drill = (field: string, value: string) => onDrill?.(section.key, field, value);
+  const booleans = section.booleans ?? [];
+  const distributions = section.distributions ?? [];
+  const fillRates = section.fillRates ?? [];
 
   return (
     <div className="space-y-4">
@@ -201,29 +204,29 @@ export function SectionPanel({
         </span>
       </div>
 
-      {section.booleans.length > 0 && (
+      {booleans.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {section.booleans.map((b) => (
+          {booleans.map((b) => (
             <BooleanCard key={b.field} item={b} onDrill={drill} />
           ))}
         </div>
       )}
 
-      {section.distributions.length > 0 && (
+      {distributions.length > 0 && (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {section.distributions.map((d) => (
+          {distributions.map((d) => (
             <DistributionCard key={d.field} dist={d} onDrill={drill} />
           ))}
         </div>
       )}
 
-      {section.fillRates.length > 0 && (
+      {fillRates.length > 0 && (
         <Card className="border-border/70">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Tingkat pengisian field</CardTitle>
           </CardHeader>
           <CardContent>
-            <FillRateList items={section.fillRates} />
+            <FillRateList items={fillRates} />
           </CardContent>
         </Card>
       )}

@@ -19,12 +19,9 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 function isAdminUser(data: unknown): data is AuthUser {
-  return (
-    typeof data === "object" &&
-    data !== null &&
-    (data as AuthUser).type === "admin" &&
-    (data as AuthUser).isAdmin === true
-  );
+  if (typeof data !== "object" || data === null) return false;
+  const u = data as AuthUser;
+  return u.type === "admin" && (u.isAdmin === true || u.isAdmin === undefined);
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {

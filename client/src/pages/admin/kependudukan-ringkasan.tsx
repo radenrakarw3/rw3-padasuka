@@ -122,11 +122,11 @@ function SegmentDialog({
         </DialogHeader>
         <div className="overflow-y-auto flex-1 -mx-1 px-1">
           {isLoading && <Skeleton className="h-32 w-full" />}
-          {!isLoading && data?.rows.length === 0 && (
+          {!isLoading && (data?.rows?.length ?? 0) === 0 && (
             <p className="text-sm text-muted-foreground py-4 text-center">Tidak ada data</p>
           )}
           <ul className="space-y-2">
-            {data?.rows.map((r) => (
+            {data?.rows?.map((r) => (
               <li key={r.wargaId} className="rounded-lg border p-3 text-sm">
                 <p className="font-medium">{r.namaLengkap}</p>
                 <p className="text-xs text-muted-foreground font-mono">{r.nik}</p>
@@ -176,7 +176,7 @@ export default function KependudukanRingkasan() {
 
   const sectionByKey = useMemo(() => {
     const m = new Map<string, SectionStats>();
-    data?.sections.forEach((s) => m.set(s.key, s));
+    (data?.sections ?? []).forEach((s) => m.set(s.key, s));
     return m;
   }, [data?.sections]);
 
@@ -482,7 +482,7 @@ export default function KependudukanRingkasan() {
               <MetricCard title="Ekonomi terisi" value={formatNumber(data.kk.kkEkonomiTerisi)} description="Penghasilan bulanan diisi" />
             </div>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {data.kk.distributions.map((d) => (
+              {data.kk.distributions?.map((d) => (
                 <Card key={d.field} className="border-border/70">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm">{d.label}</CardTitle>
@@ -502,7 +502,7 @@ export default function KependudukanRingkasan() {
                 <CardDescription>Semakin tinggi, semakin bisa dipercaya untuk keputusan program</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {data.qualityBySection
+                {(data.qualityBySection ?? [])
                   .slice()
                   .sort((a, b) => a.fillPercent - b.fillPercent)
                   .map((q) => (
