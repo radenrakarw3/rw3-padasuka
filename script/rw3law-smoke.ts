@@ -5,6 +5,8 @@ import {
   createRw3lawDraft,
   approveRw3law,
   cabutRw3law,
+  deleteRw3law,
+  getRw3lawById,
 } from "../server/rw3law";
 
 async function main() {
@@ -30,11 +32,23 @@ async function main() {
   const found = after.some((x) => x.slug === approved.slug);
   console.log("visible public:", found);
 
+  try {
+    await deleteRw3law(approved.id);
+    console.error("FAIL: hapus peraturan berlaku harus ditolak");
+    process.exit(1);
+  } catch {
+    console.log("hapus ditolak saat masih berlaku: OK");
+  }
+
   await cabutRw3law(approved.id);
   const afterCabut = await listRw3lawPublic();
   console.log("hidden after cabut:", !afterCabut.some((x) => x.slug === approved.slug));
 
-  process.exit(found ? 0 : 1);
+  await deleteRw3law(approved.id);
+  const gone = await getRw3lawById(approved.id);
+  console.log("hapus permanen setelah dicabut:", gone == null ? "OK" : "FAIL");
+
+  process.exit(found && gone == null ? 0 : 1);
 }
 
 main().catch((e) => {

@@ -1,6 +1,7 @@
 import { useRoute } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw, Ban } from "lucide-react";
+import { formatTanggalHukum } from "@/lib/rw3law-format";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Rw3lawLayout } from "@/components/gov/rw3law-layout";
@@ -8,6 +9,9 @@ import { Rw3lawDocumentView } from "@/components/gov/rw3law-document-view";
 import { Rw3lawShareBar } from "@/components/gov/rw3law-share-bar";
 import { fetchPublicJson } from "@/lib/queryClient";
 import { RW3LAW_LIST_PATH } from "@/pages/public/rw3law/paths";
+
+import type { Rw3lawRevisiRingkas } from "@shared/rw3law-archive";
+import { formatNomorPeraturanLengkap } from "@shared/rw3law-archive";
 
 type Rw3lawDetail = {
   id: number;
@@ -18,6 +22,11 @@ type Rw3lawDetail = {
   versi: string | null;
   tanggalBerlaku: string | null;
   rtAsal: number | null;
+  nomorPeraturan?: number | null;
+  tahunNomor?: number | null;
+  revisiDari?: Rw3lawRevisiRingkas | null;
+  status?: "disetujui" | "dicabut";
+  dicabutAt?: string | null;
 };
 
 export default function Rw3lawDokumen() {
@@ -78,10 +87,33 @@ export default function Rw3lawDokumen() {
           Daftar Peraturan
         </Link>
         <span className="mx-2">/</span>
-        <span className="text-[#4a4a4a]">RW3LAW-{String(data.id).padStart(4, "0")}</span>
+        <span className="text-[#4a4a4a]">
+          {formatNomorPeraturanLengkap(data.nomorPeraturan, data.tahunNomor) ??
+            `RW3LAW-${String(data.id).padStart(4, "0")}`}
+        </span>
       </nav>
 
       <Rw3lawShareBar judul={data.judul} slug={data.slug} className="mb-4" />
+
+      {data.status === "dicabut" && (
+        <div
+          className="mb-4 flex gap-3 items-start rounded-md border border-[#d4a574] bg-[#fdf6ec] px-4 py-3 font-serif text-sm text-[#5c4033]"
+          role="status"
+        >
+          <Ban className="w-5 h-5 shrink-0 mt-0.5" aria-hidden />
+          <div>
+            <p className="font-semibold">Peraturan ini telah dicabut dan tidak berlaku.</p>
+            {data.dicabutAt && (
+              <p className="text-xs mt-1 text-[#6b5344]">
+                Dicabut: {formatTanggalHukum(data.dicabutAt)}
+              </p>
+            )}
+            <p className="text-xs mt-1 text-[#6b5344]">
+              Teks di bawah disimpan sebagai arsip referensi saja.
+            </p>
+          </div>
+        </div>
+      )}
 
       <Rw3lawDocumentView
         judul={data.judul}
@@ -90,6 +122,9 @@ export default function Rw3lawDokumen() {
         versi={data.versi}
         tanggalBerlaku={data.tanggalBerlaku}
         rtAsal={data.rtAsal}
+        nomorPeraturan={data.nomorPeraturan}
+        tahunNomor={data.tahunNomor}
+        revisiDariLabel={data.revisiDari?.label ?? null}
         docketId={`RW3LAW-${String(data.id).padStart(4, "0")}`}
       />
 

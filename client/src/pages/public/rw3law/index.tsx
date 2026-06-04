@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
-import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, FileText, RefreshCw, AlertCircle } from "lucide-react";
+import { Loader2, RefreshCw, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Rw3lawLayout } from "@/components/gov/rw3law-layout";
 import {
@@ -12,62 +11,65 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { rw3lawKategoriLabels, rw3lawKategoriOptions } from "@/lib/constants";
+import { rw3lawKategoriOptions } from "@/lib/constants";
 import { fetchPublicJson } from "@/lib/queryClient";
-import { formatTanggalHukum } from "@/lib/rw3law-format";
-import { cn } from "@/lib/utils";
-import { RW3LAW_LIST_PATH, rw3lawDetailPath } from "@/pages/public/rw3law/paths";
+import {
+  Rw3lawRegulationTable,
+  type Rw3lawPublicListItem,
+} from "@/components/gov/rw3law-regulation-table";
+import { RW3LAW_LIST_PATH } from "@/pages/public/rw3law/paths";
+import { groupByTahunNomor } from "@shared/rw3law-archive";
 
-type Rw3lawListItem = {
-  id: number;
-  judul: string;
-  slug: string;
-  kategori: string;
-  versi: string | null;
-  tanggalBerlaku: string | null;
-  rtAsal: number | null;
-  cuplikan: string;
-};
-
-function nomorBerkas(id: number) {
-  return `RW3LAW-${String(id).padStart(4, "0")}`;
-}
-
-/** Kolom tabel: berkas | judul (fleksibel) | kategori | berlaku */
-const TABLE_GRID =
-  "grid grid-cols-[5.25rem_minmax(0,1fr)_4.75rem_4.25rem] sm:grid-cols-[6.5rem_minmax(0,1fr)_5.5rem_5rem] md:grid-cols-[7rem_minmax(0,1fr)_6.5rem_5.75rem] gap-x-2 sm:gap-x-3 items-center";
-
-function formatBerlakuSingkat(tanggal: string | null) {
-  if (!tanggal) return "—";
-  const penuh = formatTanggalHukum(tanggal);
-  const parts = penuh.split(" ");
-  if (parts.length >= 3) return `${parts[0]} ${parts[1]} ${parts[2]}`;
-  return penuh;
+function filterByKategori(items: Rw3lawPublicListItem[], kategori: string) {
+  if (kategori === "semua") return items;
+  return items.filter((d) => d.kategori === kategori);
 }
 
 export default function Rw3lawIndex() {
   const [filterKategori, setFilterKategori] = useState("semua");
 
-  const {
-    data: list = [],
-    isPending,
-    isError,
-    error,
-    refetch,
-    isFetching,
-  } = useQuery<Rw3lawListItem[]>({
+  const berlakuQuery = useQuery({
     queryKey: ["/api/public/rw3law"],
-    queryFn: ({ signal }) => fetchPublicJson<Rw3lawListItem[]>("/api/public/rw3law", signal),
+    queryFn: ({ signal }) =>
+      fetchPublicJson<Rw3lawPublicListItem[]>("/api/public/rw3law", signal),
     retry: 1,
     staleTime: 60_000,
   });
 
-  const showLoading = isPending || (isFetching && list.length === 0);
+  const dicabutQuery = useQuery({
+    queryKey: ["/api/public/rw3law/arsip/dicabut"],
+    queryFn: ({ signal }) =>
+      fetchPublicJson<Rw3lawPublicListItem[]>("/api/public/rw3law/arsip/dicabut", signal),
+    retry: 1,
+    staleTime: 60_000,
+  });
 
-  const filtered = useMemo(() => {
-    if (filterKategori === "semua") return list;
-    return list.filter((d) => d.kategori === filterKategori);
-  }, [list, filterKategori]);
+  const isError = berlakuQuery.isError || dicabutQuery.isError;
+  const error = berlakuQuery.error ?? dicabutQuery.error;
+  const showLoading =
+    (berlakuQuery.isPending || dicabutQuery.isPending) &&
+    !berlakuQuery.data &&
+    !dicabutQuery.data;
+
+  const berlaku = useMemo(
+    () => filterByKategori(berlakuQuery.data ?? [], filterKategori),
+    [berlakuQuery.data, filterKategori],
+  );
+  const dicabut = useMemo(
+    () => filterByKategori(dicabutQuery.data ?? [], filterKategori),
+    [dicabutQuery.data, filterKategori],
+  );
+
+  const dicabutByTahun = useMemo(() => groupByTahunNomor(dicabut), [dicabut]);
+  const dicabutTanpaTahun = useMemo(
+    () => dicabut.filter((d) => !d.tahunNomor),
+    [dicabut],
+  );
+
+  const refetch = () => {
+    berlakuQuery.refetch();
+    dicabutQuery.refetch();
+  };
 
   return (
     <Rw3lawLayout title="Daftar Peraturan" backHref="/" subtitle="RW3LAW · Peraturan Warga">
@@ -79,8 +81,8 @@ export default function Rw3lawIndex() {
           Peraturan Warga RW 03
         </h2>
         <p className="font-serif text-sm text-[#4a4a4a] max-w-md mx-auto leading-relaxed">
-          Daftar peraturan lingkungan yang telah disahkan pengurus RW dan wajib dipatuhi seluruh
-          warga, diterbitkan dalam bentuk peraturan resmi berkas RW3LAW.
+          Peraturan berlaku dan arsip yang telah dicabut dipisah. Yang masih berlaku wajib dipatuhi
+          warga.
         </p>
       </div>
 
@@ -107,7 +109,7 @@ export default function Rw3lawIndex() {
           </Select>
         </div>
         <p className="text-[11px] uppercase tracking-wider text-[#6b6b6b] font-serif">
-          {filtered.length} peraturan tercatat
+          {berlaku.length} berlaku · {dicabut.length} dicabut
         </p>
       </div>
 
@@ -134,68 +136,72 @@ export default function Rw3lawIndex() {
         >
           <Loader2 className="w-8 h-8 animate-spin text-[#1a2744]" aria-label="Memuat peraturan" />
         </div>
-      ) : filtered.length === 0 ? (
-        <div className="bg-[#fffef9] border border-[#d4cfc4] px-8 py-12 text-center">
-          <FileText className="w-10 h-10 text-[#8b7355] mx-auto mb-3" aria-hidden />
-          <p className="font-serif text-sm text-[#4a4a4a]">
-            Tidak ada peraturan untuk kategori ini.
-          </p>
-        </div>
       ) : (
-        <div className="bg-[#fffef9] border border-[#d4cfc4] overflow-hidden rounded-sm">
-          <div className="overflow-x-auto">
-            <div className="min-w-[320px] sm:min-w-[520px]">
-              <div
-                className={cn(
-                  TABLE_GRID,
-                  "bg-[#1a2744] text-[9px] sm:text-[10px] uppercase tracking-wide sm:tracking-widest text-[#e8e4dc] font-semibold px-2 sm:px-3 py-3",
-                )}
-              >
-                <div className="pr-1">No. Berkas</div>
-                <div className="pr-1 min-w-0">Judul</div>
-                <div className="text-center leading-tight px-0.5">Kategori</div>
-                <div className="text-right leading-tight pl-0.5 whitespace-nowrap">Berlaku</div>
-              </div>
-              <ul className="divide-y divide-[#e5e0d5]">
-                {filtered.map((d, idx) => (
-                  <li key={d.id}>
-                    <Link
-                      href={rw3lawDetailPath(d.slug)}
-                      className={cn(
-                        "block transition-colors hover:bg-[#f0ebe3] px-2 sm:px-3 py-3.5",
-                        idx % 2 === 1 && "bg-[#faf8f4]",
-                      )}
-                    >
-                      <div className={TABLE_GRID}>
-                        <div className="font-serif text-[10px] sm:text-xs font-semibold text-[#1a2744] tabular-nums leading-tight pr-1">
-                          {nomorBerkas(d.id)}
-                        </div>
-                        <div className="min-w-0 pr-2">
-                          <p className="font-serif text-[13px] sm:text-[15px] font-semibold text-[#1a2744] leading-snug line-clamp-2">
-                            {d.judul}
-                          </p>
-                        </div>
-                        <div className="text-[9px] sm:text-[10px] uppercase tracking-wide text-[#5c5c5c] text-center leading-tight px-0.5 line-clamp-2 break-words hyphens-auto">
-                          {rw3lawKategoriLabels[d.kategori] ?? d.kategori}
-                        </div>
-                        <div className="text-[10px] sm:text-xs font-serif text-[#4a4a4a] text-right tabular-nums leading-tight pl-0.5 whitespace-nowrap">
-                          {formatBerlakuSingkat(d.tanggalBerlaku)}
-                        </div>
-                      </div>
-                      <p className="font-serif text-xs text-[#6b6b6b] mt-2 line-clamp-2 sm:hidden border-t border-[#e5e0d5]/80 pt-2">
-                        {d.cuplikan}
-                      </p>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+        <div className="space-y-10">
+          <section>
+            <div className="mb-3 flex items-baseline justify-between gap-2 flex-wrap">
+              <h3 className="font-serif text-lg font-bold text-[#1a2744]">Peraturan berlaku</h3>
+              <span className="text-[11px] uppercase tracking-wider text-[#6b6b6b]">
+                {berlaku.length} dokumen
+              </span>
             </div>
-          </div>
+            <Rw3lawRegulationTable
+              items={berlaku}
+              variant="berlaku"
+              emptyMessage="Tidak ada peraturan berlaku untuk filter ini."
+            />
+          </section>
+
+          <section>
+            <div className="mb-3 flex items-baseline justify-between gap-2 flex-wrap">
+              <h3 className="font-serif text-lg font-bold text-[#5c5c5c]">Arsip dicabut</h3>
+              <span className="text-[11px] uppercase tracking-wider text-[#6b6b6b]">
+                {dicabut.length} dokumen
+              </span>
+            </div>
+            <p className="font-serif text-xs text-[#6b6b6b] mb-3 italic">
+              Dikelompokkan per tahun penomeran. Tidak berlaku — arsip referensi saja.
+            </p>
+            {dicabut.length === 0 ? (
+              <Rw3lawRegulationTable
+                items={[]}
+                variant="dicabut"
+                emptyMessage="Belum ada peraturan yang dicabut."
+              />
+            ) : (
+              <div className="space-y-8">
+                {dicabutByTahun.map(({ tahun, items }) => (
+                  <div key={tahun}>
+                    <p className="font-serif text-xs uppercase tracking-widest text-[#6b6b6b] mb-2">
+                      Tahun {tahun}
+                    </p>
+                    <Rw3lawRegulationTable
+                      items={items}
+                      variant="dicabut"
+                      emptyMessage=""
+                    />
+                  </div>
+                ))}
+                {dicabutTanpaTahun.length > 0 && (
+                  <div>
+                    <p className="font-serif text-xs uppercase tracking-widest text-[#6b6b6b] mb-2">
+                      Arsip lainnya
+                    </p>
+                    <Rw3lawRegulationTable
+                      items={dicabutTanpaTahun}
+                      variant="dicabut"
+                      emptyMessage=""
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
         </div>
       )}
 
       <p className="mt-6 text-center font-serif text-xs text-[#6b6b6b] italic px-4">
-        Pilih baris berkas untuk membaca teks lengkap peraturan yang telah disahkan.
+        Pilih baris berkas untuk membaca teks lengkap. Peraturan dicabut ditandai tidak berlaku.
       </p>
     </Rw3lawLayout>
   );

@@ -340,7 +340,7 @@ const jenisSuratConfigs: JenisSuratConfig[] = [
     perihalLabel: "Perihal / Tema Undangan",
     perihalPlaceholder: "Contoh: Rapat Koordinasi RT/RW, Musyawarah Warga",
     fields: [
-      { key: "tujuan", label: "Ditujukan Kepada", placeholder: "Contoh: Ketua RT 01-07, Seluruh Warga RW 03", required: true },
+      { key: "tujuan", label: "Ditujukan Kepada", placeholder: "Contoh: Ketua RT 01-04, Seluruh Warga RW 03", required: true },
       { key: "tanggalAcara", label: "Hari/Tanggal Acara", placeholder: "Contoh: Sabtu, 15 Maret 2026", required: true },
       { key: "waktuAcara", label: "Waktu Acara", placeholder: "Contoh: 19.30 WIB (Ba'da Isya)", required: true },
       { key: "tempatAcara", label: "Tempat Acara", placeholder: "Contoh: Balai RW 03, Musholla Al-Ikhlas", required: true },
@@ -433,7 +433,7 @@ const jenisSuratConfigs: JenisSuratConfig[] = [
     perihalLabel: "Perihal Edaran",
     perihalPlaceholder: "Contoh: Jadwal Kerja Bakti, Himbauan Keamanan, Informasi Lingkungan",
     fields: [
-      { key: "tujuan", label: "Ditujukan Kepada", placeholder: "Contoh: Seluruh Warga RW 03, Ketua RT 01-07", required: true },
+      { key: "tujuan", label: "Ditujukan Kepada", placeholder: "Contoh: Seluruh Warga RW 03, Ketua RT 01-04", required: true },
       { key: "isiEdaran", label: "Isi / Pesan Edaran", placeholder: "Jelaskan informasi yang ingin diedarkan", type: "textarea", required: true },
       { key: "tanggalBerlaku", label: "Tanggal Berlaku / Pelaksanaan (opsional)", placeholder: "Contoh: Mulai 1 April 2026" },
       { key: "tanggalSurat", label: "Tanggal Surat", placeholder: "", type: "date" },

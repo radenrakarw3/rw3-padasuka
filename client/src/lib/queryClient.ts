@@ -33,6 +33,30 @@ export function getApiErrorMessage(error: unknown, fallback = "Terjadi kesalahan
 
 const DEFAULT_FETCH_TIMEOUT_MS = 15_000;
 
+/** Fetch dengan cookie session + timeout (Blusukan / auth). */
+export async function fetchWithTimeout(
+  url: string,
+  init: RequestInit = {},
+  timeoutMs = DEFAULT_FETCH_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      credentials: "include",
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Server tidak merespons. Pastikan server jalan (npm run dev) lalu muat ulang.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 /** Fetch JSON publik dengan timeout — mencegah UI loading tanpa akhir. */
 export async function fetchPublicJson<T>(
   url: string,
@@ -49,7 +73,7 @@ export async function fetchPublicJson<T>(
 
   try {
     const res = await fetch(url, {
-      credentials: "same-origin",
+      credentials: "include",
       signal: controller.signal,
     });
     if (!res.ok) {

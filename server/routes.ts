@@ -1,4 +1,4 @@
-import type { Express, Request, Response, NextFunction } from "express";
+import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
@@ -6,18 +6,18 @@ import bcrypt from "bcryptjs";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import crypto from "crypto";
 import express from "express";
 import * as XLSX from "xlsx";
 import { storage } from "./storage";
 import { pool } from "./db";
 import { cache, CacheKey, TTL, invalidateWarga, invalidateKk } from "./cache";
-import { insertKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertProfileEditSchema, insertPengajuanBansosSchema, insertDonasiCampaignSchema, insertDonasiSchema, insertKasRwSchema, insertPemilikKostSchema, insertWargaSinggahSchema, insertUsahaSchema, insertKaryawanUsahaSchema, insertIzinTetanggaSchema, insertSurveyUsahaSchema, insertProgramRwSchema, insertPesertaProgramSchema } from "@shared/schema";
-import { bulkUpdateTripayProducts, createTripayPurchase, ensureTripaySchema, getTripayOverview, getTripayPublicConfig, handleTripayCallback, listTripayCatalogCategoriesForWarga, listTripayCatalogOperatorsForWarga, listTripayCatalogProductsForWarga, listTripayCategories, listTripayOperators, listTripayProducts, listTripayTransactions, listTripayTransactionsByWargaId, reconcilePendingTripayTransactions, reconcileTripayTransaction, syncTripayProducts, updateTripayCategorySetting, updateTripayOperatorSetting, updateTripayProductSetting } from "./tripay";
-import { sendWhatsApp } from "./starsender";
+import { insertKkSchema, patchKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertPengajuanBansosSchema, insertDonasiCampaignSchema, insertDonasiSchema, insertKasRwSchema, insertPemilikKostSchema, insertWargaSinggahSchema, insertUsahaSchema, insertKaryawanUsahaSchema, insertIzinTetanggaSchema, insertSurveyUsahaSchema, insertProgramRwSchema, insertPesertaProgramSchema } from "@shared/schema";
 import { z } from "zod";
-import { ACTIVE_RT_NUMBERS } from "@shared/rt";
+import { ACTIVE_RT_NUMBERS, isActiveRt, assertKkInPemukimanScope } from "@shared/rt";
 import { formatLaporanKioskIsi, formatRtLabel } from "@shared/laporan-pelapor";
+import { generateWithGemini } from "./gemini";
+import { buildKependudukanStats, buildSegmentRows } from "./kependudukan-stats";
+import { isFieldFilled } from "@shared/kependudukan-analytics";
 
 function resolveAppVersion() {
   const productionIndexPath = path.resolve(process.cwd(), "dist", "public", "index.html");
@@ -40,148 +40,9 @@ declare module "express-session" {
     adminId?: number;
     adminUsername?: string;
     adminNama?: string;
-    mitraId?: number;
-    mitraNama?: string;
-    mitraWaKasir?: string;
+    blusukanAuth?: boolean;
+    blusukanLoginAt?: number;
   }
-}
-
-type GeminiOptions = {
-  maxRetries?: number;
-  model?: string;
-  temperature?: number;
-  maxOutputTokens?: number;
-  minLength?: number;
-  timeoutMs?: number;
-  thinkingBudget?: number;
-};
-
-const wargaBooleanFields = new Set([
-  "ibuHamil",
-  "punyaAktaLahir",
-  "punyaKia",
-  "punyaNpwp",
-  "punyaSim",
-  "punyaPaspor",
-  "sedangSekolah",
-  "sedangKuliah",
-  "punyaUsaha",
-  "punyaBpjsKesehatan",
-  "punyaPenyakitKronis",
-  "butuhPendampinganKesehatan",
-  "lansia",
-  "anakYatimPiatu",
-  "perluBantuanKhusus",
-  "aktifKegiatanRw",
-  "punyaKendaraan",
-]);
-
-const wargaIntegerFields = new Set([
-  "lamaTinggalTahun",
-  "jumlahKendaraan",
-]);
-
-function normalizeProfileEditChanges(changes: Record<string, any>) {
-  return Object.fromEntries(
-    Object.entries(changes).map(([key, value]) => {
-      if (wargaBooleanFields.has(key)) {
-        return [key, value === true || value === "true"];
-      }
-      if (wargaIntegerFields.has(key)) {
-        if (value === "" || value === null || value === undefined) {
-          return [key, null];
-        }
-        const parsed = Number(value);
-        return [key, Number.isFinite(parsed) ? parsed : null];
-      }
-      return [key, value === "" ? null : value];
-    }),
-  );
-}
-
-async function generateWithGemini(prompt: string, options: number | GeminiOptions = 2): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
-
-  const normalizedOptions: GeminiOptions =
-    typeof options === "number" ? { maxRetries: options } : options;
-  const {
-    maxRetries = 2,
-    model = "gemini-2.5-flash",
-    temperature = 0.3,
-    maxOutputTokens = 8192,
-    minLength = 100,
-    timeoutMs = 20000,
-    thinkingBudget,
-  } = normalizedOptions;
-
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-    let response: globalThis.Response;
-    try {
-      response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              temperature,
-              maxOutputTokens,
-              ...(typeof thinkingBudget === "number"
-                ? { thinkingConfig: { thinkingBudget } }
-                : {}),
-            },
-          }),
-          signal: controller.signal,
-        }
-      );
-    } catch (error: any) {
-      clearTimeout(timeout);
-      if (attempt < maxRetries) {
-        console.warn(`Gemini request gagal (attempt ${attempt + 1}), retrying...`, error?.message || error);
-        continue;
-      }
-      if (error?.name === "AbortError") {
-        throw new Error("Koneksi ke Gemini melewati batas waktu. Silakan coba lagi.");
-      }
-      throw new Error(`Gagal terhubung ke Gemini: ${error?.message || "Unknown error"}`);
-    }
-    clearTimeout(timeout);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      if (attempt < maxRetries) {
-        console.warn(`Gemini API error (attempt ${attempt + 1}), retrying...`, errorText);
-        continue;
-      }
-      throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
-    }
-
-    const data: any = await response.json();
-    const candidate = data.candidates?.[0];
-    const text = candidate?.content?.parts?.[0]?.text || "";
-    const finishReason = candidate?.finishReason;
-
-    if (finishReason === "MAX_TOKENS" && attempt < maxRetries) {
-      console.warn(`Gemini response truncated (MAX_TOKENS), retrying attempt ${attempt + 2}...`);
-      continue;
-    }
-
-    if (!text || text.length < minLength) {
-      if (attempt < maxRetries) {
-        console.warn(`Gemini response too short (${text.length} chars), retrying...`);
-        continue;
-      }
-    }
-
-    return text;
-  }
-
-  throw new Error("Gemini gagal menghasilkan surat setelah beberapa percobaan");
 }
 
 const jenisSuratLabels: Record<string, string> = {
@@ -205,66 +66,6 @@ const jenisLaporanLabels: Record<string, string> = {
   umum: "Umum",
   lainnya: "Lainnya",
 };
-
-async function notifyWarga(wargaId: number, template: string) {
-  try {
-    const w = await storage.getWargaById(wargaId);
-    if (!w?.nomorWhatsapp) return;
-    await sendWhatsApp(w.nomorWhatsapp, template);
-  } catch (err) {
-    console.error("Notif WA gagal:", err);
-  }
-}
-
-const ADMIN_NOTIF_PHONE = "085285341039";
-
-async function notifyAdmin(message: string) {
-  try {
-    await sendWhatsApp(ADMIN_NOTIF_PHONE, message);
-  } catch (err) {
-    console.error("Notif admin WA gagal:", err);
-  }
-}
-
-const otpStore = new Map<string, { otp: string; kkId: number; wargaId: number; nomorKk: string; phone: string; expiresAt: number; attempts: number; lastRequestAt: number }>();
-const singgahOtpStore = new Map<string, { otp: string; wargaSinggahId: number; nik: string; phone: string; expiresAt: number; attempts: number; lastRequestAt: number }>();
-const waOtpStore = new Map<string, { otp: string; kkId: number; nomorKk: string; wargaId: number; phone: string; expiresAt: number; attempts: number; lastRequestAt: number }>();
-const LOGIN_OTP_LENGTH = 2;
-
-function generateLoginOtp() {
-  return String(Math.floor(Math.random() * 100)).padStart(LOGIN_OTP_LENGTH, "0");
-}
-
-function normalizePhone(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-  if (digits.startsWith("62")) return "0" + digits.slice(2);
-  if (digits.startsWith("0")) return digits;
-  if (digits.startsWith("8")) return "0" + digits;
-  return digits;
-}
-
-function clearOtpForWarga(wargaId: number, nomorKk?: string | null, phones: Array<string | null | undefined> = []) {
-  if (nomorKk) {
-    const storedByKk = otpStore.get(nomorKk);
-    if (storedByKk?.wargaId === wargaId) {
-      otpStore.delete(nomorKk);
-    }
-  }
-
-  const normalizedPhones = phones
-    .filter((phone): phone is string => Boolean(phone))
-    .map((phone) => normalizePhone(phone));
-
-  for (const phone of normalizedPhones) {
-    waOtpStore.delete(phone);
-  }
-
-  for (const [key, value] of waOtpStore.entries()) {
-    if (value.wargaId === wargaId) {
-      waOtpStore.delete(key);
-    }
-  }
-}
 
 function maskNama(nama: string): string {
   const words = nama.trim().split(/\s+/);
@@ -294,58 +95,34 @@ function cleanupOldPdfTemps() {
   } catch {}
 }
 
-// Helper: kumpulkan semua nomor WA notifikasi mitra (kasir utama + tambahan + owner)
-function semuaNomorWaMitra(m: any): string[] {
-  const out: string[] = [];
-  if (m?.nomorWaKasir) out.push(m.nomorWaKasir);
-  if (m?.nomorWaKasirTambahan) {
-    try { out.push(...JSON.parse(m.nomorWaKasirTambahan)); } catch {}
-  }
-  if (m?.nomorWaOwner) {
-    try { out.push(...JSON.parse(m.nomorWaOwner)); } catch {}
-  }
-  return out.filter(Boolean);
-}
-
-async function sendWhatsAppToMitra(m: any, pesan: string) {
-  for (const n of semuaNomorWaMitra(m)) {
-    await sendWhatsApp(n, pesan).catch(() => {});
-  }
-}
-
-function safeSecretEqual(expected: string, incoming: string) {
-  try {
-    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(incoming));
-  } catch {
-    return false;
-  }
-}
-
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // Migrasi kolom baru tabel mitra (idempoten)
-  await pool.query(`
-    ALTER TABLE mitra ADD COLUMN IF NOT EXISTS nomor_wa_kasir_tambahan text;
-    ALTER TABLE mitra ADD COLUMN IF NOT EXISTS nama_owner text;
-    ALTER TABLE mitra ADD COLUMN IF NOT EXISTS nomor_wa_owner text;
-  `).catch(() => {});
-  await ensureTripaySchema().catch((error) => {
-    console.error("Tripay schema init error:", error);
-  });
-
-  const RWCOIN_DISABLED_MSG =
-    "Sistem RWcoin telah dinonaktifkan. Kontribusi Visit RW3 dicatat ke Kas RW melalui menu admin Keuangan.";
-  const rwcoinDisabledPaths = [
+  const FEATURE_DISABLED_MSG =
+    "Fitur ini sudah tidak digunakan (login warga/singgah, RWcoin, Tripay, ubah profil warga).";
+  const deprecatedApiPaths = [
+    /^\/api\/auth\/check-kk$/,
+    /^\/api\/auth\/request-otp$/,
+    /^\/api\/auth\/verify-otp$/,
+    /^\/api\/auth\/check-wa$/,
+    /^\/api\/auth\/request-wa-otp$/,
+    /^\/api\/auth\/verify-wa-otp$/,
+    /^\/api\/auth\/saved-login(?:\/|$)/,
+    /^\/api\/auth\/singgah(?:\/|$)/,
+    /^\/api\/singgah(?:\/|$)/,
     /^\/api\/rwcoin(?:\/|$)/,
     /^\/api\/warga\/rwcoin(?:\/|$)/,
     /^\/api\/mitra(?:\/|$)/,
+    /^\/api\/tripay(?:\/|$)/,
     /^\/api\/iuran\/\d+\/bayar-rwcoin$/,
+    /^\/api\/iuran\/warga$/,
+    /^\/api\/warga\/curhat(?:\/|$)/,
+    /^\/api\/profile-edits(?:\/|$)/,
   ];
   app.use((req, res, next) => {
-    if (rwcoinDisabledPaths.some((re) => re.test(req.path))) {
-      return res.status(410).json({ message: RWCOIN_DISABLED_MSG });
+    if (deprecatedApiPaths.some((re) => re.test(req.path))) {
+      return res.status(410).json({ message: FEATURE_DISABLED_MSG });
     }
     next();
   });
@@ -364,6 +141,11 @@ export async function registerRoutes(
       "[RW3LAW] Startup init gagal — API akan mencoba membuat tabel saat request pertama:",
       error,
     );
+  });
+
+  /** Tanpa session — cek server hidup (Blusukan RW tidak stuck di "Memuat…"). */
+  app.get("/api/blusukan/ping", (_req, res) => {
+    res.json({ ok: true, ts: Date.now() });
   });
 
   const isProduction = process.env.NODE_ENV === "production";
@@ -389,6 +171,9 @@ export async function registerRoutes(
       },
     })
   );
+
+  const { registerBlusukanRoutes } = await import("./blusukan-routes");
+  await registerBlusukanRoutes(app);
 
   const { registerRw3lawRoutes } = await import("./rw3law-routes");
   registerRw3lawRoutes(app);
@@ -473,232 +258,6 @@ export async function registerRoutes(
     next();
   }
 
-  function requireWarga(req: Request, res: Response, next: any) {
-    if (!req.session.kkId) {
-      return res.status(401).json({ message: "Login warga diperlukan" });
-    }
-    next();
-  }
-
-  app.post("/api/auth/check-kk", async (req, res) => {
-    try {
-      const { nomorKk } = req.body;
-      if (!nomorKk) {
-        return res.status(400).json({ message: "Nomor KK harus diisi" });
-      }
-
-      const kk = await storage.getKkByNomor(nomorKk);
-      if (!kk) {
-        return res.status(404).json({ message: "Nomor KK tidak ditemukan" });
-      }
-
-      const members = await storage.getWargaByKkId(kk.id);
-      const contacts = members
-        .filter(w => w.nomorWhatsapp)
-        .map(w => ({
-          id: w.id,
-          nama: w.namaLengkap,
-          phone: w.nomorWhatsapp!.replace(/(\d{4})(\d+)(\d{3})/, "$1****$3"),
-          kedudukan: w.kedudukanKeluarga,
-        }));
-
-      if (contacts.length === 0) {
-        return res.status(400).json({ message: "Tidak ada nomor WhatsApp terdaftar di KK ini. Hubungi admin RW." });
-      }
-
-      return res.json({ contacts });
-    } catch (error: any) {
-      return res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/auth/request-otp", async (req, res) => {
-    try {
-      const { nomorKk, wargaId } = req.body;
-      if (!nomorKk || !wargaId) {
-        return res.status(400).json({ message: "Nomor KK dan penerima OTP harus diisi" });
-      }
-
-      const kk = await storage.getKkByNomor(nomorKk);
-      if (!kk) {
-        return res.status(404).json({ message: "Nomor KK tidak ditemukan" });
-      }
-
-      const target = await storage.getWargaById(wargaId);
-      if (!target || target.kkId !== kk.id || !target.nomorWhatsapp) {
-        return res.status(400).json({ message: "Nomor WhatsApp tidak valid untuk KK ini" });
-      }
-
-      const existing = otpStore.get(nomorKk);
-      if (existing && (Date.now() - existing.lastRequestAt) < 60000) {
-        return res.status(429).json({ message: "Tunggu 60 detik sebelum meminta OTP lagi" });
-      }
-
-      const otp = generateLoginOtp();
-      const expiresAt = Date.now() + 5 * 60 * 1000;
-
-      otpStore.set(nomorKk, { otp, kkId: kk.id, wargaId: target.id, nomorKk: kk.nomorKk, phone: target.nomorWhatsapp, expiresAt, attempts: 0, lastRequestAt: Date.now() });
-
-      const message = `${otp}\n\nKode login RW03`;
-      const sent = await sendWhatsApp(target.nomorWhatsapp, message, 0);
-
-      if (!sent.ok) {
-        return res.status(500).json({ message: "Gagal mengirim OTP. Coba lagi nanti." });
-      }
-
-      const maskedPhone = target.nomorWhatsapp.replace(/(\d{4})(\d+)(\d{3})/, "$1****$3");
-      return res.json({ message: "OTP terkirim", phone: maskedPhone, nama: target.namaLengkap });
-    } catch (error: any) {
-      return res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/auth/verify-otp", async (req, res) => {
-    try {
-      const { nomorKk, otp } = req.body;
-      if (!nomorKk || !otp) {
-        return res.status(400).json({ message: "Nomor KK dan kode OTP harus diisi" });
-      }
-
-      const stored = otpStore.get(nomorKk);
-      if (!stored) {
-        return res.status(400).json({ message: "Silakan minta OTP terlebih dahulu" });
-      }
-
-      if (Date.now() > stored.expiresAt) {
-        otpStore.delete(nomorKk);
-        return res.status(400).json({ message: "Kode OTP sudah kadaluarsa. Silakan minta ulang." });
-      }
-
-      if (stored.attempts >= 5) {
-        otpStore.delete(nomorKk);
-        return res.status(429).json({ message: "Terlalu banyak percobaan. Silakan minta OTP baru." });
-      }
-
-      if (stored.otp !== otp) {
-        stored.attempts++;
-        return res.status(401).json({ message: "Kode OTP salah" });
-      }
-
-      otpStore.delete(nomorKk);
-
-      req.session.kkId = stored.kkId;
-      req.session.wargaId = stored.wargaId;
-      req.session.nomorKk = stored.nomorKk;
-      req.session.isAdmin = false;
-      return req.session.save((err) => {
-        if (err) { console.error("Session save error:", err); return res.status(500).json({ message: `Session error: ${err.message}` }); }
-        return res.json({ type: "warga", kkId: stored.kkId, wargaId: stored.wargaId, nomorKk: stored.nomorKk, message: "Login berhasil" });
-      });
-    } catch (error: any) {
-      return res.status(500).json({ message: error.message });
-    }
-  });
-
-  // --- Login via Nomor WA ---
-
-  app.post("/api/auth/check-wa", async (req, res) => {
-    try {
-      const { nomorWa } = req.body;
-      if (!nomorWa) return res.status(400).json({ message: "Nomor WhatsApp harus diisi" });
-
-      const normalized = normalizePhone(nomorWa);
-      if (normalized.length < 9) return res.status(400).json({ message: "Nomor WhatsApp tidak valid" });
-
-      const results = await storage.getWargaByNomorWa(normalized);
-      if (results.length === 0) {
-        return res.status(404).json({ message: "Nomor WhatsApp tidak terdaftar. Hubungi admin RW atau gunakan Nomor KK." });
-      }
-
-      const contacts = results.map(w => ({
-        id: w.id,
-        nama: maskNama(w.namaLengkap),
-        kedudukan: w.kedudukanKeluarga,
-        rt: w.rt,
-        kkId: w.kkId,
-      }));
-
-      return res.json({ contacts });
-    } catch (error: any) {
-      return res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/auth/request-wa-otp", async (req, res) => {
-    try {
-      const { nomorWa, wargaId } = req.body;
-      if (!nomorWa || !wargaId) return res.status(400).json({ message: "Nomor WA dan penerima OTP harus diisi" });
-
-      const normalized = normalizePhone(nomorWa);
-      const target = await storage.getWargaById(wargaId);
-      if (!target || !target.nomorWhatsapp || normalizePhone(target.nomorWhatsapp) !== normalized) {
-        return res.status(400).json({ message: "Data tidak valid" });
-      }
-
-      const existing = waOtpStore.get(normalized);
-      if (existing && (Date.now() - existing.lastRequestAt) < 60000) {
-        return res.status(429).json({ message: "Tunggu 60 detik sebelum meminta OTP lagi" });
-      }
-
-      const kk = await storage.getKkById(target.kkId);
-      if (!kk) return res.status(404).json({ message: "Data KK tidak ditemukan" });
-
-      const otp = generateLoginOtp();
-      const expiresAt = Date.now() + 5 * 60 * 1000;
-
-      waOtpStore.set(normalized, { otp, kkId: kk.id, nomorKk: kk.nomorKk, wargaId: target.id, phone: target.nomorWhatsapp, expiresAt, attempts: 0, lastRequestAt: Date.now() });
-
-      const message = `${otp}\n\nKode login RW03`;
-      const sent = await sendWhatsApp(target.nomorWhatsapp, message, 0);
-
-      if (!sent.ok) return res.status(500).json({ message: "Gagal mengirim OTP. Coba lagi nanti." });
-
-      const maskedPhone = target.nomorWhatsapp.replace(/(\d{4})(\d+)(\d{3})/, "$1****$3");
-      return res.json({ message: "OTP terkirim", phone: maskedPhone, nama: target.namaLengkap });
-    } catch (error: any) {
-      return res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/auth/verify-wa-otp", async (req, res) => {
-    try {
-      const { nomorWa, otp } = req.body;
-      if (!nomorWa || !otp) return res.status(400).json({ message: "Nomor WA dan kode OTP harus diisi" });
-
-      const normalized = normalizePhone(nomorWa);
-      const stored = waOtpStore.get(normalized);
-      if (!stored) return res.status(400).json({ message: "Silakan minta OTP terlebih dahulu" });
-
-      if (Date.now() > stored.expiresAt) {
-        waOtpStore.delete(normalized);
-        return res.status(400).json({ message: "Kode OTP sudah kadaluarsa. Silakan minta ulang." });
-      }
-
-      if (stored.attempts >= 5) {
-        waOtpStore.delete(normalized);
-        return res.status(429).json({ message: "Terlalu banyak percobaan. Silakan minta OTP baru." });
-      }
-
-      if (stored.otp !== otp) {
-        stored.attempts++;
-        return res.status(401).json({ message: "Kode OTP salah" });
-      }
-
-      waOtpStore.delete(normalized);
-
-      req.session.kkId = stored.kkId;
-      req.session.wargaId = stored.wargaId;
-      req.session.nomorKk = stored.nomorKk;
-      req.session.isAdmin = false;
-      return req.session.save((err) => {
-        if (err) { console.error("Session save error:", err); return res.status(500).json({ message: `Session error: ${err.message}` }); }
-        return res.json({ type: "warga", kkId: stored.kkId, wargaId: stored.wargaId, nomorKk: stored.nomorKk, message: "Login berhasil" });
-      });
-    } catch (error: any) {
-      return res.status(500).json({ message: error.message });
-    }
-  });
-
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { username, password } = req.body;
@@ -731,102 +290,15 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/auth/singgah/check-nik", async (req, res) => {
-    try {
-      const { nik } = req.body;
-      if (!nik || nik.length !== 16) {
-        return res.status(400).json({ message: "NIK harus 16 digit" });
-      }
-      const ws = await storage.getWargaSinggahByNik(nik);
-      if (!ws) {
-        return res.status(404).json({ message: "NIK tidak terdaftar sebagai warga singgah" });
-      }
-      if (ws.status !== "aktif") {
-        return res.status(400).json({ message: "Status kontrak Anda sudah tidak aktif. Hubungi admin RW." });
-      }
-      const maskedPhone = ws.nomorWhatsapp.replace(/(\d{4})(\d+)(\d{3})/, "$1****$3");
-      return res.json({ nama: ws.namaLengkap, phone: maskedPhone });
-    } catch (error: any) {
-      return res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/auth/singgah/request-otp", async (req, res) => {
-    try {
-      const { nik } = req.body;
-      if (!nik) {
-        return res.status(400).json({ message: "NIK harus diisi" });
-      }
-      const ws = await storage.getWargaSinggahByNik(nik);
-      if (!ws || ws.status !== "aktif") {
-        return res.status(404).json({ message: "NIK tidak ditemukan atau tidak aktif" });
-      }
-      const existing = singgahOtpStore.get(nik);
-      if (existing && (Date.now() - existing.lastRequestAt) < 60000) {
-        return res.status(429).json({ message: "Tunggu 60 detik sebelum meminta OTP lagi" });
-      }
-      const otp = generateLoginOtp();
-      const expiresAt = Date.now() + 5 * 60 * 1000;
-      singgahOtpStore.set(nik, { otp, wargaSinggahId: ws.id, nik: ws.nik, phone: ws.nomorWhatsapp, expiresAt, attempts: 0, lastRequestAt: Date.now() });
-      const message = `${otp}\n\nKode login RW03`;
-      const sent = await sendWhatsApp(ws.nomorWhatsapp, message, 0);
-      if (!sent.ok) {
-        return res.status(500).json({ message: "Gagal mengirim OTP. Coba lagi nanti." });
-      }
-      const maskedPhone = ws.nomorWhatsapp.replace(/(\d{4})(\d+)(\d{3})/, "$1****$3");
-      return res.json({ message: "OTP terkirim", phone: maskedPhone, nama: ws.namaLengkap });
-    } catch (error: any) {
-      return res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/auth/singgah/verify-otp", async (req, res) => {
-    try {
-      const { nik, otp } = req.body;
-      if (!nik || !otp) {
-        return res.status(400).json({ message: "NIK dan kode OTP harus diisi" });
-      }
-      const stored = singgahOtpStore.get(nik);
-      if (!stored) {
-        return res.status(400).json({ message: "Silakan minta OTP terlebih dahulu" });
-      }
-      if (Date.now() > stored.expiresAt) {
-        singgahOtpStore.delete(nik);
-        return res.status(400).json({ message: "Kode OTP sudah kadaluarsa. Silakan minta ulang." });
-      }
-      if (stored.attempts >= 5) {
-        singgahOtpStore.delete(nik);
-        return res.status(429).json({ message: "Terlalu banyak percobaan. Silakan minta OTP baru." });
-      }
-      if (stored.otp !== otp) {
-        stored.attempts++;
-        return res.status(401).json({ message: "Kode OTP salah" });
-      }
-      singgahOtpStore.delete(nik);
-      (req.session as any).wargaSinggahId = stored.wargaSinggahId;
-      (req.session as any).wargaSinggahNik = stored.nik;
-      (req.session as any).isWargaSinggah = true;
-      return req.session.save((err) => {
-        if (err) { console.error("Session save error:", err); return res.status(500).json({ message: `Session error: ${err.message}` }); }
-        return res.json({ type: "warga_singgah", wargaSinggahId: stored.wargaSinggahId, nik: stored.nik, message: "Login berhasil" });
-      });
-    } catch (error: any) {
-      return res.status(500).json({ message: error.message });
-    }
-  });
-
   app.get("/api/auth/me", (req, res) => {
     if (req.session.isAdmin) {
-      return res.json({ type: "admin", isAdmin: true, adminId: req.session.adminId, username: req.session.adminUsername, namaLengkap: req.session.adminNama });
-    }
-    if ((req.session as any).isWargaSinggah) {
-      return res.json({ type: "warga_singgah", wargaSinggahId: (req.session as any).wargaSinggahId, nik: (req.session as any).wargaSinggahNik });
-    }
-    if (req.session.kkId) {
-      return res.json({ type: "warga", kkId: req.session.kkId, wargaId: req.session.wargaId, nomorKk: req.session.nomorKk });
-    }
-    if (req.session.mitraId) {
-      return res.json({ type: "mitra", mitraId: req.session.mitraId, namaUsaha: req.session.mitraNama, namaKasir: req.session.mitraWaKasir });
+      return res.json({
+        type: "admin",
+        isAdmin: true,
+        adminId: req.session.adminId,
+        username: req.session.adminUsername,
+        namaLengkap: req.session.adminNama,
+      });
     }
     return res.status(401).json({ message: "Belum login" });
   });
@@ -835,93 +307,6 @@ export async function registerRoutes(
     req.session.destroy(() => {
       res.json({ message: "Logout berhasil" });
     });
-  });
-
-  // ---- Saved Login (PIN) ----
-  const pinAttempts = new Map<string, { attempts: number; lockedUntil: number }>();
-
-  app.get("/api/auth/saved-login/accounts", async (req, res) => {
-    try {
-      const { deviceId } = req.query;
-      if (!deviceId || typeof deviceId !== "string") return res.json({ accounts: [] });
-      const rows = await storage.getSavedLoginsByDevice(deviceId);
-      return res.json({ accounts: rows.map(r => ({ ...r, nama: maskNama(r.nama) })) });
-    } catch (error: any) {
-      return res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/auth/saved-login/setup", requireWarga, async (req, res) => {
-    try {
-      const { pin, deviceId } = req.body;
-      if (!pin || !deviceId) return res.status(400).json({ message: "PIN dan device ID harus diisi" });
-      if (!/^\d{4}$/.test(pin)) return res.status(400).json({ message: "PIN harus 4 digit angka" });
-      const wargaId = req.session.wargaId!;
-      const kkId = req.session.kkId!;
-      const nomorKk = req.session.nomorKk!;
-      const pinHash = await bcrypt.hash(pin, 10);
-      await storage.upsertSavedLogin(wargaId, kkId, nomorKk, deviceId, pinHash);
-      return res.json({ message: "PIN berhasil dibuat" });
-    } catch (error: any) {
-      return res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/auth/saved-login/pin-login", async (req, res) => {
-    try {
-      const { wargaId, pin, deviceId } = req.body;
-      if (!wargaId || !pin || !deviceId) return res.status(400).json({ message: "Data tidak lengkap" });
-
-      const key = `${wargaId}-${deviceId}`;
-      const attempt = pinAttempts.get(key);
-      if (attempt && attempt.lockedUntil > Date.now()) {
-        const sisaMenit = Math.ceil((attempt.lockedUntil - Date.now()) / 60000);
-        return res.status(429).json({ message: `Terlalu banyak percobaan. Coba lagi dalam ${sisaMenit} menit.` });
-      }
-
-      const savedLogin = await storage.getSavedLoginByWargaDevice(wargaId, deviceId);
-      if (!savedLogin) return res.status(404).json({ message: "Akun tersimpan tidak ditemukan" });
-
-      const match = await bcrypt.compare(String(pin), savedLogin.pinHash);
-      if (!match) {
-        const cur = attempt || { attempts: 0, lockedUntil: 0 };
-        cur.attempts++;
-        if (cur.attempts >= 5) { cur.lockedUntil = Date.now() + 5 * 60 * 1000; cur.attempts = 0; }
-        pinAttempts.set(key, cur);
-        const remaining = cur.lockedUntil > Date.now() ? 0 : 5 - cur.attempts;
-        return res.status(401).json({ message: remaining > 0 ? `PIN salah. Sisa ${remaining} percobaan.` : "PIN salah. Akun terkunci 5 menit." });
-      }
-
-      pinAttempts.delete(key);
-
-      const rows = await storage.getSavedLoginsByDevice(deviceId);
-      const acc = rows.find(r => r.wargaId === Number(wargaId));
-      if (!acc) return res.status(404).json({ message: "Data tidak ditemukan" });
-
-      await storage.updateSavedLoginLastUsed(Number(wargaId), deviceId);
-
-      req.session.kkId = acc.kkId;
-      req.session.wargaId = Number(wargaId);
-      req.session.nomorKk = acc.nomorKk;
-      req.session.isAdmin = false;
-      return req.session.save((err) => {
-        if (err) return res.status(500).json({ message: `Session error: ${err.message}` });
-        return res.json({ type: "warga", kkId: acc.kkId, wargaId: Number(wargaId), nomorKk: acc.nomorKk, message: "Login berhasil" });
-      });
-    } catch (error: any) {
-      return res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.delete("/api/auth/saved-login", async (req, res) => {
-    try {
-      const { wargaId, deviceId } = req.body;
-      if (!wargaId || !deviceId) return res.status(400).json({ message: "Data tidak lengkap" });
-      await storage.deleteSavedLogin(Number(wargaId), deviceId);
-      return res.json({ message: "Akun tersimpan dihapus" });
-    } catch (error: any) {
-      return res.status(500).json({ message: error.message });
-    }
   });
 
   app.get("/api/stats/dashboard", requireAdmin, async (req, res) => {
@@ -995,12 +380,96 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
     }
   });
 
+  app.get("/api/stats/kependudukan", requireAdmin, async (req, res) => {
+    try {
+      const rtParam = req.query.rt ? parseInt(req.query.rt as string) : undefined;
+      const rtFilter = rtParam && !isNaN(rtParam) ? rtParam : undefined;
+      if (rtFilter !== undefined && !isActiveRt(rtFilter)) {
+        return res.status(400).json({ message: "Statistik kependudukan hanya untuk RT 01–04" });
+      }
+      const key = CacheKey.kependudukan(rtFilter);
+      const cached = cache.get(key);
+      if (cached) return res.json(cached);
+
+      const kkPemukiman = await storage.getAllKkPemukiman();
+      const wargaPemukiman = await storage.getAllWargaPemukiman();
+      const allKk = rtFilter ? kkPemukiman.filter((k) => k.rt === rtFilter) : kkPemukiman;
+      const kkIds = new Set(allKk.map((k) => k.id));
+      const allWarga = wargaPemukiman.filter((w) => kkIds.has(w.kkId));
+
+      const stats = buildKependudukanStats(allKk, allWarga, kkPemukiman, rtFilter);
+      cache.set(key, stats, TTL.DASHBOARD);
+      res.json(stats);
+    } catch (error: unknown) {
+      console.error("[kependudukan] stats error:", error);
+      const message = error instanceof Error ? error.message : "Gagal mengambil statistik kependudukan";
+      res.status(500).json({ message });
+    }
+  });
+
+  app.get("/api/stats/segment/:section/:field", requireAdmin, async (req, res) => {
+    try {
+      const section = req.params.section as string;
+      const field = req.params.field as string;
+      const value = (req.query.value as string) ?? "";
+      const rtParam = req.query.rt ? parseInt(req.query.rt as string) : undefined;
+      const rtFilter = rtParam && !isNaN(rtParam) ? rtParam : undefined;
+
+      if (rtFilter !== undefined && !isActiveRt(rtFilter)) {
+        return res.status(400).json({ message: "Filter hanya untuk RT 01–04" });
+      }
+      const allKkRaw = await storage.getAllKkPemukiman();
+      const kkIds = new Set(allKkRaw.map((k) => k.id));
+      const allWargaRaw = (await storage.getAllWargaPemukiman()).filter((w) => kkIds.has(w.kkId));
+      const rows = buildSegmentRows(allWargaRaw, allKkRaw, section, field, value, rtFilter);
+      res.json({ section, field, value, total: rows.length, rows });
+    } catch {
+      res.status(500).json({ message: "Gagal mengambil daftar segment" });
+    }
+  });
+
+  app.get("/api/kk/:id/detail", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id as string);
+      if (isNaN(id)) return res.status(400).json({ message: "ID tidak valid" });
+      const kk = await storage.getKkById(id);
+      if (!assertKkInPemukimanScope(kk)) {
+        return res.status(404).json({ message: "KK tidak ditemukan atau di luar RT 01–04" });
+      }
+
+      const anggota = await storage.getWargaByKkId(id);
+      const kepala = anggota.find((w) => w.kedudukanKeluarga === "Kepala Keluarga");
+      const kepalaCount = anggota.filter((w) => w.kedudukanKeluarga === "Kepala Keluarga").length;
+
+      const { computeKkCompleteness } = await import("@shared/profile-completeness");
+      const completeness = computeKkCompleteness(anggota, kk);
+
+      res.json({
+        kk,
+        anggota,
+        kepalaKeluarga: kepala ?? null,
+        flags: {
+          penghuniMismatch: kk.jumlahPenghuni !== anggota.length,
+          noKepalaKeluarga: kepalaCount === 0,
+          multipleKepalaKeluarga: kepalaCount > 1,
+          belumVerifikasi: anggota.filter((w) => w.statusVerifikasiData !== "Sudah Diverifikasi").length,
+        },
+        completeness: {
+          ...completeness,
+          anggotaCount: anggota.length,
+        },
+      });
+    } catch {
+      res.status(500).json({ message: "Gagal mengambil detail KK" });
+    }
+  });
+
   app.get("/api/kk", requireAuth, async (req, res) => {
     if (req.session.isAdmin) {
       const key = CacheKey.kkList();
       const cached = cache.get(key);
       if (cached) return res.json(cached);
-      const data = await storage.getAllKk();
+      const data = await storage.getAllKkPemukiman();
       cache.set(key, data, TTL.KK_LIST);
       return res.json(data);
     }
@@ -1015,6 +484,9 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
     }
     const data = await storage.getKkById(id);
     if (!data) return res.status(404).json({ message: "KK tidak ditemukan" });
+    if (req.session.isAdmin && !assertKkInPemukimanScope(data)) {
+      return res.status(404).json({ message: "KK tidak ditemukan atau di luar RT 01–04" });
+    }
     res.json(data);
   });
 
@@ -1029,24 +501,15 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
     }
   });
 
-  // Warga dapat update data ekonomi KK sendiri (penghasilanBulanan, kategoriEkonomi)
-  app.patch("/api/kk/self", requireAuth, async (req, res) => {
-    if (!req.session.kkId) return res.status(403).json({ message: "Akses ditolak" });
-    try {
-      const { penghasilanBulanan, kategoriEkonomi } = req.body;
-      const data = await storage.updateKk(req.session.kkId, { penghasilanBulanan, kategoriEkonomi });
-      if (!data) return res.status(404).json({ message: "KK tidak ditemukan" });
-      invalidateKk();
-      res.json(data);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
   app.patch("/api/kk/:id", requireAdmin, async (req, res) => {
     try {
-      const parsed = insertKkSchema.partial().parse(req.body);
-      const data = await storage.updateKk(parseInt(req.params.id as string), parsed);
+      const kkId = parseInt(req.params.id as string);
+      const existing = await storage.getKkById(kkId);
+      if (!assertKkInPemukimanScope(existing)) {
+        return res.status(404).json({ message: "KK tidak ditemukan atau di luar RT 01–04" });
+      }
+      const parsed = patchKkSchema.parse(req.body);
+      const data = await storage.updateKk(kkId, parsed);
       if (!data) return res.status(404).json({ message: "KK tidak ditemukan" });
       invalidateKk();
       res.json(data);
@@ -1058,7 +521,9 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
   app.delete("/api/kk/:id", requireAdmin, async (req, res) => {
     try {
       const kk = await storage.getKkById(parseInt(req.params.id as string));
-      if (!kk) return res.status(404).json({ message: "KK tidak ditemukan" });
+      if (!assertKkInPemukimanScope(kk)) {
+        return res.status(404).json({ message: "KK tidak ditemukan atau di luar RT 01–04" });
+      }
       await storage.deleteKk(kk.id);
       invalidateKk();
       res.json({ message: "KK dan semua data terkait berhasil dihapus" });
@@ -1071,7 +536,7 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
     const key = CacheKey.wargaList();
     const cached = cache.get(key);
     if (cached) return res.json(cached);
-    const data = await storage.getAllWarga();
+    const data = await storage.getAllWargaPemukiman();
     cache.set(key, data, TTL.WARGA_LIST);
     res.json(data);
   });
@@ -1080,6 +545,12 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
     const kkId = parseInt(req.params.kkId as string);
     if (!req.session.isAdmin && req.session.kkId !== kkId) {
       return res.status(403).json({ message: "Akses ditolak" });
+    }
+    if (req.session.isAdmin) {
+      const kk = await storage.getKkById(kkId);
+      if (!assertKkInPemukimanScope(kk)) {
+        return res.status(404).json({ message: "KK tidak ditemukan atau di luar RT 01–04" });
+      }
     }
     const data = await storage.getWargaByKkId(kkId);
     res.json(data);
@@ -1091,58 +562,25 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
     if (!req.session.isAdmin && data.kkId !== req.session.kkId) {
       return res.status(403).json({ message: "Akses ditolak" });
     }
+    if (req.session.isAdmin) {
+      const kk = await storage.getKkById(data.kkId);
+      if (!assertKkInPemukimanScope(kk)) {
+        return res.status(404).json({ message: "Warga tidak ditemukan atau di luar RT 01–04" });
+      }
+    }
     res.json(data);
   });
 
   app.post("/api/warga", requireAdmin, async (req, res) => {
     try {
+      const kk = await storage.getKkById(Number(req.body.kkId));
+      if (!assertKkInPemukimanScope(kk)) {
+        return res.status(400).json({ message: "KK harus di RT 01–04" });
+      }
       const parsed = insertWargaSchema.parse(req.body);
       const data = await storage.createWarga(parsed);
       invalidateWarga();
       res.json(data);
-
-      if (data.nomorWhatsapp) {
-        (async () => {
-          try {
-            const kk = await storage.getKkById(data.kkId);
-            const rtNum = kk ? String(kk.rt).padStart(2, "0") : "—";
-            const nomorKkText = kk ? kk.nomorKk : "nomor KK Anda";
-            const waMessage = `Assalamu'alaikum ${data.jenisKelamin === "Perempuan" ? "Ibu" : "Bapak"} *${data.namaLengkap}* 🙏
-
-[RW 03 Padasuka - Kelurahan Padasuka, Kota Cimahi]
-
-Selamat! Data Wargi sudah berhasil terdaftar di sistem informasi digital RW 03 Padasuka ✅
-
-📌 *Apa itu rw3padasukacimahi.org?*
-Website resmi RW 03 Padasuka untuk memudahkan warga dalam mengurus administrasi dan layanan RT/RW secara online, kapan saja dan di mana saja.
-
-🔑 *Fitur yang bisa Wargi gunakan:*
-• Mengajukan surat keterangan (domisili, SKTM, usaha, dll) tanpa harus datang ke RT/RW
-• Melaporkan masalah (keamanan, kebersihan, infrastruktur)
-• Melihat data profil keluarga
-• Mengecek status bansos
-
-📱 *Cara menggunakannya:*
-1. Buka 👉 *rw3padasukacimahi.org*
-2. Masukkan *Nomor KK* (${nomorKkText})
-3. Pilih nama Wargi, lalu kode OTP akan dikirim ke WhatsApp ini
-4. Masukkan kode OTP → langsung bisa menggunakan semua fitur
-
-Data Wargi:
-• Nama: ${data.namaLengkap}
-• RT/RW: ${rtNum}/03
-
-Jika ada kendala, silakan hubungi pengurus RT ${rtNum} atau pengurus RW 03.
-
-Hatur nuhun! 🙏
-Salam hangat dari pengurus RW 03 Padasuka`;
-
-            await sendWhatsApp(data.nomorWhatsapp!, waMessage);
-          } catch (err) {
-            console.error("Notif WA warga baru gagal:", err);
-          }
-        })();
-      }
     } catch (error: any) {
       res.status(400).json({ message: error.message });
     }
@@ -1153,6 +591,10 @@ Salam hangat dari pengurus RW 03 Padasuka`;
       const wargaId = parseInt(req.params.id as string);
       const before = await storage.getWargaById(wargaId);
       if (!before) return res.status(404).json({ message: "Warga tidak ditemukan" });
+      const kk = await storage.getKkById(before.kkId);
+      if (!assertKkInPemukimanScope(kk)) {
+        return res.status(404).json({ message: "Warga tidak ditemukan atau di luar RT 01–04" });
+      }
       const parsed = insertWargaSchema.parse({
         ...before,
         ...req.body,
@@ -1161,12 +603,6 @@ Salam hangat dari pengurus RW 03 Padasuka`;
       });
       const data = await storage.updateWarga(wargaId, parsed);
       if (!data) return res.status(404).json({ message: "Warga tidak ditemukan" });
-      const kk = await storage.getKkById(data.kkId);
-      clearOtpForWarga(
-        data.id,
-        kk?.nomorKk,
-        [before?.nomorWhatsapp, data.nomorWhatsapp]
-      );
       invalidateWarga();
       res.json(data);
     } catch (error: any) {
@@ -1178,6 +614,10 @@ Salam hangat dari pengurus RW 03 Padasuka`;
     try {
       const w = await storage.getWargaById(parseInt(req.params.id as string));
       if (!w) return res.status(404).json({ message: "Warga tidak ditemukan" });
+      const kk = await storage.getKkById(w.kkId);
+      if (!assertKkInPemukimanScope(kk)) {
+        return res.status(404).json({ message: "Warga tidak ditemukan atau di luar RT 01–04" });
+      }
       await storage.deleteWarga(w.id);
       invalidateWarga();
       res.json({ message: "Warga dan semua data terkait berhasil dihapus" });
@@ -1190,7 +630,7 @@ Salam hangat dari pengurus RW 03 Padasuka`;
     const key = CacheKey.wargaWithKk();
     const cached = cache.get(key);
     if (cached) return res.json(cached);
-    const data = await storage.getAllWargaWithKk();
+    const data = await storage.getAllWargaWithKkPemukiman();
     cache.set(key, data, TTL.WARGA_WITH_KK);
     res.json(data);
   });
@@ -1256,20 +696,15 @@ Salam hangat dari pengurus RW 03 Padasuka`;
         }),
       });
 
-      const jenisLabel = jenisLaporanLabels[parsed.jenisLaporan] || parsed.jenisLaporan;
-      notifyAdmin(
-        `[RW 03 Padasuka - Admin]\n\nLaporan baru dari kiosk publik\n\nNama: ${parsed.namaPelapor}\n${formatRtLabel(parsed.nomorRt)}\nWA: ${nomorWa}\nJudul: ${parsed.judul}\nKategori: ${jenisLabel}`,
-      );
-
       return res.json(data);
     } catch (error: any) {
       return res.status(400).json({ message: error.message || "Gagal mengirim laporan" });
     }
   });
 
-  registerVisitrw3Routes(app, notifyAdmin);
+  registerVisitrw3Routes(app);
 
-  app.get("/api/rt", async (_req, res) => {
+  app.get("/api/rt", requireAdmin, async (_req, res) => {
     const data = await storage.getAllRt();
     res.json(data);
   });
@@ -1280,46 +715,9 @@ Salam hangat dari pengurus RW 03 Padasuka`;
     res.json(data);
   });
 
-  app.get("/api/laporan", requireAuth, async (req, res) => {
-    if (req.session.isAdmin) {
-      const data = await storage.getAllLaporan();
-      return res.json(data);
-    }
-    const data = await storage.getLaporanByKkId(req.session.kkId!);
+  app.get("/api/laporan", requireAdmin, async (_req, res) => {
+    const data = await storage.getAllLaporan();
     res.json(data);
-  });
-
-  app.post("/api/laporan", requireAuth, async (req, res) => {
-    try {
-      const parsed = insertLaporanSchema.parse(req.body);
-      if (!req.session.isAdmin) {
-        if (parsed.kkId !== req.session.kkId) {
-          return res.status(403).json({ message: "Akses ditolak" });
-        }
-        if (parsed.wargaId) {
-          const w = await storage.getWargaById(parsed.wargaId);
-          if (!w || w.kkId !== req.session.kkId) {
-            return res.status(403).json({ message: "Warga bukan anggota KK Anda" });
-          }
-        }
-      }
-      const data = await storage.createLaporan(parsed);
-
-      const jenisLabel = jenisLaporanLabels[parsed.jenisLaporan ?? ""] || parsed.jenisLaporan;
-      if (parsed.wargaId) {
-        notifyWarga(parsed.wargaId, `[RW 03 Padasuka]\n\nLaporan Wargi berhasil dikirim ✅\n\nJudul: *${parsed.judul}*\nKategori: ${jenisLabel}\n\nLaporan akan segera ditinjau oleh pengurus RW.\n\nSekarang cek status laporan jadi gampang, langsung buka aja web kita di 👉 rw3padasukacimahi.org\n\nHatur nuhun Wargi! 🙏`);
-      }
-
-      if (!req.session.isAdmin) {
-        const wargaInfo = parsed.wargaId ? await storage.getWargaById(parsed.wargaId) : null;
-        const namaWarga = wargaInfo?.namaLengkap || "Warga";
-        notifyAdmin(`[RW 03 Padasuka - Admin]\n\n📢 *Laporan Baru Masuk!*\n\nDari: *${namaWarga}*\nJudul: *${parsed.judul}*\nKategori: ${jenisLabel}\n\nSegera cek dan tindak lanjuti di 👉 rw3padasukacimahi.org`);
-      }
-
-      res.json(data);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
   });
 
   app.patch("/api/laporan/:id/status", requireAdmin, async (req, res) => {
@@ -1329,18 +727,6 @@ Salam hangat dari pengurus RW 03 Padasuka`;
     }
     const data = await storage.updateLaporanStatus(parseInt(req.params.id as string), status, tanggapan);
     if (!data) return res.status(404).json({ message: "Laporan tidak ditemukan" });
-
-    const statusLabels: Record<string, string> = {
-      diproses: "sedang diproses",
-      selesai: "telah selesai ditangani",
-      ditolak: "ditolak",
-    };
-    const statusText = statusLabels[status] || status;
-    let waMsg = `[RW 03 Padasuka]\n\nUpdate Laporan Wargi:\n\nJudul: *${data.judul}*\nStatus: *${statusText.charAt(0).toUpperCase() + statusText.slice(1)}*`;
-    if (tanggapan) waMsg += `\n\nTanggapan Admin:\n${tanggapan}`;
-    if (status === "selesai") waMsg += `\n\nHatur nuhun atas laporannya Wargi, semoga lingkungan kita semakin baik! 🙏`;
-    waMsg += `\n\nCek detail laporan langsung di web 👉 rw3padasukacimahi.org`;
-    if (data.wargaId) notifyWarga(data.wargaId, waMsg);
 
     res.json(data);
   });
@@ -1368,18 +754,6 @@ Salam hangat dari pengurus RW 03 Padasuka`;
       }
 
       const data = await storage.createSuratWarga(parsed);
-
-      const jenisLabel = jenisSuratLabels[parsed.jenisSurat] || parsed.jenisSurat;
-      notifyWarga(parsed.wargaId, `[RW 03 Padasuka]\n\nPermohonan surat Wargi berhasil dikirim ✅\n\nJenis: *${jenisLabel}*\nPerihal: ${parsed.perihal}\n\nPermohonan akan segera diproses pengurus RW. Nanti Wargi dapet notifikasi lagi ya kalau sudah selesai.\n\nUntuk tanya status surat, hubungi admin via WhatsApp:\n👉 wa.me/6285860604142\n\nHatur nuhun! 🙏`);
-
-      if (!req.session.isAdmin) {
-        const wargaInfo = await storage.getWargaById(parsed.wargaId);
-        const namaWarga = wargaInfo?.namaLengkap || "Warga";
-        const kk = await storage.getKkById(parsed.kkId);
-        const alamat = kk ? `${kk.alamat}, RT ${String(kk.rt).padStart(2, "0")}/RW 03` : "-";
-        notifyAdmin(`[RW 03 Padasuka - Admin]\n\n📋 *Permohonan Surat Baru!*\n\nDari: *${namaWarga}*\nNIK: ${wargaInfo?.nik || "-"}\nAlamat: ${alamat}\nRT: ${String(parsed.nomorRt).padStart(2, "0")}\n\nJenis Surat: *${jenisLabel}*\nPerihal: ${parsed.perihal}${parsed.keterangan ? `\nKeterangan: ${parsed.keterangan}` : ""}\n\nSegera proses di 👉 rw3padasukacimahi.org`);
-      }
-
       res.json(data);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
@@ -1454,15 +828,9 @@ Salam hangat dari pengurus RW 03 Padasuka`;
         await storage.updateSuratWargaNomor(surat.id, nomorSurat);
       }
 
-      const jenisLabel = jenisSuratLabels[surat.jenisSurat] || surat.jenisSurat;
-
       if (status === "disetujui") {
         const updated = await storage.getSuratWargaById(surat.id);
         res.json(updated);
-        notifyWarga(surat.wargaId, `[RW 03 Padasuka]\n\nSurat Wargi telah *DISETUJUI* ✅\n\nJenis: *${jenisLabel}*\nPerihal: ${surat.perihal}${nomorSurat ? `\nNomor Surat: ${nomorSurat}` : ""}\n\nUntuk pengambilan surat atau informasi lebih lanjut, silakan hubungi admin via WhatsApp:\n👉 wa.me/6285860604142\n\nHatur nuhun! 🙏`);
-      } else if (status === "ditolak") {
-        res.json(data);
-        notifyWarga(surat.wargaId, `[RW 03 Padasuka]\n\nMohon maaf, permohonan surat Wargi *ditolak* ❌\n\nJenis: *${jenisLabel}*\nPerihal: ${surat.perihal}\n\nUntuk info lebih lanjut, hubungi admin via WhatsApp:\n👉 wa.me/6285860604142`);
       } else {
         res.json(data);
       }
@@ -1658,51 +1026,6 @@ Salam hangat dari pengurus RW 03 Padasuka`;
     }
   });
 
-  app.get("/api/profile-edits", requireAuth, async (req, res) => {
-    if (req.session.isAdmin) {
-      const data = await storage.getAllProfileEdits();
-      return res.json(data);
-    }
-    const data = await storage.getProfileEditsByKkId(req.session.kkId!);
-    res.json(data);
-  });
-
-  app.post("/api/profile-edits", requireAuth, async (req, res) => {
-    try {
-      const parsed = insertProfileEditSchema.parse(req.body);
-      if (!req.session.isAdmin) {
-        if (parsed.kkId !== req.session.kkId) {
-          return res.status(403).json({ message: "Akses ditolak" });
-        }
-        const w = await storage.getWargaById(parsed.wargaId);
-        if (!w || w.kkId !== req.session.kkId) {
-          return res.status(403).json({ message: "Warga bukan anggota KK Anda" });
-        }
-      }
-      const data = await storage.createProfileEdit(parsed);
-      res.json(data);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.patch("/api/profile-edits/:id/status", requireAdmin, async (req, res) => {
-    const { status } = req.body;
-    const edit = await storage.updateProfileEditStatus(parseInt(req.params.id as string), status);
-    if (!edit) return res.status(404).json({ message: "Edit request tidak ditemukan" });
-
-    if (status === "disetujui") {
-      const changes = normalizeProfileEditChanges(edit.fieldChanges as Record<string, any>);
-      await storage.updateWarga(edit.wargaId, changes);
-      const fieldList = Object.entries(changes).map(([k, v]) => `- ${k}: ${v}`).join("\n");
-      notifyWarga(edit.wargaId, `[RW 03 Padasuka]\n\nPerubahan data profil Wargi telah *DISETUJUI* ✅\n\nData yang diperbarui:\n${fieldList}\n\nCek profil terbaru langsung di web 👉 rw3padasukacimahi.org\n\nHatur nuhun! 🙏`);
-    } else if (status === "ditolak") {
-      notifyWarga(edit.wargaId, `[RW 03 Padasuka]\n\nMohon maaf, pengajuan perubahan data profil Wargi *ditolak* ❌\n\nSilakan hubungi pengurus RW untuk info lebih lanjut atau ajukan ulang di web 👉 rw3padasukacimahi.org`);
-    }
-
-    res.json(edit);
-  });
-
   app.get("/api/bansos/penerima", requireAdmin, async (_req, res) => {
     const data = await storage.getBansosRecipients();
     res.json(data);
@@ -1714,7 +1037,7 @@ Salam hangat dari pengurus RW 03 Padasuka`;
       const { jenisBansos } = req.body;
       if (!jenisBansos || typeof jenisBansos !== "string") return res.status(400).json({ message: "Jenis bansos harus diisi" });
       const kk = await storage.getKkById(kkId);
-      if (!kk) return res.status(404).json({ message: "KK tidak ditemukan" });
+      if (!assertKkInPemukimanScope(kk)) return res.status(404).json({ message: "KK tidak ditemukan atau di luar RT 01–04" });
       if (!kk.penerimaBansos) return res.status(400).json({ message: "KK ini bukan penerima bansos" });
       const updated = await storage.updateKkBansos(kkId, true, jenisBansos);
       res.json(updated);
@@ -1729,7 +1052,7 @@ Salam hangat dari pengurus RW 03 Padasuka`;
       if (!kkId) return res.status(400).json({ message: "KK ID harus diisi" });
       if (!jenisBansos || typeof jenisBansos !== "string") return res.status(400).json({ message: "Jenis bansos harus diisi" });
       const kk = await storage.getKkById(kkId);
-      if (!kk) return res.status(404).json({ message: "KK tidak ditemukan" });
+      if (!assertKkInPemukimanScope(kk)) return res.status(404).json({ message: "KK tidak ditemukan atau di luar RT 01–04" });
       if (kk.penerimaBansos) return res.status(400).json({ message: "KK ini sudah terdaftar sebagai penerima bansos" });
       const updated = await storage.updateKkBansos(kkId, true, jenisBansos);
       res.json(updated);
@@ -1743,7 +1066,7 @@ Salam hangat dari pengurus RW 03 Padasuka`;
       const { kkId } = req.body;
       if (!kkId) return res.status(400).json({ message: "KK ID harus diisi" });
       const kk = await storage.getKkById(kkId);
-      if (!kk) return res.status(404).json({ message: "KK tidak ditemukan" });
+      if (!assertKkInPemukimanScope(kk)) return res.status(404).json({ message: "KK tidak ditemukan atau di luar RT 01–04" });
       if (!kk.penerimaBansos) return res.status(400).json({ message: "KK ini bukan penerima bansos" });
       const updated = await storage.updateKkBansos(kkId, false, null);
       res.json(updated);
@@ -1761,7 +1084,7 @@ Salam hangat dari pengurus RW 03 Padasuka`;
     try {
       const parsed = insertPengajuanBansosSchema.parse(req.body);
       const kk = await storage.getKkById(parsed.kkId);
-      if (!kk) return res.status(404).json({ message: "KK tidak ditemukan" });
+      if (!assertKkInPemukimanScope(kk)) return res.status(404).json({ message: "KK tidak ditemukan atau di luar RT 01–04" });
 
       if (parsed.jenisPengajuan === "rekomendasi_coret" && !kk.penerimaBansos) {
         return res.status(400).json({ message: "KK ini bukan penerima bansos" });
@@ -1875,23 +1198,10 @@ Salam hangat dari pengurus RW 03 Padasuka`;
 
       const formatRupiah = (n: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n);
       if (paymentMethod === "rwcoin") {
-        const wargaId = req.session.wargaId;
-        if (!wargaId) return res.status(403).json({ message: "Login warga diperlukan" });
-        const wargaData = await storage.getWargaById(wargaId);
-        if (!wargaData) return res.status(404).json({ message: "Data warga tidak ditemukan" });
-        const result = await storage.createDonasiWithRwcoin({
-          campaignId: parsed.campaignId,
-          kkId,
-          wargaId,
-          namaDonatur: wargaData.namaLengkap,
-          jumlah: parsed.jumlah,
-        });
-        notifyAdmin(`[RW 03 Padasuka - Admin]\n\n💚 *Donasi RWcoin Berhasil!*\n\nDonatur: *${wargaData.namaLengkap}*\nKegiatan: *${campaign.judul}*\nJumlah: *${formatRupiah(parsed.jumlah)}*\nMetode: *RWcoin*\n\nPemasukan kas RW sudah tercatat otomatis.`);
-        return res.json(result);
+        return res.status(410).json({ message: "Donasi via RWcoin sudah tidak digunakan." });
       }
 
       const result = await storage.createDonasi(parsed);
-      notifyAdmin(`[RW 03 Padasuka - Admin]\n\n💰 *Donasi Baru Masuk!*\n\nDonatur: *${parsed.namaDonatur}*\nKegiatan: *${campaign.judul}*\nJumlah: *${formatRupiah(parsed.jumlah)}*\n\nSegera verifikasi di 👉 rw3padasukacimahi.org`);
       res.json(result);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
@@ -2063,29 +1373,6 @@ Salam hangat dari pengurus RW 03 Padasuka`;
     }
   });
 
-  app.get("/api/iuran/warga", requireWarga, async (req, res) => {
-    try {
-      const kkId = (req.session as any).kkId as number;
-      const data = await storage.getIuranByKkId(kkId);
-      res.json(data);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/iuran/:id/bayar-rwcoin", requireWarga, async (req, res) => {
-    try {
-      const wargaId = (req.session as any).wargaId as number | undefined;
-      if (!wargaId) return res.status(404).json({ message: "Sesi warga tidak ditemukan, silakan login ulang" });
-      const id = parseInt(req.params.id as string);
-      const tanggalBayar = (req.body?.tanggalBayar as string) || new Date().toISOString().slice(0, 10);
-      const result = await storage.payIuranWithRwcoin(id, wargaId, tanggalBayar);
-      res.json(result);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
   app.get("/api/iuran", requireAdmin, async (req, res) => {
     try {
       const bulanTahun = req.query.bulanTahun as string | undefined;
@@ -2093,8 +1380,8 @@ Salam hangat dari pengurus RW 03 Padasuka`;
       if (!bulanTahun || !/^\d{4}-\d{2}$/.test(bulanTahun)) {
         return res.status(400).json({ message: "Parameter bulanTahun (YYYY-MM) wajib diisi" });
       }
-      if (filterRt !== undefined && (filterRt < 1 || filterRt > 7)) {
-        return res.status(400).json({ message: "Filter RT harus antara 1-7" });
+      if (filterRt !== undefined && !isActiveRt(filterRt)) {
+        return res.status(400).json({ message: "Filter RT harus 1–4" });
       }
       const data = await storage.getIuranByBulan(bulanTahun, filterRt);
       res.json(data);
@@ -2278,13 +1565,6 @@ Salam hangat dari pengurus RW 03 Padasuka`;
       }
       const result = await storage.perpanjangKontrak(id, tanggalMulaiBaru, tanggalHabisBaru);
       if (!result) return res.status(404).json({ message: "Warga singgah tidak ditemukan" });
-
-      try {
-        await sendWhatsApp(result.nomorWhatsapp,
-          `Halo ${result.namaLengkap},\n\nKontrak Anda telah diperpanjang.\n📅 Mulai: ${tanggalMulaiBaru}\n📅 Habis: ${tanggalHabisBaru}\n\nTerima kasih telah menjadi warga singgah di wilayah RW 03 Padasuka.\n\n🌐 rw3padasukacimahi.org`
-        );
-      } catch {}
-
       res.json(result);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
@@ -2355,7 +1635,6 @@ Salam hangat dari pengurus RW 03 Padasuka`;
         }
       }
       const created = await storage.createUsahaWithRelations(parsed, karyawan || [], izinList);
-      await notifyAdmin(`📋 *Pendaftaran Usaha Baru*\n\n🏪 Nama: ${created.namaUsaha}\n👤 Pemilik: ${created.namaPemilik}\n📍 RT ${created.rt}\n📄 NIB: ${created.nib || '-'}\n\nMenunggu survey lapangan.`);
       res.json(created);
     } catch (error: any) {
       if (error.name === "ZodError") {
@@ -2451,14 +1730,12 @@ Salam hangat dari pengurus RW 03 Padasuka`;
       }
       if (keputusan === "disetujui") {
         const result = await storage.approveUsahaWithStiker(usahaId);
-        await sendWhatsApp(existing.nomorWaPemilik, `Halo ${existing.namaPemilik},\n\nUsaha "${existing.namaUsaha}" Anda telah *DISETUJUI* oleh RW 03 Padasuka.\n\n📋 Nomor Stiker: ${result.nomorStiker}\n📅 Berlaku: ${result.tanggalTerbit} s/d ${result.tanggalExpired}\n\nStiker berlaku selama 6 bulan. Harap diperpanjang sebelum masa berlaku habis.\n\n🏘️ RW 03 Padasuka\n🌐 rw3padasukacimahi.org`);
         res.json({ message: "Usaha disetujui dan stiker diterbitkan", nomorStiker: result.nomorStiker });
       } else {
         if (!alasanPenolakan || !alasanPenolakan.trim()) {
           return res.status(400).json({ message: "Alasan penolakan harus diisi" });
         }
         await storage.updateUsahaStatus(usahaId, "ditolak", { alasanPenolakan });
-        await sendWhatsApp(existing.nomorWaPemilik, `Halo ${existing.namaPemilik},\n\nMohon maaf, usaha "${existing.namaUsaha}" Anda *TIDAK DISETUJUI* oleh RW 03 Padasuka.\n\nAlasan: ${alasanPenolakan || '-'}\n\nSilakan hubungi admin untuk informasi lebih lanjut.\n\n🏘️ RW 03 Padasuka`);
         res.json({ message: "Usaha ditolak" });
       }
     } catch (error: any) {
@@ -2475,116 +1752,9 @@ Salam hangat dari pengurus RW 03 Padasuka`;
         return res.status(400).json({ message: "Hanya usaha yang sudah disetujui yang bisa diperpanjang stikernya" });
       }
       const result = await storage.perpanjangStiker(usahaId, existing.tanggalStikerExpired);
-      await sendWhatsApp(existing.nomorWaPemilik, `Halo ${existing.namaPemilik},\n\nStiker usaha "${existing.namaUsaha}" telah *DIPERPANJANG*.\n\n📋 Nomor Stiker Baru: ${result.nomorStiker}\n📅 Berlaku: ${result.tanggalTerbit} s/d ${result.tanggalExpired}\n\n🏘️ RW 03 Padasuka\n🌐 rw3padasukacimahi.org`);
       res.json({ message: "Stiker berhasil diperpanjang", nomorStiker: result.nomorStiker, tanggalExpired: result.tanggalExpired });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
-    }
-  });
-
-  // === Scheduler: H-7 Kontrak Habis WA Notification ===
-  async function checkKontrakMendekatiHabis() {
-    try {
-      const wargaH7 = await storage.getWargaSinggahMendekatiHabis(7);
-      for (const ws of wargaH7) {
-        const pesanPenghuni = `Halo ${ws.namaLengkap},\n\nKontrak tinggal Anda di ${ws.namaKost} akan berakhir pada tanggal ${ws.tanggalHabisKontrak} (7 hari lagi).\n\nApakah Anda berencana memperpanjang kontrak? Silakan hubungi pemilik kost (${ws.namaPemilik}) atau sampaikan ke pengurus RW.\n\nTerima kasih.\n🏘️ RW 03 Padasuka\n🌐 rw3padasukacimahi.org`;
-        await sendWhatsApp(ws.nomorWhatsapp, pesanPenghuni);
-
-        const pesanAdmin = `⚠️ *Notifikasi Kontrak H-7*\n\nWarga singgah berikut kontraknya akan habis 7 hari lagi:\n👤 Nama: ${ws.namaLengkap}\n📍 Kost: ${ws.namaKost}\n👤 Pemilik: ${ws.namaPemilik}\n📅 Habis: ${ws.tanggalHabisKontrak}`;
-        await notifyAdmin(pesanAdmin);
-
-        const pesanPemilik = `Halo ${ws.namaPemilik},\n\nKontrak penghuni berikut di ${ws.namaKost} akan berakhir dalam 7 hari:\n👤 Nama: ${ws.namaLengkap}\n📅 Habis: ${ws.tanggalHabisKontrak}\n\nMohon konfirmasi apakah akan diperpanjang.\n\n🏘️ RW 03 Padasuka`;
-        await sendWhatsApp(ws.nomorWaPemilik, pesanPemilik);
-      }
-      if (wargaH7.length > 0) {
-        console.log(`[Scheduler] Sent H-7 notifications to ${wargaH7.length} warga singgah`);
-      }
-    } catch (error) {
-      console.error("[Scheduler] Error checking kontrak:", error);
-    }
-  }
-
-  setInterval(checkKontrakMendekatiHabis, 24 * 60 * 60 * 1000);
-  setTimeout(checkKontrakMendekatiHabis, 10000);
-
-  async function checkStikerMendekatiExpired() {
-    try {
-      const usahaH30 = await storage.getUsahaMendekatiExpired(30);
-      for (const u of usahaH30) {
-        await sendWhatsApp(u.nomorWaPemilik, `Halo ${u.namaPemilik},\n\nStiker usaha "${u.namaUsaha}" akan habis masa berlakunya pada ${u.tanggalStikerExpired} (30 hari lagi).\n\nSilakan hubungi admin RW untuk memperpanjang stiker.\n\n🏘️ RW 03 Padasuka\n🌐 rw3padasukacimahi.org`);
-        await notifyAdmin(`⚠️ *Stiker Usaha H-30*\n\n🏪 ${u.namaUsaha}\n👤 ${u.namaPemilik}\n📅 Expired: ${u.tanggalStikerExpired}`);
-      }
-      const usahaH7 = await storage.getUsahaMendekatiExpired(7);
-      for (const u of usahaH7) {
-        await sendWhatsApp(u.nomorWaPemilik, `Halo ${u.namaPemilik},\n\n⚠️ Stiker usaha "${u.namaUsaha}" akan habis masa berlakunya pada ${u.tanggalStikerExpired} (7 hari lagi).\n\nSegera hubungi admin RW untuk memperpanjang stiker sebelum masa berlaku habis.\n\n🏘️ RW 03 Padasuka\n🌐 rw3padasukacimahi.org`);
-        await notifyAdmin(`🚨 *Stiker Usaha H-7*\n\n🏪 ${u.namaUsaha}\n👤 ${u.namaPemilik}\n📅 Expired: ${u.tanggalStikerExpired}`);
-      }
-      if (usahaH30.length + usahaH7.length > 0) {
-        console.log(`[Scheduler] Sent stiker expiry notifications: H-30=${usahaH30.length}, H-7=${usahaH7.length}`);
-      }
-    } catch (error) {
-      console.error("[Scheduler] Error checking stiker expiry:", error);
-    }
-  }
-
-  setInterval(checkStikerMendekatiExpired, 24 * 60 * 60 * 1000);
-  setTimeout(checkStikerMendekatiExpired, 15000);
-
-  function requireSinggahAuth(req: Request, res: Response, next: NextFunction) {
-    if (!(req.session as any).isWargaSinggah) {
-      return res.status(401).json({ message: "Belum login sebagai warga singgah" });
-    }
-    next();
-  }
-
-  app.get("/api/singgah/profil", requireSinggahAuth, async (req, res) => {
-    try {
-      const wsId = (req.session as any).wargaSinggahId;
-      const ws = await storage.getWargaSinggahById(wsId);
-      if (!ws) {
-        return res.status(404).json({ message: "Data tidak ditemukan" });
-      }
-      const pemilik = await storage.getPemilikKostById(ws.pemilikKostId);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayStr = today.toISOString().split("T")[0];
-      const habis = new Date(ws.tanggalHabisKontrak + "T00:00:00");
-      const diffMs = habis.getTime() - today.getTime();
-      const sisaHari = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-      return res.json({
-        ...ws,
-        namaKost: pemilik?.namaKost || "-",
-        namaPemilik: pemilik?.namaPemilik || "-",
-        alamatKost: pemilik?.alamatLengkap || "-",
-        sisaHari,
-        sudahHabis: ws.tanggalHabisKontrak < todayStr,
-      });
-    } catch (error: any) {
-      return res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/singgah/laporan", requireSinggahAuth, async (req, res) => {
-    try {
-      const wsId = (req.session as any).wargaSinggahId;
-      const ws = await storage.getWargaSinggahById(wsId);
-      if (!ws) {
-        return res.status(404).json({ message: "Data tidak ditemukan" });
-      }
-      const { jenisLaporan, judul, isi } = req.body;
-      if (!jenisLaporan || !judul || !isi) {
-        return res.status(400).json({ message: "Semua field harus diisi" });
-      }
-      const laporan = await storage.createLaporan({
-        wargaSinggahId: ws.id,
-        jenisLaporan,
-        judul: `[Warga Singgah - ${ws.namaLengkap}] ${judul}`,
-        isi: `Dari: ${ws.namaLengkap} (NIK: ${ws.nik})\nWA: ${ws.nomorWhatsapp}\n\n${isi}`,
-      });
-      await notifyAdmin(`Laporan baru dari warga singgah ${ws.namaLengkap}: ${judul}`);
-      return res.json(laporan);
-    } catch (error: any) {
-      return res.status(500).json({ message: error.message });
     }
   });
 
@@ -2682,1163 +1852,6 @@ Salam hangat dari pengurus RW 03 Padasuka`;
     }
   });
 
-  // ============================================================
-  // RWCOIN ECOSYSTEM
-  // ============================================================
-
-  function requireMitra(req: Request, res: Response, next: NextFunction) {
-    if (!req.session.mitraId) return res.status(401).json({ message: "Login mitra diperlukan" });
-    next();
-  }
-
-  // --- Auth Mitra ---
-  app.post("/api/mitra/login", async (req, res) => {
-    try {
-      const { nomorWa, pin } = req.body;
-      if (!nomorWa || !pin) return res.status(400).json({ message: "Nomor WA dan PIN wajib diisi" });
-      const mitraData = await storage.getMitraByWaKasir(nomorWa);
-      if (!mitraData || !mitraData.isActive) return res.status(401).json({ message: "Mitra tidak ditemukan atau tidak aktif" });
-      const valid = await bcrypt.compare(String(pin), mitraData.pinHash);
-      if (!valid) return res.status(401).json({ message: "PIN salah" });
-      req.session.mitraId = mitraData.id;
-      req.session.mitraNama = mitraData.namaUsaha;
-      req.session.mitraWaKasir = mitraData.nomorWaKasir;
-      req.session.kkId = undefined;
-      req.session.isAdmin = undefined;
-      res.json({ id: mitraData.id, namaUsaha: mitraData.namaUsaha, kategori: mitraData.kategori, rt: mitraData.rt, namaKasir: mitraData.namaKasir });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/mitra/logout", (req, res) => {
-    req.session.mitraId = undefined;
-    req.session.mitraNama = undefined;
-    req.session.mitraWaKasir = undefined;
-    res.json({ message: "Logout berhasil" });
-  });
-
-  app.get("/api/mitra/me", requireMitra, async (req, res) => {
-    try {
-      const mitraData = await storage.getMitraById(req.session.mitraId!);
-      if (!mitraData) return res.status(404).json({ message: "Mitra tidak ditemukan" });
-      const wallet = await storage.getOrCreateMitraWallet(mitraData.id);
-      res.json({ ...mitraData, saldo: wallet.saldo, kodeWallet: wallet.kodeWallet });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // --- Admin: Kelola Mitra ---
-  app.get("/api/rwcoin/mitra", requireAdmin, async (req, res) => {
-    try {
-      const list = await storage.getAllMitra();
-      const result = await Promise.all(list.map(async m => {
-        const wallet = await storage.getWalletByMitraId(m.id);
-        return { ...m, saldo: wallet?.saldo ?? 0 };
-      }));
-      res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/rwcoin/mitra", requireAdmin, async (req, res) => {
-    try {
-      const { pin, ...rest } = req.body;
-      if (!pin || String(pin).length !== 6) return res.status(400).json({ message: "PIN harus 6 digit" });
-      const pinHash = await bcrypt.hash(String(pin), 10);
-      const data = await storage.createMitra({ ...rest, pinHash, isActive: true });
-      res.json(data);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.patch("/api/rwcoin/mitra/:id", requireAdmin, async (req, res) => {
-    try {
-      const { pin, ...rest } = req.body;
-      const updateData: any = { ...rest };
-      if (pin) {
-        if (String(pin).length !== 6) return res.status(400).json({ message: "PIN harus 6 digit" });
-        updateData.pinHash = await bcrypt.hash(String(pin), 10);
-      }
-      const data = await storage.updateMitra(parseInt(req.params.id as string), updateData);
-      if (!data) return res.status(404).json({ message: "Mitra tidak ditemukan" });
-      res.json(data);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.delete("/api/rwcoin/mitra/:id", requireAdmin, async (req, res) => {
-    try {
-      await storage.deleteMitra(parseInt(req.params.id as string));
-      res.json({ message: "Mitra dihapus" });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // --- Admin: Topup Warga ---
-  app.post("/api/rwcoin/topup", requireAdmin, async (req, res) => {
-    try {
-      const { wargaId, jumlah, keterangan } = req.body;
-      if (!wargaId || !jumlah || jumlah <= 0) return res.status(400).json({ message: "wargaId dan jumlah wajib diisi" });
-      const transaksi = await storage.topupWargaWallet(parseInt(wargaId), parseInt(jumlah), keterangan || "Topup oleh admin");
-      const wallet = await storage.getWalletByWargaId(parseInt(wargaId));
-      const saldoBaru = wallet?.saldo ?? 0;
-      // Kirim WA notif ke warga (non-blocking)
-      const wargaData = await storage.getWargaById(parseInt(wargaId));
-      if (wargaData?.nomorWhatsapp) {
-        const pesan = `[RWcoin RW 03 Padasuka]\n\nHalo ${wargaData.namaLengkap}, saldo RWcoin Anda baru saja ditambahkan.\n\nJumlah       : +${parseInt(jumlah).toLocaleString("id")} RWcoin\nSaldo baru   : ${saldoBaru.toLocaleString("id")} RWcoin\nKeterangan   : ${keterangan || "Topup oleh admin"}\nID Transaksi : ${transaksi.kodeTransaksi}\n\nSaldo sudah aktif dan siap digunakan. Terima kasih!\n\nrw3padasukacimahi.org`;
-        sendWhatsApp(wargaData.nomorWhatsapp, pesan).catch(() => {});
-      }
-      res.json({ transaksi, saldoBaru });
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  // --- Admin: Withdraw Management ---
-  app.get("/api/rwcoin/withdraw", requireAdmin, async (req, res) => {
-    try {
-      const list = await storage.getAllWithdrawRequests();
-      res.json(list);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.patch("/api/rwcoin/withdraw/:id/setujui", requireAdmin, async (req, res) => {
-    try {
-      const data = await storage.approveWithdraw(parseInt(req.params.id as string), req.session.adminNama || "Admin");
-      if (!data) return res.status(404).json({ message: "Request tidak ditemukan" });
-      // Notif WA ke mitra
-      const mitraData = await storage.getMitraById(data.mitraId);
-      if (mitraData) {
-        const pesan = `RWcoin RW03 - Permintaan withdraw Anda sebesar ${data.jumlahCoin.toLocaleString("id")} coin telah DISETUJUI. Pembayaran akan segera diproses ke rekening ${data.namaBank} ${data.nomorRekening} a/n ${data.atasNama}.`;
-        await sendWhatsAppToMitra(mitraData, pesan);
-      }
-      res.json(data);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.patch("/api/rwcoin/withdraw/:id/bayar", requireAdmin, async (req, res) => {
-    try {
-      const data = await storage.markWithdrawDibayar(parseInt(req.params.id as string));
-      if (!data) return res.status(404).json({ message: "Request tidak ditemukan" });
-      const mitraData = await storage.getMitraById(data.mitraId);
-      if (mitraData) {
-        const pesan = `RWcoin RW03 - Pembayaran withdraw ${data.jumlahCoin.toLocaleString("id")} coin telah DIBAYARKAN ke rekening ${data.namaBank} ${data.nomorRekening} a/n ${data.atasNama}. Terima kasih telah menjadi mitra RW03!`;
-        await sendWhatsAppToMitra(mitraData, pesan);
-      }
-      res.json(data);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.patch("/api/rwcoin/withdraw/:id/tolak", requireAdmin, async (req, res) => {
-    try {
-      const { catatan } = req.body;
-      const data = await storage.rejectWithdraw(parseInt(req.params.id as string), catatan || "Ditolak oleh admin");
-      if (!data) return res.status(404).json({ message: "Request tidak ditemukan" });
-      const mitraData = await storage.getMitraById(data.mitraId);
-      if (mitraData) {
-        const pesan = `RWcoin RW03 - Permintaan withdraw Anda sebesar ${data.jumlahCoin.toLocaleString("id")} coin telah DITOLAK. Catatan: ${catatan || "-"}. Coin telah dikembalikan ke saldo Anda.`;
-        await sendWhatsAppToMitra(mitraData, pesan);
-      }
-      res.json(data);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // --- Admin: Kas RWcoin ---
-  app.get("/api/rwcoin/kas", requireAdmin, async (_req, res) => {
-    try {
-      const data = await storage.getKasRwcoin();
-      res.json(data);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // --- Admin: Inject Kas Manual ---
-  app.post("/api/rwcoin/kas/inject", requireAdmin, async (req, res) => {
-    try {
-      const { tipe, jumlah, keterangan } = req.body;
-      if (!["pemasukan", "pengeluaran"].includes(tipe)) return res.status(400).json({ message: "tipe harus pemasukan/pengeluaran" });
-      const jumlahInt = parseInt(jumlah);
-      if (!jumlahInt || jumlahInt <= 0) return res.status(400).json({ message: "Jumlah tidak valid" });
-      const result = await storage.injectKas({ tipe, jumlah: jumlahInt, keterangan: keterangan || (tipe === "pemasukan" ? "Topup kas manual oleh admin" : "Penarikan kas manual oleh admin") });
-      res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // --- Admin: Statistik & Transaksi ---
-  app.get("/api/rwcoin/stats", requireAdmin, async (req, res) => {
-    try {
-      const stats = await storage.getRwcoinStats();
-      res.json(stats);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/rwcoin/dashboard", requireAdmin, async (_req, res) => {
-    try {
-      const data = await storage.getRwcoinDashboard();
-      res.json(data);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // Settings — GET bisa diakses mitra/warga juga (untuk tampilkan fee)
-  app.get("/api/rwcoin/settings", async (_req, res) => {
-    try {
-      const data = await storage.getRwcoinSettings();
-      res.json(data);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.patch("/api/rwcoin/settings/:key", requireAdmin, async (req, res) => {
-    try {
-      const key = req.params.key as string;
-      const { value } = req.body;
-      const allowed = ["topup_fee", "withdraw_fee", "min_topup", "min_withdraw"];
-      if (!allowed.includes(key)) return res.status(400).json({ message: "Key tidak diizinkan" });
-      const parsed = parseInt(value);
-      if (isNaN(parsed) || parsed < 0) return res.status(400).json({ message: "Nilai harus angka positif" });
-      const result = await storage.upsertRwcoinSetting(key, String(parsed));
-      res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/rwcoin/tripay/config", requireAdmin, async (req, res) => {
-    try {
-      const base = process.env.APP_BASE_URL ?? `${req.protocol}://${req.get("host")}`;
-      const overview = await getTripayOverview();
-      const secret = process.env.TRIPAY_CALLBACK_SECRET ?? "";
-      res.json({
-        ...getTripayPublicConfig(),
-        callbackUrl: secret ? `${base}/api/tripay/callback?s=${encodeURIComponent(secret)}` : `${base}/api/tripay/callback`,
-        callbackSecretConfigured: Boolean(secret),
-        ...overview,
-      });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/rwcoin/tripay/products", requireAdmin, async (req, res) => {
-    try {
-      const kind = req.query.kind ? String(req.query.kind) as any : undefined;
-      const includeInactive = String(req.query.includeInactive ?? "true") === "true";
-      const rows = await listTripayProducts(kind, includeInactive);
-      res.json(rows);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/rwcoin/tripay/categories", requireAdmin, async (_req, res) => {
-    try {
-      const rows = await listTripayCategories();
-      res.json(rows);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.patch("/api/rwcoin/tripay/categories/:id", requireAdmin, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id as string);
-      const isActive = req.body?.isActive != null ? Boolean(req.body.isActive) : undefined;
-      const isVisibleToWarga = req.body?.isVisibleToWarga != null ? Boolean(req.body.isVisibleToWarga) : undefined;
-      const displayOrder = req.body?.displayOrder != null ? parseInt(req.body.displayOrder) : undefined;
-      const iconKey = req.body?.iconKey != null ? String(req.body.iconKey) : undefined;
-      const adminLabel = req.body?.adminLabel != null ? String(req.body.adminLabel) : undefined;
-      const row = await updateTripayCategorySetting(id, { isActive, isVisibleToWarga, displayOrder, iconKey, adminLabel });
-      res.json(row);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/rwcoin/tripay/operators", requireAdmin, async (req, res) => {
-    try {
-      const categoryRefId = req.query.categoryId ? parseInt(String(req.query.categoryId)) : undefined;
-      const rows = await listTripayOperators(categoryRefId);
-      res.json(rows);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.patch("/api/rwcoin/tripay/operators/:id", requireAdmin, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id as string);
-      const isActive = req.body?.isActive != null ? Boolean(req.body.isActive) : undefined;
-      const isVisibleToWarga = req.body?.isVisibleToWarga != null ? Boolean(req.body.isVisibleToWarga) : undefined;
-      const displayOrder = req.body?.displayOrder != null ? parseInt(req.body.displayOrder) : undefined;
-      const normalizedName = req.body?.normalizedName != null ? String(req.body.normalizedName) : undefined;
-      const row = await updateTripayOperatorSetting(id, { isActive, isVisibleToWarga, displayOrder, normalizedName });
-      res.json(row);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/rwcoin/tripay/products/sync", requireAdmin, async (_req, res) => {
-    try {
-      const result = await syncTripayProducts();
-      res.json(result);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.patch("/api/rwcoin/tripay/products/:id", requireAdmin, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id as string);
-      const marginFlat = req.body?.marginFlat != null ? parseInt(req.body.marginFlat) : undefined;
-      const isActive = req.body?.isActive != null ? Boolean(req.body.isActive) : undefined;
-      const isVisibleToWarga = req.body?.isVisibleToWarga != null ? Boolean(req.body.isVisibleToWarga) : undefined;
-      const isFeatured = req.body?.isFeatured != null ? Boolean(req.body.isFeatured) : undefined;
-      const isRecommended = req.body?.isRecommended != null ? Boolean(req.body.isRecommended) : undefined;
-      const displayOrder = req.body?.displayOrder != null ? parseInt(req.body.displayOrder) : undefined;
-      const adminNote = req.body?.adminNote != null ? String(req.body.adminNote) : undefined;
-      const kind = req.body?.kind != null ? String(req.body.kind) as any : undefined;
-      const productGroup = req.body?.productGroup != null ? String(req.body.productGroup) : undefined;
-      const operatorNormalized = req.body?.operatorNormalized != null ? String(req.body.operatorNormalized) : undefined;
-      const row = await updateTripayProductSetting(id, { marginFlat, isActive, isVisibleToWarga, isFeatured, isRecommended, displayOrder, adminNote, kind, productGroup, operatorNormalized });
-      res.json(row);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/rwcoin/tripay/products/bulk-update", requireAdmin, async (req, res) => {
-    try {
-      const marginFlat = parseInt(req.body?.marginFlat);
-      if (isNaN(marginFlat) || marginFlat < 0) {
-        return res.status(400).json({ message: "Margin bulk harus angka 0 atau lebih" });
-      }
-      const kind = req.body?.kind ? String(req.body.kind) as any : undefined;
-      const operatorName = req.body?.operatorName ? String(req.body.operatorName) : undefined;
-      const isActive = req.body?.isActive != null ? Boolean(req.body.isActive) : undefined;
-      const result = await bulkUpdateTripayProducts({ marginFlat, kind, operatorName, isActive });
-      res.json(result);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/rwcoin/tripay/transaksi", requireAdmin, async (_req, res) => {
-    try {
-      const rows = await listTripayTransactions(200);
-      res.json(rows);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/rwcoin/tripay/reconcile", requireAdmin, async (req, res) => {
-    try {
-      const reference = req.body?.reference ? String(req.body.reference) : null;
-      if (reference) {
-        const row = await reconcileTripayTransaction(reference);
-        return res.json({ mode: "single", row });
-      }
-      const result = await reconcilePendingTripayTransactions(50);
-      res.json({ mode: "bulk", ...result });
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/rwcoin/transaksi", requireAdmin, async (req, res) => {
-    try {
-      const list = await storage.getAllRwcoinTransaksi();
-      res.json(list);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // --- Admin: Voucher ---
-  app.get("/api/rwcoin/voucher", requireAdmin, async (req, res) => {
-    try {
-      res.json(await storage.getAllVoucher());
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/rwcoin/voucher", requireAdmin, async (req, res) => {
-    try {
-      const data = await storage.createVoucher(req.body);
-      res.json(data);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.patch("/api/rwcoin/voucher/:id", requireAdmin, async (req, res) => {
-    try {
-      const data = await storage.updateVoucher(parseInt(req.params.id as string), req.body);
-      if (!data) return res.status(404).json({ message: "Voucher tidak ditemukan" });
-      res.json(data);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.delete("/api/rwcoin/voucher/:id", requireAdmin, async (req, res) => {
-    try {
-      await storage.deleteVoucher(parseInt(req.params.id as string));
-      res.json({ message: "Voucher dihapus" });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // --- Admin: Diskon ---
-  app.get("/api/rwcoin/diskon", requireAdmin, async (req, res) => {
-    try {
-      res.json(await storage.getAllDiskon());
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/rwcoin/diskon", requireAdmin, async (req, res) => {
-    try {
-      const data = await storage.createDiskon(req.body);
-      res.json(data);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.patch("/api/rwcoin/diskon/:id", requireAdmin, async (req, res) => {
-    try {
-      const data = await storage.updateDiskon(parseInt(req.params.id as string), req.body);
-      if (!data) return res.status(404).json({ message: "Diskon tidak ditemukan" });
-      res.json(data);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.delete("/api/rwcoin/diskon/:id", requireAdmin, async (req, res) => {
-    try {
-      await storage.deleteDiskon(parseInt(req.params.id as string));
-      res.json({ message: "Diskon dihapus" });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // --- Mitra: Transaksi Belanja ---
-  app.post("/api/mitra/transaksi", requireMitra, async (req, res) => {
-    try {
-      const { kodeWallet, jumlah, voucherKode, keterangan } = req.body;
-      if (!jumlah || jumlah <= 0) return res.status(400).json({ message: "Jumlah wajib diisi" });
-      if (!kodeWallet) return res.status(400).json({ message: "Kode wallet wajib diisi" });
-
-      const resolvedKodeWallet = kodeWallet.toUpperCase();
-
-      const result = await storage.processBelanjaTransaksi(resolvedKodeWallet, req.session.mitraId!, parseInt(jumlah), voucherKode, keterangan);
-      // Kirim notifikasi WA ke semua nomor mitra
-      const mitraData = await storage.getMitraById(req.session.mitraId!);
-      if (mitraData) {
-        const diskonInfo = result.diskon > 0 ? ` (diskon ${result.diskon.toLocaleString("id")} coin)` : "";
-        const pesan = `RWcoin RW03 - Transaksi berhasil!\nPembeli: ${result.namaWarga}\nTotal: ${result.transaksi.jumlahBruto.toLocaleString("id")} coin${diskonInfo}\nDibayar: ${result.transaksi.jumlahBayar.toLocaleString("id")} coin\nKode: ${result.transaksi.kodeTransaksi}\nMitra: ${mitraData.namaUsaha}`;
-        await sendWhatsAppToMitra(mitraData, pesan);
-      }
-      res.json(result);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/mitra/transaksi", requireMitra, async (req, res) => {
-    try {
-      const list = await storage.getRwcoinTransaksiByMitraId(req.session.mitraId!);
-      res.json(list);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // Cek wallet warga sebelum transaksi (preview)
-  app.get("/api/mitra/cek-wallet/:kode", requireMitra, async (req, res) => {
-    try {
-      const wallet = await storage.getWalletByKode((req.params.kode as string).toUpperCase());
-      if (!wallet || wallet.ownerType !== "warga" || !wallet.wargaId) return res.status(404).json({ message: "Kode wallet tidak ditemukan" });
-      const wargaData = await storage.getWargaById(wallet.wargaId);
-      if (!wargaData) return res.status(404).json({ message: "Warga tidak ditemukan" });
-      const kk = await storage.getKkById(wargaData.kkId);
-      res.json({ namaWarga: wargaData.namaLengkap, saldo: wallet.saldo, rt: kk?.rt ?? 0, kodeWallet: wallet.kodeWallet });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // Mitra withdraw request
-  app.post("/api/mitra/withdraw", requireMitra, async (req, res) => {
-    try {
-      const { jumlahCoin, nomorRekening, namaBank, atasNama, catatan } = req.body;
-      if (!jumlahCoin || jumlahCoin <= 0 || !nomorRekening || !namaBank || !atasNama) {
-        return res.status(400).json({ message: "Semua field wajib diisi" });
-      }
-      const result = await storage.processWithdrawRequest(req.session.mitraId!, parseInt(jumlahCoin), nomorRekening, namaBank, atasNama, catatan);
-      // Notif admin
-      const mitraData = await storage.getMitraById(req.session.mitraId!);
-      await notifyAdmin(`RWcoin - Permintaan Withdraw Baru!\nMitra: ${mitraData?.namaUsaha}\nJumlah: ${parseInt(jumlahCoin).toLocaleString("id")} coin\nBank: ${namaBank} ${nomorRekening} a/n ${atasNama}`);
-      res.json(result);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/mitra/withdraw", requireMitra, async (req, res) => {
-    try {
-      const list = await storage.getWithdrawByMitraId(req.session.mitraId!);
-      res.json(list);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // Mitra: lihat voucher & diskon aktif
-  app.get("/api/mitra/voucher", requireMitra, async (req, res) => {
-    try {
-      const list = await storage.getAllVoucher();
-      res.json(list.filter(v => v.isActive && (!v.mitraId || v.mitraId === req.session.mitraId)));
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/mitra/diskon", requireMitra, async (req, res) => {
-    try {
-      const list = await storage.getDiskonByMitraId(req.session.mitraId!);
-      res.json(list);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/mitra/diskon", requireMitra, async (req, res) => {
-    try {
-      const data = await storage.createDiskon({ ...req.body, mitraId: req.session.mitraId! });
-      res.json(data);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.patch("/api/mitra/diskon/:id", requireMitra, async (req, res) => {
-    try {
-      const existing = (await storage.getDiskonByMitraId(req.session.mitraId!)).find(d => d.id === parseInt(req.params.id as string));
-      if (!existing) return res.status(403).json({ message: "Diskon tidak ditemukan" });
-      const data = await storage.updateDiskon(parseInt(req.params.id as string), req.body);
-      res.json(data);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.delete("/api/mitra/diskon/:id", requireMitra, async (req, res) => {
-    try {
-      await storage.deleteDiskon(parseInt(req.params.id as string));
-      res.json({ message: "Diskon dihapus" });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // Helper: ambil warga kepala keluarga dari kkId (dipakai di non-RWcoin routes)
-  async function getKepalaKeluarga(kkId: number) {
-    const wargaList = await storage.getWargaByKkId(kkId);
-    return wargaList.find(w => w.kedudukanKeluarga === "Kepala Keluarga") ?? wargaList[0];
-  }
-
-  // Helper: ambil warga yang sedang login (pakai wargaId session, fallback ke kepala KK)
-  async function getWargaFromSession(req: Request) {
-    if (req.session.wargaId) {
-      return await storage.getWargaById(req.session.wargaId);
-    }
-    if (req.session.kkId) {
-      return await getKepalaKeluarga(req.session.kkId);
-    }
-    return null;
-  }
-
-  app.post("/api/tripay/callback", async (req, res) => {
-    try {
-      const expectedSecret = process.env.TRIPAY_CALLBACK_SECRET ?? "";
-      // Terima secret dari query param (URL), header X-Callback-Secret, atau header X_CALLBACK_SECRET
-      const incomingSecret = String(
-        req.query.s ??
-        req.header("X-Callback-Secret") ??
-        req.header("X_CALLBACK_SECRET") ??
-        ""
-      );
-      if (!expectedSecret || !incomingSecret || !safeSecretEqual(expectedSecret, incomingSecret)) {
-        return res.status(403).json({ success: false, message: "Invalid callback secret" });
-      }
-      await handleTripayCallback(req.body);
-      res.json({ success: true });
-    } catch (error: any) {
-      res.status(400).json({ success: false, message: error.message });
-    }
-  });
-
-  // --- Warga: Wallet ---
-  app.get("/api/warga/rwcoin/wallet", requireWarga, async (req, res) => {
-    try {
-      const wargaData = await getWargaFromSession(req);
-      if (!wargaData) return res.status(404).json({ message: "Data warga tidak ditemukan" });
-      const wallet = await storage.getOrCreateWargaWallet(wargaData.id);
-      res.json({ ...wallet, namaWarga: wargaData.namaLengkap });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/warga/rwcoin/tripay/catalog", requireWarga, async (req, res) => {
-    try {
-      const kind = req.query.kind ? String(req.query.kind) as any : undefined;
-      const rows = await listTripayProducts(kind, false);
-      res.json(rows);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/warga/rwcoin/tripay/catalog/categories", requireWarga, async (_req, res) => {
-    try {
-      const rows = await listTripayCatalogCategoriesForWarga();
-      res.json(rows);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/warga/rwcoin/tripay/catalog/operators", requireWarga, async (req, res) => {
-    try {
-      const categoryId = parseInt(String(req.query.categoryId ?? ""));
-      if (!categoryId) return res.status(400).json({ message: "categoryId wajib diisi" });
-      const rows = await listTripayCatalogOperatorsForWarga(categoryId);
-      res.json(rows);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/warga/rwcoin/tripay/catalog/products", requireWarga, async (req, res) => {
-    try {
-      const categoryId = parseInt(String(req.query.categoryId ?? ""));
-      if (!categoryId) return res.status(400).json({ message: "categoryId wajib diisi" });
-      const operatorId = req.query.operatorId ? parseInt(String(req.query.operatorId)) : undefined;
-      const rows = await listTripayCatalogProductsForWarga({ categoryRefId: categoryId, operatorRefId: operatorId });
-      res.json(rows);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/warga/rwcoin/tripay/transaksi", requireWarga, async (req, res) => {
-    try {
-      const wargaData = await getWargaFromSession(req);
-      if (!wargaData) return res.json([]);
-      const rows = await listTripayTransactionsByWargaId(wargaData.id, 50);
-      res.json(rows);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/warga/rwcoin/tripay/checkout", requireWarga, async (req, res) => {
-    try {
-      const wargaData = await getWargaFromSession(req);
-      if (!wargaData) return res.status(404).json({ message: "Data warga tidak ditemukan" });
-      const { productCode, target, noMeterPln } = req.body;
-      const result = await createTripayPurchase({
-        wargaId: wargaData.id,
-        productCode: String(productCode ?? ""),
-        target: String(target ?? ""),
-        noMeterPln: noMeterPln ? String(noMeterPln) : undefined,
-      });
-      res.json(result);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/warga/rwcoin/tripay/cek-status", requireWarga, async (req, res) => {
-    try {
-      const wargaData = await getWargaFromSession(req);
-      if (!wargaData) return res.status(404).json({ message: "Data warga tidak ditemukan" });
-      const reference = String(req.body?.reference ?? "").trim();
-      if (!reference) return res.status(400).json({ message: "Reference wajib diisi" });
-
-      // Ambil transaksi, pastikan milik warga ini
-      const { db } = await import("./db");
-      const { tripayTransaction } = await import("@shared/schema");
-      const { eq } = await import("drizzle-orm");
-      const [trx] = await db.select().from(tripayTransaction).where(eq(tripayTransaction.reference, reference));
-      if (!trx) return res.status(404).json({ message: "Transaksi tidak ditemukan" });
-      if (trx.wargaId !== wargaData.id) return res.status(403).json({ message: "Bukan transaksi Anda" });
-
-      // Jika sudah final, kembalikan langsung tanpa hit Tripay
-      if (trx.status === "success" || trx.status === "refunded") {
-        return res.json(trx);
-      }
-
-      const updated = await reconcileTripayTransaction(reference);
-      res.json(updated);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/warga/rwcoin/transaksi", requireWarga, async (req, res) => {
-    try {
-      const wargaData = await getWargaFromSession(req);
-      if (!wargaData) return res.json([]);
-      const list = await storage.getRwcoinTransaksiByWargaId(wargaData.id);
-      res.json(list);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/warga/rwcoin/voucher", requireWarga, async (req, res) => {
-    try {
-      const list = await storage.getAllVoucher();
-      const today = new Date().toISOString().split("T")[0];
-      res.json(list.filter(v => v.isActive && (!v.berlakuHingga || v.berlakuHingga >= today) && (!v.kuota || v.terpakai < v.kuota)));
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // Warga: List mitra aktif (dengan kodeWallet untuk search & bayar)
-  app.get("/api/warga/rwcoin/mitra", requireWarga, async (_req, res) => {
-    try {
-      const list = await storage.getAllMitra();
-      const aktif = list.filter((m) => m.isActive);
-      const result = await Promise.all(aktif.map(async (m) => {
-        const wallet = await storage.getOrCreateMitraWallet(m.id);
-        return { id: m.id, namaUsaha: m.namaUsaha, kategori: m.kategori, rt: m.rt, alamat: m.alamat, kodeWallet: wallet.kodeWallet };
-      }));
-      res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // Warga: Lookup mitra by kode wallet (untuk preview sebelum bayar)
-  app.get("/api/warga/rwcoin/mitra-by-kode/:kode", requireWarga, async (req, res) => {
-    try {
-      const kode = String(req.params.kode).toUpperCase();
-      // Coba lookup wallet langsung
-      let wallet = await storage.getWalletByKode(kode);
-      // Jika wallet belum ada, parse kode MT0001 → mitraId=1 lalu getOrCreate
-      if (!wallet) {
-        const match = kode.match(/^MT(\d+)$/);
-        if (!match) return res.status(404).json({ message: "Format kode tidak valid (contoh: MT0001)" });
-        const mitraId = parseInt(match[1]);
-        const mitraData = await storage.getMitraById(mitraId);
-        if (!mitraData || !mitraData.isActive) return res.status(404).json({ message: "Mitra tidak ditemukan" });
-        wallet = await storage.getOrCreateMitraWallet(mitraId);
-      }
-      if (!wallet || wallet.ownerType !== "mitra" || !wallet.mitraId) {
-        return res.status(404).json({ message: "Kode mitra tidak ditemukan" });
-      }
-      const mitraData = await storage.getMitraById(wallet.mitraId);
-      if (!mitraData || !mitraData.isActive) {
-        return res.status(404).json({ message: "Mitra tidak aktif" });
-      }
-      res.json({ id: mitraData.id, namaUsaha: mitraData.namaUsaha, kategori: mitraData.kategori, alamat: mitraData.alamat, rt: mitraData.rt });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // Warga: Bayar langsung ke mitra via kode mitra (tanpa OTP)
-  app.post("/api/warga/rwcoin/bayar-langsung", requireWarga, async (req, res) => {
-    try {
-      const wargaData = await getWargaFromSession(req);
-      if (!wargaData) return res.status(404).json({ message: "Data warga tidak ditemukan" });
-      const { kodeMitra, jumlah, voucherKode, keterangan } = req.body;
-      if (!kodeMitra || !jumlah || parseInt(jumlah) <= 0) {
-        return res.status(400).json({ message: "Masukkan kode mitra dan nominal" });
-      }
-      const kodeM = String(kodeMitra).toUpperCase();
-      let mitraWallet = await storage.getWalletByKode(kodeM);
-      if (!mitraWallet) {
-        const match = kodeM.match(/^MT(\d+)$/);
-        if (!match) return res.status(404).json({ message: "Format kode mitra tidak valid" });
-        const mitraId = parseInt(match[1]);
-        const cekMitra = await storage.getMitraById(mitraId);
-        if (!cekMitra || !cekMitra.isActive) return res.status(404).json({ message: "Mitra tidak ditemukan" });
-        mitraWallet = await storage.getOrCreateMitraWallet(mitraId);
-      }
-      if (!mitraWallet || mitraWallet.ownerType !== "mitra" || !mitraWallet.mitraId) {
-        return res.status(404).json({ message: "Kode mitra tidak valid" });
-      }
-      const mitraData = await storage.getMitraById(mitraWallet.mitraId);
-      if (!mitraData || !mitraData.isActive) {
-        return res.status(404).json({ message: "Mitra tidak aktif" });
-      }
-      const wargaWallet = await storage.getOrCreateWargaWallet(wargaData.id);
-      const result = await storage.processBelanjaTransaksi(wargaWallet.kodeWallet, mitraWallet.mitraId, parseInt(jumlah), voucherKode, keterangan);
-      const diskonInfo = result.diskon > 0 ? ` (hemat ${result.diskon.toLocaleString("id")} coin)` : "";
-      const pesan = `RWcoin RW03 - Transaksi berhasil!\nPembeli: ${result.namaWarga}\nNominal: ${result.transaksi.jumlahBruto.toLocaleString("id")} coin${diskonInfo}\nDibayar: ${result.transaksi.jumlahBayar.toLocaleString("id")} coin\nID: ${result.transaksi.kodeTransaksi}`;
-      sendWhatsAppToMitra(mitraData, pesan).catch(() => {});
-      res.json({ ...result, namaUsaha: mitraData.namaUsaha });
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  // Warga: Request Topup — kirim notif WA ke admin via StarSender
-  app.post("/api/warga/rwcoin/request-topup", requireWarga, async (req, res) => {
-    try {
-      const wargaData = await getWargaFromSession(req);
-      if (!wargaData) return res.status(404).json({ message: "Data warga tidak ditemukan" });
-      const { jumlah, metode, rekening, atasnama } = req.body;
-      if (!jumlah || parseInt(jumlah) <= 0 || !metode || !rekening || !atasnama) {
-        return res.status(400).json({ message: "Jumlah, metode, rekening, dan atas nama wajib diisi" });
-      }
-      const ADMIN_FEE = await storage.getRwcoinSettingValue("topup_fee", 2500);
-      const jumlahInt = parseInt(jumlah);
-      const totalTransfer = jumlahInt + ADMIN_FEE;
-
-      // Jalankan wallet + insert request secara paralel
-      const [wallet, request] = await Promise.all([
-        storage.getOrCreateWargaWallet(wargaData.id),
-        storage.createTopupRequest({
-          wargaId: wargaData.id,
-          namaWarga: wargaData.namaLengkap,
-          noWa: wargaData.nomorWhatsapp ?? undefined,
-          jumlah: jumlahInt,
-          metode,
-          rekening,
-          atasnama,
-          totalTransfer,
-        }),
-      ]);
-
-      // WA ke admin (non-blocking)
-      const pesanAdmin =
-        `[RWcoin RW03] Permintaan Topup #${request.id}\n\n` +
-        `Nama: ${wargaData.namaLengkap}\n` +
-        `Kode Wallet: ${wallet.kodeWallet}\n` +
-        `Jumlah Topup: Rp ${jumlahInt.toLocaleString("id")}\n` +
-        `Biaya Admin: Rp ${ADMIN_FEE.toLocaleString("id")}\n` +
-        `Total Transfer: Rp ${totalTransfer.toLocaleString("id")}\n` +
-        `Via: ${metode} ${rekening} a.n ${atasnama}\n\n` +
-        `Cek dan ACC di dashboard admin RWcoin tab Topup.`;
-      sendWhatsApp("0895424577140", pesanAdmin).catch(() => {});
-
-      // WA konfirmasi ke warga (jika ada nomor WA)
-      if (wargaData.nomorWhatsapp) {
-        const noWaFormatted = wargaData.nomorWhatsapp.startsWith("0")
-          ? "62" + wargaData.nomorWhatsapp.slice(1)
-          : wargaData.nomorWhatsapp;
-        const pesanWarga =
-          `[RWcoin RW 03 Padasuka]\n\n` +
-          `Halo ${wargaData.namaLengkap}, permintaan topup Anda sudah kami terima dengan baik.\n\n` +
-          `Jumlah topup  : Rp ${jumlahInt.toLocaleString("id")}\n` +
-          `Biaya admin   : Rp ${ADMIN_FEE.toLocaleString("id")}\n` +
-          `Total transfer: Rp ${totalTransfer.toLocaleString("id")}\n` +
-          `Rekening      : ${metode} ${rekening} a.n ${atasnama}\n` +
-          `ID Permintaan : #${request.id}\n` +
-          `Kode Wallet   : ${wallet.kodeWallet}\n\n` +
-          `Silakan transfer sesuai nominal di atas, lalu kirim bukti ke WA admin RW 03. Saldo aktif setelah diverifikasi.\n\n` +
-          `Ada pertanyaan? Hubungi pengurus RW 03 kapan saja.`;
-        sendWhatsApp(noWaFormatted, pesanWarga).catch(() => {});
-      }
-
-      res.json({ ok: true, requestId: request.id, kodeWallet: wallet.kodeWallet, totalTransfer });
-    } catch (error: any) {
-      console.error("[request-topup] ERROR:", error);
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // Admin: list topup request
-  app.get("/api/rwcoin/topup-request", requireAdmin, async (req, res) => {
-    try {
-      const { status } = req.query as { status?: string };
-      const list = await storage.getTopupRequests(status);
-      res.json(list);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // Admin: ACC topup request
-  app.post("/api/rwcoin/topup-request/:id/acc", requireAdmin, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id as string);
-      const { request, transaksi } = await storage.accTopupRequest(id);
-      // WA notif ke warga
-      if (request.noWa) {
-        const noWaFormatted = request.noWa.startsWith("0") ? "62" + request.noWa.slice(1) : request.noWa;
-        const pesan =
-          `[RWcoin RW 03 Padasuka]\n\n` +
-          `Halo ${request.namaWarga}, kabar baik! Topup RWcoin Anda sudah diverifikasi.\n\n` +
-          `Jumlah       : +${request.jumlah.toLocaleString("id")} RWcoin\n` +
-          `ID Transaksi : ${transaksi.kodeTransaksi}\n\n` +
-          `Saldo sudah masuk dan siap digunakan sekarang. Terima kasih sudah percaya RWcoin RW 03!\n\n` +
-          `rw3padasukacimahi.org`;
-        sendWhatsApp(noWaFormatted, pesan).catch(() => {});
-      }
-      res.json({ ok: true, request, transaksi });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // Admin: Tolak topup request
-  app.post("/api/rwcoin/topup-request/:id/tolak", requireAdmin, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id as string);
-      const { catatan } = req.body;
-      const request = await storage.tolakTopupRequest(id, catatan);
-      if (!request) return res.status(404).json({ message: "Request tidak ditemukan" });
-      // WA notif ke warga
-      if (request.noWa) {
-        const noWaFormatted = request.noWa.startsWith("0") ? "62" + request.noWa.slice(1) : request.noWa;
-        const pesan =
-          `[RWcoin RW 03 Padasuka]\n\n` +
-          `Halo ${request.namaWarga}, kami perlu menyampaikan bahwa permintaan topup Anda belum bisa diproses saat ini.\n\n` +
-          `Jumlah        : Rp ${request.jumlah.toLocaleString("id")}\n` +
-          `ID Permintaan : #${id}\n` +
-          (catatan ? `Keterangan    : ${catatan}\n` : "") +
-          `\nTenang, tidak ada saldo yang berkurang. Silakan hubungi pengurus RW 03 jika ada pertanyaan atau ingin mengajukan ulang.`;
-        sendWhatsApp(noWaFormatted, pesan).catch(() => {});
-      }
-      res.json({ ok: true, request });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // Warga: Cari wallet tujuan transfer berdasarkan nama warga
-  app.get("/api/warga/rwcoin/wallet-search", requireWarga, async (req, res) => {
-    try {
-      const wargaData = await getWargaFromSession(req);
-      if (!wargaData) return res.status(404).json({ message: "Data warga tidak ditemukan" });
-
-      const q = String(req.query.q ?? "").trim();
-      if (q.length < 2) return res.json([]);
-
-      const results = await storage.searchWargaWalletByName(q, wargaData.id);
-      res.json(results);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // Warga: Preview wallet tujuan transfer (cek kode wallet sebelum transfer)
-  app.get("/api/warga/rwcoin/wallet-preview/:kode", requireWarga, async (req, res) => {
-    try {
-      const kode = (req.params.kode as string).trim().toUpperCase();
-      const preview = await storage.getWargaWalletPreview(kode);
-      if (!preview) return res.status(404).json({ message: "Kode wallet tidak ditemukan atau bukan wallet warga" });
-      res.json(preview);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // Warga: Transfer RWcoin ke warga lain
-  app.post("/api/warga/rwcoin/transfer", requireWarga, async (req, res) => {
-    try {
-      const wargaData = await getWargaFromSession(req);
-      if (!wargaData) return res.status(404).json({ message: "Data warga tidak ditemukan" });
-
-      const { kodeWalletTujuan, jumlah, keterangan } = req.body;
-      if (!kodeWalletTujuan || !jumlah || parseInt(jumlah) <= 0) {
-        return res.status(400).json({ message: "Kode wallet tujuan dan jumlah wajib diisi" });
-      }
-
-      const result = await storage.processTransferAntar(
-        wargaData.id,
-        String(kodeWalletTujuan),
-        parseInt(jumlah),
-        keterangan?.trim() || undefined,
-      );
-
-      // WA notif ke penerima (non-blocking)
-      const penerimaWarga = await storage.getWargaById(result.transaksi.tujuanWargaId!).catch(() => null);
-      if (penerimaWarga?.nomorWhatsapp) {
-        const noWaFormatted = penerimaWarga.nomorWhatsapp.startsWith("0") ? "62" + penerimaWarga.nomorWhatsapp.slice(1) : penerimaWarga.nomorWhatsapp;
-        const tanggal = new Date().toLocaleString("id-ID", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" });
-        const pesanPenerima =
-          `[RWcoin RW 03 Padasuka]\n\n` +
-          `Halo ${penerimaWarga.namaLengkap}, ada RWcoin masuk ke wallet Anda!\n\n` +
-          `Dari         : ${result.namaWarga}\n` +
-          `Jumlah       : +${parseInt(jumlah).toLocaleString("id")} RWcoin\n` +
-          (keterangan?.trim() ? `Keterangan   : ${keterangan.trim()}\n` : "") +
-          `ID Transaksi : ${result.transaksi.kodeTransaksi}\n` +
-          `Waktu        : ${tanggal} WIB\n\n` +
-          `Saldo sudah masuk dan siap digunakan.\n\n` +
-          `rw3padasukacimahi.org`;
-        sendWhatsApp(noWaFormatted, pesanPenerima).catch(() => {});
-      }
-
-      res.json({
-        ok: true,
-        kodeTransaksi: result.transaksi.kodeTransaksi,
-        namaPenerima: result.namaPenerima,
-        namaWarga: result.namaWarga,
-        jumlah: parseInt(jumlah),
-      });
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  // ============================================================
-  // END RWCOIN
-  // ============================================================
-
-  // ============================================================
-  // CURHAT WARGA (Stress Relief + RWcoin)
-  // ============================================================
-
-  app.post("/api/warga/curhat", requireWarga, async (req, res) => {
-    try {
-      const wargaData = await getWargaFromSession(req);
-      if (!wargaData) return res.status(404).json({ message: "Data warga tidak ditemukan" });
-
-      const { items } = req.body;
-      if (!Array.isArray(items) || items.length !== 5 || items.some((it: any) => typeof it !== "string" || it.trim().length < 3)) {
-        return res.status(400).json({ message: "Isi 5 kebersyukuran dengan masing-masing minimal 3 karakter ya!" });
-      }
-
-      // Cek apakah sudah mengisi hari ini (1x/hari)
-      const curhatHariIni = await storage.getCurhatHariIni(wargaData.id);
-      if (curhatHariIni) {
-        return res.status(400).json({ message: "Kamu sudah mengisi kebersyukuran hari ini. Bisa lagi besok setelah tengah malam ya!" });
-      }
-
-      const isiFormatted = items.map((it: string, i: number) => `${i + 1}. ${it.trim()}`).join("\n");
-
-      const prompt = `Kamu adalah penilai jurnal syukur harian yang SANGAT KETAT dan selektif untuk warga RW 03 Padasuka Cimahi. Warga bernama ${wargaData.namaLengkap} mengisi 5 hal yang ia syukuri hari ini:
-
----
-${isiFormatted}
----
-
-Tugasmu: Nilai dengan KETAT berdasarkan kriteria berikut, lalu tentukan skor coin.
-
-KRITERIA PENILAIAN (semua harus dipenuhi untuk skor tinggi):
-1. SPESIFIK HARI INI — kejadian/momen yang jelas terjadi hari ini, bukan kalimat generik
-2. PANJANG & DETAIL — minimal 8–10 kata per item, bukan jawaban 2–3 kata
-3. BERAGAM — 5 item berbeda tema, bukan pengulangan hal yang sama
-4. BUKAN TEMPLATE — tidak terkesan copy-paste, dibuat-buat, atau sekadar menggugurkan kewajiban
-5. REFLEKTIF — ada unsur merenungi, bukan sekadar menyebutkan
-
-PANDUAN SKOR (bersifat KETAT — mayoritas warga seharusnya mendapat 500–900):
-- 500–600: Isian sangat singkat (1–3 kata), asal-asalan, atau tidak ada hubungannya dengan hari ini
-- 600–800: Ada usaha tapi terlalu generik ("syukur masih hidup", "alhamdulillah sehat"), kurang dari 5 kata per item, atau ada item yang diulang
-- 800–1000: Cukup spesifik tapi masih ada 2–3 item yang pendek/generik
-- 1000–1300: Sebagian besar spesifik hari ini, panjang memadai, tapi masih ada 1–2 yang lemah
-- 1300–1600: Semua spesifik dan cukup panjang, tapi kurang mendalam atau ada pengulangan tema
-- 1600–2000: Semua spesifik hari ini, panjang, beragam, dan tulus — kualitas baik
-- 2000–2500: Luar biasa — semua item sangat detail, jelas momen nyata hari ini, beragam, reflektif, dan menyentuh
-- 2500–3000: SANGAT JARANG — hanya untuk isian yang benar-benar menonjol: sangat detail, personal, penuh makna, menunjukkan kesadaran mendalam tentang nikmat hidup
-
-PENALTI OTOMATIS (kurangi 200–400 dari skor jika):
-- Ada item yang hanya 1–4 kata
-- Ada item yang generik tanpa konteks hari ini ("bersyukur masih sehat", "alhamdulillah", dll)
-- Ada 2 atau lebih item yang serupa/pengulangan
-- Terkesan dibuat-buat atau tidak tulus
-
-2. Tulis balasan singkat yang hangat dan memotivasi. Gaya bahasa santai, sapaan nama (${wargaData.namaLengkap.split(" ")[0]}), singgung 1 hal konkret yang ia tulis, dorong untuk lebih spesifik besok. 2–3 kalimat saja. Jangan pakai markdown atau simbol *.
-
-Balas HANYA dengan JSON valid (tanpa komentar, tanpa teks lain):
-{"coin": <angka>, "balasan": "<teks balasan>"}`;
-
-      let coin = 500;
-      let balasan = "Keren banget udah mau luangin waktu untuk bersyukur hari ini! Semangat terus ya, semoga harimu makin berkah!";
-
-      try {
-        const raw = await generateWithGemini(prompt);
-        const cleaned = raw.replace(/```json|```/g, "").trim();
-        const jsonStart = cleaned.indexOf("{");
-        const jsonEnd = cleaned.lastIndexOf("}");
-        if (jsonStart !== -1 && jsonEnd !== -1) {
-          const parsed = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1));
-          coin = Math.max(500, Math.min(3000, Math.round(Number(parsed.coin) || 500)));
-          balasan = String(parsed.balasan || balasan).trim();
-        }
-      } catch {
-        // Gemini error: tetap simpan dengan coin minimum dan balasan default
-      }
-
-      // Simpan
-      const curhat = await storage.createCurhat({
-        wargaId: wargaData.id,
-        isi: isiFormatted,
-        coinDiberikan: coin,
-        balasanGemini: balasan,
-      });
-
-      // Award coin ke wallet
-      await storage.topupWargaWallet(wargaData.id, coin, "Hadiah kebersyukuran RWcoin");
-
-      res.json({
-        coin,
-        balasan,
-        coinDiberikan: coin,
-        curhatId: curhat.id,
-      });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/warga/curhat/kuota", requireWarga, async (req, res) => {
-    try {
-      const wargaData = await getWargaFromSession(req);
-      if (!wargaData) return res.status(404).json({ message: "Data warga tidak ditemukan" });
-      const curhatHariIni = await storage.getCurhatHariIni(wargaData.id);
-      const sudahCurhatHariIni = !!curhatHariIni;
-      res.json({
-        sudahCurhatHariIni,
-        coinDiberikan: curhatHariIni?.coinDiberikan ?? 0,
-        balasanGemini: curhatHariIni?.balasanGemini ?? null,
-      });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // ============================================================
-  // END CURHAT WARGA
-  // ============================================================
-
   return httpServer;
 }
+

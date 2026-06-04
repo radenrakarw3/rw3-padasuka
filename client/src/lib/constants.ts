@@ -80,6 +80,7 @@ export const pekerjaanOptions = [
   "Lainnya",
 ];
 
+/** Tingkat pendidikan — selaras ISCED 2011 / klasifikasi BPS. */
 export const pendidikanOptions = [
   "Belum Sekolah",
   "Tidak/Belum Tamat SD",
@@ -129,6 +130,9 @@ export const kedudukanKeluargaOptions = [
 
 export const statusKependudukanOptions = [
   "Aktif",
+  "Lahir",
+  "Pindah Masuk",
+  "Pindah Keluar",
   "Pindah",
   "Meninggal",
 ];
@@ -373,6 +377,7 @@ export const hubunganKontakDaruratOptions = [
   "Lainnya",
 ];
 
+/** Status angkatan kerja — kerangka ILO (disederhanakan). */
 export const statusPekerjaanOptions = [
   "Belum Bekerja",
   "Mencari Kerja",

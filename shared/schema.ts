@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { pgTable, text, varchar, serial, integer, boolean, timestamp, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { isActiveRt } from "./rt";
 
 export const kartuKeluarga = pgTable("kartu_keluarga", {
   id: serial("id").primaryKey(),
@@ -81,6 +82,11 @@ export const warga = pgTable("warga", {
   namaUsaha: text("nama_usaha"),
   // Data kesehatan & kondisi khusus
   statusDisabilitas: text("status_disabilitas").notNull().default("Tidak Ada"),
+  /** UNESCO — literasi baca-tulis. */
+  literasi: text("literasi"),
+  /** Washington Group Short Set (domain disederhanakan). */
+  wgKesulitanMelihat: text("wg_kesulitan_melihat"),
+  wgKesulitanBerjalan: text("wg_kesulitan_berjalan"),
   kondisiKesehatan: text("kondisi_kesehatan").notNull().default("Sehat"),
   ibuHamil: boolean("ibu_hamil").notNull().default(false),
   punyaBpjsKesehatan: boolean("punya_bpjs_kesehatan").notNull().default(false),
@@ -348,6 +354,10 @@ export const rw3lawDokumen = pgTable("rw3law_dokumen", {
   rtAsal: integer("rt_asal"),
   versi: text("versi"),
   tanggalBerlaku: text("tanggal_berlaku"),
+  nomorPeraturan: integer("nomor_peraturan"),
+  tahunNomor: integer("tahun_nomor"),
+  revisiDariId: integer("revisi_dari_id"),
+  dicabutAt: timestamp("dicabut_at"),
   urutan: integer("urutan").notNull().default(0),
   catatanInternal: text("catatan_internal"),
   createdBy: text("created_by"),
@@ -387,7 +397,47 @@ export const riwayatKontrak = pgTable("riwayat_kontrak", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertKkSchema = createInsertSchema(kartuKeluarga).omit({ id: true, createdAt: true });
+export const BLUSUKAN_HASIL = ["selesai", "perlu_ulang", "tidak_ada"] as const;
+export type BlusukanHasil = (typeof BLUSUKAN_HASIL)[number];
+
+export const blusukanKunjungan = pgTable("blusukan_kunjungan", {
+  id: serial("id").primaryKey(),
+  kkId: integer("kk_id").notNull().references(() => kartuKeluarga.id),
+  hasil: text("hasil").notNull(),
+  catatan: text("catatan"),
+  petugasLabel: text("petugas_label"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertBlusukanKunjunganSchema = createInsertSchema(blusukanKunjungan).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  hasil: z.enum(BLUSUKAN_HASIL),
+  catatan: z.string().nullable().optional(),
+  petugasLabel: z.string().nullable().optional(),
+});
+
+const insertKkBaseSchema = createInsertSchema(kartuKeluarga).omit({ id: true, createdAt: true });
+
+function refineKkRtPemukiman(data: { rt?: unknown }, ctx: z.RefinementCtx, required: boolean) {
+  if (required ? !isActiveRt(data.rt) : data.rt !== undefined && !isActiveRt(data.rt)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["rt"],
+      message: "RT hanya 01–04.",
+    });
+  }
+}
+
+export const insertKkSchema = insertKkBaseSchema.superRefine((data, ctx) => {
+  refineKkRtPemukiman(data, ctx, true);
+});
+
+/** PATCH KK — RT opsional; jika diisi harus 01–04. */
+export const patchKkSchema = insertKkBaseSchema.partial().superRefine((data, ctx) => {
+  refineKkRtPemukiman(data, ctx, false);
+});
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const DIGIT_ONLY_REGEX = /^\d+$/;
 const OPTIONAL_EMAIL_SCHEMA = z.union([z.literal(""), z.string().email("Format email tidak valid")]).nullable().optional();
@@ -510,9 +560,10 @@ export const insertRw3lawDokumenSchema = createInsertSchema(rw3lawDokumen)
     judul: z.string().min(3, "Judul minimal 3 karakter"),
     isi: z.string().min(20, "Isi peraturan minimal 20 karakter"),
     kategori: z.enum(RW3LAW_KATEGORI),
-    rtAsal: z.number().int().min(1).max(7).nullable().optional(),
+    rtAsal: z.number().int().min(1).max(4).nullable().optional(),
     versi: z.string().optional().nullable(),
     tanggalBerlaku: z.string().optional().nullable(),
+    revisiDariId: z.number().int().positive().optional().nullable(),
     urutan: z.number().int().min(0).optional(),
     catatanInternal: z.string().optional().nullable(),
     createdBy: z.string().optional().nullable(),
@@ -1023,6 +1074,8 @@ export type WargaSinggah = typeof wargaSinggah.$inferSelect;
 export type InsertWargaSinggah = z.infer<typeof insertWargaSinggahSchema>;
 export type RiwayatKontrak = typeof riwayatKontrak.$inferSelect;
 export type InsertRiwayatKontrak = z.infer<typeof insertRiwayatKontrakSchema>;
+export type BlusukanKunjungan = typeof blusukanKunjungan.$inferSelect;
+export type InsertBlusukanKunjungan = z.infer<typeof insertBlusukanKunjunganSchema>;
 export type Visitrw3Pengajuan = typeof visitrw3Pengajuan.$inferSelect;
 export type Visitrw3Settings = typeof visitrw3Settings.$inferSelect;
 export type Visitrw3Penghuni = typeof visitrw3Penghuni.$inferSelect;

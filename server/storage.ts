@@ -1,11 +1,14 @@
 import { eq, and, or, desc, sql, count, gte, asc, getTableColumns, inArray } from "drizzle-orm";
 import { ACTIVE_RT_NUMBERS } from "@shared/rt";
+import { getWargaAge } from "@shared/warga-form-tier";
+import { needsLiterasi, needsStatusAngkatanKerja } from "@shared/warga-international";
+import { isPengangguran } from "./kependudukan-stats";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "./db";
 import {
   kartuKeluarga, warga, rtData, laporan, suratWarga, suratRw,
   profileEditRequest, adminUser, waBlast, waBlastRecipient, pengajuanBansos, donasiCampaign, donasi, kasRw,
-  pemilikKost, wargaSinggah, riwayatKontrak, visitrw3Pengajuan,
+  pemilikKost, wargaSinggah, riwayatKontrak, visitrw3Pengajuan, blusukanKunjungan,
   usaha, karyawanUsaha, izinTetangga, surveyUsaha, riwayatStiker, monthlySnapshot,
   programRw, pesertaProgram,
   mitra, rwcoinWallet, rwcoinTransaksi, mitraVoucher, mitraDiskon, rwcoinWithdraw, rwcoinOtp, rwcoinPendingTransaksi, kasRwcoin, rwcoinTopupRequest, wargaSavedLogin, curhatWarga,
@@ -38,6 +41,7 @@ import {
   type MitraVoucher, type MitraDiskon, type RwcoinWithdraw, type RwcoinOtp, type RwcoinPendingTransaksi,
   type RwcoinTopupRequest, type CurhatWarga,
   type IuranKk, type IuranSetting, type RwcoinSettings,
+  type BlusukanKunjungan, type InsertBlusukanKunjungan,
 } from "@shared/schema";
 
 function normalizeStoredPhone(phone?: string | null): string | null {
@@ -68,6 +72,8 @@ export interface IStorage {
   getKkByNomor(nomorKk: string): Promise<KartuKeluarga | undefined>;
   getKkById(id: number): Promise<KartuKeluarga | undefined>;
   getAllKk(): Promise<KartuKeluarga[]>;
+  /** KK RT 01–04 saja (pemukiman, untuk Blusukan RW). */
+  getAllKkPemukiman(): Promise<KartuKeluarga[]>;
   createKk(data: InsertKartuKeluarga): Promise<KartuKeluarga>;
   updateKk(id: number, data: Partial<InsertKartuKeluarga>): Promise<KartuKeluarga | undefined>;
   deleteKk(id: number): Promise<void>;
@@ -77,6 +83,8 @@ export interface IStorage {
   getWargaByNomorWa(nomorWa: string): Promise<(Pick<Warga, "id" | "kkId" | "namaLengkap" | "kedudukanKeluarga"> & { nomorKk: string; rt: number })[]>;
   validateWargaIdentity(nik: string, nomorWa: string): Promise<{ wargaId: number; kkId: number; namaLengkap: string; rt: number; nomorKk: string } | null>;
   getAllWarga(): Promise<Warga[]>;
+  /** Warga yang KK-nya RT 01–04 (modul kependudukan). */
+  getAllWargaPemukiman(): Promise<Warga[]>;
   createWarga(data: InsertWarga): Promise<Warga>;
   updateWarga(id: number, data: Partial<InsertWarga>): Promise<Warga | undefined>;
   deleteWarga(id: number): Promise<void>;
@@ -122,6 +130,12 @@ export interface IStorage {
 
   getWargaByRt(rt: number): Promise<(Warga & { nomorKk: string; rt: number })[]>;
   getAllWargaWithKk(): Promise<(Warga & { nomorKk: string; rt: number; alamat: string })[]>;
+  /** Warga + KK, hanya RT 01–04 (pemukiman). */
+  getAllWargaWithKkPemukiman(): Promise<(Warga & { nomorKk: string; rt: number; alamat: string })[]>;
+
+  getLatestKunjunganByKkIds(kkIds: number[]): Promise<Map<number, BlusukanKunjungan>>;
+  getBlusukanKunjunganByKkId(kkId: number, limit?: number): Promise<BlusukanKunjungan[]>;
+  createBlusukanKunjungan(data: InsertBlusukanKunjungan): Promise<BlusukanKunjungan>;
 
   getAdminByUsername(username: string): Promise<AdminUser | undefined>;
   getAllAdmins(): Promise<AdminUser[]>;
@@ -437,6 +451,14 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(kartuKeluarga).orderBy(kartuKeluarga.rt, kartuKeluarga.id);
   }
 
+  async getAllKkPemukiman(): Promise<KartuKeluarga[]> {
+    return db
+      .select()
+      .from(kartuKeluarga)
+      .where(inArray(kartuKeluarga.rt, [...ACTIVE_RT_NUMBERS]))
+      .orderBy(kartuKeluarga.rt, kartuKeluarga.id);
+  }
+
   async createKk(data: InsertKartuKeluarga): Promise<KartuKeluarga> {
     const [result] = await db.insert(kartuKeluarga).values(data).returning();
     return result;
@@ -525,6 +547,13 @@ export class DatabaseStorage implements IStorage {
 
   async getAllWarga(): Promise<Warga[]> {
     return db.select().from(warga).orderBy(warga.id);
+  }
+
+  async getAllWargaPemukiman(): Promise<Warga[]> {
+    const kkPemukiman = await this.getAllKkPemukiman();
+    const kkIds = kkPemukiman.map((k) => k.id);
+    if (kkIds.length === 0) return [];
+    return db.select().from(warga).where(inArray(warga.kkId, kkIds)).orderBy(warga.namaLengkap);
   }
 
   async createWarga(data: InsertWarga): Promise<Warga> {
@@ -810,6 +839,21 @@ export class DatabaseStorage implements IStorage {
     return results;
   }
 
+  async getAllWargaWithKkPemukiman(): Promise<(Warga & { nomorKk: string; rt: number; alamat: string })[]> {
+    const results = await db
+      .select({
+        ...getTableColumns(warga),
+        nomorKk: kartuKeluarga.nomorKk,
+        rt: kartuKeluarga.rt,
+        alamat: kartuKeluarga.alamat,
+      })
+      .from(warga)
+      .innerJoin(kartuKeluarga, eq(warga.kkId, kartuKeluarga.id))
+      .where(inArray(kartuKeluarga.rt, [...ACTIVE_RT_NUMBERS]))
+      .orderBy(warga.namaLengkap);
+    return results;
+  }
+
   async getAdminByUsername(username: string): Promise<AdminUser | undefined> {
     const [result] = await db.select().from(adminUser).where(eq(adminUser.username, username));
     return result;
@@ -888,7 +932,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getBansosRecipients(): Promise<(KartuKeluarga & { kepalaKeluarga: string | null })[]> {
-    const allKk = await db.select().from(kartuKeluarga).where(eq(kartuKeluarga.penerimaBansos, true));
+    const allKk = await db
+      .select()
+      .from(kartuKeluarga)
+      .where(and(eq(kartuKeluarga.penerimaBansos, true), inArray(kartuKeluarga.rt, [...ACTIVE_RT_NUMBERS])));
     const allWarga = await db.select().from(warga);
     const kepalaMap: Record<number, string> = {};
     allWarga.forEach(w => {
@@ -900,15 +947,16 @@ export class DatabaseStorage implements IStorage {
   async getAllPengajuanBansos(): Promise<(PengajuanBansos & { nomorKk: string; rt: number; kepalaKeluarga: string | null; alamat: string })[]> {
     const allPengajuan = await db.select().from(pengajuanBansos).orderBy(desc(pengajuanBansos.createdAt));
     const kkIds = Array.from(new Set(allPengajuan.map(p => p.kkId)));
-    const allKk = await db.select().from(kartuKeluarga);
-    const allWarga = await db.select().from(warga);
+    const allKk = await this.getAllKkPemukiman();
+    const kkIdSet = new Set(allKk.map((k) => k.id));
+    const allWarga = await this.getAllWargaPemukiman();
     const kkMap: Record<number, KartuKeluarga> = {};
     allKk.forEach(k => { kkMap[k.id] = k; });
     const kepalaMap: Record<number, string> = {};
     allWarga.forEach(w => {
       if (w.kedudukanKeluarga === "Kepala Keluarga") kepalaMap[w.kkId] = w.namaLengkap;
     });
-    return allPengajuan.map(p => ({
+    return allPengajuan.filter((p) => kkIdSet.has(p.kkId)).map(p => ({
       ...p,
       nomorKk: kkMap[p.kkId]?.nomorKk || "-",
       rt: kkMap[p.kkId]?.rt || 0,
@@ -1110,8 +1158,8 @@ export class DatabaseStorage implements IStorage {
       allDonasi, allCampaigns, allUsahaRaw,
       allWargaSinggahData, allPemilikKostData,
     ] = await Promise.all([
-      db.select().from(kartuKeluarga),
-      db.select().from(warga),
+      this.getAllKkPemukiman(),
+      this.getAllWargaPemukiman(),
       db.select().from(rtData).where(inArray(rtData.nomorRt, [...ACTIVE_RT_NUMBERS])).orderBy(rtData.nomorRt),
       db.select().from(laporan),
       db.select().from(suratWarga),
@@ -1128,9 +1176,9 @@ export class DatabaseStorage implements IStorage {
 
     const rtList = allRtData.map(r => r.nomorRt);
 
-    const allKk = rtFilter ? allKkRaw.filter(k => k.rt === rtFilter) : allKkRaw;
-    const kkIds = new Set(allKk.map(k => k.id));
-    const allWarga = rtFilter ? allWargaRaw.filter(w => kkIds.has(w.kkId)) : allWargaRaw;
+    const allKk = rtFilter ? allKkRaw.filter((k) => k.rt === rtFilter) : allKkRaw;
+    const kkIds = new Set(allKk.map((k) => k.id));
+    const allWarga = allWargaRaw.filter((w) => kkIds.has(w.kkId));
 
     const totalKk = allKk.length;
     const totalWarga = allWarga.length;
@@ -1254,8 +1302,8 @@ export class DatabaseStorage implements IStorage {
       bukan: allKk.filter(k => !k.penerimaBansos).length,
     };
 
-    const kkRtMapAll = new Map(allKkRaw.map(k => [k.id, k.rt]));
-    const perRtSource = rtFilter ? rtList.filter(r => r === rtFilter) : rtList;
+    const kkRtMapAll = new Map(allKkRaw.map((k) => [k.id, k.rt]));
+    const perRtSource = rtFilter ? rtList.filter((r) => r === rtFilter) : rtList;
     const perRt = perRtSource.map(rt => {
       const kkInRt = allKk.filter(k => k.rt === rt);
       const wargaInRt = allWarga.filter(w => {
@@ -2031,29 +2079,14 @@ export class DatabaseStorage implements IStorage {
     const today = new Date();
     const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
 
-    const allKk = await db.select().from(kartuKeluarga);
-    const allWarga = await db.select().from(warga);
+    const allKk = await this.getAllKkPemukiman();
+    const allWarga = await this.getAllWargaPemukiman();
     const allLaporanData = await db.select().from(laporan);
     const allSuratData = await db.select().from(suratWarga);
     const allUsahaData = await db.select().from(usaha);
     const allSinggah = await db.select().from(wargaSinggah);
 
-    const PENGANGGURAN_KEYWORDS = ["tidak bekerja", "belum bekerja", "pengangguran", "belum/tidak bekerja", "tidak diketahui", ""];
-    const pengangguranCount = allWarga.filter(w => {
-      const job = (w.pekerjaan || "").toLowerCase().trim();
-      const isUnemployed = !job || PENGANGGURAN_KEYWORDS.some(k => job === k);
-      if (!isUnemployed) return false;
-      if (w.tanggalLahir) {
-        const birth = new Date(w.tanggalLahir);
-        if (!isNaN(birth.getTime())) {
-          let age = today.getFullYear() - birth.getFullYear();
-          const m = today.getMonth() - birth.getMonth();
-          if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
-          if (age < 18) return false;
-        }
-      }
-      return true;
-    }).length;
+    const pengangguranCount = allWarga.filter(isPengangguran).length;
 
     const waRegistered = allWarga.filter(w => w.nomorWhatsapp && w.nomorWhatsapp.trim() !== "").length;
     const penerimaBansos = allKk.filter(k => k.penerimaBansos).length;
@@ -2074,7 +2107,17 @@ export class DatabaseStorage implements IStorage {
     const pengangguranP = Math.max(0, 100 - Math.round((pengangguranCount / totalW) * 100));
     const laporanP = allLaporanData.length > 0 ? Math.round((laporanSelesai / allLaporanData.length) * 100) : 100;
 
-    const indeks = Math.round((waP + bansosP + usahaP + pengangguranP + laporanP) / 5);
+    const literasiEligible = allWarga.filter((w) => needsLiterasi(getWargaAge(w.tanggalLahir)));
+    const literasiFilled = literasiEligible.filter((w) => (w.literasi || "").trim() !== "").length;
+    const literasiP = literasiEligible.length
+      ? Math.round((literasiFilled / literasiEligible.length) * 100)
+      : 100;
+
+    const iloEligible = allWarga.filter((w) => needsStatusAngkatanKerja(getWargaAge(w.tanggalLahir)));
+    const iloFilled = iloEligible.filter((w) => (w.statusPekerjaan || "").trim() !== "").length;
+    const iloP = iloEligible.length ? Math.round((iloFilled / iloEligible.length) * 100) : 100;
+
+    const indeks = Math.round((waP + bansosP + usahaP + pengangguranP + laporanP + literasiP + iloP) / 7);
 
     const snapshotData: InsertMonthlySnapshot = {
       month: currentMonth,
@@ -3049,6 +3092,34 @@ export class DatabaseStorage implements IStorage {
       .where(eq(curhatWarga.wargaId, wargaId))
       .orderBy(desc(curhatWarga.createdAt))
       .limit(limit);
+  }
+
+  async getLatestKunjunganByKkIds(kkIds: number[]): Promise<Map<number, BlusukanKunjungan>> {
+    const map = new Map<number, BlusukanKunjungan>();
+    if (kkIds.length === 0) return map;
+    const rows = await db
+      .select()
+      .from(blusukanKunjungan)
+      .where(inArray(blusukanKunjungan.kkId, kkIds))
+      .orderBy(desc(blusukanKunjungan.createdAt));
+    for (const row of rows) {
+      if (!map.has(row.kkId)) map.set(row.kkId, row);
+    }
+    return map;
+  }
+
+  async getBlusukanKunjunganByKkId(kkId: number, limit = 10): Promise<BlusukanKunjungan[]> {
+    return db
+      .select()
+      .from(blusukanKunjungan)
+      .where(eq(blusukanKunjungan.kkId, kkId))
+      .orderBy(desc(blusukanKunjungan.createdAt))
+      .limit(limit);
+  }
+
+  async createBlusukanKunjungan(data: InsertBlusukanKunjungan): Promise<BlusukanKunjungan> {
+    const [row] = await db.insert(blusukanKunjungan).values(data).returning();
+    return row;
   }
 }
 

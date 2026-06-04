@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, lazy, Suspense, Component, type ReactNode } from "react";
 
 import { Switch, Route, Redirect, useLocation } from "wouter";
 
@@ -10,6 +10,7 @@ import { Toaster } from "@/components/ui/toaster";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 
+import { AdminPageSkeleton } from "@/components/admin/admin-page-skeleton";
 import { AuthProvider, useAuth } from "@/lib/auth";
 
 
@@ -34,8 +35,6 @@ const Visitrw3StatusProperti = lazy(() => import("@/pages/visitrw3/status-proper
 
 const AdminLayout = lazy(() => import("@/components/admin-layout"));
 
-const AdminDashboard = lazy(() => import("@/pages/admin/dashboard"));
-
 const AdminKelolaKK = lazy(() => import("@/pages/admin/kelola-kk"));
 
 const AdminKelolaWarga = lazy(() => import("@/pages/admin/kelola-warga"));
@@ -47,6 +46,7 @@ const AdminRw3law = lazy(() => import("@/pages/admin/rw3law"));
 const AdminSuratRw = lazy(() => import("@/pages/admin/surat-rw"));
 
 const AdminVisitrw3Dashboard = lazy(() => import("@/pages/admin/visitrw3-dashboard"));
+const AdminVisitrw3Kalender = lazy(() => import("@/pages/admin/visitrw3-kalender"));
 const AdminVisitrw3Antrian = lazy(() => import("@/pages/admin/visitrw3-antrian"));
 const AdminVisitrw3Properti = lazy(() => import("@/pages/admin/visitrw3-properti"));
 const AdminVisitrw3Penghuni = lazy(() => import("@/pages/admin/visitrw3-penghuni"));
@@ -54,21 +54,19 @@ const AdminVisitrw3Pengaturan = lazy(() => import("@/pages/admin/visitrw3-pengat
 
 const AdminKeuangan = lazy(() => import("@/pages/admin/keuangan"));
 
-const MitraLayout = lazy(() => import("@/components/mitra-layout"));
+const AdminKependudukanRingkasan = lazy(() => import("@/pages/admin/kependudukan-ringkasan"));
+const AdminPeristiwaKependudukan = lazy(() => import("@/pages/admin/peristiwa-kependudukan"));
+const AdminKkDetail = lazy(() => import("@/pages/admin/kk-detail"));
 
-const MitraLoginPage = lazy(() => import("@/pages/mitra/login"));
-
-const MitraBeranda = lazy(() => import("@/pages/mitra/beranda"));
-
-const MitraTransaksi = lazy(() => import("@/pages/mitra/transaksi"));
-
-const MitraWithdraw = lazy(() => import("@/pages/mitra/withdraw"));
-
-const MitraDiskon = lazy(() => import("@/pages/mitra/diskon"));
-
-
+import BlusukanrwLogin from "@/pages/blusukanrw/login";
+import BlusukanrwDashboard from "@/pages/blusukanrw/dashboard";
+import BlusukanrwKunjungan from "@/pages/blusukanrw/kunjungan";
+import BlusukanrwCari from "@/pages/blusukanrw/cari";
+import BlusukanrwKkDetail from "@/pages/blusukanrw/kk-detail";
 
 import goldLogo from "@assets/RW3-Cimahi-Logo-Gold.webp";
+import { BlusukanAuthProvider, useBlusukanAuth } from "@/lib/blusukan-auth";
+import { BlusukanrwLayout } from "@/components/blusukanrw-layout";
 
 import emblemSvg from "@assets/rw03-emblem.svg";
 
@@ -107,17 +105,7 @@ function PageLoader() {
 
 
 function needsAuthSession(path: string) {
-
-  return (
-
-    path.startsWith("/admin") ||
-
-    path.startsWith("/singgah") ||
-
-    path.startsWith("/mitra")
-
-  );
-
+  return path.startsWith("/admin");
 }
 
 
@@ -258,21 +246,68 @@ function AdminLoginForm() {
 
 
 
+function AdminRouteFallback() {
+  return <AdminPageSkeleton />;
+}
+
+class AdminSectionErrorBoundary extends Component<
+  { children: ReactNode },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm space-y-2">
+          <p className="font-semibold text-destructive">Halaman admin gagal dimuat</p>
+          <p className="text-muted-foreground">{this.state.error.message}</p>
+          <button
+            type="button"
+            className="underline text-primary text-xs"
+            onClick={() => this.setState({ error: null })}
+          >
+            Coba lagi
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function AdminRoutes() {
 
   return (
 
     <AdminLayout>
 
-      <Switch>
+      <AdminSectionErrorBoundary>
+        <Suspense fallback={<AdminRouteFallback />}>
+          <Switch>
 
-        <Route path="/admin/kk" component={AdminKelolaKK} />
+        <Route path="/admin/kependudukan/kk/:id" component={AdminKkDetail} />
+        <Route path="/admin/kependudukan/kk" component={AdminKelolaKK} />
+        <Route path="/admin/kependudukan/warga" component={AdminKelolaWarga} />
+        <Route path="/admin/kependudukan/peristiwa" component={AdminPeristiwaKependudukan} />
+        <Route path="/admin/kependudukan" component={AdminKependudukanRingkasan} />
 
-        <Route path="/admin/warga" component={AdminKelolaWarga} />
+        <Route path="/admin/kk">{() => <Redirect to="/admin/kependudukan/kk" />}</Route>
+        <Route path="/admin/warga">{() => <Redirect to="/admin/kependudukan/warga" />}</Route>
 
         <Route path="/admin/laporan" component={AdminKelolaLaporan} />
 
+        <Route path="/admin/surat-warga">{() => <Redirect to="/admin/laporan" />}</Route>
+        <Route path="/admin/dashboard">{() => <Redirect to="/admin/kependudukan" />}</Route>
+        <Route path="/admin/antrian-warga">{() => <Redirect to="/admin/laporan" />}</Route>
+        <Route path="/admin/rwcoin">{() => <Redirect to="/admin/laporan" />}</Route>
+
         <Route path="/admin/rw3law" component={AdminRw3law} />
+        <Route path="/admin/rwlaw">{() => <Redirect to="/admin/rw3law" />}</Route>
 
         <Route path="/admin/surat-rw" component={AdminSuratRw} />
 
@@ -280,19 +315,21 @@ function AdminRoutes() {
         <Route path="/admin/visitrw3/properti" component={AdminVisitrw3Properti} />
         <Route path="/admin/visitrw3/penghuni" component={AdminVisitrw3Penghuni} />
         <Route path="/admin/visitrw3/antrian" component={AdminVisitrw3Antrian} />
+        <Route path="/admin/visitrw3/kalender" component={AdminVisitrw3Kalender} />
         <Route path="/admin/visitrw3/dashboard" component={AdminVisitrw3Dashboard} />
-        <Route path="/admin/visitrw3" component={AdminVisitrw3Dashboard} />
+        <Route path="/admin/visitrw3">{() => <Redirect to="/admin/visitrw3/antrian" />}</Route>
         <Route path="/admin/pemilik-kost">{() => <Redirect to="/admin/visitrw3/properti" />}</Route>
         <Route path="/admin/warga-singgah">{() => <Redirect to="/admin/visitrw3/penghuni" />}</Route>
 
         <Route path="/admin/keuangan" component={AdminKeuangan} />
-        <Route path="/admin/rwcoin">{() => <Redirect to="/admin/keuangan" />}</Route>
 
-        <Route path="/admin" component={AdminDashboard} />
+        <Route path="/admin">{() => <Redirect to="/admin/laporan" />}</Route>
 
-        <Route>{() => <Redirect to="/admin" />}</Route>
+        <Route>{() => <Redirect to="/admin/laporan" />}</Route>
 
       </Switch>
+        </Suspense>
+      </AdminSectionErrorBoundary>
 
     </AdminLayout>
 
@@ -320,82 +357,89 @@ function AdminApp() {
 
 
 
-function MitraRoutes() {
+function BlusukanrwRoutes() {
+  const { authenticated, loading, bootError } = useBlusukanAuth();
+
+  if (loading) return <PageLoader />;
+
+  if (!authenticated) {
+    return (
+      <Switch>
+        <Route path="/blusukanrw">
+          {() => <BlusukanrwLogin bootError={bootError} />}
+        </Route>
+        <Route path="/blusukanrw/">{() => <Redirect to="/blusukanrw" />}</Route>
+        <Route path="/blusukanrw/:rest*">{() => <Redirect to="/blusukanrw" />}</Route>
+      </Switch>
+    );
+  }
 
   return (
-
-    <MitraLayout>
-
+    <BlusukanrwLayout>
       <Switch>
-
-        <Route path="/mitra" component={MitraBeranda} />
-
-        <Route path="/mitra/transaksi" component={MitraTransaksi} />
-
-        <Route path="/mitra/withdraw" component={MitraWithdraw} />
-
-        <Route path="/mitra/diskon" component={MitraDiskon} />
-
-        <Route>{() => <Redirect to="/mitra" />}</Route>
-
+        <Route path="/blusukanrw/dashboard" component={BlusukanrwDashboard} />
+        <Route path="/blusukanrw/kunjungan" component={BlusukanrwKunjungan} />
+        <Route path="/blusukanrw/cari" component={BlusukanrwCari} />
+        <Route path="/blusukanrw/kk/:id" component={BlusukanrwKkDetail} />
+        <Route path="/blusukanrw">{() => <Redirect to="/blusukanrw/dashboard" />}</Route>
+        <Route>{() => <Redirect to="/blusukanrw/dashboard" />}</Route>
       </Switch>
-
-    </MitraLayout>
-
+    </BlusukanrwLayout>
   );
-
 }
 
-
+function BlusukanrwApp() {
+  return (
+    <BlusukanAuthProvider>
+      <BlusukanrwRoutes />
+    </BlusukanAuthProvider>
+  );
+}
 
 function PublicRoutes() {
 
   return (
 
     <Switch>
-
+      {/* Beranda & form warga publik */}
       <Route path="/" component={PublicLanding} />
-
       <Route path="/lapor" component={PublicLapor} />
-
       <Route path="/pelayanan" component={PublicPelayanan} />
 
+      {/* RW3LAW — path kanonik /rwlaw */}
       <Route path="/rwlaw/:slug" component={Rw3lawDokumen} />
-
       <Route path="/rwlaw" component={Rw3lawIndex} />
-
       <Route path="/rw3law/:slug">
         {(params) => <Redirect to={`/rwlaw/${params.slug}`} />}
       </Route>
+      <Route path="/rw3law">{() => <Redirect to="/rwlaw" />}</Route>
 
-      <Route path="/rw3law">
-        <Redirect to="/rwlaw" />
-      </Route>
-
+      {/* Visit RW3 */}
+      <Route path="/visitrw3/pemilik" component={Visitrw3HubPemilik} />
+      <Route path="/visitrw3/penyewa" component={Visitrw3HubPenyewa} />
+      <Route path="/visitrw3/daftar-properti" component={Visitrw3DaftarProperti} />
+      <Route path="/visitrw3/pengajuan" component={Visitrw3Pengajuan} />
+      <Route path="/visitrw3/perpanjang" component={Visitrw3Perpanjang} />
+      <Route path="/visitrw3/status-properti" component={Visitrw3StatusProperti} />
+      <Route path="/visitrw3/status" component={Visitrw3Status} />
+      <Route path="/visitrw3/login">{() => <Redirect to="/visitrw3/penyewa" />}</Route>
       <Route path="/visitrw3" component={Visitrw3Hub} />
 
-      <Route path="/visitrw3/pemilik" component={Visitrw3HubPemilik} />
-
-      <Route path="/visitrw3/penyewa" component={Visitrw3HubPenyewa} />
-
-      <Route path="/visitrw3/daftar-properti" component={Visitrw3DaftarProperti} />
-
-      <Route path="/visitrw3/pengajuan" component={Visitrw3Pengajuan} />
-
-      <Route path="/visitrw3/perpanjang" component={Visitrw3Perpanjang} />
-
-      <Route path="/visitrw3/status" component={Visitrw3Status} />
-
-      <Route path="/visitrw3/status-properti" component={Visitrw3StatusProperti} />
-
+      {/* Fitur lama — redirect */}
       <Route path="/login">{() => <Redirect to="/" />}</Route>
-
-      <Route path="/warga">{() => <Redirect to="/" />}</Route>
-
+      <Route path="/warga/rwcoin">{() => <Redirect to="/" />}</Route>
       <Route path="/warga/:rest*">{() => <Redirect to="/" />}</Route>
+      <Route path="/warga">{() => <Redirect to="/" />}</Route>
+      <Route path="/mitra/:rest*">{() => <Redirect to="/" />}</Route>
+      <Route path="/mitra">{() => <Redirect to="/" />}</Route>
+      <Route path="/rwcoin/:rest*">{() => <Redirect to="/" />}</Route>
+      <Route path="/rwcoin">{() => <Redirect to="/" />}</Route>
+      <Route path="/tripay/:rest*">{() => <Redirect to="/" />}</Route>
+      <Route path="/tripay">{() => <Redirect to="/" />}</Route>
+      <Route path="/singgah/:rest*">{() => <Redirect to="/visitrw3/penyewa" />}</Route>
+      <Route path="/singgah">{() => <Redirect to="/visitrw3/penyewa" />}</Route>
 
       <Route>{() => <Redirect to="/" />}</Route>
-
     </Switch>
 
   );
@@ -426,18 +470,8 @@ function AppContent() {
 
   }
 
-
-
-  if (location.startsWith("/singgah") || location.startsWith("/visitrw3/login")) {
-
-    return <Redirect to="/visitrw3" />;
-
-  }
-
-
-
-  if (location.startsWith("/mitra")) {
-    return <Redirect to="/" />;
+  if (location.startsWith("/blusukanrw")) {
+    return <BlusukanrwApp />;
   }
 
   if (needsAuthSession(location) && loading) {
@@ -449,16 +483,8 @@ function AppContent() {
 
 
   if (user?.type === "admin" || user?.isAdmin) {
-
-    return <Redirect to="/admin" />;
-
+    return <Redirect to="/admin/laporan" />;
   }
-
-  if (user?.type === "mitra") {
-    return <Redirect to="/" />;
-  }
-
-
 
   return (
 

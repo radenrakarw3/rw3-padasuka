@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
+import { Link } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { KependudukanAdminNav } from "@/components/admin/kependudukan-admin-nav";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -172,7 +174,8 @@ export default function AdminKelolaKK() {
           kk.alamat.toLowerCase().includes(query) ||
           kepalaKeluarga?.namaLengkap.toLowerCase().includes(query) ||
           anggotaKeluarga.some((anggota) => anggota.namaLengkap.toLowerCase().includes(query));
-        const matchesRt = filterRt === "semua" || kk.rt === parseInt(filterRt);
+        const matchesRt =
+          filterRt === "semua" ? rtOptions.includes(kk.rt as (typeof rtOptions)[number]) : kk.rt === parseInt(filterRt);
         return matchesSearch && matchesRt;
       }) || []
     );
@@ -201,6 +204,7 @@ export default function AdminKelolaKK() {
       resetCreateDialog();
       queryClient.invalidateQueries({ queryKey: ["/api/kk"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats/dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats/kependudukan"] });
     },
     onError: (error: unknown) => {
       toast({ title: "Gagal", description: getErrorMessage(error), variant: "destructive" });
@@ -232,6 +236,7 @@ export default function AdminKelolaKK() {
       queryClient.invalidateQueries({ queryKey: ["/api/kk"] });
       queryClient.invalidateQueries({ queryKey: ["/api/warga"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats/dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats/kependudukan"] });
     },
     onError: (error: unknown) => {
       toast({ title: "Gagal menghapus", description: getErrorMessage(error), variant: "destructive" });
@@ -256,11 +261,11 @@ export default function AdminKelolaKK() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xl font-bold" data-testid="text-kk-title">
-          Kartu Keluarga
-        </h2>
-
+      <KependudukanAdminNav
+        title="Kartu Keluarga"
+        description="Daftar rumah tangga — klik kartu untuk detail"
+      />
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <Dialog
           open={dialogOpen}
           onOpenChange={(open) => {
@@ -347,13 +352,20 @@ export default function AdminKelolaKK() {
                         <Home className="w-4 h-4 text-[hsl(163,55%,22%)]" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-xs font-mono font-medium truncate">{kk.nomorKk}</p>
+                        <Link href={`/admin/kependudukan/kk/${kk.id}`}>
+                          <p className="text-xs font-mono font-medium truncate text-primary hover:underline cursor-pointer">
+                            {kk.nomorKk}
+                          </p>
+                        </Link>
                         {kepalaKeluarga && (
                           <p className="text-[11px] font-medium truncate" data-testid={`text-kepala-${kk.id}`}>
                             {kepalaKeluarga.namaLengkap}
                           </p>
                         )}
                         <p className="text-[11px] text-muted-foreground truncate">{kk.alamat}</p>
+                        {kk.jumlahPenghuni !== anggotaKeluarga.length && (
+                          <p className="text-[10px] text-amber-700 dark:text-amber-400">Penghuni tidak sinkron</p>
+                        )}
                       </div>
                     </div>
 

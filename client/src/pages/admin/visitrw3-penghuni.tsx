@@ -117,6 +117,7 @@ export default function AdminVisitrw3Penghuni() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/warga-singgah"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/visitrw3/kalender"] });
       toast({ title: "Berhasil", description: "Warga singgah berhasil ditambahkan" });
       resetForm();
     },
@@ -131,6 +132,7 @@ export default function AdminVisitrw3Penghuni() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/warga-singgah"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/visitrw3/kalender"] });
       toast({ title: "Berhasil", description: "Data warga singgah berhasil diperbarui" });
       resetForm();
     },
@@ -145,6 +147,7 @@ export default function AdminVisitrw3Penghuni() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/warga-singgah"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/visitrw3/kalender"] });
       toast({ title: "Berhasil", description: "Warga singgah berhasil dihapus" });
       setDeleteTarget(null);
     },
@@ -159,6 +162,7 @@ export default function AdminVisitrw3Penghuni() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/warga-singgah"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/visitrw3/kalender"] });
       toast({ title: "Berhasil", description: "Kontrak berhasil diperpanjang" });
       setPerpanjangTarget(null);
       setPerpanjangData({ tanggalMulaiBaru: "", tanggalHabisBaru: "" });

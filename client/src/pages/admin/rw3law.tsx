@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient, getApiErrorMessage, readJsonSafely } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
@@ -22,33 +22,62 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, CheckCircle, Ban, Pencil, Scale, Eye, RefreshCw, Database } from "lucide-react";
+import {
+  Plus,
+  CheckCircle,
+  Ban,
+  Pencil,
+  Scale,
+  Eye,
+  RefreshCw,
+  Database,
+  Trash2,
+  GitBranch,
+  Loader2,
+} from "lucide-react";
+import { formatNomorPeraturanLengkap, groupByTahunNomor } from "@shared/rw3law-archive";
 import { Rw3lawDocumentView } from "@/components/gov/rw3law-document-view";
+import { Rw3lawStructuredBody } from "@/components/gov/rw3law-structured-body";
 import type { Rw3lawDokumen } from "@shared/schema";
 import { rw3lawKategoriOptions, rw3lawKategoriLabels, rw3lawStatusLabels } from "@/lib/constants";
 import { ACTIVE_RT_NUMBERS } from "@shared/rt";
-import { Link } from "wouter";
+import {
+  createEmptyStructuredIsi,
+  parseIsiToStructured,
+  structuredToIsi,
+  validateStructuredIsi,
+  type Rw3lawStructuredIsi,
+} from "@shared/rw3law-structured";
+import { Rw3lawIsiEditor } from "@/components/admin/rw3law-isi-editor";
 
 type FormState = {
   judul: string;
   kategori: string;
   rtAsal: string;
-  versi: string;
   tanggalBerlaku: string;
-  urutan: string;
-  isi: string;
   catatanInternal: string;
 };
+
+function todayIsoDate() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 const emptyForm: FormState = {
   judul: "",
   kategori: "umum",
   rtAsal: "",
-  versi: "1.0",
-  tanggalBerlaku: "",
-  urutan: "0",
-  isi: "",
+  tanggalBerlaku: todayIsoDate(),
   catatanInternal: "",
 };
 
@@ -58,15 +87,13 @@ function statusBadgeClass(status: string) {
   return "bg-yellow-100 text-yellow-800";
 }
 
-function formToBody(f: FormState) {
+function formToBody(f: FormState, structured: Rw3lawStructuredIsi) {
   return {
     judul: f.judul.trim(),
     kategori: f.kategori,
     rtAsal: f.rtAsal ? parseInt(f.rtAsal, 10) : null,
-    versi: f.versi.trim() || null,
     tanggalBerlaku: f.tanggalBerlaku.trim() || null,
-    urutan: parseInt(f.urutan, 10) || 0,
-    isi: f.isi.trim(),
+    isi: structuredToIsi(structured),
     catatanInternal: f.catatanInternal.trim() || null,
   };
 }
@@ -76,10 +103,7 @@ function dokumenToForm(d: Rw3lawDokumen): FormState {
     judul: d.judul,
     kategori: d.kategori,
     rtAsal: d.rtAsal != null ? String(d.rtAsal) : "",
-    versi: d.versi ?? "",
-    tanggalBerlaku: d.tanggalBerlaku ?? "",
-    urutan: String(d.urutan ?? 0),
-    isi: d.isi,
+    tanggalBerlaku: d.tanggalBerlaku ?? todayIsoDate(),
     catatanInternal: d.catatanInternal ?? "",
   };
 }
@@ -92,6 +116,43 @@ export default function AdminRw3law() {
   const [previewDoc, setPreviewDoc] = useState<Rw3lawDokumen | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [structuredIsi, setStructuredIsi] = useState<Rw3lawStructuredIsi>(createEmptyStructuredIsi);
+  const [cabutTarget, setCabutTarget] = useState<Rw3lawDokumen | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Rw3lawDokumen | null>(null);
+  const [revisiLoadingId, setRevisiLoadingId] = useState<number | null>(null);
+
+  const isiPreview = structuredToIsi(structuredIsi);
+  const isiValid = validateStructuredIsi(structuredIsi) === null;
+
+  const publishPreviewQuery = useQuery({
+    queryKey: ["/api/admin/rw3law/nomor/preview", form.tanggalBerlaku, editingId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (form.tanggalBerlaku.trim()) {
+        params.set("tanggalBerlaku", form.tanggalBerlaku.trim());
+      }
+      if (editingId != null) params.set("draftId", String(editingId));
+      const qs = params.toString();
+      const res = await fetch(`/api/admin/rw3law/nomor/preview${qs ? `?${qs}` : ""}`, {
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await readJsonSafely<{ message?: string }>(res).catch(() => null);
+        throw new Error(err?.message || "Gagal memuat pratinjau publikasi");
+      }
+      return readJsonSafely<{
+        tahun: number;
+        nomorBerikut: number;
+        label: string;
+        singkat: string;
+        versiBerikut: string;
+        urutanBerikut: number;
+        adalahRevisi: boolean;
+      }>(res);
+    },
+    enabled: dialogOpen,
+    staleTime: 10_000,
+  });
 
   const queryKey = ["/api/admin/rw3law", filterStatus] as const;
 
@@ -141,15 +202,67 @@ export default function AdminRw3law() {
     },
   });
 
-  const invalidateRw3law = () => {
-    queryClient.invalidateQueries({ queryKey: ["/api/admin/rw3law"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/admin/rw3law/status/overview"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/public/rw3law"] });
+  /** Selalu muat draft (untuk tombol Lanjutkan revisi meski filter bukan Semua). */
+  const { data: draftList = [] } = useQuery<Rw3lawDokumen[]>({
+    queryKey: ["/api/admin/rw3law", "draft"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/rw3law?status=draft", { credentials: "include" });
+      if (!res.ok) return [];
+      return (await readJsonSafely<Rw3lawDokumen[]>(res)) ?? [];
+    },
+    staleTime: 30_000,
+  });
+
+  const removeFromRw3lawLists = (id: number) => {
+    queryClient.setQueriesData<Rw3lawDokumen[]>(
+      { queryKey: ["/api/admin/rw3law"] },
+      (prev) => (prev ?? []).filter((d) => d.id !== id),
+    );
   };
+
+  const invalidateRw3law = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/rw3law"], refetchType: "active" }),
+      queryClient.invalidateQueries({
+        queryKey: ["/api/admin/rw3law/status/overview"],
+        refetchType: "active",
+      }),
+      queryClient.invalidateQueries({ queryKey: ["/api/public/rw3law"], refetchType: "active" }),
+      queryClient.invalidateQueries({
+        queryKey: ["/api/public/rw3law/arsip/dicabut"],
+        refetchType: "active",
+      }),
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/rw3law", "draft"], refetchType: "active" }),
+    ]);
+  };
+
+  const RW3LAW_ACTION_TIMEOUT_MS = 15_000;
+
+  const openCreate = useCallback(() => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setStructuredIsi(createEmptyStructuredIsi());
+    setShowPreview(false);
+    setDialogOpen(true);
+  }, []);
+
+  const openEditDraft = useCallback((d: Rw3lawDokumen) => {
+    setEditingId(d.id);
+    setForm(dokumenToForm(d));
+    try {
+      setStructuredIsi(parseIsiToStructured(d.isi ?? ""));
+    } catch {
+      setStructuredIsi(createEmptyStructuredIsi());
+    }
+    setShowPreview(false);
+    setDialogOpen(true);
+  }, []);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const body = formToBody(form);
+      const err = validateStructuredIsi(structuredIsi);
+      if (err) throw new Error(err);
+      const body = formToBody(form, structuredIsi);
       if (editingId) {
         await apiRequest("PATCH", `/api/admin/rw3law/${editingId}`, body);
       } else {
@@ -161,6 +274,7 @@ export default function AdminRw3law() {
       setDialogOpen(false);
       setEditingId(null);
       setForm(emptyForm);
+      setStructuredIsi(createEmptyStructuredIsi());
       invalidateRw3law();
     },
     onError: (e: unknown) =>
@@ -168,9 +282,20 @@ export default function AdminRw3law() {
   });
 
   const approveMutation = useMutation({
-    mutationFn: async (id: number) => apiRequest("PATCH", `/api/admin/rw3law/${id}/approve`, {}),
-    onSuccess: () => {
-      toast({ title: "Peraturan dipublikasikan" });
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("PATCH", `/api/admin/rw3law/${id}/approve`, {});
+      return readJsonSafely<Rw3lawDokumen>(res);
+    },
+    onSuccess: (row) => {
+      const nomor = row
+        ? formatNomorPeraturanLengkap(row.nomorPeraturan, row.tahunNomor)
+        : null;
+      toast({
+        title: "Peraturan dipublikasikan",
+        description: nomor
+          ? `${nomor} · v${row?.versi ?? "1.0"} · urutan ${row?.urutan ?? "—"}`
+          : undefined,
+      });
       invalidateRw3law();
     },
     onError: (e: unknown) =>
@@ -178,34 +303,281 @@ export default function AdminRw3law() {
   });
 
   const cabutMutation = useMutation({
-    mutationFn: async (id: number) => apiRequest("PATCH", `/api/admin/rw3law/${id}/cabut`, {}),
+    mutationFn: async (id: number) =>
+      apiRequest("PATCH", `/api/admin/rw3law/${id}/cabut`, {}, { timeoutMs: RW3LAW_ACTION_TIMEOUT_MS }),
     onSuccess: () => {
-      toast({ title: "Peraturan dicabut" });
+      toast({
+        title: "Peraturan dicabut",
+        description: "Pindah ke arsip dicabut. Bisa dihapus permanen setelah ini.",
+      });
       invalidateRw3law();
     },
     onError: (e: unknown) =>
       toast({ title: "Gagal", description: getApiErrorMessage(e), variant: "destructive" }),
+    onSettled: () => setCabutTarget(null),
   });
 
-  const openCreate = () => {
-    setEditingId(null);
-    setForm(emptyForm);
-    setShowPreview(false);
-    setDialogOpen(true);
-  };
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("DELETE", `/api/admin/rw3law/${id}`, undefined, {
+        timeoutMs: RW3LAW_ACTION_TIMEOUT_MS,
+      });
+      const body = await readJsonSafely<{ id?: number }>(res);
+      if (body?.id !== id) {
+        throw new Error("Hapus gagal: respons server tidak sesuai.");
+      }
+      return body;
+    },
+    onSuccess: async (_data, id) => {
+      removeFromRw3lawLists(id);
+      toast({ title: "Peraturan dihapus permanen" });
+      await invalidateRw3law();
+    },
+    onError: (e: unknown) =>
+      toast({ title: "Gagal", description: getApiErrorMessage(e), variant: "destructive" }),
+    onSettled: () => setDeleteTarget(null),
+  });
 
-  const openEdit = (d: Rw3lawDokumen) => {
-    setEditingId(d.id);
-    setForm(dokumenToForm(d));
-    setShowPreview(false);
-    setDialogOpen(true);
-  };
+  const grouped = useMemo(() => {
+    const berlaku = list.filter((d) => d.status === "disetujui");
+    const draft = list.filter((d) => d.status === "draft");
+    const dicabut = list.filter((d) => d.status === "dicabut");
+    return { berlaku, draft, dicabut };
+  }, [list]);
+
+  const draftRevisiByParentId = useMemo(() => {
+    const map = new Map<number, Rw3lawDokumen>();
+    for (const d of draftList) {
+      if (d.revisiDariId != null) map.set(d.revisiDariId, d);
+    }
+    return map;
+  }, [draftList]);
+
+  const handleBuatRevisi = useCallback(
+    async (parentId: number) => {
+      const existing = draftRevisiByParentId.get(parentId);
+      if (existing) {
+        setFilterStatus("semua");
+        openEditDraft(existing);
+        toast({
+          title: "Melanjutkan draft revisi",
+          description: `Versi ${existing.versi ?? "—"}`,
+        });
+        return;
+      }
+
+      setRevisiLoadingId(parentId);
+      try {
+        const res = await apiRequest("POST", `/api/admin/rw3law/${parentId}/revisi`, undefined, {
+          timeoutMs: RW3LAW_ACTION_TIMEOUT_MS,
+        });
+        const row = await readJsonSafely<Rw3lawDokumen>(res);
+        if (!row?.id || !row.isi) {
+          throw new Error(
+            "Respons server tidak valid. Muat ulang halaman; jika masih gagal, restart server (npm run dev).",
+          );
+        }
+
+        setFilterStatus("semua");
+        openEditDraft(row);
+
+        toast({
+          title: "Editor revisi dibuka",
+          description: `Versi ${row.versi ?? "—"} — sunting isi lalu klik Setujui. Peraturan lama dicabut otomatis.`,
+        });
+        await invalidateRw3law();
+      } catch (e: unknown) {
+        const msg = getApiErrorMessage(e);
+        toast({
+          title: "Gagal membuat revisi",
+          description: msg,
+          variant: "destructive",
+        });
+      } finally {
+        setRevisiLoadingId(null);
+      }
+    },
+    [draftRevisiByParentId, openEditDraft, toast, invalidateRw3law],
+  );
 
   const openPreview = (d: Rw3lawDokumen) => {
     setPreviewDoc(d);
   };
 
-  const draftCount = list.filter((d) => d.status === "draft").length;
+  const draftCount = draftList.length;
+
+  const renderDocCard = (d: Rw3lawDokumen) => {
+    const nomorLabel = formatNomorPeraturanLengkap(d.nomorPeraturan, d.tahunNomor);
+    return (
+    <Card key={d.id} data-testid={`card-rw3law-admin-${d.id}`}>
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            {nomorLabel && (
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[hsl(163,55%,28%)]">
+                {nomorLabel}
+              </p>
+            )}
+            <p className="font-semibold text-sm">{d.judul}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {rw3lawKategoriLabels[d.kategori] ?? d.kategori}
+              {d.rtAsal != null ? ` · RT ${String(d.rtAsal).padStart(2, "0")}` : ""}
+              {d.versi ? ` · v${d.versi}` : ""}
+              {d.revisiDariId ? " · revisi" : ""}
+            </p>
+          </div>
+          <Badge className={`${statusBadgeClass(d.status)} text-[10px] flex-shrink-0`}>
+            {rw3lawStatusLabels[d.status] ?? d.status}
+          </Badge>
+        </div>
+
+        {d.catatanInternal && (
+          <p className="text-xs bg-muted p-2 rounded-md">
+            <span className="font-medium">Catatan internal:</span> {d.catatanInternal}
+          </p>
+        )}
+
+        <div className="flex flex-wrap gap-2 pt-1 border-t">
+          <Button size="sm" variant="outline" onClick={() => openPreview(d)}>
+            <Eye className="w-3 h-3 mr-1" />
+            Pratinjau
+          </Button>
+          {d.status === "draft" && (
+            <>
+              <Button size="sm" variant="outline" onClick={() => openEditDraft(d)}>
+                <Pencil className="w-3 h-3 mr-1" />
+                Edit draft
+              </Button>
+              <Button
+                size="sm"
+                className="bg-green-700 hover:bg-green-800"
+                onClick={() => approveMutation.mutate(d.id)}
+                disabled={approveMutation.isPending}
+              >
+                <CheckCircle className="w-3 h-3 mr-1" />
+                Setujui & publikasikan
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-destructive border-destructive/40 hover:bg-destructive/10"
+                onClick={() => setDeleteTarget(d)}
+              >
+                <Trash2 className="w-3 h-3 mr-1" />
+                Hapus draft
+              </Button>
+            </>
+          )}
+          {d.status === "disetujui" && (
+            <>
+              {draftRevisiByParentId.has(d.id) ? (
+                <Button
+                  size="sm"
+                  className="bg-amber-600 hover:bg-amber-700 text-white"
+                  type="button"
+                  onClick={() => {
+                    const pending = draftRevisiByParentId.get(d.id)!;
+                    setFilterStatus("semua");
+                    openEditDraft(pending);
+                    toast({
+                      title: "Melanjutkan draft revisi",
+                      description: `Versi ${pending.versi ?? "—"}`,
+                    });
+                  }}
+                >
+                  <Pencil className="w-3 h-3 mr-1" />
+                  Lanjutkan revisi
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  type="button"
+                  onClick={() => void handleBuatRevisi(d.id)}
+                  disabled={revisiLoadingId === d.id}
+                >
+                  {revisiLoadingId === d.id ? (
+                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                  ) : (
+                    <GitBranch className="w-3 h-3 mr-1" />
+                  )}
+                  {revisiLoadingId === d.id ? "Membuat…" : "Buat revisi"}
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => setCabutTarget(d)}
+                disabled={cabutMutation.isPending}
+              >
+                <Ban className="w-3 h-3 mr-1" />
+                Cabut
+              </Button>
+            </>
+          )}
+          {d.status === "dicabut" && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-destructive border-destructive/40 hover:bg-destructive/10"
+              onClick={() => setDeleteTarget(d)}
+            >
+              <Trash2 className="w-3 h-3 mr-1" />
+              Hapus permanen
+            </Button>
+          )}
+        </div>
+        <p className="text-[10px] text-muted-foreground">
+          {d.tahunNomor ? `Arsip penomeran ${d.tahunNomor}` : ""}
+          {d.createdBy ? `${d.tahunNomor ? " · " : ""}Oleh ${d.createdBy}` : ""}
+          {d.disetujuiOleh ? ` · Disetujui ${d.disetujuiOleh}` : ""}
+          {d.updatedAt ? ` · Diubah ${new Date(d.updatedAt).toLocaleDateString("id-ID")}` : ""}
+        </p>
+      </CardContent>
+    </Card>
+    );
+  };
+
+  const renderArsipDicabut = (docs: Rw3lawDokumen[]) => {
+    const byTahun = groupByTahunNomor(docs);
+    const tanpaTahun = docs.filter((d) => !d.tahunNomor);
+    return (
+      <div className="space-y-5">
+        {byTahun.map(({ tahun, items }) => (
+          <div key={tahun} className="space-y-2">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Arsip tahun {tahun}
+            </h4>
+            {items.map(renderDocCard)}
+          </div>
+        ))}
+        {tanpaTahun.length > 0 && (
+          <div className="space-y-2">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Arsip lainnya
+            </h4>
+            {tanpaTahun.map(renderDocCard)}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderSection = (title: string, docs: Rw3lawDokumen[], hint?: string) => (
+    <div className="space-y-3">
+      <div>
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        {hint && <p className="text-xs text-muted-foreground mt-0.5">{hint}</p>}
+      </div>
+      {docs.length === 0 ? (
+        <p className="text-xs text-muted-foreground py-4 text-center border border-dashed rounded-lg">
+          Tidak ada dokumen.
+        </p>
+      ) : (
+        docs.map(renderDocCard)
+      )}
+    </div>
+  );
 
   return (
     <div className="space-y-4">
@@ -223,8 +595,8 @@ export default function AdminRw3law() {
       </div>
 
       <p className="text-sm text-muted-foreground">
-        Susun draft bersama pengurus RW dan RT (catat RT asal). Setelah disetujui, peraturan tampil di
-        halaman publik RW3LAW.
+        Hanya <strong>draft</strong> yang dapat diedit. Peraturan <strong>berlaku</strong> harus dicabut dulu
+        sebelum dihapus permanen. Di halaman publik, berlaku dan dicabut ditampilkan terpisah.
       </p>
 
       {overviewError ? (
@@ -296,84 +668,38 @@ export default function AdminRw3law() {
             Belum ada dokumen. Buat draft peraturan baru.
           </CardContent>
         </Card>
-      ) : (
-        <div className="space-y-3">
-          {list.map((d) => (
-            <Card key={d.id} data-testid={`card-rw3law-admin-${d.id}`}>
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-sm">{d.judul}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {rw3lawKategoriLabels[d.kategori] ?? d.kategori}
-                      {d.rtAsal != null ? ` · RT ${String(d.rtAsal).padStart(2, "0")}` : ""}
-                      {d.versi ? ` · v${d.versi}` : ""}
-                    </p>
-                    <p className="text-xs text-muted-foreground line-clamp-2 mt-2">{d.isi}</p>
-                  </div>
-                  <Badge className={`${statusBadgeClass(d.status)} text-[10px] flex-shrink-0`}>
-                    {rw3lawStatusLabels[d.status] ?? d.status}
-                  </Badge>
-                </div>
-
-                {d.catatanInternal && (
-                  <p className="text-xs bg-muted p-2 rounded-md">
-                    <span className="font-medium">Catatan internal:</span> {d.catatanInternal}
-                  </p>
-                )}
-
-                <div className="flex flex-wrap gap-2 pt-1 border-t">
-                  <Button size="sm" variant="outline" onClick={() => openPreview(d)}>
-                    <Eye className="w-3 h-3 mr-1" />
-                    Pratinjau peraturan
-                  </Button>
-                  {d.status === "draft" && (
-                    <>
-                      <Button size="sm" variant="outline" onClick={() => openEdit(d)}>
-                        <Pencil className="w-3 h-3 mr-1" />
-                        Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        className="bg-green-700 hover:bg-green-800"
-                        onClick={() => approveMutation.mutate(d.id)}
-                        disabled={approveMutation.isPending}
-                      >
-                        <CheckCircle className="w-3 h-3 mr-1" />
-                        Setujui & publikasikan
-                      </Button>
-                    </>
-                  )}
-                  {d.status === "disetujui" && (
-                    <>
-                      <Button size="sm" variant="outline" asChild>
-                        <Link href={`/rwlaw/${d.slug}`} target="_blank">
-                          Lihat publik
-                        </Link>
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => cabutMutation.mutate(d.id)}
-                        disabled={cabutMutation.isPending}
-                      >
-                        <Ban className="w-3 h-3 mr-1" />
-                        Cabut
-                      </Button>
-                    </>
-                  )}
-                </div>
-                <p className="text-[10px] text-muted-foreground">
-                  {d.createdBy ? `Oleh ${d.createdBy}` : ""}
-                  {d.disetujuiOleh ? ` · Disetujui ${d.disetujuiOleh}` : ""}
-                  {d.updatedAt
-                    ? ` · Diubah ${new Date(d.updatedAt).toLocaleDateString("id-ID")}`
-                    : ""}
-                </p>
-              </CardContent>
-            </Card>
-          ))}
+      ) : filterStatus === "semua" ? (
+        <div className="space-y-8">
+          {renderSection(
+            "Peraturan berlaku",
+            grouped.berlaku,
+            "Tampil di halaman publik (bagian peraturan berlaku). Tidak dapat diedit — cabut dulu jika perlu diubah.",
+          )}
+          {renderSection(
+            "Draft",
+            grouped.draft,
+            "Belum dipublikasikan. Dapat diedit, disetujui, atau dihapus.",
+          )}
+          <div className="space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Dicabut (arsip)</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Dikelompokkan per tahun penomeran. Tidak berlaku — hanya arsip referensi di publik.
+              </p>
+            </div>
+            {grouped.dicabut.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-4 text-center border border-dashed rounded-lg">
+                Tidak ada dokumen.
+              </p>
+            ) : (
+              renderArsipDicabut(grouped.dicabut)
+            )}
+          </div>
         </div>
+      ) : filterStatus === "dicabut" ? (
+        <div className="space-y-3">{renderArsipDicabut(list)}</div>
+      ) : (
+        <div className="space-y-3">{list.map(renderDocCard)}</div>
       )}
 
       <Dialog open={Boolean(previewDoc)} onOpenChange={(o) => !o && setPreviewDoc(null)}>
@@ -390,6 +716,8 @@ export default function AdminRw3law() {
                 versi={previewDoc.versi}
                 tanggalBerlaku={previewDoc.tanggalBerlaku}
                 rtAsal={previewDoc.rtAsal}
+                nomorPeraturan={previewDoc.nomorPeraturan}
+                tahunNomor={previewDoc.tahunNomor}
                 docketId={`RW3LAW-${String(previewDoc.id).padStart(4, "0")}`}
               />
             </div>
@@ -404,123 +732,132 @@ export default function AdminRw3law() {
           if (!o) setShowPreview(false);
         }}
       >
-        <DialogContent
-          className={
-            showPreview
-              ? "max-w-4xl max-h-[92vh] overflow-y-auto"
-              : "max-w-lg max-h-[90vh] overflow-y-auto"
-          }
-        >
-          <DialogHeader>
-            <DialogTitle>{editingId ? "Edit draft" : "Draft peraturan baru"}</DialogTitle>
+        <DialogContent className="max-w-5xl w-[95vw] max-h-[95vh] flex flex-col gap-0 p-0 overflow-hidden">
+          <DialogHeader className="px-6 pt-6 pb-3 shrink-0 border-b">
+            <DialogTitle className="text-lg">
+              {editingId ? "Edit draft" : "Draft peraturan baru"}
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label>Judul</Label>
-              <Input
-                value={form.judul}
-                onChange={(e) => setForm({ ...form, judul: e.target.value })}
-                data-testid="input-judul-rw3law"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Kategori</Label>
-                <Select value={form.kategori} onValueChange={(v) => setForm({ ...form, kategori: v })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {rw3lawKategoriOptions.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>RT asal (opsional)</Label>
-                <Select value={form.rtAsal || "none"} onValueChange={(v) => setForm({ ...form, rtAsal: v === "none" ? "" : v })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="RW" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— RW —</SelectItem>
-                    {ACTIVE_RT_NUMBERS.map((n) => (
-                      <SelectItem key={n} value={String(n)}>
-                        RT {String(n).padStart(2, "0")}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Versi</Label>
-                <Input value={form.versi} onChange={(e) => setForm({ ...form, versi: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Berlaku sejak</Label>
-                <Input
-                  type="date"
-                  value={form.tanggalBerlaku}
-                  onChange={(e) => setForm({ ...form, tanggalBerlaku: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Urutan tampil</Label>
-              <Input
-                type="number"
-                min={0}
-                value={form.urutan}
-                onChange={(e) => setForm({ ...form, urutan: e.target.value })}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Isi peraturan</Label>
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                Format peraturan resmi: baris <span className="font-mono">MENIMBANG …</span>, judul pasal{" "}
-                <span className="font-mono">PASAL 1 — Judul</span>, ayat bernomor{" "}
-                <span className="font-mono">1. …</span>
-              </p>
-              <Textarea
-                rows={10}
-                value={form.isi}
-                onChange={(e) => setForm({ ...form, isi: e.target.value })}
-                data-testid="input-isi-rw3law"
-              />
-            </div>
-            {showPreview && form.judul.trim() && form.isi.trim().length >= 20 && (
-              <div className="rounded-lg border bg-[#f4f1ea] p-3 overflow-x-auto">
-                <Rw3lawDocumentView
-                  judul={form.judul.trim()}
-                  isi={form.isi.trim()}
-                  kategori={form.kategori}
-                  versi={form.versi.trim() || null}
-                  tanggalBerlaku={form.tanggalBerlaku.trim() || null}
-                  rtAsal={form.rtAsal ? parseInt(form.rtAsal, 10) : null}
-                  docketId={editingId ? `RW3LAW-${String(editingId).padStart(4, "0")}` : "RW3LAW-DRAFT"}
-                />
-              </div>
-            )}
-            <div className="space-y-1.5">
-              <Label>Catatan internal (tidak tampil publik)</Label>
-              <Textarea
-                rows={2}
-                value={form.catatanInternal}
-                onChange={(e) => setForm({ ...form, catatanInternal: e.target.value })}
-              />
+
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            <div className="grid lg:grid-cols-[minmax(0,260px)_1fr] gap-6 items-start">
+              <aside className="space-y-3 lg:sticky lg:top-0">
+                <div className="space-y-1.5">
+                  <Label>Judul</Label>
+                  <Input
+                    value={form.judul}
+                    onChange={(e) => setForm({ ...form, judul: e.target.value })}
+                    data-testid="input-judul-rw3law"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Kategori</Label>
+                  <Select value={form.kategori} onValueChange={(v) => setForm({ ...form, kategori: v })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {rw3lawKategoriOptions.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>RT asal (opsional)</Label>
+                  <Select
+                    value={form.rtAsal || "none"}
+                    onValueChange={(v) => setForm({ ...form, rtAsal: v === "none" ? "" : v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="RW" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">— Seluruh RW —</SelectItem>
+                      {ACTIVE_RT_NUMBERS.map((n) => (
+                        <SelectItem key={n} value={String(n)}>
+                          RT {String(n).padStart(2, "0")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Berlaku sejak</Label>
+                  <Input
+                    type="date"
+                    value={form.tanggalBerlaku}
+                    onChange={(e) => setForm({ ...form, tanggalBerlaku: e.target.value })}
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Tahun penomeran mengikuti tanggal ini (atau tahun persetujuan jika kosong).
+                  </p>
+                </div>
+                <div className="rounded-md border border-[hsl(163,55%,22%)]/25 bg-[hsl(163,55%,22%)]/5 px-3 py-2.5 space-y-1.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(163,55%,28%)]">
+                    Saat dipublikasikan (otomatis)
+                  </p>
+                  {publishPreviewQuery.isPending ? (
+                    <p className="text-xs text-muted-foreground">Menghitung…</p>
+                  ) : publishPreviewQuery.data ? (
+                    <>
+                      <p className="text-sm font-medium text-foreground">
+                        {publishPreviewQuery.data.label}
+                      </p>
+                      <ul className="text-[11px] text-muted-foreground space-y-0.5">
+                        <li>
+                          Versi <span className="font-medium text-foreground">{publishPreviewQuery.data.versiBerikut}</span>
+                          {publishPreviewQuery.data.adalahRevisi ? " (revisi)" : " (peraturan baru)"}
+                        </li>
+                        <li>
+                          Urutan tampil #{publishPreviewQuery.data.urutanBerikut} di daftar berlaku
+                        </li>
+                        <li>Tahun penomeran {publishPreviewQuery.data.tahun}</li>
+                      </ul>
+                      <p className="text-[10px] text-muted-foreground leading-relaxed pt-1">
+                        Nomor, versi, dan urutan tidak perlu diisi manual. Sistem mencegah nomor
+                        ganda per tahun.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Pratinjau tidak tersedia.</p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Catatan internal</Label>
+                  <Textarea
+                    rows={2}
+                    className="text-sm"
+                    value={form.catatanInternal}
+                    onChange={(e) => setForm({ ...form, catatanInternal: e.target.value })}
+                  />
+                </div>
+              </aside>
+
+              <main className="space-y-3 min-w-0">
+                <Label className="text-base font-semibold">Isi peraturan</Label>
+                <Rw3lawIsiEditor value={structuredIsi} onChange={setStructuredIsi} />
+                {showPreview && form.judul.trim() && isiValid && (
+                  <div className="rounded-lg border border-[#d4cfc4] bg-[#fffef9] p-4 sm:p-5 overflow-y-auto max-h-[50vh]">
+                    <p className="text-xs uppercase tracking-wider text-[#6b6b6b] font-serif mb-3">
+                      Pratinjau isi (sama dengan tampilan publik)
+                    </p>
+                    <p className="font-serif text-sm font-bold text-[#1a2744] mb-4">{form.judul.trim()}</p>
+                    <Rw3lawStructuredBody isi={isiPreview} structured={structuredIsi} />
+                  </div>
+                )}
+              </main>
             </div>
           </div>
-          <DialogFooter className="flex-wrap gap-2 sm:justify-between">
+
+          <DialogFooter className="shrink-0 px-6 py-4 border-t flex-wrap gap-2 sm:justify-between bg-background">
             <Button
               type="button"
               variant="secondary"
               onClick={() => setShowPreview((v) => !v)}
-              disabled={!form.judul.trim() || form.isi.trim().length < 20}
+              disabled={!form.judul.trim() || !isiValid}
             >
               <Eye className="w-4 h-4 mr-1" />
               {showPreview ? "Sembunyikan pratinjau" : "Pratinjau peraturan"}
@@ -531,7 +868,7 @@ export default function AdminRw3law() {
               </Button>
               <Button
                 onClick={() => saveMutation.mutate()}
-                disabled={saveMutation.isPending || !form.judul.trim() || form.isi.trim().length < 20}
+                disabled={saveMutation.isPending || !form.judul.trim() || !isiValid}
               >
                 Simpan draft
               </Button>
@@ -539,6 +876,84 @@ export default function AdminRw3law() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={Boolean(cabutTarget)}
+        onOpenChange={(o) => {
+          if (!o) setCabutTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cabut peraturan?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {cabutTarget && (
+                <>
+                  <span className="font-medium text-foreground">{cabutTarget.judul}</span> tidak
+                  lagi berlaku dan dipindah ke arsip dicabut di halaman publik. Untuk menghapus dari
+                  database, cabut terlebih dahulu lalu gunakan &quot;Hapus permanen&quot;.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={() => {
+                if (!cabutTarget) return;
+                const id = cabutTarget.id;
+                setCabutTarget(null);
+                cabutMutation.mutate(id);
+              }}
+            >
+              Ya, cabut
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(o) => {
+          if (!o) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {deleteTarget?.status === "draft" ? "Hapus draft?" : "Hapus permanen?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget && (
+                <>
+                  <span className="font-medium text-foreground">{deleteTarget.judul}</span> akan
+                  dihapus dari database dan tidak dapat dikembalikan.
+                  {deleteTarget.status === "disetujui" && (
+                    <span className="block mt-2 text-destructive">
+                      Peraturan masih berlaku — cabut terlebih dahulu.
+                    </span>
+                  )}
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={() => {
+                if (!deleteTarget) return;
+                const id = deleteTarget.id;
+                setDeleteTarget(null);
+                deleteMutation.mutate(id);
+              }}
+            >
+              Hapus permanen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

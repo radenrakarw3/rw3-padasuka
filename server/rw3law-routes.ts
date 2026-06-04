@@ -8,11 +8,17 @@ import {
   listRw3lawAdmin,
   getRw3lawById,
   createRw3lawDraft,
+  createRw3lawRevisiDraft,
   updateRw3lawDraft,
   approveRw3law,
   cabutRw3law,
+  deleteRw3law,
+  getRw3lawRevisiMeta,
+  listRw3lawDicabutPublic,
   seedRw3lawDevIfNeeded,
   getRw3lawOverview,
+  getRw3lawPublishPreview,
+  syncRw3lawNomorExisting,
 } from "./rw3law";
 
 function requireAdmin(req: Request, res: Response, next: () => void) {
@@ -58,6 +64,18 @@ export function registerRw3lawRoutes(app: Express) {
     }
   });
 
+  app.get("/api/public/rw3law/arsip/dicabut", async (_req, res) => {
+    try {
+      const data = await listRw3lawDicabutPublic();
+      res.json(data);
+    } catch (error: unknown) {
+      console.error("[RW3LAW] GET /api/public/rw3law/arsip/dicabut:", error);
+      res.status(rw3lawErrorStatus(error)).json({
+        message: apiError(error, "Gagal memuat arsip peraturan dicabut"),
+      });
+    }
+  });
+
   app.get("/api/public/rw3law/:slug", async (req, res) => {
     const slug = String(req.params.slug);
     if (slug === "health") {
@@ -66,6 +84,7 @@ export function registerRw3lawRoutes(app: Express) {
     try {
       const row = await getRw3lawBySlugPublic(slug);
       if (!row) return res.status(404).json({ message: "Peraturan tidak ditemukan" });
+      const revisiDari = await getRw3lawRevisiMeta(row.revisiDariId);
       res.json({
         id: row.id,
         judul: row.judul,
@@ -75,7 +94,13 @@ export function registerRw3lawRoutes(app: Express) {
         versi: row.versi,
         tanggalBerlaku: row.tanggalBerlaku,
         rtAsal: row.rtAsal,
+        status: row.status,
+        nomorPeraturan: row.nomorPeraturan,
+        tahunNomor: row.tahunNomor,
+        revisiDari,
         disetujuiAt: row.disetujuiAt,
+        dicabutAt:
+          row.status === "dicabut" ? row.dicabutAt ?? row.updatedAt : null,
       });
     } catch (error: unknown) {
       console.error("[RW3LAW] GET /api/public/rw3law/:slug:", error);
@@ -109,6 +134,22 @@ export function registerRw3lawRoutes(app: Express) {
     }
   });
 
+  app.get("/api/admin/rw3law/nomor/preview", requireAdmin, async (req, res) => {
+    try {
+      const tanggalBerlaku =
+        typeof req.query.tanggalBerlaku === "string" ? req.query.tanggalBerlaku : undefined;
+      const draftIdRaw = req.query.draftId;
+      const draftId =
+        typeof draftIdRaw === "string" && /^\d+$/.test(draftIdRaw)
+          ? parseInt(draftIdRaw, 10)
+          : undefined;
+      const preview = await getRw3lawPublishPreview({ tanggalBerlaku, draftId });
+      res.json(preview);
+    } catch (error: unknown) {
+      res.status(500).json({ message: apiError(error, "Gagal memuat pratinjau publikasi") });
+    }
+  });
+
   app.get("/api/admin/rw3law", requireAdmin, async (req, res) => {
     try {
       const status = typeof req.query.status === "string" ? req.query.status : undefined;
@@ -130,6 +171,17 @@ export function registerRw3lawRoutes(app: Express) {
       res.json(row);
     } catch (error: unknown) {
       res.status(400).json({ message: apiError(error, "Gagal menyetujui") });
+    }
+  });
+
+  app.post("/api/admin/rw3law/:id/revisi", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(String(req.params.id), 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ message: "ID tidak valid" });
+      const row = await createRw3lawRevisiDraft(id, req.session.adminUsername || "admin");
+      res.status(201).json(row);
+    } catch (error: unknown) {
+      res.status(400).json({ message: apiError(error, "Gagal membuat draft revisi") });
     }
   });
 
@@ -175,12 +227,24 @@ export function registerRw3lawRoutes(app: Express) {
       res.status(400).json({ message: apiError(error, "Gagal memperbarui draft") });
     }
   });
+
+  app.delete("/api/admin/rw3law/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(String(req.params.id), 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ message: "ID tidak valid" });
+      const result = await deleteRw3law(id);
+      res.json(result);
+    } catch (error: unknown) {
+      res.status(400).json({ message: apiError(error, "Gagal menghapus peraturan") });
+    }
+  });
 }
 
 export async function initRw3law() {
   try {
     await ensureRw3lawReady(true);
     await seedRw3lawDevIfNeeded();
+    await syncRw3lawNomorExisting();
     const conn = await checkRw3lawConnection();
     if (!conn.ok) {
       throw new Error(conn.message ?? "Tabel rw3law_dokumen tidak dapat diakses");

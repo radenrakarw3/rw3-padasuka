@@ -1,6 +1,8 @@
-import { parseRw3lawIsi, formatTanggalHukum, type Rw3lawBlock } from "@/lib/rw3law-format";
+import { formatTanggalHukum } from "@/lib/rw3law-format";
+import { formatNomorPeraturanLengkap } from "@shared/rw3law-archive";
 import { rw3lawKategoriLabels } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { Rw3lawStructuredBody } from "@/components/gov/rw3law-structured-body";
 
 type Rw3lawDocumentViewProps = {
   judul: string;
@@ -9,66 +11,12 @@ type Rw3lawDocumentViewProps = {
   versi?: string | null;
   tanggalBerlaku?: string | null;
   rtAsal?: number | null;
+  nomorPeraturan?: number | null;
+  tahunNomor?: number | null;
+  revisiDariLabel?: string | null;
   docketId?: string;
   className?: string;
 };
-
-function BlockRenderer({ block }: { block: Rw3lawBlock }) {
-  switch (block.type) {
-    case "whereas": {
-      const teks = block.text.replace(/^WHEREAS\b/i, "MENIMBANG").replace(/;\s*and\b/gi, "; dan");
-      return (
-        <p className="rw3law-whereas font-serif text-[15px] leading-relaxed text-[#2c2c2c] italic pl-6 border-l-2 border-[#8b7355]/40 mb-4">
-          {teks}
-        </p>
-      );
-    }
-    case "article": {
-      const isSection = block.label.startsWith("§");
-      const isRomanOrNum = /^[IVXLC\d]+$/i.test(block.label);
-      const isStandaloneHeading = !isSection && !isRomanOrNum;
-      if (isStandaloneHeading) {
-        return (
-          <h3 className="mt-10 mb-3 font-serif text-sm font-bold uppercase tracking-[0.25em] text-[#1a2744] text-center border-b border-[#1a2744]/15 pb-2">
-            {block.label}
-          </h3>
-        );
-      }
-      return (
-        <div className="mt-8 mb-4 first:mt-0">
-          <div className="flex items-baseline gap-3 border-b border-[#1a2744]/20 pb-2">
-            <span className="font-serif text-sm font-bold uppercase tracking-[0.2em] text-[#1a2744]">
-              {isSection ? block.label.replace(/^§\s*/, "Pasal ") : `Pasal ${block.label}`}
-            </span>
-            {block.title && (
-              <span className="font-serif text-sm text-[#4a4a4a]">— {block.title}</span>
-            )}
-          </div>
-        </div>
-      );
-    }
-    case "provision":
-      return (
-        <div className="flex gap-4 mb-3 pl-2">
-          <span
-            className="font-serif text-sm font-semibold text-[#1a2744] w-10 flex-shrink-0 text-right tabular-nums"
-            aria-hidden
-          >
-            {block.label}.
-          </span>
-          <p className="font-serif text-[15px] leading-[1.75] text-[#2c2c2c] text-justify flex-1 m-0">
-            {block.text}
-          </p>
-        </div>
-      );
-    case "paragraph":
-      return (
-        <p className="font-serif text-[15px] leading-[1.8] text-[#2c2c2c] text-justify mb-4 indent-8">
-          {block.text}
-        </p>
-      );
-  }
-}
 
 export function Rw3lawDocumentView({
   judul,
@@ -77,12 +25,16 @@ export function Rw3lawDocumentView({
   versi,
   tanggalBerlaku,
   rtAsal,
+  nomorPeraturan,
+  tahunNomor,
+  revisiDariLabel,
   docketId,
   className,
 }: Rw3lawDocumentViewProps) {
-  const blocks = parseRw3lawIsi(isi);
   const kategoriLabel = rw3lawKategoriLabels[kategori] ?? kategori;
   const effective = tanggalBerlaku ? formatTanggalHukum(tanggalBerlaku) : null;
+  const nomorLabel =
+    formatNomorPeraturanLengkap(nomorPeraturan, tahunNomor) ?? null;
 
   return (
     <article
@@ -91,7 +43,6 @@ export function Rw3lawDocumentView({
         className,
       )}
     >
-      {/* Court caption */}
       <header className="px-6 sm:px-10 pt-10 pb-6 text-center border-b-2 border-[#1a2744]">
         <p className="text-[11px] uppercase tracking-[0.4em] text-[#5c5c5c] mb-3">
           Dalam Hal Ketertiban Lingkungan
@@ -111,7 +62,19 @@ export function Rw3lawDocumentView({
           {judul}
         </h2>
 
+        {revisiDariLabel && (
+          <p className="mt-4 font-serif text-xs text-[#5c4033] max-w-prose mx-auto leading-relaxed">
+            Mengubah dan menggantikan: <span className="font-semibold">{revisiDariLabel}</span>
+          </p>
+        )}
+
         <dl className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-left max-w-md mx-auto text-[12px] font-serif">
+          {nomorLabel && (
+            <>
+              <dt className="uppercase tracking-wider text-[#6b6b6b]">Penomeran</dt>
+              <dd className="text-[#1a2744] font-medium">{nomorLabel}</dd>
+            </>
+          )}
           {docketId && (
             <>
               <dt className="uppercase tracking-wider text-[#6b6b6b]">Nomor Berkas</dt>
@@ -141,26 +104,14 @@ export function Rw3lawDocumentView({
         </dl>
       </header>
 
-      {/* Body */}
-      <div className="px-6 sm:px-12 py-8 sm:py-10">
+      <div className="px-4 sm:px-8 md:px-12 py-8 sm:py-10">
         <p className="text-center font-serif text-[13px] uppercase tracking-[0.15em] text-[#6b6b6b] mb-8">
           Peraturan berikut ditetapkan dan wajib dipatuhi seluruh warga RW 03 Padasuka.
         </p>
 
-        {blocks.length > 0 ? (
-          <div className="space-y-1">
-            {blocks.map((block, i) => (
-              <BlockRenderer key={i} block={block} />
-            ))}
-          </div>
-        ) : (
-          <div className="font-serif text-[15px] leading-[1.8] text-[#2c2c2c] text-justify whitespace-pre-wrap">
-            {isi}
-          </div>
-        )}
+        <Rw3lawStructuredBody isi={isi} />
       </div>
 
-      {/* Certification footer */}
       <footer className="px-6 sm:px-10 py-8 border-t border-[#d4cfc4] bg-[#f8f6f0]">
         <p className="font-serif text-[13px] text-center text-[#4a4a4a] leading-relaxed italic max-w-prose mx-auto">
           Dokumen ini merupakan peraturan resmi RW 03 Padasuka sebagaimana disahkan pengurus RW.

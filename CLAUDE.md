@@ -18,7 +18,6 @@ Website publik: **rw3padasukacimahi.org**
 | ORM | Drizzle ORM |
 | Database | PostgreSQL (Railway) |
 | Auth | Passport.js + express-session |
-| WA API | Star Sender V3 (env: `STARSENDER_API_KEY`) |
 | AI | Google Gemini 2.5 Flash (env: `GEMINI_API_KEY`) |
 
 ---
@@ -27,7 +26,7 @@ Website publik: **rw3padasukacimahi.org**
 
 ```
 /client/src/
-  pages/admin/        ← Halaman admin (wa-blast, warga, dll)
+  pages/admin/        ← Halaman admin (laporan, warga, dll)
   pages/public/       ← Halaman publik
   components/ui/      ← Komponen shadcn/ui
   lib/                ← queryClient, constants, utils
@@ -53,13 +52,9 @@ Website publik: **rw3padasukacimahi.org**
 ### `warga`
 - `id`, `kk_id` (FK ke kartu_keluarga)
 - `nama_lengkap`, `nik` (unique)
-- `nomor_whatsapp` — **nullable**, sering kosong, penting untuk WA Blast
+- `nomor_whatsapp` — **nullable**, sering kosong
 - `jenis_kelamin`, `kedudukan_keluarga` (Kepala Keluarga / Istri / Anak / dst)
-- `tanggal_lahir` — digunakan untuk filter umur di WA Blast
-
-### `wa_blast`
-- `id`, `pesan`, `kategori_filter`, `filter_rt`
-- `jumlah_penerima`, `jumlah_berhasil`, `status`
+- `tanggal_lahir`
 
 ### `warga_singgah`, `pemilik_kost`, `rt_data`
 
@@ -67,27 +62,10 @@ Website publik: **rw3padasukacimahi.org**
 
 ## Fitur Utama
 
-### WA Blast (`/admin/wa-blast`)
-- Kirim pesan massal WhatsApp ke warga berdasarkan kategori
-- Kategori: semua, per RT, pemukiman (RT 01–04), perumahan (RT 05–07), kepala keluarga, penerima bansos, pemilik kost, warga singgah, kategori umur
-- Generate pesan otomatis via Gemini AI
-- Personalisasi pesan: `{gender}` = Bapak/Ibu, `{warga}` = nama, `{rtxx}` = RT
-- **Panel Laporan Nomor WA Kosong**: menampilkan warga tanpa nomor WA, beserta tombol WA ke kepala keluarga untuk meminta update nomor
-
-### Aturan Kategori Umur di WA Blast
-- Anak: < 18 tahun (di WA Blast sebelumnya); di panel laporan nomor kosong, anak **< 16 tahun** otomatis ditandai "Tidak punya WA"
-- Remaja: 18–29 tahun
-- Dewasa: 30–60 tahun
-- Lansia: > 60 tahun
-
----
-
 ## Konvensi Kode
 
 - Semua label/teks UI memakai **Bahasa Indonesia**
 - Warna brand: `hsl(163,55%,22%)` (hijau tua) dan `hsl(40,45%,55%)` (emas)
-- Format nomor WA: `0812xxxx` disimpan → dikonversi ke format `08…` saat kirim ke Star Sender
-- Pesan WhatsApp tidak boleh memakai markdown (tanpa `*bold*`), teks biasa saja
 - Railway: filesystem bersifat ephemeral → simpan file/foto ke PostgreSQL (base64 `_data` fields)
 
 ---
@@ -97,7 +75,6 @@ Website publik: **rw3padasukacimahi.org**
 ```
 DATABASE_URL
 SESSION_SECRET
-STARSENDER_API_KEY
 GEMINI_API_KEY
 ```
 
@@ -105,7 +82,4 @@ GEMINI_API_KEY
 
 ## Catatan Penting
 
-- RT 01–04 = **Pemukiman**, RT 05–07 = **Perumahan**
-- Nomor WA warga sering tidak diisi → gunakan panel laporan untuk melacak dan menghubungi kepala keluarga
-- Anak di bawah 16 tahun dianggap **tidak memiliki WA** (diisi otomatis di laporan)
-- Blast ke kategori "anak" (< 18 thn) tetap valid jika ada nomor WA yang terdaftar (misal WA orang tua)
+- RT yang dikelola di sistem: **01–04** (pemukiman RW 03)

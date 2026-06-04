@@ -19,24 +19,14 @@ export default function PublicPelayanan() {
   const [selectedRt, setSelectedRt] = useState<number | null>(null);
 
   const { data: rtList = [], isLoading } = useQuery<RtData[]>({
-    queryKey: ["/api/rt", "pelayanan"],
+    queryKey: ["/api/public/rt-pelayanan"],
     queryFn: async () => {
-      const res = await fetch("/api/rt");
+      const res = await fetch("/api/public/rt-pelayanan");
       if (!res.ok) throw new Error("Gagal memuat data RT");
-      const list = await readJsonSafely<
-        { nomorRt: number; namaKetua: string; nomorWhatsapp: string | null }[]
-      >(res);
-      return list
-        .filter((rt) => (ACTIVE_RT_NUMBERS as readonly number[]).includes(rt.nomorRt))
-        .map((rt) => {
-          const wa = rt.nomorWhatsapp ? String(rt.nomorWhatsapp) : "";
-          return {
-            nomorRt: rt.nomorRt,
-            namaKetua: rt.namaKetua,
-            nomorWhatsapp: rt.nomorWhatsapp,
-            tersedia: wa.replace(/\D/g, "").length >= 9,
-          };
-        });
+      const list = await readJsonSafely<RtData[]>(res);
+      return list.filter((rt) =>
+        (ACTIVE_RT_NUMBERS as readonly number[]).includes(rt.nomorRt),
+      );
     },
   });
 

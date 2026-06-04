@@ -43,6 +43,7 @@ export const TTL = {
 
 export const CacheKey = {
   dashboard: (rt?: number) => `dashboard:rt=${rt ?? "all"}`,
+  kependudukan: (rt?: number) => `kependudukan:v2:rt=${rt ?? "all"}`,
   wargaList: () => `warga:list`,
   kkList: () => `kk:list`,
   wargaWithKk: () => `warga-with-kk:list`,
@@ -54,6 +55,7 @@ export function invalidateWarga(): void {
   cache.delete(CacheKey.wargaWithKk());
   cache.delete(CacheKey.nomorKosong());
   cache.invalidateByPrefix("dashboard:");
+  cache.invalidateByPrefix("kependudukan:");
 }
 
 export function invalidateKk(): void {
@@ -61,4 +63,5 @@ export function invalidateKk(): void {
   cache.delete(CacheKey.wargaWithKk());
   cache.delete(CacheKey.nomorKosong());
   cache.invalidateByPrefix("dashboard:");
+  cache.invalidateByPrefix("kependudukan:");
 }

@@ -17,6 +17,7 @@ import {
   rejectPengajuan,
   getVisitrw3DashboardStats,
   emptyVisitrw3DashboardStats,
+  getVisitrw3Kalender,
   isMissingVisitrw3TableError,
   hitungTanggalBerlaku,
 } from "./visitrw3";
@@ -44,7 +45,7 @@ function requireAdmin(req: Request, res: Response, next: () => void) {
   next();
 }
 
-export function registerVisitrw3Routes(app: Express, notifyAdmin: (msg: string) => void) {
+export function registerVisitrw3Routes(app: Express) {
   app.get("/api/public/pemilik-kost", async (req, res) => {
     try {
       const rt = parseInt(String(req.query.rt || ""), 10);
@@ -134,9 +135,6 @@ export function registerVisitrw3Routes(app: Express, notifyAdmin: (msg: string) 
   app.post("/api/public/visitrw3/daftar-properti", async (req, res) => {
     try {
       const properti = await createPendaftaranProperti(req.body);
-      notifyAdmin(
-        `[Visit RW3] Pendaftaran properti baru\nNomor: ${properti.nomorPendaftaran}\n${properti.namaKost} — ${properti.namaPemilik}\nRT ${String(properti.rt).padStart(2, "0")}\nStatus: Menunggu verifikasi admin`,
-      );
       res.json({
         nomorPendaftaran: properti.nomorPendaftaran,
         statusProperti: properti.statusProperti,
@@ -181,10 +179,6 @@ export function registerVisitrw3Routes(app: Express, notifyAdmin: (msg: string) 
   app.post("/api/public/visitrw3/pengajuan", async (req, res) => {
     try {
       const pengajuan = await createPengajuanBaru(req.body);
-      const keperluanLabel = pengajuan.keperluanPengajuan === "bisnis" ? "Bisnis" : "Tinggal";
-      notifyAdmin(
-        `[Visit RW3] Pengajuan baru\nNomor: ${pengajuan.nomorVisitrw3}\nRT: ${String(pengajuan.rt).padStart(2, "0")}\nKeperluan: ${keperluanLabel}\nStatus: Menunggu survey`,
-      );
       res.json({ nomorVisitrw3: pengajuan.nomorVisitrw3, status: pengajuan.status });
     } catch (error: unknown) {
       res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal mengirim pengajuan") });
@@ -194,9 +188,6 @@ export function registerVisitrw3Routes(app: Express, notifyAdmin: (msg: string) 
   app.post("/api/public/visitrw3/perpanjang", async (req, res) => {
     try {
       const result = await createPerpanjang(req.body);
-      notifyAdmin(
-        `[Visit RW3] Perpanjang\nNomor lama: ${result.nomorLama}\nNomor antrian: ${result.nomorBaru}\nStatus: Menunggu survey`,
-      );
       res.json({
         nomorVisitrw3: result.nomorBaru,
         nomorLama: result.nomorLama,
@@ -255,6 +246,33 @@ export function registerVisitrw3Routes(app: Express, notifyAdmin: (msg: string) 
       res.json(list);
     } catch (error: unknown) {
       res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat antrian pengajuan") });
+    }
+  });
+
+  app.get("/api/admin/visitrw3/kalender", requireAdmin, async (req, res) => {
+    try {
+      const rtRaw = req.query.rt;
+      let rtFilter: number | undefined;
+      if (rtRaw != null && String(rtRaw).trim() !== "" && String(rtRaw) !== "semua") {
+        const rt = parseInt(String(rtRaw), 10);
+        if (!Number.isFinite(rt) || !(ACTIVE_RT_NUMBERS as readonly number[]).includes(rt)) {
+          return res.status(400).json({ message: "RT tidak valid" });
+        }
+        rtFilter = rt;
+      }
+      try {
+        const data = await getVisitrw3Kalender(rtFilter);
+        return res.json(data);
+      } catch (inner: unknown) {
+        if (isMissingVisitrw3TableError(inner)) {
+          await ensureVisitrw3Schema().catch(() => undefined);
+          const data = await getVisitrw3Kalender(rtFilter);
+          return res.json(data);
+        }
+        throw inner;
+      }
+    } catch (error: unknown) {
+      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat kalender kontrak") });
     }
   });
 

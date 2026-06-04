@@ -33,7 +33,7 @@ export function PublicKioskLayout({
             loading="eager"
           />
           <p className="text-xs uppercase tracking-[0.28em] text-brand-accent-muted">
-            Kiosk Pelayanan
+            Portal Warga
           </p>
           <h1 className="text-display text-white mt-1">RW 03 Padasuka</h1>
           <p className="text-caption text-white/70 mt-1">Kelurahan Padasuka, Kota Cimahi</p>

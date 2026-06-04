@@ -1,7 +1,9 @@
 /**
  * Peraturan dasar tingkat RW 03 Padasuka — rancangan standar komunitas perkotaan Indonesia.
- * Format isi mengikuti parser RW3LAW (MENIMBANG, PASAL, ayat bernomor).
+ * Format isi: MENIMBANG, PASAL N — Judul, ayat bernomor (sama dengan editor RW3LAW).
  */
+
+import { canonicalizeRw3lawIsi } from "./rw3law-structured";
 
 export type Rw3lawPeraturanSeed = {
   judul: string;
@@ -14,7 +16,7 @@ export type Rw3lawPeraturanSeed = {
   isi: string;
 };
 
-export const RW3LAW_PERATURAN_DASAR: Rw3lawPeraturanSeed[] = [
+const RW3LAW_PERATURAN_DASAR_RAW: Rw3lawPeraturanSeed[] = [
   {
     judul: "Peraturan Ketua RW 03 Padasuka Nomor 1 Tahun 2026 tentang Ketertiban dan Keharmonisan Warga",
     slug: "peraturan-ketertiban-keharmonisan",
@@ -28,7 +30,7 @@ MENIMBANG terciptanya lingkungan yang aman, tertib, dan saling menghormati merup
 
 PASAL 1 — Asas dan Ruang Lingkup
 
-1. Peraturan ini berlaku bagi seluruh warga dan unit hunian di wilayah RW 03 Padasuka, meliputi RT 01 sampai RT 07.
+1. Peraturan ini berlaku bagi seluruh warga dan unit hunian di wilayah RW 03 Padasuka, meliputi RT 01 sampai RT 04.
 2. Setiap warga wajib menjunjung tinggi norma kesopanan, toleransi, dan gotong royong.
 3. Keputusan musyawarah RW dan RT yang telah disepakati wajib dihormati oleh warga yang bersangkutan.
 
@@ -255,3 +257,13 @@ PASAL 3 — Pencabutan dan Revisi
 2. Peraturan yang dicabut tidak berlaku sejak tanggal pencabutan diumumkan melalui saluran resmi RW.`,
   },
 ];
+
+/** Isi dinormalisasi ke format terstruktur (tampilan publik & editor). */
+export const RW3LAW_PERATURAN_DASAR: Rw3lawPeraturanSeed[] = RW3LAW_PERATURAN_DASAR_RAW.map(
+  (p) => ({
+    ...p,
+    isi: canonicalizeRw3lawIsi(p.isi),
+  }),
+);
+
+export const RW3LAW_PERATURAN_DASAR_SLUGS = new Set(RW3LAW_PERATURAN_DASAR.map((p) => p.slug));

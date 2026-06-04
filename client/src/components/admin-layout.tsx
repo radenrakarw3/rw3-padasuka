@@ -2,27 +2,73 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import {
-  LayoutDashboard, Users, ScrollText, Megaphone, Scale,
-  LogOut, Menu, X, Home as HomeIcon, Building2, Wallet
+  Users, Megaphone, Scale,
+  LogOut, Menu, X, Building2, Wallet, FileText, BarChart3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import logoGold from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
 
-const navItems = [
-  { path: "/admin", icon: LayoutDashboard, label: "Dashboard" },
-  { path: "/admin/keuangan", icon: Wallet, label: "Kas RW" },
-  { path: "/admin/kk", icon: HomeIcon, label: "Kartu Keluarga" },
-  { path: "/admin/warga", icon: Users, label: "Data Warga" },
+type NavItem = { path: string; icon: typeof Megaphone; label: string };
+
+const navFormWarga: NavItem[] = [
   { path: "/admin/laporan", icon: Megaphone, label: "Laporan" },
-  { path: "/admin/rw3law", icon: Scale, label: "RW3LAW" },
-  { path: "/admin/surat-rw", icon: ScrollText, label: "Surat RW" },
-  { path: "/admin/visitrw3", icon: Building2, label: "Visit RW3" },
+  { path: "/admin/visitrw3/antrian", icon: Building2, label: "Visit RW3" },
 ];
+
+const navPengelolaan: NavItem[] = [
+  { path: "/admin/kependudukan", icon: BarChart3, label: "Kependudukan" },
+  { path: "/admin/keuangan", icon: Wallet, label: "Kas RW" },
+  { path: "/admin/rw3law", icon: Scale, label: "RW3LAW" },
+  { path: "/admin/surat-rw", icon: FileText, label: "Surat RW" },
+];
+
+function isNavActive(location: string, path: string): boolean {
+  if (path === "/admin/laporan") return location === path || location.startsWith("/admin/laporan/");
+  if (path === "/admin/visitrw3/antrian") {
+    return location === path || location.startsWith("/admin/visitrw3/");
+  }
+  if (path === "/admin/kependudukan") {
+    return location === path || location.startsWith("/admin/kependudukan");
+  }
+  return location === path || location.startsWith(`${path}/`);
+}
+
+function NavButton({
+  item,
+  location,
+  onNavigate,
+}: {
+  item: NavItem;
+  location: string;
+  onNavigate: (path: string) => void;
+}) {
+  const active = isNavActive(location, item.path);
+  return (
+    <button
+      type="button"
+      onClick={() => onNavigate(item.path)}
+      className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-md text-sm transition-colors ${
+        active
+          ? "bg-[hsl(163,55%,22%)] text-white font-medium"
+          : "text-foreground hover:bg-muted"
+      }`}
+      data-testid={`nav-admin-${item.label.toLowerCase().replace(/\s/g, "-")}`}
+    >
+      <item.icon className="w-4 h-4 flex-shrink-0" />
+      {item.label}
+    </button>
+  );
+}
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { logout } = useAuth();
   const [location, setLocation] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const go = (path: string) => {
+    setLocation(path);
+    setSidebarOpen(false);
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -45,7 +91,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </div>
           </div>
           <button
-            onClick={async () => { await logout(); setLocation("/"); }}
+            type="button"
+            onClick={async () => {
+              await logout();
+              setLocation("/");
+            }}
             className="flex items-center gap-1 text-xs bg-white/10 px-3 py-2 rounded-md"
             data-testid="button-admin-logout"
           >
@@ -64,38 +114,31 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         )}
 
         <aside
-          className={`fixed lg:static top-[52px] left-0 bottom-0 z-40 w-64 bg-card border-r transform transition-transform lg:transform-none ${
+          className={`fixed lg:static top-[52px] left-0 bottom-0 z-40 w-64 bg-card border-r transform transition-transform lg:transform-none overflow-y-auto ${
             sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
           }`}
         >
-          <nav className="p-3 space-y-1">
-            {navItems.map((item) => {
-              const active =
-                item.path === "/admin/visitrw3"
-                  ? location === item.path || location.startsWith("/admin/visitrw3/")
-                  : location === item.path;
-              return (
-                <button
-                  key={item.path}
-                  onClick={() => { setLocation(item.path); setSidebarOpen(false); }}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-md text-sm transition-colors ${
-                    active
-                      ? "bg-[hsl(163,55%,22%)] text-white font-medium"
-                      : "text-foreground hover:bg-muted"
-                  }`}
-                  data-testid={`nav-admin-${item.label.toLowerCase().replace(/\s/g, '-')}`}
-                >
-                  <item.icon className="w-4 h-4 flex-shrink-0" />
-                  {item.label}
-                </button>
-              );
-            })}
+          <nav className="p-3 space-y-4">
+            <div className="space-y-1">
+              <p className="px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Form warga
+              </p>
+              {navFormWarga.map((item) => (
+                <NavButton key={item.path} item={item} location={location} onNavigate={go} />
+              ))}
+            </div>
+            <div className="space-y-1 border-t border-border/60 pt-3">
+              <p className="px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Pengelolaan data
+              </p>
+              {navPengelolaan.map((item) => (
+                <NavButton key={item.path} item={item} location={location} onNavigate={go} />
+              ))}
+            </div>
           </nav>
         </aside>
 
-        <main className="flex-1 p-4 lg:p-6 min-w-0">
-          {children}
-        </main>
+        <main className="flex-1 p-4 lg:p-6 min-w-0">{children}</main>
       </div>
     </div>
   );

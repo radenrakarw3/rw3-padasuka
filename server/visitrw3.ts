@@ -556,6 +556,171 @@ export async function listPengajuanAdmin(status?: string) {
   return db.select().from(visitrw3Pengajuan).orderBy(desc(visitrw3Pengajuan.createdAt));
 }
 
+export type Visitrw3KalenderPenghuni = {
+  id: number;
+  namaLengkap: string;
+  nik: string;
+  nomorWhatsapp: string;
+  tanggalMulaiKontrak: string;
+  tanggalHabisKontrak: string;
+  status: string;
+  nomorVisitrw3: string | null;
+  pengajuanId: number | null;
+  namaKost: string;
+  namaPemilik: string;
+  rtKost: number;
+};
+
+export type Visitrw3KalenderAntrianPerpanjang = {
+  id: number;
+  nomorVisitrw3: string;
+  tipe: string;
+  status: string;
+  rt: number;
+  tanggalBerlakuSampai: string;
+  tanggalBayar: string;
+  wargaSinggahId: number | null;
+  namaPenghuni: string | null;
+  namaKost: string | null;
+  createdAt: string | null;
+};
+
+export type Visitrw3KalenderResponse = {
+  penghuni: Visitrw3KalenderPenghuni[];
+  antrianPerpanjang: Visitrw3KalenderAntrianPerpanjang[];
+  ringkasan: {
+    sudahHabis: number;
+    hariIni: number;
+    dalam7Hari: number;
+    dalam30Hari: number;
+    antrianPerpanjang: number;
+  };
+};
+
+function kontrakDaysRemaining(tanggalHabis: string): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const habis = new Date(`${tanggalHabis}T00:00:00`);
+  return Math.ceil((habis.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+export function emptyVisitrw3Kalender(): Visitrw3KalenderResponse {
+  return {
+    penghuni: [],
+    antrianPerpanjang: [],
+    ringkasan: {
+      sudahHabis: 0,
+      hariIni: 0,
+      dalam7Hari: 0,
+      dalam30Hari: 0,
+      antrianPerpanjang: 0,
+    },
+  };
+}
+
+/** Penghuni yang ditampilkan di kalender (sama seperti halaman Penghuni: bukan nonaktif). */
+function isPenghuniKalenderAktif(status: string): boolean {
+  const s = (status || "").trim().toLowerCase();
+  return s !== "nonaktif" && s !== "non_aktif" && s !== "berhenti" && s !== "hapus";
+}
+
+/** Data kalender kontrak: penghuni (warga_singgah) + antrian perpanjang (visitrw3_pengajuan). */
+export async function getVisitrw3Kalender(rtFilter?: number): Promise<Visitrw3KalenderResponse> {
+  const allWs = await storage.getAllWargaSinggah();
+  let penghuniRows = allWs.filter((w) => isPenghuniKalenderAktif(w.status));
+  if (rtFilter != null) {
+    penghuniRows = penghuniRows.filter((w) => w.rtKost === rtFilter);
+  }
+
+  const penghuni: Visitrw3KalenderPenghuni[] = penghuniRows.map((w) => ({
+    id: w.id,
+    namaLengkap: w.namaLengkap,
+    nik: w.nik,
+    nomorWhatsapp: w.nomorWhatsapp,
+    tanggalMulaiKontrak: w.tanggalMulaiKontrak,
+    tanggalHabisKontrak: w.tanggalHabisKontrak,
+    status: w.status,
+    nomorVisitrw3: w.nomorVisitrw3 ?? null,
+    pengajuanId: w.pengajuanId ?? null,
+    namaKost: w.namaKost,
+    namaPemilik: w.namaPemilik,
+    rtKost: w.rtKost,
+  }));
+
+  let antrianPerpanjang: Visitrw3KalenderAntrianPerpanjang[] = [];
+  try {
+    const antrianConditions = [
+      eq(visitrw3Pengajuan.tipe, "perpanjang"),
+      eq(visitrw3Pengajuan.status, "menunggu_survey"),
+    ];
+    if (rtFilter != null) {
+      antrianConditions.push(eq(visitrw3Pengajuan.rt, rtFilter));
+    }
+
+    const antrianRows = await db
+      .select({
+        id: visitrw3Pengajuan.id,
+        nomorVisitrw3: visitrw3Pengajuan.nomorVisitrw3,
+        tipe: visitrw3Pengajuan.tipe,
+        status: visitrw3Pengajuan.status,
+        rt: visitrw3Pengajuan.rt,
+        tanggalBerlakuSampai: visitrw3Pengajuan.tanggalBerlakuSampai,
+        tanggalBayar: visitrw3Pengajuan.tanggalBayar,
+        wargaSinggahId: visitrw3Pengajuan.wargaSinggahId,
+        namaPenghuni: wargaSinggah.namaLengkap,
+        namaKost: pemilikKost.namaKost,
+        createdAt: visitrw3Pengajuan.createdAt,
+      })
+      .from(visitrw3Pengajuan)
+      .leftJoin(wargaSinggah, eq(visitrw3Pengajuan.wargaSinggahId, wargaSinggah.id))
+      .leftJoin(pemilikKost, eq(visitrw3Pengajuan.pemilikKostId, pemilikKost.id))
+      .where(and(...antrianConditions))
+      .orderBy(visitrw3Pengajuan.tanggalBerlakuSampai);
+
+    antrianPerpanjang = antrianRows.map((r) => ({
+    id: r.id,
+    nomorVisitrw3: r.nomorVisitrw3,
+    tipe: r.tipe,
+    status: r.status,
+    rt: r.rt,
+    tanggalBerlakuSampai: r.tanggalBerlakuSampai,
+    tanggalBayar: r.tanggalBayar,
+    wargaSinggahId: r.wargaSinggahId,
+    namaPenghuni: r.namaPenghuni,
+    namaKost: r.namaKost,
+      createdAt: r.createdAt ? r.createdAt.toISOString() : null,
+    }));
+  } catch (antrianErr: unknown) {
+    if (!isMissingVisitrw3TableError(antrianErr)) {
+      throw antrianErr;
+    }
+  }
+
+  let sudahHabis = 0;
+  let hariIni = 0;
+  let dalam7Hari = 0;
+  let dalam30Hari = 0;
+  for (const w of penghuni) {
+    const d = kontrakDaysRemaining(w.tanggalHabisKontrak);
+    if (d < 0) sudahHabis++;
+    else if (d === 0) hariIni++;
+    else if (d <= 7) dalam7Hari++;
+    else if (d <= 30) dalam30Hari++;
+  }
+
+  return {
+    penghuni,
+    antrianPerpanjang,
+    ringkasan: {
+      sudahHabis,
+      hariIni,
+      dalam7Hari,
+      dalam30Hari,
+      antrianPerpanjang: antrianPerpanjang.length,
+    },
+  };
+}
+
 export async function getPengajuanDetailAdmin(id: number) {
   const [p] = await db.select().from(visitrw3Pengajuan).where(eq(visitrw3Pengajuan.id, id));
   if (!p) return null;

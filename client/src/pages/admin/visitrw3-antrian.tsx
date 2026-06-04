@@ -71,6 +71,8 @@ export default function AdminVisitrw3Antrian() {
       setSurveyForm(defaultSurveyKontribusiState());
       queryClient.invalidateQueries({ queryKey: ["/api/admin/visitrw3/pengajuan"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/visitrw3/dashboard-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/visitrw3/kalender"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/warga-singgah"] });
       queryClient.invalidateQueries({ queryKey: ["/api/kas-rw"] });
       queryClient.invalidateQueries({ queryKey: ["/api/kas-rw/summary"] });
     },
@@ -88,6 +90,7 @@ export default function AdminVisitrw3Antrian() {
       setDetailId(null);
       queryClient.invalidateQueries({ queryKey: ["/api/admin/visitrw3/pengajuan"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/visitrw3/dashboard-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/visitrw3/kalender"] });
     },
     onError: (e: unknown) =>
       toast({ title: "Gagal", description: getApiErrorMessage(e), variant: "destructive" }),
