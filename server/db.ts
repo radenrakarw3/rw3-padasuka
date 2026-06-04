@@ -16,6 +16,7 @@ const sslConfig = dbUrl.includes("sslmode=")
 export const pool = new pg.Pool({
   connectionString: dbUrl,
   ...(sslConfig !== undefined && { ssl: sslConfig }),
+  max: Math.max(5, parseInt(process.env.PG_POOL_MAX || "20", 10) || 20),
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
 });

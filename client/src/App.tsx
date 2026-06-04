@@ -20,6 +20,9 @@ const PublicLapor = lazy(() => import("@/pages/public/lapor"));
 
 const PublicPelayanan = lazy(() => import("@/pages/public/pelayanan"));
 
+const Rw3lawIndex = lazy(() => import("@/pages/public/rw3law/index"));
+const Rw3lawDokumen = lazy(() => import("@/pages/public/rw3law/dokumen"));
+
 const Visitrw3Hub = lazy(() => import("@/pages/visitrw3/hub"));
 const Visitrw3HubPemilik = lazy(() => import("@/pages/visitrw3/hub-pemilik"));
 const Visitrw3HubPenyewa = lazy(() => import("@/pages/visitrw3/hub-penyewa"));
@@ -36,6 +39,10 @@ const AdminDashboard = lazy(() => import("@/pages/admin/dashboard"));
 const AdminKelolaKK = lazy(() => import("@/pages/admin/kelola-kk"));
 
 const AdminKelolaWarga = lazy(() => import("@/pages/admin/kelola-warga"));
+
+const AdminKelolaLaporan = lazy(() => import("@/pages/admin/kelola-laporan"));
+
+const AdminRw3law = lazy(() => import("@/pages/admin/rw3law"));
 
 const AdminSuratRw = lazy(() => import("@/pages/admin/surat-rw"));
 
@@ -263,6 +270,10 @@ function AdminRoutes() {
 
         <Route path="/admin/warga" component={AdminKelolaWarga} />
 
+        <Route path="/admin/laporan" component={AdminKelolaLaporan} />
+
+        <Route path="/admin/rw3law" component={AdminRw3law} />
+
         <Route path="/admin/surat-rw" component={AdminSuratRw} />
 
         <Route path="/admin/visitrw3/pengaturan" component={AdminVisitrw3Pengaturan} />
@@ -348,6 +359,18 @@ function PublicRoutes() {
       <Route path="/lapor" component={PublicLapor} />
 
       <Route path="/pelayanan" component={PublicPelayanan} />
+
+      <Route path="/rwlaw/:slug" component={Rw3lawDokumen} />
+
+      <Route path="/rwlaw" component={Rw3lawIndex} />
+
+      <Route path="/rw3law/:slug">
+        {(params) => <Redirect to={`/rwlaw/${params.slug}`} />}
+      </Route>
+
+      <Route path="/rw3law">
+        <Redirect to="/rwlaw" />
+      </Route>
 
       <Route path="/visitrw3" component={Visitrw3Hub} />
 

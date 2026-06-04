@@ -11,9 +11,10 @@ import { apiRequest, getApiErrorMessage } from "@/lib/queryClient";
 import { PublicKioskLayout } from "@/components/public-kiosk-layout";
 import { FormStepper } from "@/components/gov/form-stepper";
 import { SuccessPanel } from "@/components/gov/success-panel";
+import { ACTIVE_RT_NUMBERS } from "@shared/rt";
 
 const STEPS = [
-  { id: "kontak", label: "Kontak" },
+  { id: "kontak", label: "Identitas" },
   { id: "detail", label: "Detail" },
 ];
 
@@ -29,6 +30,8 @@ const jenisLaporanOptions = [
 export default function PublicLapor() {
   const { toast } = useToast();
   const [step, setStep] = useState(0);
+  const [namaPelapor, setNamaPelapor] = useState("");
+  const [nomorRt, setNomorRt] = useState("");
   const [nomorWa, setNomorWa] = useState("");
   const [jenisLaporan, setJenisLaporan] = useState("");
   const [judul, setJudul] = useState("");
@@ -39,6 +42,8 @@ export default function PublicLapor() {
   const mutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/public/laporan", {
+        namaPelapor: namaPelapor.trim(),
+        nomorRt: parseInt(nomorRt, 10),
         nomorWa,
         jenisLaporan,
         judul,
@@ -69,6 +74,14 @@ export default function PublicLapor() {
   }
 
   const goNext = () => {
+    if (namaPelapor.trim().length < 2) {
+      toast({ title: "Nama pelapor wajib diisi", variant: "destructive" });
+      return;
+    }
+    if (!nomorRt) {
+      toast({ title: "Pilih RT lokasi masalah", variant: "destructive" });
+      return;
+    }
     const wa = nomorWa.replace(/\D/g, "");
     if (wa.length < 9) {
       setWaError("Nomor WhatsApp minimal 9 digit");
@@ -107,7 +120,32 @@ export default function PublicLapor() {
       >
         {step === 0 && (
           <fieldset className="space-y-4 border-0 p-0 m-0">
-            <legend className="sr-only">Kontak dan kategori</legend>
+            <legend className="sr-only">Identitas pelapor</legend>
+            <div className="space-y-2">
+              <Label htmlFor="nama-pelapor">Nama pelapor</Label>
+              <Input
+                id="nama-pelapor"
+                placeholder="Nama lengkap"
+                value={namaPelapor}
+                onChange={(e) => setNamaPelapor(e.target.value)}
+                data-testid="input-nama-pelapor-laporan"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>RT lokasi masalah</Label>
+              <Select value={nomorRt} onValueChange={setNomorRt}>
+                <SelectTrigger data-testid="select-rt-laporan">
+                  <SelectValue placeholder="Pilih RT" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ACTIVE_RT_NUMBERS.map((n) => (
+                    <SelectItem key={n} value={String(n)}>
+                      RT {String(n).padStart(2, "0")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="nomor-wa">Nomor WhatsApp</Label>
               <Input

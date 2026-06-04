@@ -31,6 +31,47 @@ export function getApiErrorMessage(error: unknown, fallback = "Terjadi kesalahan
   return fallback;
 }
 
+const DEFAULT_FETCH_TIMEOUT_MS = 15_000;
+
+/** Fetch JSON publik dengan timeout — mencegah UI loading tanpa akhir. */
+export async function fetchPublicJson<T>(
+  url: string,
+  signal?: AbortSignal,
+  timeoutMs = DEFAULT_FETCH_TIMEOUT_MS,
+): Promise<T> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const onAbort = () => controller.abort();
+  if (signal) {
+    if (signal.aborted) controller.abort();
+    else signal.addEventListener("abort", onAbort, { once: true });
+  }
+
+  try {
+    const res = await fetch(url, {
+      credentials: "same-origin",
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const err = await readJsonSafely<{ message?: string }>(res).catch(() => null);
+      throw new Error(err?.message || `Gagal memuat (${res.status})`);
+    }
+    const data = await readJsonSafely<T>(res);
+    if (data == null) {
+      throw new Error("Respons server kosong");
+    }
+    return data;
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Server tidak merespons. Periksa koneksi atau coba lagi.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+    if (signal) signal.removeEventListener("abort", onAbort);
+  }
+}
+
 export async function readJsonSafely<T = any>(res: Response): Promise<T> {
   const text = await res.text();
   if (!text) {

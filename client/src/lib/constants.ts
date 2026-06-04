@@ -262,6 +262,23 @@ export const jenisPropertiOptions = [
   { value: "lapak", label: "Lapak" },
 ] as const;
 
+export const rw3lawKategoriOptions = [
+  { value: "ketertiban", label: "Ketertiban" },
+  { value: "lingkungan", label: "Lingkungan" },
+  { value: "keamanan", label: "Keamanan" },
+  { value: "umum", label: "Umum" },
+] as const;
+
+export const rw3lawKategoriLabels: Record<string, string> = Object.fromEntries(
+  rw3lawKategoriOptions.map((o) => [o.value, o.label]),
+);
+
+export const rw3lawStatusLabels: Record<string, string> = {
+  draft: "Draft",
+  disetujui: "Berlaku",
+  dicabut: "Dicabut",
+};
+
 /** Jenjang pendidikan anak pada formulir Visit RW3 pengajuan */
 export const visitrw3JenjangAnakOptions = [
   "Belum sekolah",

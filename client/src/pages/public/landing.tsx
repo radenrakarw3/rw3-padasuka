@@ -2,6 +2,7 @@ import { Megaphone, Headphones } from "lucide-react";
 import { PublicKioskLayout } from "@/components/public-kiosk-layout";
 import { ServiceCard } from "@/components/gov/service-card";
 import { Visitrw3VisaCard } from "@/components/gov/visitrw3-visa-card";
+import { Rw3lawCard } from "@/components/gov/rw3law-card";
 
 export default function PublicLanding() {
   return (
@@ -22,6 +23,7 @@ export default function PublicLanding() {
         iconClassName="bg-accent"
       />
       <Visitrw3VisaCard />
+      <Rw3lawCard />
     </PublicKioskLayout>
   );
 }

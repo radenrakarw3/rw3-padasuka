@@ -338,6 +338,25 @@ export const visitrw3Settings = pgTable("visitrw3_settings", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const rw3lawDokumen = pgTable("rw3law_dokumen", {
+  id: serial("id").primaryKey(),
+  judul: text("judul").notNull(),
+  slug: text("slug").notNull().unique(),
+  isi: text("isi").notNull(),
+  kategori: text("kategori").notNull().default("umum"),
+  status: text("status").notNull().default("draft"),
+  rtAsal: integer("rt_asal"),
+  versi: text("versi"),
+  tanggalBerlaku: text("tanggal_berlaku"),
+  urutan: integer("urutan").notNull().default(0),
+  catatanInternal: text("catatan_internal"),
+  createdBy: text("created_by"),
+  disetujuiOleh: text("disetujui_oleh"),
+  disetujuiAt: timestamp("disetujui_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const visitrw3Penghuni = pgTable("visitrw3_penghuni", {
   id: serial("id").primaryKey(),
   pengajuanId: integer("pengajuan_id").notNull().references(() => visitrw3Pengajuan.id, { onDelete: "cascade" }),
@@ -473,6 +492,33 @@ export const insertKasRwSchema = createInsertSchema(kasRw).omit({ id: true, crea
   keterangan: z.string().min(1, "Keterangan tidak boleh kosong"),
   campaignId: z.number().int().nullable().optional(),
 });
+
+export const RW3LAW_KATEGORI = ["ketertiban", "lingkungan", "keamanan", "umum"] as const;
+export const RW3LAW_STATUS = ["draft", "disetujui", "dicabut"] as const;
+
+export const insertRw3lawDokumenSchema = createInsertSchema(rw3lawDokumen)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+    status: true,
+    disetujuiOleh: true,
+    disetujuiAt: true,
+    slug: true,
+  })
+  .extend({
+    judul: z.string().min(3, "Judul minimal 3 karakter"),
+    isi: z.string().min(20, "Isi peraturan minimal 20 karakter"),
+    kategori: z.enum(RW3LAW_KATEGORI),
+    rtAsal: z.number().int().min(1).max(7).nullable().optional(),
+    versi: z.string().optional().nullable(),
+    tanggalBerlaku: z.string().optional().nullable(),
+    urutan: z.number().int().min(0).optional(),
+    catatanInternal: z.string().optional().nullable(),
+    createdBy: z.string().optional().nullable(),
+  });
+
+export const updateRw3lawDokumenSchema = insertRw3lawDokumenSchema.partial();
 
 export type KartuKeluarga = typeof kartuKeluarga.$inferSelect;
 export type InsertKartuKeluarga = z.infer<typeof insertKkSchema>;
@@ -980,6 +1026,8 @@ export type InsertRiwayatKontrak = z.infer<typeof insertRiwayatKontrakSchema>;
 export type Visitrw3Pengajuan = typeof visitrw3Pengajuan.$inferSelect;
 export type Visitrw3Settings = typeof visitrw3Settings.$inferSelect;
 export type Visitrw3Penghuni = typeof visitrw3Penghuni.$inferSelect;
+export type Rw3lawDokumen = typeof rw3lawDokumen.$inferSelect;
+export type InsertRw3lawDokumen = z.infer<typeof insertRw3lawDokumenSchema>;
 export type InsertVisitrw3Pengajuan = z.infer<typeof insertVisitrw3PengajuanSchema>;
 export type InsertVisitrw3Penghuni = z.infer<typeof insertVisitrw3PenghuniSchema>;
 

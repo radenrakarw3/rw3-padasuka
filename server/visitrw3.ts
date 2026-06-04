@@ -1081,7 +1081,68 @@ export async function ensureVisitrw3Schema() {
     ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS kas_rw_id integer;
   `);
   await seedVisitrw3Settings();
+  await seedVisitrw3DevPropertiIfNeeded();
   } catch (e) {
     throw e;
   }
+}
+
+/** Development: contoh properti aktif agar pengajuan tinggal/bisnis dapat diuji di localhost. */
+export async function seedVisitrw3DevPropertiIfNeeded() {
+  if (process.env.NODE_ENV === "production") return;
+  if (process.env.SEED_VISITRW3_DEMO === "0") return;
+
+  const all = await db.select().from(pemilikKost);
+  const hasUsable = all.some(
+    (k) =>
+      (k.statusProperti ?? "aktif") === "aktif" && (k.izinTinggal || k.izinBisnis),
+  );
+  if (hasUsable) return;
+
+  const demoRows = [
+    {
+      nomorPendaftaran: "PROP-DEV-KOST-RT01",
+      namaKost: "Kost Contoh (Dev) RT01",
+      namaPemilik: "Pemilik Contoh Dev",
+      nomorWaPemilik: "081234567800",
+      namaPenanggungJawab: "PJ Kost Dev",
+      nomorWaPenanggungJawab: "081234567801",
+      rt: 1,
+      alamatLengkap: "Jl. Contoh Dev No. 1, RT 01",
+      jumlahPintu: 8,
+      jenisProperti: "kost",
+      izinTinggal: true,
+      izinBisnis: false,
+      statusProperti: "aktif",
+      setujuTataTertib: true,
+      catatanPemohon: "Data demo pengembangan lokal — boleh dihapus dari admin",
+    },
+    {
+      nomorPendaftaran: "PROP-DEV-KIOSK-RT01",
+      namaKost: "Kiosk Contoh (Dev) RT01",
+      namaPemilik: "Pemilik Kiosk Dev",
+      nomorWaPemilik: "081234567802",
+      namaPenanggungJawab: "PJ Kiosk Dev",
+      nomorWaPenanggungJawab: "081234567803",
+      rt: 1,
+      alamatLengkap: "Jl. Contoh Dev No. 2, RT 01",
+      jumlahPintu: 1,
+      jenisProperti: "kiosk",
+      izinTinggal: false,
+      izinBisnis: true,
+      statusProperti: "aktif",
+      setujuTataTertib: true,
+      catatanPemohon: "Data demo pengembangan lokal — boleh dihapus dari admin",
+    },
+  ] as const;
+
+  for (const row of demoRows) {
+    const [existing] = await db
+      .select({ id: pemilikKost.id })
+      .from(pemilikKost)
+      .where(eq(pemilikKost.nomorPendaftaran, row.nomorPendaftaran))
+      .limit(1);
+    if (!existing) await db.insert(pemilikKost).values({ ...row });
+  }
+  console.log("[Visit RW3] Properti demo dev disiapkan (RT 01)");
 }

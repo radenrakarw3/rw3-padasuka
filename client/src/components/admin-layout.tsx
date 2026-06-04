@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import {
-  LayoutDashboard, Users, ScrollText,
+  LayoutDashboard, Users, ScrollText, Megaphone, Scale,
   LogOut, Menu, X, Home as HomeIcon, Building2, Wallet
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,8 @@ const navItems = [
   { path: "/admin/keuangan", icon: Wallet, label: "Kas RW" },
   { path: "/admin/kk", icon: HomeIcon, label: "Kartu Keluarga" },
   { path: "/admin/warga", icon: Users, label: "Data Warga" },
+  { path: "/admin/laporan", icon: Megaphone, label: "Laporan" },
+  { path: "/admin/rw3law", icon: Scale, label: "RW3LAW" },
   { path: "/admin/surat-rw", icon: ScrollText, label: "Surat RW" },
   { path: "/admin/visitrw3", icon: Building2, label: "Visit RW3" },
 ];

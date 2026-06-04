@@ -16,6 +16,8 @@ import { insertKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWarg
 import { bulkUpdateTripayProducts, createTripayPurchase, ensureTripaySchema, getTripayOverview, getTripayPublicConfig, handleTripayCallback, listTripayCatalogCategoriesForWarga, listTripayCatalogOperatorsForWarga, listTripayCatalogProductsForWarga, listTripayCategories, listTripayOperators, listTripayProducts, listTripayTransactions, listTripayTransactionsByWargaId, reconcilePendingTripayTransactions, reconcileTripayTransaction, syncTripayProducts, updateTripayCategorySetting, updateTripayOperatorSetting, updateTripayProductSetting } from "./tripay";
 import { sendWhatsApp } from "./starsender";
 import { z } from "zod";
+import { ACTIVE_RT_NUMBERS } from "@shared/rt";
+import { formatLaporanKioskIsi, formatRtLabel } from "@shared/laporan-pelapor";
 
 function resolveAppVersion() {
   const productionIndexPath = path.resolve(process.cwd(), "dist", "public", "index.html");
@@ -198,7 +200,9 @@ const jenisLaporanLabels: Record<string, string> = {
   keamanan: "Keamanan",
   kebersihan: "Kebersihan",
   infrastruktur: "Infrastruktur",
+  ketertiban: "Ketertiban",
   sosial: "Sosial",
+  umum: "Umum",
   lainnya: "Lainnya",
 };
 
@@ -354,6 +358,13 @@ export async function registerRoutes(
   await ensureVisitrw3Schema().catch((error) => {
     console.error("Visit RW3 schema init error:", error);
   });
+  const { initRw3law } = await import("./rw3law-routes");
+  await initRw3law().catch((error) => {
+    console.error(
+      "[RW3LAW] Startup init gagal — API akan mencoba membuat tabel saat request pertama:",
+      error,
+    );
+  });
 
   const isProduction = process.env.NODE_ENV === "production";
   if (isProduction) {
@@ -379,7 +390,10 @@ export async function registerRoutes(
     })
   );
 
-const pdfTempPublicDir = path.join(uploadsDir, "pdf-temp");
+  const { registerRw3lawRoutes } = await import("./rw3law-routes");
+  registerRw3lawRoutes(app);
+
+  const pdfTempPublicDir = path.join(uploadsDir, "pdf-temp");
   fs.mkdirSync(pdfTempPublicDir, { recursive: true });
   const pdfTempTokens = new Map<string, { filePath: string; expires: number }>();
   app.get("/uploads/pdf-temp/:token", (req, res) => {
@@ -1187,6 +1201,10 @@ Salam hangat dari pengurus RW 03 Padasuka`;
   });
 
   const publicLaporanSchema = z.object({
+    namaPelapor: z.string().min(2, "Nama pelapor wajib diisi"),
+    nomorRt: z.coerce.number().int().refine((n) => (ACTIVE_RT_NUMBERS as readonly number[]).includes(n), {
+      message: "RT tidak valid",
+    }),
     nomorWa: z.string().min(9, "Nomor WhatsApp tidak valid"),
     jenisLaporan: z.string().min(1),
     judul: z.string().min(3),
@@ -1230,12 +1248,17 @@ Salam hangat dari pengurus RW 03 Padasuka`;
       const data = await storage.createLaporan({
         jenisLaporan: parsed.jenisLaporan,
         judul: parsed.judul,
-        isi: `[Kontak WA: ${nomorWa}]\n\n${parsed.isi}`,
+        isi: formatLaporanKioskIsi({
+          namaPelapor: parsed.namaPelapor,
+          nomorRt: parsed.nomorRt,
+          nomorWa,
+          isi: parsed.isi,
+        }),
       });
 
       const jenisLabel = jenisLaporanLabels[parsed.jenisLaporan] || parsed.jenisLaporan;
       notifyAdmin(
-        `[RW 03 Padasuka - Admin]\n\nLaporan baru dari kiosk publik\n\nWA: ${nomorWa}\nJudul: ${parsed.judul}\nKategori: ${jenisLabel}`,
+        `[RW 03 Padasuka - Admin]\n\nLaporan baru dari kiosk publik\n\nNama: ${parsed.namaPelapor}\n${formatRtLabel(parsed.nomorRt)}\nWA: ${nomorWa}\nJudul: ${parsed.judul}\nKategori: ${jenisLabel}`,
       );
 
       return res.json(data);

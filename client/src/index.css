@@ -43,7 +43,7 @@
   --chart-4: 220 55% 30%;
   --chart-5: 163 35% 40%;
   --font-sans: 'Plus Jakarta Sans', 'Open Sans', sans-serif;
-  --font-serif: Georgia, serif;
+  --font-serif: 'Libre Baskerville', Georgia, 'Times New Roman', serif;
   --font-mono: Menlo, monospace;
   --radius: .625rem;
   --shadow-2xs: 0px 1px 2px 0px hsl(40 15% 75% / 0.06);
@@ -291,5 +291,31 @@
   .border.active-elevate-2:not(.no-active-interaction-elevate)::after,
   .border.hover-elevate:not(.no-hover-interaction-elevate)::after {
     inset: -1px;
+  }
+}
+
+/* RW3LAW — court / municipal code reading experience */
+.rw3law-court {
+  font-family: var(--font-serif);
+}
+
+.rw3law-court .font-serif {
+  font-family: var(--font-serif);
+}
+
+@media print {
+  .rw3law-court header,
+  .rw3law-court footer,
+  .rw3law-court nav {
+    display: none !important;
+  }
+
+  .rw3law-court main {
+    background: white !important;
+  }
+
+  .rw3law-court article {
+    box-shadow: none !important;
+    border: none !important;
   }
 }
