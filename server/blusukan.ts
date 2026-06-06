@@ -3,6 +3,7 @@ import { storage } from "./storage";
 import { ACTIVE_RT_NUMBERS, isActiveRt, assertKkInPemukimanScope } from "@shared/rt";
 import {
   computeBlusukanKkCompleteness,
+  computeBlusukanWargaCompleteness,
   countBelumDiverifikasi,
 } from "@shared/profile-completeness";
 import type { BlusukanKunjungan, KartuKeluarga, Warga } from "@shared/schema";
@@ -62,10 +63,15 @@ export async function getBlusukanDashboard(rtFilter?: number) {
   let diverifikasi = 0;
   let kunjunganSelesai = 0;
   let perluKunjungan = 0;
+  let sumKelengkapan = 0;
+  let wargaBelumLengkap = 0;
 
-  const byRt: Record<number, { kk: number; warga: number; perluKunjungan: number }> = {};
+  const byRt: Record<
+    number,
+    { kk: number; warga: number; perluKunjungan: number; kkLengkap: number; sumKelengkapan: number }
+  > = {};
   for (const rt of ACTIVE_RT_NUMBERS) {
-    byRt[rt] = { kk: 0, warga: 0, perluKunjungan: 0 };
+    byRt[rt] = { kk: 0, warga: 0, perluKunjungan: 0, kkLengkap: 0, sumKelengkapan: 0 };
   }
 
   for (const kk of kkList) {
@@ -73,8 +79,16 @@ export async function getBlusukanDashboard(rtFilter?: number) {
 
     const anggota = allWarga.filter((w) => w.kkId === kk.id);
     const comp = computeBlusukanKkCompleteness(anggota, kk);
+    sumKelengkapan += comp.completionPercent;
     if (comp.isComplete) lengkap++;
-    if (anggota.every((w) => w.statusVerifikasiData === "Sudah Diverifikasi")) diverifikasi++;
+    if (anggota.length > 0 && anggota.every((w) => w.statusVerifikasiData === "Sudah Diverifikasi")) {
+      diverifikasi++;
+    }
+
+    for (const w of anggota) {
+      const wComp = computeBlusukanWargaCompleteness(w);
+      if (!wComp.isComplete) wargaBelumLengkap++;
+    }
 
     const latest = latestMap.get(kk.id);
     if (latest?.hasil === "selesai") kunjunganSelesai++;
@@ -83,6 +97,8 @@ export async function getBlusukanDashboard(rtFilter?: number) {
     if (byRt[kk.rt]) {
       byRt[kk.rt].kk++;
       byRt[kk.rt].warga += anggota.length;
+      byRt[kk.rt].sumKelengkapan += comp.completionPercent;
+      if (comp.isComplete) byRt[kk.rt].kkLengkap++;
       if (needsVisit(latest)) byRt[kk.rt].perluKunjungan++;
     }
   }
@@ -93,13 +109,21 @@ export async function getBlusukanDashboard(rtFilter?: number) {
   return {
     totalKk,
     totalWarga,
+    kkLengkap: lengkap,
+    kkBelumLengkap: totalKk - lengkap,
+    avgKelengkapan: totalKk ? Math.round(sumKelengkapan / totalKk) : 0,
+    wargaBelumLengkap,
     percentLengkap: totalKk ? Math.round((lengkap / totalKk) * 100) : 0,
     percentDiverifikasi: totalKk ? Math.round((diverifikasi / totalKk) * 100) : 0,
     percentKunjunganSelesai: totalKk ? Math.round((kunjunganSelesai / totalKk) * 100) : 0,
     perluKunjungan,
     perRt: ACTIVE_RT_NUMBERS.map((rt) => ({
       rt,
-      ...byRt[rt],
+      kk: byRt[rt].kk,
+      warga: byRt[rt].warga,
+      perluKunjungan: byRt[rt].perluKunjungan,
+      kkLengkap: byRt[rt].kkLengkap,
+      avgKelengkapan: byRt[rt].kk ? Math.round(byRt[rt].sumKelengkapan / byRt[rt].kk) : 0,
     })),
   };
 }
