@@ -1,9 +1,4 @@
 export const pekerjaanOptions = [
-  "Belum/Tidak Bekerja",
-  "Mengurus Rumah Tangga",
-  "Ibu Rumah Tangga",
-  "Pelajar/Mahasiswa",
-  "Pensiunan",
   "Pegawai Negeri Sipil (PNS)",
   "Tentara Nasional Indonesia (TNI)",
   "Kepolisian RI (POLRI)",
@@ -79,6 +74,16 @@ export const pekerjaanOptions = [
   "Jasa",
   "Lainnya",
 ];
+
+/** Dropdown legacy (Visit RW3) — status + jabatan dalam satu list. */
+export const pekerjaanLegacyOptions = [
+  "Belum/Tidak Bekerja",
+  "Mengurus Rumah Tangga",
+  "Ibu Rumah Tangga",
+  "Pelajar/Mahasiswa",
+  "Pensiunan",
+  ...pekerjaanOptions,
+] as const;
 
 /** Tingkat pendidikan — selaras ISCED 2011 / klasifikasi BPS. */
 export const pendidikanOptions = [
@@ -379,8 +384,6 @@ export const hubunganKontakDaruratOptions = [
 
 /** Status angkatan kerja — kerangka ILO (disederhanakan). */
 export const statusPekerjaanOptions = [
-  "Belum Bekerja",
-  "Mencari Kerja",
   "Bekerja",
   "Wiraswasta",
   "Pelaku Usaha",
@@ -388,6 +391,8 @@ export const statusPekerjaanOptions = [
   "Ibu Rumah Tangga",
   "Pelajar/Mahasiswa",
   "Pensiun",
+  "Mencari Kerja",
+  "Belum Bekerja",
 ];
 
 export const penghasilanPribadiOptions = [
@@ -475,4 +480,14 @@ export const statusProgramOptions = [
   "berjalan",
   "selesai",
   "dibatalkan",
+];
+
+/** Label internal KK — hanya petugas/ketua RW (Blusukan). */
+export const kkLabelRwSuggestions = [
+  "Prioritas bansos",
+  "Perlu kunjungan ulang",
+  "Keluarga rentan",
+  "Usaha informal",
+  "Butuh bantuan kesehatan",
+  "Data belum lengkap",
 ];

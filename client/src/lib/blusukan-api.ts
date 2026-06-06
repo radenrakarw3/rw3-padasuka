@@ -34,6 +34,8 @@ export type BlusukanKeluargaPage<T = unknown> = {
   page: number;
   limit: number;
   totalPages: number;
+  filter?: "perlu" | "semua" | "selesai";
+  counts?: { perlu: number; selesai: number; semua: number };
 };
 
 const KELUARGA_DEFAULT_LIMIT = 15;
@@ -84,12 +86,14 @@ export const blusukanApi = {
     q?: string;
     page?: number;
     limit?: number;
+    filter?: "perlu" | "semua" | "selesai";
   }): Promise<BlusukanKeluargaPage<T>> => {
     const page = params?.page ?? 1;
     const limit = params?.limit ?? KELUARGA_DEFAULT_LIMIT;
     const sp = new URLSearchParams();
     if (params?.rt != null) sp.set("rt", String(params.rt));
     if (params?.q) sp.set("q", params.q);
+    if (params?.filter) sp.set("filter", params.filter);
     sp.set("page", String(page));
     sp.set("limit", String(limit));
     const qs = `?${sp}`;

@@ -300,6 +300,6 @@ export function wargaFormSectionFieldKeys(): Record<string, string[]> {
 
 
 export const PENGANGGURAN_DEFINISI =
-  "Warga usia ≥18 dengan status ILO «Mencari Kerja» atau «Belum Bekerja»; pelajar/mahasiswa & pensiun dikecualikan. Jika status kosong, dipetakan dari teks pekerjaan (legacy).";
+  "Warga usia ≥18 dengan status «Mencari Kerja» atau «Belum Bekerja». Ibu/mengurus rumah tangga, pelajar/mahasiswa, dan pensiun bukan pengangguran. Data lama tanpa status dipetakan dari teks pekerjaan.";
 
 

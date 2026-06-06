@@ -7,20 +7,27 @@ type PlatNomorInputProps = {
   onChange: (parts: PlatParts) => void;
   idPrefix?: string;
   required?: boolean;
+  /** Input lebih besar untuk form mobile (Blusukan). */
+  large?: boolean;
 };
 
-export function PlatNomorInput({ value, onChange, idPrefix = "plat", required }: PlatNomorInputProps) {
+export function PlatNomorInput({ value, onChange, idPrefix = "plat", required, large }: PlatNomorInputProps) {
   const patch = (p: Partial<PlatParts>) => onChange({ ...value, ...p });
+  const inputClass = large
+    ? "h-12 text-base rounded-lg"
+    : "";
+  const daerahClass = large ? "w-16" : "w-14";
+  const belakangClass = large ? "w-24" : "w-20";
 
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs">
+      <Label className={large ? "text-sm" : "text-xs"}>
         Plat nomor{required ? " *" : ""}
       </Label>
       <div className="flex items-center gap-2">
         <Input
           id={`${idPrefix}-daerah`}
-          className="w-14 text-center uppercase font-semibold shrink-0"
+          className={`${daerahClass} text-center uppercase font-semibold shrink-0 ${inputClass}`}
           placeholder="B"
           maxLength={3}
           value={value.daerah}
@@ -29,7 +36,7 @@ export function PlatNomorInput({ value, onChange, idPrefix = "plat", required }:
         />
         <Input
           id={`${idPrefix}-angka`}
-          className="flex-1 min-w-0 text-center font-mono tracking-wider"
+          className={`flex-1 min-w-0 text-center font-mono tracking-wider ${inputClass}`}
           placeholder="1234"
           maxLength={4}
           inputMode="numeric"
@@ -39,7 +46,7 @@ export function PlatNomorInput({ value, onChange, idPrefix = "plat", required }:
         />
         <Input
           id={`${idPrefix}-belakang`}
-          className="w-20 text-center uppercase font-semibold shrink-0"
+          className={`${belakangClass} text-center uppercase font-semibold shrink-0 ${inputClass}`}
           placeholder="DZ"
           maxLength={3}
           value={value.belakang}

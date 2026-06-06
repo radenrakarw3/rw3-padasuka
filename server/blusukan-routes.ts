@@ -21,6 +21,7 @@ import {
   assertKkInBlusukanScope,
   BLUSUKAN_KELUARGA_DEFAULT_LIMIT,
   BLUSUKAN_KELUARGA_MAX_LIMIT,
+  type BlusukanKeluargaFilter,
 } from "./blusukan";
 import { saveSession } from "./session-save";
 
@@ -82,6 +83,12 @@ function parseLimitQuery(raw: unknown): number {
   const limit = parseInt(String(raw ?? BLUSUKAN_KELUARGA_DEFAULT_LIMIT), 10);
   if (!Number.isFinite(limit) || limit < 1) return BLUSUKAN_KELUARGA_DEFAULT_LIMIT;
   return Math.min(limit, BLUSUKAN_KELUARGA_MAX_LIMIT);
+}
+
+function parseKeluargaFilter(raw: unknown): BlusukanKeluargaFilter {
+  const v = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  if (v === "semua" || v === "selesai") return v;
+  return "perlu";
 }
 
 function applyWargaVerifikasiAutoDate(before: { statusVerifikasiData: string | null }, body: Record<string, unknown>) {
@@ -171,7 +178,8 @@ export async function registerBlusukanRoutes(app: Express) {
       const q = typeof req.query.q === "string" ? req.query.q : undefined;
       const page = parsePageQuery(req.query.page);
       const limit = parseLimitQuery(req.query.limit);
-      const result = await listBlusukanKeluarga(rtFilter, q, page, limit);
+      const filter = parseKeluargaFilter(req.query.filter);
+      const result = await listBlusukanKeluarga(rtFilter, q, page, limit, filter);
       res.json(result);
     } catch {
       res.status(500).json({ message: "Gagal memuat daftar keluarga" });

@@ -192,6 +192,10 @@ function AdminLoginForm() {
 
               onChange={(e) => setUsername(e.target.value)}
 
+              placeholder="Contoh: raden raka"
+
+              autoComplete="username"
+
               className="w-full h-11 px-3 rounded-lg border bg-background text-sm outline-none focus:ring-2 focus:ring-[hsl(163,55%,22%)]"
 
             />
@@ -381,8 +385,8 @@ function BlusukanrwRoutes() {
         <Route path="/blusukanrw/kunjungan" component={BlusukanrwKunjungan} />
         <Route path="/blusukanrw/cari" component={BlusukanrwCari} />
         <Route path="/blusukanrw/kk/:id" component={BlusukanrwKkDetail} />
+        <Route path="/blusukanrw/">{() => <Redirect to="/blusukanrw/dashboard" />}</Route>
         <Route path="/blusukanrw">{() => <Redirect to="/blusukanrw/dashboard" />}</Route>
-        <Route>{() => <Redirect to="/blusukanrw/dashboard" />}</Route>
       </Switch>
     </BlusukanrwLayout>
   );

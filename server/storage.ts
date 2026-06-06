@@ -11,7 +11,7 @@ import {
   pemilikKost, wargaSinggah, riwayatKontrak, visitrw3Pengajuan, blusukanKunjungan,
   usaha, karyawanUsaha, izinTetangga, surveyUsaha, riwayatStiker, monthlySnapshot,
   programRw, pesertaProgram,
-  mitra, rwcoinWallet, rwcoinTransaksi, mitraVoucher, mitraDiskon, rwcoinWithdraw, rwcoinOtp, rwcoinPendingTransaksi, kasRwcoin, rwcoinTopupRequest, wargaSavedLogin, curhatWarga,
+  mitra, rwcoinWallet, rwcoinTransaksi, mitraVoucher, mitraDiskon, rwcoinWithdraw, rwcoinOtp, rwcoinPendingTransaksi, kasRwcoin, rwcoinTopupRequest, wargaSavedLogin, curhatWarga, tripayTransaction,
   iuranKk, iuranSetting, rwcoinSettings,
   type KartuKeluarga, type InsertKartuKeluarga,
   type Warga, type InsertWarga,
@@ -471,17 +471,56 @@ export class DatabaseStorage implements IStorage {
 
   async deleteKk(id: number): Promise<void> {
     await db.transaction(async (tx) => {
-      const wargaList = await tx.select({ id: warga.id }).from(warga).where(eq(warga.kkId, id));
-      for (const w of wargaList) {
-        await tx.delete(laporan).where(eq(laporan.wargaId, w.id));
-        await tx.delete(suratWarga).where(eq(suratWarga.wargaId, w.id));
-        await tx.delete(profileEditRequest).where(eq(profileEditRequest.wargaId, w.id));
+      // Legacy iuran KK — wajib dihapus sebelum kartu_keluarga (FK iuran_kk.kk_id).
+      const iuranRows = await tx
+        .select({ id: iuranKk.id, kasRwId: iuranKk.kasRwId })
+        .from(iuranKk)
+        .where(eq(iuranKk.kkId, id));
+      for (const row of iuranRows) {
+        if (row.kasRwId) {
+          await tx.delete(kasRw).where(eq(kasRw.id, row.kasRwId));
+        }
       }
+      await tx.delete(iuranKk).where(eq(iuranKk.kkId, id));
+
+      const wargaList = await tx.select({ id: warga.id }).from(warga).where(eq(warga.kkId, id));
+      const wargaIds = wargaList.map((w) => w.id);
+      await this.deleteWargaRelatedInTx(tx, wargaIds);
+      await tx.delete(profileEditRequest).where(eq(profileEditRequest.kkId, id));
+      await tx.delete(laporan).where(eq(laporan.kkId, id));
+      await tx.delete(blusukanKunjungan).where(eq(blusukanKunjungan.kkId, id));
+      await tx.delete(pesertaProgram).where(eq(pesertaProgram.kkId, id));
       await tx.delete(warga).where(eq(warga.kkId, id));
       await tx.delete(donasi).where(eq(donasi.kkId, id));
       await tx.delete(pengajuanBansos).where(eq(pengajuanBansos.kkId, id));
       await tx.delete(kartuKeluarga).where(eq(kartuKeluarga.id, id));
     });
+  }
+
+  /** Hapus data turunan warga sebelum baris warga dihapus (FK). */
+  private async deleteWargaRelatedInTx(
+    tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+    wargaIds: number[],
+  ): Promise<void> {
+    if (wargaIds.length === 0) return;
+    await tx.delete(rwcoinPendingTransaksi).where(inArray(rwcoinPendingTransaksi.wargaId, wargaIds));
+    await tx.delete(rwcoinOtp).where(inArray(rwcoinOtp.wargaId, wargaIds));
+    await tx.delete(tripayTransaction).where(inArray(tripayTransaction.wargaId, wargaIds));
+    await tx
+      .delete(rwcoinTransaksi)
+      .where(
+        or(
+          inArray(rwcoinTransaksi.wargaId, wargaIds),
+          inArray(rwcoinTransaksi.tujuanWargaId, wargaIds),
+        ),
+      );
+    await tx.delete(rwcoinWallet).where(inArray(rwcoinWallet.wargaId, wargaIds));
+    await tx.delete(rwcoinTopupRequest).where(inArray(rwcoinTopupRequest.wargaId, wargaIds));
+    await tx.delete(curhatWarga).where(inArray(curhatWarga.wargaId, wargaIds));
+    await tx.delete(wargaSavedLogin).where(inArray(wargaSavedLogin.wargaId, wargaIds));
+    await tx.delete(laporan).where(inArray(laporan.wargaId, wargaIds));
+    await tx.delete(suratWarga).where(inArray(suratWarga.wargaId, wargaIds));
+    await tx.delete(profileEditRequest).where(inArray(profileEditRequest.wargaId, wargaIds));
   }
 
   async getWargaByKkId(kkId: number): Promise<Warga[]> {
@@ -559,22 +598,36 @@ export class DatabaseStorage implements IStorage {
   async createWarga(data: InsertWarga): Promise<Warga> {
     const payload = normalizeWargaPayload(data);
     const [result] = await db.insert(warga).values(payload).returning();
+    await this.syncKkJumlahPenghuni(result.kkId);
     return result;
   }
 
   async updateWarga(id: number, data: Partial<InsertWarga>): Promise<Warga | undefined> {
+    const [before] = await db.select({ kkId: warga.kkId }).from(warga).where(eq(warga.id, id));
     const payload = normalizeWargaPayload(data);
     const [result] = await db.update(warga).set(payload).where(eq(warga.id, id)).returning();
+    if (result) {
+      await this.syncKkJumlahPenghuni(result.kkId);
+      if (before && data.kkId !== undefined && before.kkId !== result.kkId) {
+        await this.syncKkJumlahPenghuni(before.kkId);
+      }
+    }
     return result;
   }
 
   async deleteWarga(id: number): Promise<void> {
+    const [before] = await db.select({ kkId: warga.kkId }).from(warga).where(eq(warga.id, id));
     await db.transaction(async (tx) => {
-      await tx.delete(laporan).where(eq(laporan.wargaId, id));
-      await tx.delete(suratWarga).where(eq(suratWarga.wargaId, id));
-      await tx.delete(profileEditRequest).where(eq(profileEditRequest.wargaId, id));
+      await this.deleteWargaRelatedInTx(tx, [id]);
       await tx.delete(warga).where(eq(warga.id, id));
     });
+    if (before) await this.syncKkJumlahPenghuni(before.kkId);
+  }
+
+  private async syncKkJumlahPenghuni(kkId: number): Promise<void> {
+    const [row] = await db.select({ count: count() }).from(warga).where(eq(warga.kkId, kkId));
+    const total = row?.count ?? 0;
+    await db.update(kartuKeluarga).set({ jumlahPenghuni: Math.max(total, 0) }).where(eq(kartuKeluarga.id, kkId));
   }
 
   async getAllRt(): Promise<RtData[]> {
@@ -855,7 +908,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAdminByUsername(username: string): Promise<AdminUser | undefined> {
-    const [result] = await db.select().from(adminUser).where(eq(adminUser.username, username));
+    const normalized = username.trim().toLowerCase().replace(/\s+/g, "");
+    const [result] = await db
+      .select()
+      .from(adminUser)
+      .where(sql`lower(replace(${adminUser.username}, ' ', '')) = ${normalized}`);
     return result;
   }
 
@@ -1320,8 +1377,6 @@ export class DatabaseStorage implements IStorage {
       };
     });
 
-    const PENGANGGURAN_KEYWORDS = ["tidak bekerja", "belum bekerja", "pengangguran", "belum/tidak bekerja", "tidak diketahui", ""];
-    const PELAJAR_KEYWORDS = ["pelajar", "mahasiswa", "pelajar/mahasiswa"];
     const kkRtMap = new Map(allKk.map(k => [k.id, k.rt]));
 
     function calcAge(tanggalLahir: string | null): number | null {
@@ -1334,16 +1389,7 @@ export class DatabaseStorage implements IStorage {
       return age;
     }
 
-    const pengangguranWarga = allWarga.filter(w => {
-      const job = (w.pekerjaan || "").toLowerCase().trim();
-      const isPelajar = PELAJAR_KEYWORDS.some(k => job.includes(k));
-      const isUnemployed = !job || PENGANGGURAN_KEYWORDS.some(k => job === k);
-      if (!isUnemployed) return false;
-      const age = calcAge(w.tanggalLahir);
-      if (age !== null && age < 18) return false;
-      if (isPelajar) return false;
-      return true;
-    });
+    const pengangguranWarga = allWarga.filter(isPengangguran);
     const pengangguranPerUsia: Record<string, number> = {};
     const pengangguranDaftar: { nama: string; usia: number | null; rt: number | null }[] = [];
     for (const w of pengangguranWarga) {

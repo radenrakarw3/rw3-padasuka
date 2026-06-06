@@ -4,7 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { readJsonSafely } from "@/lib/queryClient";
+import { BLUSUKAN_API } from "@shared/blusukan-api";
+import { blusukanApi } from "@/lib/blusukan-api";
 import { BLUSUKAN_RT_NUMBERS } from "@shared/rt";
 import { Users, Home, CheckCircle2, ClipboardList } from "lucide-react";
 
@@ -18,20 +19,13 @@ type DashboardData = {
   perRt: { rt: number; kk: number; warga: number; perluKunjungan: number }[];
 };
 
-async function fetchDashboard(rt?: number) {
-  const q = rt != null ? `?rt=${rt}` : "";
-  const res = await fetch(`/api/blusukan/dashboard${q}`, { credentials: "include" });
-  if (!res.ok) throw new Error("Gagal memuat dashboard");
-  return readJsonSafely<DashboardData>(res);
-}
-
 export default function BlusukanrwDashboard() {
   const [rtFilter, setRtFilter] = useState<number | "semua">("semua");
   const rtParam = rtFilter === "semua" ? undefined : rtFilter;
 
   const { data, isLoading } = useQuery({
-    queryKey: ["/api/blusukan/dashboard", rtParam],
-    queryFn: () => fetchDashboard(rtParam),
+    queryKey: [BLUSUKAN_API.dashboard, rtParam],
+    queryFn: () => blusukanApi.dashboard<DashboardData>(rtParam),
   });
 
   return (
@@ -132,9 +126,9 @@ export default function BlusukanrwDashboard() {
           </Card>
 
           <Link href="/blusukanrw/kunjungan">
-            <Button className="w-full gap-2" style={{ backgroundColor: "hsl(163,55%,22%)" }}>
+            <Button className="w-full gap-2 h-11" style={{ backgroundColor: "hsl(163,55%,22%)" }}>
               <ClipboardList className="w-4 h-4" />
-              Lihat keluarga harus dikunjungi
+              Mulai kunjungan ({data.perluKunjungan})
             </Button>
           </Link>
         </>

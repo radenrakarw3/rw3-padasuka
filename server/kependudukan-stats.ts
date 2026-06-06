@@ -7,6 +7,10 @@ import {
 } from "@shared/kependudukan-analytics";
 import { getWargaAge } from "@shared/warga-form-tier";
 import {
+  isLegacyPekerjaanDiLuarAngkatanKerja,
+  isLegacyPekerjaanPengangguran,
+} from "@shared/pekerjaan-labor";
+import {
   needsLiterasi,
   needsCrvsDocuments,
   needsStatusAngkatanKerja,
@@ -228,9 +232,6 @@ function aggregateKk(kkList: KartuKeluarga[], wargaByKk: Map<number, number>): K
   };
 }
 
-const PENGANGGURAN_KEYWORDS = ["tidak bekerja", "belum bekerja", "pengangguran", "belum/tidak bekerja", "tidak diketahui", ""];
-const PELAJAR_KEYWORDS = ["pelajar", "mahasiswa", "pelajar/mahasiswa"];
-
 function calcAge(tanggalLahir: string | null | undefined): number | null {
   if (!tanggalLahir) return null;
   const birth = new Date(tanggalLahir);
@@ -252,12 +253,8 @@ export function isPengangguran(w: Warga): boolean {
   if (st === "Mencari Kerja" || st === "Belum Bekerja") return true;
   if (["Bekerja", "Wiraswasta", "Pelaku Usaha", "Pekerja Lepas"].includes(st)) return false;
 
-  const job = (w.pekerjaan || "").toLowerCase().trim();
-  const isPelajar = PELAJAR_KEYWORDS.some((k) => job.includes(k)) || st === "Pelajar/Mahasiswa";
-  const isUnemployed = !job || PENGANGGURAN_KEYWORDS.some((k) => job === k);
-  if (!isUnemployed) return false;
-  if (isPelajar) return false;
-  return true;
+  if (isLegacyPekerjaanDiLuarAngkatanKerja(w.pekerjaan)) return false;
+  return isLegacyPekerjaanPengangguran(w.pekerjaan);
 }
 
 export function buildLegacySummary(

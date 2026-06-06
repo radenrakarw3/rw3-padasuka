@@ -2,7 +2,7 @@ import { pool } from "./db";
 import { storage } from "./storage";
 import { ACTIVE_RT_NUMBERS, isActiveRt, assertKkInPemukimanScope } from "@shared/rt";
 import {
-  computeKkCompleteness,
+  computeBlusukanKkCompleteness,
   countBelumDiverifikasi,
 } from "@shared/profile-completeness";
 import type { BlusukanKunjungan, KartuKeluarga, Warga } from "@shared/schema";
@@ -72,7 +72,7 @@ export async function getBlusukanDashboard(rtFilter?: number) {
     if (!isActiveRt(kk.rt)) continue;
 
     const anggota = allWarga.filter((w) => w.kkId === kk.id);
-    const comp = computeKkCompleteness(anggota, kk);
+    const comp = computeBlusukanKkCompleteness(anggota, kk);
     if (comp.isComplete) lengkap++;
     if (anggota.every((w) => w.statusVerifikasiData === "Sudah Diverifikasi")) diverifikasi++;
 
@@ -108,6 +108,7 @@ export type BlusukanKeluargaRow = {
   kkId: number;
   nomorKk: string;
   rt: number;
+  noUnit: string | null;
   alamat: string;
   kepalaKeluarga: string | null;
   jumlahAnggota: number;
@@ -117,8 +118,16 @@ export type BlusukanKeluargaRow = {
   perluKunjungan: boolean;
 };
 
+export type BlusukanKeluargaFilter = "perlu" | "semua" | "selesai";
+
 export const BLUSUKAN_KELUARGA_DEFAULT_LIMIT = 15;
 export const BLUSUKAN_KELUARGA_MAX_LIMIT = 50;
+
+export type BlusukanKeluargaCounts = {
+  perlu: number;
+  selesai: number;
+  semua: number;
+};
 
 export type BlusukanKeluargaPage = {
   rows: BlusukanKeluargaRow[];
@@ -126,6 +135,8 @@ export type BlusukanKeluargaPage = {
   page: number;
   limit: number;
   totalPages: number;
+  filter: BlusukanKeluargaFilter;
+  counts: BlusukanKeluargaCounts;
 };
 
 export async function listBlusukanKeluarga(
@@ -133,6 +144,7 @@ export async function listBlusukanKeluarga(
   q?: string,
   page = 1,
   limit = BLUSUKAN_KELUARGA_DEFAULT_LIMIT,
+  filter: BlusukanKeluargaFilter = "perlu",
 ): Promise<BlusukanKeluargaPage> {
   const { kkList, allWarga } = await loadPemukimanScope(rtFilter);
   const kkIds = kkList.map((k) => k.id);
@@ -147,7 +159,7 @@ export async function listBlusukanKeluarga(
 
     const anggota = allWarga.filter((w) => w.kkId === kk.id);
     const kepala = anggota.find((w) => w.kedudukanKeluarga === "Kepala Keluarga");
-    const comp = computeKkCompleteness(anggota, kk);
+    const comp = computeBlusukanKkCompleteness(anggota, kk);
     const belumVerifikasi = countBelumDiverifikasi(anggota);
     const latest = latestMap.get(kk.id);
 
@@ -168,6 +180,7 @@ export async function listBlusukanKeluarga(
       kkId: kk.id,
       nomorKk: kk.nomorKk,
       rt: kk.rt,
+      noUnit: kk.noUnit ?? null,
       alamat: kk.alamat,
       kepalaKeluarga: kepala?.namaLengkap ?? null,
       jumlahAnggota: anggota.length,
@@ -188,21 +201,36 @@ export async function listBlusukanKeluarga(
     .sort((a, b) => b._priority - a._priority)
     .map(({ _priority: _, ...row }) => row);
 
+  const counts: BlusukanKeluargaCounts = {
+    semua: sorted.length,
+    perlu: sorted.filter((r) => r.perluKunjungan).length,
+    selesai: sorted.filter((r) => !r.perluKunjungan).length,
+  };
+
+  const filtered =
+    filter === "perlu"
+      ? sorted.filter((r) => r.perluKunjungan)
+      : filter === "selesai"
+        ? sorted.filter((r) => !r.perluKunjungan)
+        : sorted;
+
   const safeLimit = Math.min(
     BLUSUKAN_KELUARGA_MAX_LIMIT,
     Math.max(1, Number.isFinite(limit) ? Math.floor(limit) : BLUSUKAN_KELUARGA_DEFAULT_LIMIT),
   );
-  const total = sorted.length;
+  const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / safeLimit));
   const safePage = Math.min(Math.max(1, Number.isFinite(page) ? Math.floor(page) : 1), totalPages);
   const offset = (safePage - 1) * safeLimit;
 
   return {
-    rows: sorted.slice(offset, offset + safeLimit),
+    rows: filtered.slice(offset, offset + safeLimit),
     total,
     page: safePage,
     limit: safeLimit,
     totalPages,
+    filter,
+    counts,
   };
 }
 
@@ -252,7 +280,7 @@ export async function getBlusukanKkDetail(kkId: number) {
   if (!kk || !isActiveRt(kk.rt)) return null;
 
   const anggota = await storage.getWargaByKkId(kkId);
-  const completeness = computeKkCompleteness(anggota, kk);
+  const completeness = computeBlusukanKkCompleteness(anggota, kk);
   const latestMap = await storage.getLatestKunjunganByKkIds([kkId]);
   const latest = latestMap.get(kkId);
   const riwayat = await storage.getBlusukanKunjunganByKkId(kkId, 5);

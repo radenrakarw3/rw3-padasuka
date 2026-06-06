@@ -3,11 +3,14 @@ import { pgTable, text, varchar, serial, integer, boolean, timestamp, jsonb, uni
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { isActiveRt } from "./rt";
+import { parseKkKendaraanData, validateKkKendaraanList } from "./kk-kendaraan";
 
 export const kartuKeluarga = pgTable("kartu_keluarga", {
   id: serial("id").primaryKey(),
   nomorKk: text("nomor_kk").notNull().unique(),
   rt: integer("rt").notNull(),
+  /** Nomor unit/rumah di RT (Blusukan RW). */
+  noUnit: text("no_unit"),
   alamat: text("alamat").notNull(),
   statusRumah: text("status_rumah").notNull().default("Milik Sendiri"),
   jumlahPenghuni: integer("jumlah_penghuni").notNull().default(1),
@@ -24,6 +27,10 @@ export const kartuKeluarga = pgTable("kartu_keluarga", {
   linkGmaps: text("link_gmaps"),
   latitude: text("latitude"),
   longitude: text("longitude"),
+  /** Label internal ketua RW (JSON array) — tidak tampil ke warga. */
+  labelRw: text("label_rw"),
+  /** Daftar kendaraan KK — JSON [{ jenis, platNomor }]. */
+  kendaraanData: text("kendaraan_data"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -52,6 +59,10 @@ export const warga = pgTable("warga", {
   statusEktp: text("status_ektp"),
   noAktaLahir: text("no_akta_lahir"),
   punyaAktaLahir: boolean("punya_akta_lahir").notNull().default(false),
+  tanggalTerbitAktaLahir: text("tanggal_terbit_akta_lahir"),
+  tempatTerbitAktaLahir: text("tempat_terbit_akta_lahir"),
+  namaIbuAktaLahir: text("nama_ibu_akta_lahir"),
+  namaAyahAktaLahir: text("nama_ayah_akta_lahir"),
   punyaKia: boolean("punya_kia").notNull().default(false),
   punyaNpwp: boolean("punya_npwp").notNull().default(false),
   punyaSim: boolean("punya_sim").notNull().default(false),
@@ -80,6 +91,8 @@ export const warga = pgTable("warga", {
   sumberPenghasilan: text("sumber_penghasilan"),
   punyaUsaha: boolean("punya_usaha").notNull().default(false),
   namaUsaha: text("nama_usaha"),
+  punyaUsahaLuarRw3: boolean("punya_usaha_luar_rw3").notNull().default(false),
+  namaUsahaLuarRw3: text("nama_usaha_luar_rw3"),
   // Data kesehatan & kondisi khusus
   statusDisabilitas: text("status_disabilitas").notNull().default("Tidak Ada"),
   /** UNESCO — literasi baca-tulis. */
@@ -430,13 +443,24 @@ function refineKkRtPemukiman(data: { rt?: unknown }, ctx: z.RefinementCtx, requi
   }
 }
 
+function refineKkKendaraan(data: { kendaraanData?: string | null }, ctx: z.RefinementCtx) {
+  if (data.kendaraanData == null || data.kendaraanData === "") return;
+  const items = parseKkKendaraanData(data.kendaraanData);
+  const err = validateKkKendaraanList(items);
+  if (err) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["kendaraanData"], message: err });
+  }
+}
+
 export const insertKkSchema = insertKkBaseSchema.superRefine((data, ctx) => {
   refineKkRtPemukiman(data, ctx, true);
+  refineKkKendaraan(data, ctx);
 });
 
 /** PATCH KK — RT opsional; jika diisi harus 01–04. */
 export const patchKkSchema = insertKkBaseSchema.partial().superRefine((data, ctx) => {
   refineKkRtPemukiman(data, ctx, false);
+  refineKkKendaraan(data, ctx);
 });
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const DIGIT_ONLY_REGEX = /^\d+$/;
@@ -498,6 +522,26 @@ export const insertWargaSchema = createInsertSchema(warga).omit({ id: true, crea
   }
   if (data.punyaUsaha && !data.namaUsaha) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["namaUsaha"], message: "Nama usaha wajib diisi" });
+  }
+  if (data.punyaUsahaLuarRw3 && !data.namaUsahaLuarRw3) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["namaUsahaLuarRw3"], message: "Nama usaha di luar RW 03 wajib diisi" });
+  }
+  if (data.punyaAktaLahir) {
+    if (!data.noAktaLahir?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["noAktaLahir"], message: "Nomor akta kelahiran wajib diisi" });
+    }
+    if (!data.tanggalTerbitAktaLahir) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["tanggalTerbitAktaLahir"], message: "Tanggal terbit akta wajib diisi" });
+    }
+    if (!data.tempatTerbitAktaLahir?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["tempatTerbitAktaLahir"], message: "Tempat terbit akta wajib diisi" });
+    }
+    if (!data.namaIbuAktaLahir?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["namaIbuAktaLahir"], message: "Nama ibu (sesuai akta) wajib diisi" });
+    }
+  }
+  if (isWorkingStatus(data.statusPekerjaan) && !data.alamatTempatKerja?.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["alamatTempatKerja"], message: "Alamat tempat kerja wajib diisi" });
   }
   if (data.statusBansosIndividu === "Penerima" && !data.jenisBansosIndividu) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["jenisBansosIndividu"], message: "Jenis bansos individu wajib diisi" });

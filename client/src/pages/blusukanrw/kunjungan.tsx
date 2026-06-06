@@ -1,35 +1,33 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Search, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, Plus, ClipboardList } from "lucide-react";
 import { BLUSUKAN_API } from "@shared/blusukan-api";
 import { blusukanApi } from "@/lib/blusukan-api";
 import { useToast } from "@/hooks/use-toast";
-import { BLUSUKAN_RT_NUMBERS, isActiveRt } from "@shared/rt";
+import { BLUSUKAN_RT_NUMBERS } from "@shared/rt";
 import { statusRumahOptions, rtOptions } from "@/lib/constants";
+import {
+  KeluargaKunjunganRowCard,
+  type KeluargaKunjunganRow,
+} from "@/components/blusukanrw/keluarga-kunjungan-row";
+import { cn } from "@/lib/utils";
 
-type KeluargaRow = {
-  kkId: number;
-  nomorKk: string;
-  rt: number;
-  alamat: string;
-  kepalaKeluarga: string | null;
-  jumlahAnggota: number;
-  completionPercent: number;
-  belumVerifikasi: number;
-  kunjunganTerakhir: { hasil: string; createdAt: string | null } | null;
-  perluKunjungan: boolean;
-};
+type KunjunganFilter = "perlu" | "semua" | "selesai";
 
-const PER_PAGE = 15;
+const PER_PAGE = 20;
+
+const filterTabs: { id: KunjunganFilter; label: string }[] = [
+  { id: "perlu", label: "Perlu dikunjungi" },
+  { id: "semua", label: "Semua" },
+  { id: "selesai", label: "Selesai" },
+];
 
 const defaultNewKk = {
   nomorKk: "",
@@ -43,19 +41,13 @@ const defaultNewKk = {
   listrik: "PLN 900 VA",
 };
 
-function hasilLabel(hasil: string) {
-  if (hasil === "selesai") return "Selesai";
-  if (hasil === "perlu_ulang") return "Perlu ulang";
-  if (hasil === "tidak_ada") return "Tidak ada";
-  return hasil;
-}
-
 export default function BlusukanrwKunjungan() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const [rtFilter, setRtFilter] = useState<number | "semua">("semua");
   const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<KunjunganFilter>("perlu");
   const [page, setPage] = useState(1);
   const [addKkOpen, setAddKkOpen] = useState(false);
   const [newKk, setNewKk] = useState(defaultNewKk);
@@ -63,22 +55,24 @@ export default function BlusukanrwKunjungan() {
 
   useEffect(() => {
     setPage(1);
-  }, [rtFilter, search]);
+  }, [rtFilter, search, filter]);
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: [BLUSUKAN_API.keluarga, rtParam, search, page],
+    queryKey: [BLUSUKAN_API.keluarga, rtParam, search, page, filter],
     queryFn: () =>
-      blusukanApi.keluarga<KeluargaRow>({
+      blusukanApi.keluarga<KeluargaKunjunganRow>({
         rt: rtParam,
         q: search || undefined,
         page,
         limit: PER_PAGE,
+        filter,
       }),
     placeholderData: (prev) => prev,
   });
 
   const rows = data?.rows ?? [];
   const total = data?.total ?? 0;
+  const counts = data?.counts ?? { perlu: 0, selesai: 0, semua: 0 };
   const totalPages = data?.totalPages ?? 1;
   const currentPage = data?.page ?? page;
   const pageLimit = data?.limit ?? PER_PAGE;
@@ -116,16 +110,24 @@ export default function BlusukanrwKunjungan() {
     },
   });
 
+  const countForTab = (id: KunjunganFilter) => {
+    if (id === "perlu") return counts.perlu;
+    if (id === "selesai") return counts.selesai;
+    return counts.semua;
+  };
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-start justify-between gap-2">
+    <div className="space-y-4 pb-2">
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold">Keluarga Harus Dikunjungi</h2>
-          <p className="text-xs text-muted-foreground">Master data Ketua RW · RT 01–04</p>
+          <h2 className="text-xl font-bold tracking-tight">Kunjungan Keluarga</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Tap keluarga → isi data → catat hasil kunjungan
+          </p>
         </div>
         <Dialog open={addKkOpen} onOpenChange={setAddKkOpen}>
           <DialogTrigger asChild>
-            <Button type="button" size="sm" className="gap-1 shrink-0" style={{ backgroundColor: "hsl(163,55%,22%)" }}>
+            <Button type="button" variant="outline" size="sm" className="gap-1 shrink-0 h-9">
               <Plus className="w-4 h-4" />
               KK Baru
             </Button>
@@ -137,25 +139,37 @@ export default function BlusukanrwKunjungan() {
             <div className="space-y-3">
               <div>
                 <Label className="text-xs">Nomor KK</Label>
-                <Input value={newKk.nomorKk} onChange={(e) => setNewKk({ ...newKk, nomorKk: e.target.value })} className="h-9 font-mono" />
+                <Input
+                  value={newKk.nomorKk}
+                  onChange={(e) => setNewKk({ ...newKk, nomorKk: e.target.value })}
+                  className="h-11 text-base font-mono"
+                />
               </div>
               <div>
                 <Label className="text-xs">RT</Label>
                 <Select value={newKk.rt} onValueChange={(v) => setNewKk({ ...newKk, rt: v })}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-11">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     {rtOptions.map((rt) => (
-                      <SelectItem key={rt} value={String(rt)}>RT {String(rt).padStart(2, "0")}</SelectItem>
+                      <SelectItem key={rt} value={String(rt)}>
+                        RT {String(rt).padStart(2, "0")}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div>
                 <Label className="text-xs">Alamat</Label>
-                <Input value={newKk.alamat} onChange={(e) => setNewKk({ ...newKk, alamat: e.target.value })} className="h-9" />
+                <Input
+                  value={newKk.alamat}
+                  onChange={(e) => setNewKk({ ...newKk, alamat: e.target.value })}
+                  className="h-11 text-base"
+                />
               </div>
               <Button
-                className="w-full"
+                className="w-full h-11"
                 style={{ backgroundColor: "hsl(163,55%,22%)" }}
                 disabled={createKkMutation.isPending || !newKk.nomorKk || !newKk.alamat}
                 onClick={() => createKkMutation.mutate()}
@@ -167,41 +181,70 @@ export default function BlusukanrwKunjungan() {
         </Dialog>
       </div>
 
+      <div className="grid grid-cols-3 gap-1 rounded-xl bg-muted/60 p-1">
+        {filterTabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setFilter(tab.id)}
+            className={cn(
+              "rounded-lg py-2.5 px-1 text-center text-[11px] font-medium leading-tight transition-colors min-h-11 touch-manipulation",
+              filter === tab.id
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {tab.label}
+            <span className="block text-sm font-bold tabular-nums mt-0.5">{countForTab(tab.id)}</span>
+          </button>
+        ))}
+      </div>
+
+      {filter === "perlu" && counts.perlu > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 flex items-start gap-3">
+          <ClipboardList className="w-5 h-5 text-amber-800 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-amber-950">
+              {counts.perlu} keluarga menunggu kunjungan
+            </p>
+            <p className="text-xs text-amber-800/90 mt-0.5">
+              Urutan: belum pernah → data belum lengkap → perlu ulang
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="relative">
-        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Cari alamat, nama, NIK, nomor KK..."
-          className="pl-9 h-10"
+          placeholder="Cari nama, alamat, NIK, nomor KK..."
+          className="pl-9 h-11 text-base"
           aria-label="Cari keluarga"
         />
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
         <button
           type="button"
-          onClick={() => {
-            setRtFilter("semua");
-            setPage(1);
-          }}
-          className={`px-3 py-1 rounded-full text-xs font-medium border ${
-            rtFilter === "semua" ? "bg-[hsl(163,55%,22%)] text-white" : ""
-          }`}
+          onClick={() => setRtFilter("semua")}
+          className={cn(
+            "shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border min-h-9 touch-manipulation",
+            rtFilter === "semua" && "bg-[hsl(163,55%,22%)] text-white border-transparent",
+          )}
         >
-          Semua
+          Semua RT
         </button>
         {BLUSUKAN_RT_NUMBERS.map((rt) => (
           <button
             key={rt}
             type="button"
-            onClick={() => {
-              setRtFilter(rt);
-              setPage(1);
-            }}
-            className={`px-3 py-1 rounded-full text-xs font-medium border ${
-              rtFilter === rt ? "bg-[hsl(163,55%,22%)] text-white" : ""
-            }`}
+            onClick={() => setRtFilter(rt)}
+            className={cn(
+              "shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border min-h-9 touch-manipulation",
+              rtFilter === rt && "bg-[hsl(163,55%,22%)] text-white border-transparent",
+            )}
           >
             RT {String(rt).padStart(2, "0")}
           </button>
@@ -209,67 +252,55 @@ export default function BlusukanrwKunjungan() {
       </div>
 
       {isLoading ? (
-        <div className="space-y-2">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-24 rounded-xl" />
+        <div className="space-y-3">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-28 rounded-xl" />
           ))}
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           <p className="text-xs text-muted-foreground">
             {total === 0
-              ? "0 keluarga"
-              : `Menampilkan ${rangeStart}–${rangeEnd} dari ${total} keluarga`}
+              ? filter === "perlu"
+                ? "Semua keluarga sudah dikunjungi"
+                : "Tidak ada keluarga yang cocok"
+              : `Menampilkan ${rangeStart}–${rangeEnd} dari ${total}`}
             {isFetching && !isLoading ? " · memuat…" : ""}
           </p>
-          {rows.filter((row) => isActiveRt(row.rt)).map((row) => (
-            <Link key={row.kkId} href={`/blusukanrw/kk/${row.kkId}`}>
-              <Card className={`cursor-pointer hover:border-[hsl(163,55%,22%)] transition-colors ${row.perluKunjungan ? "border-amber-300" : ""}`}>
-                <CardContent className="p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">{row.kepalaKeluarga || "—"}</p>
-                      <p className="text-xs text-muted-foreground truncate">{row.alamat}</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">
-                        KK {row.nomorKk} · RT {String(row.rt).padStart(2, "0")} · {row.jumlahAnggota} anggota
-                      </p>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-                  </div>
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    <Badge variant={row.completionPercent === 100 ? "secondary" : "outline"} className="text-[10px]">
-                      Lengkap {row.completionPercent}%
-                    </Badge>
-                    {row.belumVerifikasi > 0 && (
-                      <Badge variant="outline" className="text-[10px] text-amber-800 border-amber-300">
-                        {row.belumVerifikasi} belum verifikasi
-                      </Badge>
-                    )}
-                    {row.kunjunganTerakhir ? (
-                      <Badge variant="secondary" className="text-[10px]">
-                        {hasilLabel(row.kunjunganTerakhir.hasil)}
-                      </Badge>
-                    ) : (
-                      <Badge className="text-[10px] bg-amber-100 text-amber-900 hover:bg-amber-100">
-                        Belum dikunjungi
-                      </Badge>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
+
+          {rows.map((row, i) => (
+            <KeluargaKunjunganRowCard
+              key={row.kkId}
+              row={row}
+              index={filter === "perlu" ? rangeStart + i : undefined}
+              highlightNext={filter === "perlu" && page === 1 && i === 0}
+            />
           ))}
-          {rows.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-8">Tidak ada keluarga yang cocok.</p>
+
+          {rows.length === 0 && filter === "perlu" && !search && (
+            <div className="text-center py-10 px-4 rounded-xl border border-dashed">
+              <p className="text-sm font-medium">Tidak ada antrian kunjungan</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Semua keluarga di filter ini sudah selesai dikunjungi.
+              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                className="mt-2 text-[hsl(163,55%,22%)]"
+                onClick={() => setFilter("selesai")}
+              >
+                Lihat yang sudah selesai
+              </Button>
+            </div>
           )}
 
           {totalPages > 1 && (
-            <div className="flex items-center justify-between pt-3 pb-1">
+            <div className="flex items-center justify-between pt-2">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                className="gap-1"
+                className="gap-1 h-10"
                 disabled={page <= 1 || isFetching}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
               >
@@ -283,7 +314,7 @@ export default function BlusukanrwKunjungan() {
                 type="button"
                 variant="outline"
                 size="sm"
-                className="gap-1"
+                className="gap-1 h-10"
                 disabled={page >= totalPages || isFetching}
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               >

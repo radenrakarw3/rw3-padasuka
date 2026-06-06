@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { pekerjaanOptions, keperluanTinggalOptions, rtOptions } from "@/lib/constants";
+import { pekerjaanLegacyOptions, keperluanTinggalOptions, rtOptions } from "@/lib/constants";
 import { Visitrw3AdminNav } from "@/components/admin/visitrw3-admin-nav";
 import { Plus, Pencil, Trash2, User, Phone, Briefcase, Calendar, Users as UsersIcon, X, RefreshCw, History } from "lucide-react";
 
@@ -310,7 +310,7 @@ export default function AdminVisitrw3Penghuni() {
                   <Select value={formData.pekerjaan} onValueChange={(v) => setFormData({ ...formData, pekerjaan: v })}>
                     <SelectTrigger data-testid="select-pekerjaan-singgah"><SelectValue placeholder="Pilih" /></SelectTrigger>
                     <SelectContent>
-                      {pekerjaanOptions.map((p) => (
+                      {pekerjaanLegacyOptions.map((p) => (
                         <SelectItem key={p} value={p}>{p}</SelectItem>
                       ))}
                     </SelectContent>

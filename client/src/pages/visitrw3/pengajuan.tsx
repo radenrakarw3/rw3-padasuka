@@ -13,7 +13,7 @@ import { apiRequest, readJsonSafely, getApiErrorMessage } from "@/lib/queryClien
 import {
   rtOptions,
   keperluanTinggalOptions,
-  pekerjaanOptions,
+  pekerjaanLegacyOptions,
   jenisKendaraanOptions,
   visitrw3JenisTempatUsahaOptions,
   visitrw3JenjangAnakOptions,
@@ -825,7 +825,7 @@ export default function Visitrw3Pengajuan() {
                     <Select value={p.pekerjaan} onValueChange={(v) => updatePenghuni(i, { pekerjaan: v })}>
                     <SelectTrigger><SelectValue placeholder="Pilih pekerjaan" /></SelectTrigger>
                     <SelectContent>
-                      {pekerjaanOptions.map((o) => (
+                      {pekerjaanLegacyOptions.map((o) => (
                         <SelectItem key={o} value={o}>{o}</SelectItem>
                       ))}
                     </SelectContent>

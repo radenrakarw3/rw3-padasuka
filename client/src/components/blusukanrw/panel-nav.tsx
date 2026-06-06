@@ -27,10 +27,10 @@ export function BlusukanPanelNav({
           aria-selected={value === p.id}
           onClick={() => onChange(p.id)}
           className={cn(
-            "flex-1 rounded-md py-2 text-sm font-medium transition-colors",
+            "flex-1 rounded-md py-3 min-h-11 text-sm font-medium transition-colors touch-manipulation",
             value === p.id
               ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground",
+              : "text-muted-foreground hover:text-foreground active:bg-background/50",
           )}
         >
           {p.label}

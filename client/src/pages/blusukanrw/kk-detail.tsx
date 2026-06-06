@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useRoute } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, MapPin, Loader2, Plus, Trash2, Pencil, CheckCircle2, AlertCircle } from "lucide-react";
+import { ArrowLeft, MapPin, Loader2, Plus, Trash2, CheckCircle2, AlertCircle } from "lucide-react";
 import { BLUSUKAN_API } from "@shared/blusukan-api";
 import { blusukanApi } from "@/lib/blusukan-api";
-import { computeWargaCompleteness } from "@shared/profile-completeness";
+import { computeBlusukanWargaCompleteness } from "@shared/profile-completeness";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,26 +13,24 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import type { Warga } from "@shared/schema";
 import {
-  WargaFormFields,
-  defaultWargaForm,
-  mapWargaToForm,
-  toWargaPayload,
-  validateWargaFormData,
-  type WargaFormValues,
-} from "@/components/kependudukan/warga-form";
+  defaultBlusukanWargaForm,
+  mapWargaToBlusukanForm,
+  toBlusukanWargaPayload,
+  validateBlusukanWargaForm,
+  type BlusukanWargaFormValues,
+} from "@shared/blusukan-warga-form";
+import { BlusukanWargaFormFields } from "@/components/blusukanrw/blusukan-warga-form-fields";
 import {
   BlusukanKkFormFields,
   mapKkToForm,
+  parseKkLabels,
   toKkPayload,
+  validateKkFormKendaraan,
   type KkFormValues,
 } from "@/components/blusukanrw/kk-form-fields";
+import { formatKkKendaraanDisplay } from "@shared/kk-kendaraan";
 import { BlusukanPanelNav, type BlusukanPanel } from "@/components/blusukanrw/panel-nav";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { BlusukanFullScreenForm } from "@/components/blusukanrw/blusukan-form-ui";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -75,12 +73,12 @@ export default function BlusukanrwKkDetail() {
   const [kkForm, setKkForm] = useState<KkFormValues | null>(null);
   const [catatanKunjungan, setCatatanKunjungan] = useState("");
   const [editWarga, setEditWarga] = useState<Warga | null>(null);
-  const [editForm, setEditForm] = useState<WargaFormValues | null>(null);
+  const [editForm, setEditForm] = useState<BlusukanWargaFormValues | null>(null);
   const [kkSearch, setKkSearch] = useState("");
   const [kkDropdownOpen, setKkDropdownOpen] = useState(false);
   const [addWargaOpen, setAddWargaOpen] = useState(false);
-  const [newWargaForm, setNewWargaForm] = useState<WargaFormValues>(() => ({
-    ...defaultWargaForm,
+  const [newWargaForm, setNewWargaForm] = useState<BlusukanWargaFormValues>(() => ({
+    ...defaultBlusukanWargaForm,
     kkId: String(id),
   }));
   const [deleteWargaTarget, setDeleteWargaTarget] = useState<Warga | null>(null);
@@ -108,10 +106,10 @@ export default function BlusukanrwKkDetail() {
   }, [data]);
 
   const editErrors = useMemo(
-    () => (editForm ? validateWargaFormData(editForm) : {}),
+    () => (editForm ? validateBlusukanWargaForm(editForm) : {}),
     [editForm],
   );
-  const newWargaErrors = useMemo(() => validateWargaFormData(newWargaForm), [newWargaForm]);
+  const newWargaErrors = useMemo(() => validateBlusukanWargaForm(newWargaForm), [newWargaForm]);
   const editInvalid = Object.keys(editErrors).length > 0;
   const newInvalid = Object.keys(newWargaErrors).length > 0;
 
@@ -124,8 +122,13 @@ export default function BlusukanrwKkDetail() {
 
   const saveKkMutation = useMutation({
     mutationFn: async () => {
-      if (!kkForm || isNaN(id)) return;
-      await blusukanApi.kk.patch(id, toKkPayload(kkForm));
+      if (!kkForm || isNaN(id) || !data) return;
+      const kendaraanErr = validateKkFormKendaraan(kkForm);
+      if (kendaraanErr) throw new Error(kendaraanErr);
+      await blusukanApi.kk.patch(
+        id,
+        toKkPayload(kkForm, { anggotaCount: data.anggota.length, preserve: data.kk }),
+      );
     },
     onSuccess: () => {
       toast({ title: "Data KK tersimpan" });
@@ -141,10 +144,10 @@ export default function BlusukanrwKkDetail() {
   });
 
   const saveWargaMutation = useMutation({
-    mutationFn: async ({ wargaId, form }: { wargaId: number; form: WargaFormValues }) => {
-      const errs = validateWargaFormData(form);
+    mutationFn: async ({ wargaId, form }: { wargaId: number; form: BlusukanWargaFormValues }) => {
+      const errs = validateBlusukanWargaForm(form);
       if (Object.keys(errs).length > 0) throw new Error("Lengkapi field wajib");
-      await blusukanApi.warga.patch(wargaId, toWargaPayload(form));
+      await blusukanApi.warga.patch(wargaId, toBlusukanWargaPayload(form));
     },
     onSuccess: () => {
       toast({ title: "Data warga tersimpan" });
@@ -164,12 +167,12 @@ export default function BlusukanrwKkDetail() {
   const addWargaMutation = useMutation({
     mutationFn: async () => {
       if (Object.keys(newWargaErrors).length > 0) throw new Error("Lengkapi data warga baru");
-      return blusukanApi.warga.create(toWargaPayload({ ...newWargaForm, kkId: String(id) }));
+      return blusukanApi.warga.create(toBlusukanWargaPayload({ ...newWargaForm, kkId: String(id) }));
     },
     onSuccess: () => {
       toast({ title: "Anggota ditambahkan" });
       setAddWargaOpen(false);
-      setNewWargaForm({ ...defaultWargaForm, kkId: String(id) });
+      setNewWargaForm({ ...defaultBlusukanWargaForm, kkId: String(id) });
       setPanel("anggota");
       invalidateAll();
     },
@@ -201,8 +204,11 @@ export default function BlusukanrwKkDetail() {
   const deleteKkMutation = useMutation({
     mutationFn: () => blusukanApi.kk.delete(id),
     onSuccess: () => {
-      toast({ title: "KK dihapus" });
-      setLocation("/blusukanrw/kunjungan");
+      toast({ title: "KK dihapus dari database" });
+      setDeleteKkOpen(false);
+      invalidateAll();
+      queryClient.removeQueries({ queryKey: [BLUSUKAN_API.kk(id)] });
+      setLocation("/blusukanrw/dashboard");
     },
     onError: (e: unknown) => {
       toast({
@@ -215,8 +221,13 @@ export default function BlusukanrwKkDetail() {
 
   const kunjunganMutation = useMutation({
     mutationFn: async () => {
-      if (kkForm && !saveKkMutation.isPending) {
-        await blusukanApi.kk.patch(id, toKkPayload(kkForm));
+      if (kkForm && !saveKkMutation.isPending && data) {
+        const kendaraanErr = validateKkFormKendaraan(kkForm);
+        if (kendaraanErr) throw new Error(kendaraanErr);
+        await blusukanApi.kk.patch(
+          id,
+          toKkPayload(kkForm, { anggotaCount: data.anggota.length, preserve: data.kk }),
+        );
       }
       await blusukanApi.kunjungan({
         kkId: id,
@@ -241,12 +252,14 @@ export default function BlusukanrwKkDetail() {
 
   const openEditWarga = (w: Warga) => {
     setEditWarga(w);
-    setEditForm(mapWargaToForm(w));
+    setEditForm(mapWargaToBlusukanForm(w));
     setKkSearch("");
     setKkDropdownOpen(false);
   };
 
   if (isNaN(id)) return <p className="text-sm text-muted-foreground">ID tidak valid</p>;
+
+  const wargaFormOpen = addWargaOpen || (!!editWarga && !!editForm);
 
   const footerPrimary =
     panel === "kk"
@@ -260,13 +273,20 @@ export default function BlusukanrwKkDetail() {
         : null;
 
   return (
-    <div className="pb-28">
-      <Link href="/blusukanrw/kunjungan">
-        <Button variant="ghost" size="sm" className="mb-3 -ml-2">
-          <ArrowLeft className="w-4 h-4 mr-1" />
-          Kembali
-        </Button>
-      </Link>
+    <div className="pb-28" style={{ paddingBottom: wargaFormOpen ? undefined : "max(7rem, calc(5rem + env(safe-area-inset-bottom)))" }}>
+      <div className="flex items-center gap-2 mb-3 -ml-2">
+        <Link href="/blusukanrw/kunjungan">
+          <Button variant="ghost" size="sm">
+            <ArrowLeft className="w-4 h-4 mr-1" />
+            Antrian
+          </Button>
+        </Link>
+        <Link href="/blusukanrw/dashboard">
+          <Button variant="ghost" size="sm" className="text-muted-foreground">
+            Dashboard
+          </Button>
+        </Link>
+      </div>
 
       {isLoading && <Skeleton className="h-48 w-full" />}
       {isError && <p className="text-sm text-destructive">Gagal memuat data KK.</p>}
@@ -278,7 +298,18 @@ export default function BlusukanrwKkDetail() {
             <p className="text-sm text-muted-foreground line-clamp-2">{data.kk.alamat}</p>
             <div className="flex flex-wrap gap-1.5 mt-2">
               <Badge>RT {String(data.kk.rt).padStart(2, "0")}</Badge>
+              {data.kk.noUnit && <Badge variant="outline">Unit {data.kk.noUnit}</Badge>}
               <Badge variant="outline">Lengkap {data.completeness.completionPercent}%</Badge>
+              {parseKkLabels(data.kk.labelRw).map((label) => (
+                <Badge key={label} variant="secondary" className="text-[10px]">
+                  {label}
+                </Badge>
+              ))}
+              {formatKkKendaraanDisplay(data.kk.kendaraanData) && (
+                <Badge variant="outline" className="text-[10px] max-w-full truncate">
+                  Kendaraan: {formatKkKendaraanDisplay(data.kk.kendaraanData)}
+                </Badge>
+              )}
               {data.belumVerifikasi > 0 && (
                 <Badge variant="outline" className="text-amber-800 border-amber-300">
                   {data.belumVerifikasi} belum verifikasi
@@ -319,7 +350,7 @@ export default function BlusukanrwKkDetail() {
 
           {panel === "kk" && (
             <div className="space-y-4">
-              <BlusukanKkFormFields form={kkForm} onChange={setKkForm} />
+              <BlusukanKkFormFields form={kkForm} onChange={setKkForm} anggotaCount={data.anggota.length} />
               <Button
                 type="button"
                 variant="outline"
@@ -335,11 +366,11 @@ export default function BlusukanrwKkDetail() {
           {panel === "anggota" && (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                Ketuk anggota untuk mengubah. Simpan per orang — tidak perlu scroll form panjang.
+                Ketuk nama anggota untuk mengubah data. Tombol simpan selalu terlihat di bawah layar.
               </p>
               <Button
                 type="button"
-                className="w-full gap-2"
+                className="w-full gap-2 h-12 text-base touch-manipulation"
                 variant="outline"
                 onClick={() => setAddWargaOpen(true)}
               >
@@ -347,42 +378,43 @@ export default function BlusukanrwKkDetail() {
                 Tambah anggota
               </Button>
               {data.anggota.map((w) => {
-                const pct = computeWargaCompleteness(w).completionPercent;
+                const pct = computeBlusukanWargaCompleteness(w).completionPercent;
                 const ok = pct === 100;
                 return (
                   <div
                     key={w.id}
-                    className="flex items-center gap-2 rounded-xl border bg-card p-3 shadow-sm"
+                    className="flex items-center gap-2 rounded-xl border bg-card p-3 shadow-sm touch-manipulation"
                   >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold truncate">{w.namaLengkap}</p>
-                      <p className="text-xs text-muted-foreground">
+                    <button
+                      type="button"
+                      className="min-w-0 flex-1 text-left py-1 -my-1"
+                      onClick={() => openEditWarga(w)}
+                    >
+                      <p className="text-base font-semibold truncate">{w.namaLengkap}</p>
+                      <p className="text-sm text-muted-foreground">
                         {w.kedudukanKeluarga}
                         {w.nomorWhatsapp ? ` · ${w.nomorWhatsapp}` : ""}
                       </p>
-                      <div className="flex items-center gap-1 mt-1.5">
+                      <div className="flex items-center gap-1.5 mt-1.5">
                         {ok ? (
-                          <CheckCircle2 className="w-3.5 h-3.5 text-[hsl(163,55%,32%)]" />
+                          <CheckCircle2 className="w-4 h-4 text-[hsl(163,55%,32%)]" />
                         ) : (
-                          <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                          <AlertCircle className="w-4 h-4 text-amber-600" />
                         )}
-                        <span className="text-[10px] text-muted-foreground">
+                        <span className="text-xs text-muted-foreground">
                           Profil {pct}% · {w.statusVerifikasiData}
                         </span>
                       </div>
-                    </div>
-                    <Button type="button" size="sm" variant="secondary" className="shrink-0 gap-1" onClick={() => openEditWarga(w)}>
-                      <Pencil className="w-3.5 h-3.5" />
-                      Ubah
-                    </Button>
+                    </button>
                     <Button
                       type="button"
                       size="icon"
                       variant="ghost"
-                      className="shrink-0 text-destructive h-8 w-8"
+                      className="shrink-0 text-destructive h-11 w-11"
                       onClick={() => setDeleteWargaTarget(w)}
+                      aria-label="Hapus warga"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-5 h-5" />
                     </Button>
                   </div>
                 );
@@ -415,6 +447,7 @@ export default function BlusukanrwKkDetail() {
                   value={catatanKunjungan}
                   onChange={(e) => setCatatanKunjungan(e.target.value)}
                   rows={4}
+                  className="text-base min-h-[6rem] rounded-lg"
                   placeholder="Contoh: Data KK dicek, 1 anggota tambah WA..."
                 />
               </div>
@@ -426,95 +459,68 @@ export default function BlusukanrwKkDetail() {
         </div>
       )}
 
-      <Dialog
+      <BlusukanFullScreenForm
         open={addWargaOpen}
-        onOpenChange={(o) => {
-          setAddWargaOpen(o);
-          if (!o) setNewWargaForm({ ...defaultWargaForm, kkId: String(id) });
+        onClose={() => {
+          setAddWargaOpen(false);
+          setNewWargaForm({ ...defaultBlusukanWargaForm, kkId: String(id) });
         }}
+        title="Tambah anggota"
+        subtitle={data?.kk.nomorKk}
+        saveLabel="Simpan anggota baru"
+        onSave={() => addWargaMutation.mutate()}
+        saving={addWargaMutation.isPending}
+        saveDisabled={newInvalid}
       >
-        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[92vh] overflow-y-auto p-4">
-          <DialogHeader>
-            <DialogTitle>Tambah anggota</DialogTitle>
-          </DialogHeader>
-          <WargaFormFields
-            variant="blusukan"
-            formData={newWargaForm}
-            setFormData={setNewWargaForm}
-            errors={newWargaErrors}
-            testIdPrefix="blusukan-new-warga"
-            searchVal=""
-            setSearchVal={() => {}}
-            dropdownOpen={false}
-            setDropdownOpen={() => {}}
-            pickerRef={{ current: null }}
-            kkIdLocked
+        <BlusukanWargaFormFields
+          formData={newWargaForm}
+          setFormData={setNewWargaForm}
+          errors={newWargaErrors}
+          testIdPrefix="blusukan-new-warga"
+          searchVal=""
+          setSearchVal={() => {}}
+          dropdownOpen={false}
+          setDropdownOpen={() => {}}
+          pickerRef={{ current: null }}
+          showVerifikasiAdmin
+        />
+      </BlusukanFullScreenForm>
+
+      <BlusukanFullScreenForm
+        open={!!editWarga && !!editForm}
+        onClose={() => {
+          setEditWarga(null);
+          setEditForm(null);
+        }}
+        title={editWarga?.namaLengkap ?? "Edit anggota"}
+        subtitle="Ketuk section untuk buka/tutup"
+        saveLabel="Simpan perubahan"
+        onSave={() => editWarga && editForm && saveWargaMutation.mutate({ wargaId: editWarga.id, form: editForm })}
+        saving={saveWargaMutation.isPending}
+        saveDisabled={editInvalid}
+      >
+        {editForm && (
+          <BlusukanWargaFormFields
+            formData={editForm}
+            setFormData={(updater) => {
+              setEditForm((prev) => {
+                if (!prev) return prev;
+                return typeof updater === "function" ? updater(prev) : updater;
+              });
+            }}
+            errors={editErrors}
+            testIdPrefix={`blusukan-edit-${editWarga?.id}`}
+            searchVal={kkSearch}
+            setSearchVal={setKkSearch}
+            dropdownOpen={kkDropdownOpen}
+            setDropdownOpen={setKkDropdownOpen}
+            pickerRef={kkPickerRef}
+            kkList={kkList}
+            showPindahKk
             showVerifikasiAdmin
           />
-          <Button
-            className="w-full"
-            style={{ backgroundColor: "hsl(163,55%,22%)" }}
-            disabled={addWargaMutation.isPending || newInvalid}
-            onClick={() => addWargaMutation.mutate()}
-          >
-            {addWargaMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-            Simpan anggota baru
-          </Button>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={!!editWarga && !!editForm}
-        onOpenChange={(o) => {
-          if (!o) {
-            setEditWarga(null);
-            setEditForm(null);
-          }
-        }}
-      >
-        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[92vh] overflow-y-auto p-4">
-          <DialogHeader>
-            <DialogTitle className="pr-6">{editWarga?.namaLengkap}</DialogTitle>
-          </DialogHeader>
-          {editForm && (
-            <>
-              <WargaFormFields
-                variant="blusukan"
-                formData={editForm}
-                setFormData={(updater) => {
-                  setEditForm((prev) => {
-                    if (!prev) return prev;
-                    return typeof updater === "function" ? updater(prev) : updater;
-                  });
-                }}
-                errors={editErrors}
-                testIdPrefix={`blusukan-edit-${editWarga?.id}`}
-                searchVal={kkSearch}
-                setSearchVal={setKkSearch}
-                dropdownOpen={kkDropdownOpen}
-                setDropdownOpen={setKkDropdownOpen}
-                pickerRef={kkPickerRef}
-                kkList={kkList}
-                kkIdLocked
-                showPindahKk
-                showVerifikasiAdmin
-              />
-              <Button
-                className="w-full"
-                style={{ backgroundColor: "hsl(163,55%,22%)" }}
-                disabled={saveWargaMutation.isPending || editInvalid}
-                onClick={() =>
-                  editWarga &&
-                  saveWargaMutation.mutate({ wargaId: editWarga.id, form: editForm })
-                }
-              >
-                {saveWargaMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                Simpan perubahan
-              </Button>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+        )}
+      </BlusukanFullScreenForm>
 
       <AlertDialog open={!!deleteWargaTarget} onOpenChange={(o) => !o && setDeleteWargaTarget(null)}>
         <AlertDialogContent>
@@ -528,9 +534,10 @@ export default function BlusukanrwKkDetail() {
             <AlertDialogCancel>Batal</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground"
+              disabled={deleteWargaMutation.isPending}
               onClick={() => deleteWargaTarget && deleteWargaMutation.mutate(deleteWargaTarget.id)}
             >
-              Hapus
+              {deleteWargaMutation.isPending ? "Menghapus…" : "Hapus"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -548,18 +555,22 @@ export default function BlusukanrwKkDetail() {
             <AlertDialogCancel>Batal</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground"
+              disabled={deleteKkMutation.isPending}
               onClick={() => deleteKkMutation.mutate()}
             >
-              Hapus KK
+              {deleteKkMutation.isPending ? "Menghapus…" : "Hapus KK"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {data && kkForm && footerPrimary && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur border-t p-4 max-w-lg mx-auto">
+      {data && kkForm && footerPrimary && !wargaFormOpen && (
+        <div
+          className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur border-t p-4 max-w-lg mx-auto shadow-[0_-4px_20px_rgba(0,0,0,0.06)]"
+          style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+        >
           <Button
-            className="w-full"
+            className="w-full h-12 text-base font-semibold touch-manipulation"
             style={{ backgroundColor: "hsl(163,55%,22%)" }}
             disabled={footerPrimary.pending}
             onClick={footerPrimary.onClick}
