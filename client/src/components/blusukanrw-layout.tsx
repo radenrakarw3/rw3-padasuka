@@ -12,10 +12,8 @@ const navItems = [
 export function BlusukanrwLayout({ children }: { children: React.ReactNode }) {
   const { logout } = useBlusukanAuth();
   const [location, setLocation] = useLocation();
-  const hideNav = location.startsWith("/blusukanrw/kk/");
-
   return (
-    <div className={`min-h-screen flex flex-col bg-background ${hideNav ? "pb-0" : "pb-20"}`}>
+    <div className="min-h-screen flex flex-col bg-background pb-20">
       <header className="sticky top-0 z-50 bg-[hsl(163,55%,22%)] text-white px-4 py-3 shadow-md">
         <div className="flex items-center justify-between gap-2 max-w-lg mx-auto">
           <div className="flex items-center gap-2 min-w-0">
@@ -41,31 +39,31 @@ export function BlusukanrwLayout({ children }: { children: React.ReactNode }) {
 
       <main className="flex-1 max-w-lg mx-auto w-full px-4 py-4">{children}</main>
 
-      {!hideNav && (
-        <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-border shadow-lg">
-          <div className="flex items-center justify-around max-w-lg mx-auto py-1">
-            {navItems.map((item) => {
-              const active = location === item.path || location.startsWith(`${item.path}/`);
-              return (
-                <button
-                  key={item.path}
-                  type="button"
-                  onClick={() => setLocation(item.path)}
-                  className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-lg transition-colors min-w-[72px] ${
-                    active ? "text-[hsl(163,55%,22%)]" : "text-muted-foreground"
-                  }`}
-                >
-                  <item.icon className={`w-5 h-5 ${active ? "stroke-[2.5]" : ""}`} />
-                  <span className={`text-[10px] ${active ? "font-bold" : "font-medium"}`}>
-                    {item.label}
-                  </span>
-                  {active && <div className="w-4 h-0.5 bg-[hsl(163,55%,22%)] rounded-full" />}
-                </button>
-              );
-            })}
-          </div>
-        </nav>
-      )}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-border shadow-lg">
+        <div className="flex items-center justify-around max-w-lg mx-auto py-1">
+          {navItems.map((item) => {
+            const onKkDetail = location.startsWith("/blusukanrw/kk/");
+            const active =
+              !onKkDetail && (location === item.path || location.startsWith(`${item.path}/`));
+            return (
+              <button
+                key={item.path}
+                type="button"
+                onClick={() => setLocation(item.path)}
+                className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-lg transition-colors min-w-[72px] ${
+                  active ? "text-[hsl(163,55%,22%)]" : "text-muted-foreground"
+                }`}
+              >
+                <item.icon className={`w-5 h-5 ${active ? "stroke-[2.5]" : ""}`} />
+                <span className={`text-[10px] ${active ? "font-bold" : "font-medium"}`}>
+                  {item.label}
+                </span>
+                {active && <div className="w-4 h-0.5 bg-[hsl(163,55%,22%)] rounded-full" />}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }

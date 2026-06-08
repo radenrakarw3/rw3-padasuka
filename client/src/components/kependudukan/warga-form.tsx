@@ -24,6 +24,7 @@ import { LITERASI_OPTIONS, WG_DOMAIN_LEVEL_OPTIONS } from "@shared/warga-interna
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import type { KartuKeluarga, Warga } from "@shared/schema";
@@ -714,10 +715,14 @@ export function WargaFormFields({
           {needsStatusAngkatanKerja(age) && needsPekerjaanDetail(formData.statusPekerjaan) && (
             <div className="space-y-1.5">
               <Label>Pekerjaan / jabatan *</Label>
-              <Select value={formData.pekerjaan} onValueChange={(value) => updateField("pekerjaan", value)}>
-                <SelectTrigger data-testid={`select-pekerjaan-${testIdPrefix}`}><SelectValue placeholder="Pilih" /></SelectTrigger>
-                <SelectContent>{pekerjaanOptions.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
-              </Select>
+              <SearchableSelect
+                value={formData.pekerjaan}
+                onValueChange={(value) => updateField("pekerjaan", value)}
+                options={pekerjaanOptions}
+                placeholder="Pilih pekerjaan"
+                searchPlaceholder="Cari pekerjaan…"
+                data-testid={`select-pekerjaan-${testIdPrefix}`}
+              />
               {renderError("pekerjaan")}
             </div>
           )}

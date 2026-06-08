@@ -43,7 +43,7 @@ export const TTL = {
 
 export const CacheKey = {
   dashboard: (rt?: number) => `dashboard:rt=${rt ?? "all"}`,
-  kependudukan: (rt?: number) => `kependudukan:v2:rt=${rt ?? "all"}`,
+  kependudukan: (rt?: number) => `kependudukan:v14:rt=${rt ?? "all"}`,
   wargaList: () => `warga:list`,
   kkList: () => `kk:list`,
   wargaWithKk: () => `warga-with-kk:list`,

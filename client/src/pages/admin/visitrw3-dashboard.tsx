@@ -2,16 +2,6 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
-  XAxis,
-  YAxis,
-} from "recharts";
-import {
   Building2,
   ClipboardList,
   Users,
@@ -20,173 +10,44 @@ import {
   CheckCircle2,
   Filter,
 } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from "@/components/ui/chart";
 import { Visitrw3AdminNav } from "@/components/admin/visitrw3-admin-nav";
+import { Visitrw3AdminShell, Visitrw3Panel, Visitrw3StatCard } from "@/components/admin/visitrw3-admin-ui";
+import {
+  BarBlock,
+  ChartCard,
+  DashboardSection,
+  pairsToPie,
+  PieBlock,
+  rowsToPie,
+  StatChips,
+  toPieData,
+} from "@/components/admin/visitrw3-dashboard-charts";
 import { formatRupiah } from "@/lib/visitrw3-kontribusi";
 import { rtOptions } from "@/lib/constants";
 import { getApiErrorMessage, readJsonSafely } from "@/lib/queryClient";
-
-type Visitrw3DashboardStats = {
-  ringkasan: {
-    totalPengajuan: number;
-    menungguSurvey: number;
-    disetujui: number;
-    ditolak: number;
-    totalProperti: number;
-    propertiMenunggu: number;
-    penghuniAktif: number;
-    totalKontribusiKasRw: number;
-  };
-  pengajuan: {
-    byKeperluan: Record<string, number>;
-    byTipe: Record<string, number>;
-    byStatus: Record<string, number>;
-    byRt: { rt: number; count: number }[];
-    byTerminBulan: { termin: number; count: number }[];
-    bisnisDiRw3: number;
-    bisnisLuar: number;
-    byJenisTempatUsaha: { label: string; count: number }[];
-  };
-  penghuni: {
-    totalBaris: number;
-    anakVsDewasa: { anak: number; dewasa: number };
-    byJenisKelamin: Record<string, number>;
-    topPekerjaan: { label: string; count: number }[];
-    denganKendaraan: number;
-    tanpaKendaraan: number;
-    byJenisKendaraan: { label: string; count: number }[];
-  };
-  properti: {
-    byJenisProperti: { label: string; count: number }[];
-    byStatusProperti: { label: string; count: number }[];
-    byRt: { rt: number; count: number }[];
-    izinTinggal: number;
-    izinBisnis: number;
-    byJumlahPintu: { label: string; count: number }[];
-  };
-  trenBulan: { bulan: string; count: number }[];
-  pengajuanTerbaru: {
-    id: number;
-    nomorVisitrw3: string;
-    keperluanPengajuan: string;
-    status: string;
-    rt: number;
-    createdAt: string | null;
-  }[];
-  rtList: number[];
-};
-
-const PIE_COLORS = ["#0f766e", "#22c55e", "#f59e0b", "#ef4444", "#6366f1", "#8b5cf6", "#ec4899", "#14b8a6"];
-
-const statusLabel: Record<string, string> = {
-  menunggu_survey: "Menunggu survey",
-  disetujui: "Disetujui",
-  ditolak: "Ditolak",
-};
-
-const keperluanLabel: Record<string, string> = {
-  tinggal: "Tinggal",
-  bisnis: "Bisnis",
-};
-
-const tipeLabel: Record<string, string> = {
-  pengajuan_baru: "Pengajuan baru",
-  perpanjang: "Perpanjang",
-};
+import {
+  type Visitrw3DashboardStats,
+  normalizeVisitrw3DashboardStats,
+  visitrw3JenisPropertiLabels,
+  visitrw3KeperluanLabels,
+  visitrw3PropertiStatusLabels,
+  visitrw3StatusLabels,
+  visitrw3TipeLabels,
+} from "@shared/visitrw3-analytics";
 
 const DEFAULT_RT_LIST = [...rtOptions];
-
-const pieConfig = { value: { label: "Jumlah" } } satisfies ChartConfig;
-const barConfig = { count: { label: "Jumlah", color: "#0f766e" } } satisfies ChartConfig;
 
 function formatNumber(n: number) {
   return n.toLocaleString("id-ID");
 }
 
-function toPieData(record: Record<string, number>, labelMap?: Record<string, string>) {
-  return Object.entries(record)
-    .filter(([, v]) => v > 0)
-    .map(([key, value], i) => ({
-      label: labelMap?.[key] ?? key,
-      value,
-      fill: PIE_COLORS[i % PIE_COLORS.length],
-    }));
-}
-
-function MetricCard({
-  title,
-  value,
-  description,
-  icon: Icon,
-}: {
-  title: string;
-  value: string;
-  description: string;
-  icon: typeof Users;
-}) {
-  return (
-    <Card className="border-border/70 bg-card/80 shadow-sm">
-      <CardContent className="flex items-start justify-between gap-4 p-5">
-        <div className="space-y-1">
-          <p className="text-sm font-medium text-muted-foreground">{title}</p>
-          <p className="text-2xl font-bold tracking-tight">{value}</p>
-          <p className="text-xs text-muted-foreground">{description}</p>
-        </div>
-        <div className="rounded-2xl bg-primary/10 p-3 text-primary">
-          <Icon className="h-5 w-5" />
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function ChartCard({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Card className="border-border/70 bg-card/80 shadow-sm">
-      <CardHeader className="space-y-1">
-        <CardTitle className="text-base">{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
-  );
-}
-
-function PieBlock({ data, empty }: { data: { label: string; value: number; fill: string }[]; empty: string }) {
-  if (data.length === 0) {
-    return <p className="text-sm text-muted-foreground py-8 text-center">{empty}</p>;
-  }
-  return (
-    <ChartContainer config={pieConfig} className="mx-auto aspect-square max-h-[240px]">
-      <PieChart>
-        <ChartTooltip content={<ChartTooltipContent nameKey="label" />} />
-        <Pie data={data} dataKey="value" nameKey="label" cx="50%" cy="50%" innerRadius={50} outerRadius={80}>
-          {data.map((entry, i) => (
-            <Cell key={`${entry.label}-${i}`} fill={entry.fill} />
-          ))}
-        </Pie>
-      </PieChart>
-    </ChartContainer>
-  );
+function labelPropertiJenis(label: string) {
+  return visitrw3JenisPropertiLabels[label] ?? label;
 }
 
 export default function AdminVisitrw3Dashboard() {
@@ -207,84 +68,135 @@ export default function AdminVisitrw3Dashboard() {
         }
         throw new Error(msg);
       }
-      return readJsonSafely<Visitrw3DashboardStats>(res);
+      const raw = await readJsonSafely<Partial<Visitrw3DashboardStats>>(res);
+      return normalizeVisitrw3DashboardStats(raw);
     },
     retry: 1,
     staleTime: 60_000,
   });
 
-  const statusPie = useMemo(
-    () => toPieData(data?.pengajuan.byStatus ?? {}, statusLabel),
-    [data?.pengajuan.byStatus],
-  );
-  const keperluanPie = useMemo(
-    () => toPieData(data?.pengajuan.byKeperluan ?? {}, keperluanLabel),
-    [data?.pengajuan.byKeperluan],
-  );
+  const statusPie = useMemo(() => toPieData(data?.pengajuan.byStatus ?? {}, visitrw3StatusLabels), [data?.pengajuan.byStatus]);
+  const keperluanPie = useMemo(() => toPieData(data?.pengajuan.byKeperluan ?? {}, visitrw3KeperluanLabels), [data?.pengajuan.byKeperluan]);
+  const tipePie = useMemo(() => toPieData(data?.pengajuan.byTipe ?? {}, visitrw3TipeLabels), [data?.pengajuan.byTipe]);
+  const bisnisWilayahPie = useMemo(() => {
+    if (!data?.pengajuan) return [];
+    return pairsToPie([
+      { label: "Bisnis di wilayah RW3", value: data.pengajuan.bisnisDiRw3 },
+      { label: "Bisnis luar wilayah", value: data.pengajuan.bisnisLuar },
+    ]);
+  }, [data?.pengajuan]);
+  const setujuSyaratPie = useMemo(() => {
+    if (!data?.pengajuan) return [];
+    return pairsToPie([
+      { label: "Setuju tata tertib", value: data.pengajuan.setujuTataTertib.ya },
+      { label: "Belum setuju", value: data.pengajuan.setujuTataTertib.tidak },
+    ]);
+  }, [data?.pengajuan]);
+  const nomorUnitPie = useMemo(() => {
+    if (!data?.pengajuan) return [];
+    return pairsToPie([
+      { label: "Ada nomor unit", value: data.pengajuan.denganNomorUnit },
+      { label: "Tanpa nomor unit", value: data.pengajuan.tanpaNomorUnit },
+    ]);
+  }, [data?.pengajuan]);
+  const propertiTerkaitPie = useMemo(() => {
+    if (!data?.pengajuan) return [];
+    return pairsToPie([
+      { label: "Terhubung properti", value: data.pengajuan.denganProperti },
+      { label: "Tanpa properti (luar)", value: data.pengajuan.tanpaProperti },
+    ]);
+  }, [data?.pengajuan]);
+
   const anakPie = useMemo(() => {
     if (!data?.penghuni) return [];
     const { anak, dewasa } = data.penghuni.anakVsDewasa;
-    return [
-      { label: "Dewasa", value: dewasa, fill: PIE_COLORS[0] },
-      { label: "Anak", value: anak, fill: PIE_COLORS[1] },
-    ].filter((d) => d.value > 0);
+    return pairsToPie([
+      { label: "Dewasa", value: dewasa },
+      { label: "Anak", value: anak },
+    ]);
   }, [data?.penghuni]);
+  const jenisKelaminPie = useMemo(() => rowsToPie(data?.penghuni.byJenisKelamin ?? []), [data?.penghuni.byJenisKelamin]);
   const kendaraanPie = useMemo(() => {
     if (!data?.penghuni) return [];
-    return [
-      { label: "Punya kendaraan", value: data.penghuni.denganKendaraan, fill: PIE_COLORS[0] },
-      { label: "Tanpa kendaraan", value: data.penghuni.tanpaKendaraan, fill: PIE_COLORS[2] },
-    ].filter((d) => d.value > 0);
+    return pairsToPie([
+      { label: "Punya kendaraan", value: data.penghuni.denganKendaraan },
+      { label: "Tanpa kendaraan", value: data.penghuni.tanpaKendaraan },
+    ]);
   }, [data?.penghuni]);
+  const fotoKtpPie = useMemo(() => {
+    if (!data?.penghuni) return [];
+    return pairsToPie([
+      { label: "Foto KTP terunggah", value: data.penghuni.withFotoKtp },
+      { label: "Tanpa foto KTP", value: data.penghuni.withoutFotoKtp },
+    ]);
+  }, [data?.penghuni]);
+
+  const propertiStatusPie = useMemo(
+    () =>
+      rowsToPie(
+        (data?.properti.byStatusProperti ?? []).map((r) => ({
+          label: visitrw3PropertiStatusLabels[r.label] ?? r.label,
+          count: r.count,
+        })),
+      ),
+    [data?.properti.byStatusProperti],
+  );
+  const izinPropertiPie = useMemo(() => rowsToPie(data?.properti.byIzinKombinasi ?? []), [data?.properti.byIzinKombinasi]);
+  const pjPropertiPie = useMemo(() => {
+    if (!data?.properti) return [];
+    return pairsToPie([
+      { label: "Ada PJ pengelola", value: data.properti.denganPenanggungJawab },
+      { label: "Tanpa PJ", value: data.properti.tanpaPenanggungJawab },
+    ]);
+  }, [data?.properti]);
+  const propertiSetujuSyaratPie = useMemo(() => {
+    if (!data?.properti) return [];
+    return pairsToPie([
+      { label: "Setuju tata tertib", value: data.properti.setujuTataTertib.ya },
+      { label: "Belum setuju", value: data.properti.setujuTataTertib.tidak },
+    ]);
+  }, [data?.properti]);
 
   const rtBar = useMemo(
     () => (data?.pengajuan.byRt ?? []).map((r) => ({ label: `RT ${String(r.rt).padStart(2, "0")}`, count: r.count })),
     [data?.pengajuan.byRt],
   );
+  const propertiRtBar = useMemo(
+    () => (data?.properti.byRt ?? []).map((r) => ({ label: `RT ${String(r.rt).padStart(2, "0")}`, count: r.count })),
+    [data?.properti.byRt],
+  );
   const propertiJenisBar = useMemo(
-    () => (data?.properti.byJenisProperti ?? []).map((r) => ({ label: r.label, count: r.count })),
+    () => (data?.properti.byJenisProperti ?? []).map((r) => ({ label: labelPropertiJenis(r.label), count: r.count })),
     [data?.properti.byJenisProperti],
   );
   const terminBar = useMemo(
-    () =>
-      (data?.pengajuan.byTerminBulan ?? []).map((r) => ({
-        label: `${r.termin} bln`,
-        count: r.count,
-      })),
+    () => (data?.pengajuan.byTerminBulan ?? []).map((r) => ({ label: `${r.termin} bln`, count: r.count })),
     [data?.pengajuan.byTerminBulan],
   );
-  const pekerjaanBar = useMemo(
-    () => (data?.penghuni.topPekerjaan ?? []).map((r) => ({ label: r.label, count: r.count })),
-    [data?.penghuni.topPekerjaan],
+  const jumlahPenghuniBar = useMemo(
+    () => data?.pengajuan.byJumlahPenghuni ?? [],
+    [data?.pengajuan.byJumlahPenghuni],
   );
-  const jenisUsahaBar = useMemo(
-    () => (data?.pengajuan.byJenisTempatUsaha ?? []).map((r) => ({ label: r.label, count: r.count })),
-    [data?.pengajuan.byJenisTempatUsaha],
-  );
-  const trenBar = useMemo(
-    () => (data?.trenBulan ?? []).map((r) => ({ label: r.bulan, count: r.count })),
-    [data?.trenBulan],
-  );
-  const propertiStatusPie = useMemo(
-    () =>
-      (data?.properti.byStatusProperti ?? []).map((r, i) => ({
-        label: r.label === "menunggu_verifikasi" ? "Menunggu verifikasi" : r.label === "aktif" ? "Aktif" : r.label,
-        value: r.count,
-        fill: PIE_COLORS[i % PIE_COLORS.length],
-      })),
-    [data?.properti.byStatusProperti],
-  );
+  const pekerjaanBar = useMemo(() => data?.penghuni.topPekerjaan ?? [], [data?.penghuni.topPekerjaan]);
+  const keperluanTinggalBar = useMemo(() => data?.penghuni.byKeperluanTinggal ?? [], [data?.penghuni.byKeperluanTinggal]);
+  const jenjangAnakBar = useMemo(() => data?.penghuni.byJenjangAnak ?? [], [data?.penghuni.byJenjangAnak]);
+  const kelompokUsiaBar = useMemo(() => data?.penghuni.byKelompokUsia ?? [], [data?.penghuni.byKelompokUsia]);
+  const jenisKendaraanBar = useMemo(() => data?.penghuni.byJenisKendaraan ?? [], [data?.penghuni.byJenisKendaraan]);
+  const tempatKerjaBar = useMemo(() => data?.penghuni.topTempatKerja ?? [], [data?.penghuni.topTempatKerja]);
+  const jenisUsahaBar = useMemo(() => data?.pengajuan.byJenisTempatUsaha ?? [], [data?.pengajuan.byJenisTempatUsaha]);
+  const pintuTierBar = useMemo(() => data?.properti.byJumlahPintu ?? [], [data?.properti.byJumlahPintu]);
+  const trenBar = useMemo(() => (data?.trenBulan ?? []).map((r) => ({ label: r.bulan, count: r.count })), [data?.trenBulan]);
+
   const pengajuanBaru = data?.pengajuan.byTipe?.pengajuan_baru ?? 0;
   const pengajuanPerpanjang = data?.pengajuan.byTipe?.perpanjang ?? 0;
-
   const rtList = data?.rtList?.length ? data.rtList : DEFAULT_RT_LIST;
   const selectedRtLabel = rtFilter === "semua" ? "Semua RT" : `RT ${rtFilter}`;
 
   return (
-    <div className="space-y-6">
+    <Visitrw3AdminShell className="space-y-6">
       <Visitrw3AdminNav
         title="Dashboard Visit RW3"
-        description={`Ringkasan dari form pengajuan, properti, dan penghuni — ${selectedRtLabel}`}
+        description={`Ringkasan semua isian form pengajuan, properti, dan penghuni — ${selectedRtLabel}`}
         actions={
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-muted-foreground" />
@@ -301,9 +213,7 @@ export default function AdminVisitrw3Dashboard() {
                 ))}
               </SelectContent>
             </Select>
-            {isFetching && !isLoading && (
-              <span className="text-xs text-muted-foreground">Memuat…</span>
-            )}
+            {isFetching && !isLoading && <span className="text-xs text-muted-foreground">Memuat…</span>}
           </div>
         }
       />
@@ -313,10 +223,6 @@ export default function AdminVisitrw3Dashboard() {
           <AlertTitle>Gagal memuat dashboard</AlertTitle>
           <AlertDescription className="flex flex-col gap-3">
             <span>{getApiErrorMessage(error)}</span>
-            <span className="text-xs opacity-90">
-              Pastikan server dev sudah di-restart setelah update. Endpoint:{" "}
-              <code className="font-mono">/api/admin/visitrw3/dashboard-stats</code>
-            </span>
             <Button type="button" variant="outline" size="sm" className="w-fit" onClick={() => refetch()}>
               Coba lagi
             </Button>
@@ -336,246 +242,196 @@ export default function AdminVisitrw3Dashboard() {
             <Alert>
               <AlertTitle>Belum ada data Visit RW3</AlertTitle>
               <AlertDescription>
-                Dashboard siap dipakai. Statistik akan terisi setelah ada pengajuan dari form publik atau properti
-                terdaftar. Anda tetap bisa mengelola antrian, properti, dan penghuni dari tab di atas.
+                Statistik akan terisi otomatis dari form publik (pengajuan, daftar properti) dan data penghuni pada
+                setiap pengajuan.
               </AlertDescription>
             </Alert>
           )}
 
-          <div className="flex flex-wrap gap-2 text-sm">
-            <span className="rounded-md border px-3 py-1.5">
+          <div className="flex flex-wrap gap-2">
+            <span className="rounded-full border border-border/60 bg-card/80 px-3 py-1.5 text-sm shadow-sm">
               Pengajuan baru: <strong>{formatNumber(pengajuanBaru)}</strong>
             </span>
-            <span className="rounded-md border px-3 py-1.5">
+            <span className="rounded-full border border-border/60 bg-card/80 px-3 py-1.5 text-sm shadow-sm">
               Perpanjang: <strong>{formatNumber(pengajuanPerpanjang)}</strong>
+            </span>
+            <span className="rounded-full border border-border/60 bg-card/80 px-3 py-1.5 text-sm shadow-sm">
+              Catatan pemohon: <strong>{formatNumber(data.pengajuan.denganCatatanPemohon)}</strong>
             </span>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <MetricCard
-              title="Menunggu survey"
-              value={formatNumber(data.ringkasan.menungguSurvey)}
-              description="Pengajuan belum diproses admin"
-              icon={Clock}
-            />
-            <MetricCard
-              title="Disetujui"
-              value={formatNumber(data.ringkasan.disetujui)}
-              description={`Dari ${formatNumber(data.ringkasan.totalPengajuan)} pengajuan`}
-              icon={CheckCircle2}
-            />
-            <MetricCard
-              title="Properti"
-              value={formatNumber(data.ringkasan.totalProperti)}
-              description={
-                data.ringkasan.propertiMenunggu > 0
-                  ? `${data.ringkasan.propertiMenunggu} menunggu verifikasi`
-                  : "Terdaftar di Visit RW3"
-              }
-              icon={Building2}
-            />
-            <MetricCard
-              title="Penghuni aktif"
-              value={formatNumber(data.ringkasan.penghuniAktif)}
-              description="Kontrak aktif di properti RW"
-              icon={Users}
-            />
-            <MetricCard
-              title="Kontribusi Kas RW"
-              value={formatRupiah(data.ringkasan.totalKontribusiKasRw)}
-              description="Total setelah survey & persetujuan"
-              icon={Wallet}
-            />
-            <MetricCard
-              title="Baris data penghuni"
-              value={formatNumber(data.penghuni.totalBaris)}
-              description="Isian form penghuni pada pengajuan"
-              icon={ClipboardList}
-            />
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <Visitrw3StatCard title="Menunggu survey" value={formatNumber(data.ringkasan.menungguSurvey)} description="Belum diproses admin" icon={Clock} tone="warning" />
+            <Visitrw3StatCard title="Disetujui" value={formatNumber(data.ringkasan.disetujui)} description={`Dari ${formatNumber(data.ringkasan.totalPengajuan)} pengajuan`} icon={CheckCircle2} tone="success" />
+            <Visitrw3StatCard title="Properti" value={formatNumber(data.ringkasan.totalProperti)} description={data.ringkasan.propertiMenunggu > 0 ? `${data.ringkasan.propertiMenunggu} menunggu verifikasi` : "Terdaftar"} icon={Building2} />
+            <Visitrw3StatCard title="Penghuni aktif" value={formatNumber(data.ringkasan.penghuniAktif)} description="Kontrak aktif (warga_singgah)" icon={Users} />
+            <Visitrw3StatCard title="Kontribusi Kas RW" value={formatRupiah(data.ringkasan.totalKontribusiKasRw)} description="Setelah survey & persetujuan" icon={Wallet} tone="gold" />
+            <Visitrw3StatCard title="Baris form penghuni" value={formatNumber(data.penghuni.totalBaris)} description="Isian penghuni pada pengajuan" icon={ClipboardList} />
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <ChartCard title="Status pengajuan" description="Dari form pengajuan / perpanjang">
+          <DashboardSection title="Form pengajuan" description="Keperluan, lokasi, bayar, bisnis, dan persetujuan syarat" />
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <ChartCard title="Status pengajuan" description="menunggu_survey · disetujui · ditolak">
               <PieBlock data={statusPie} empty="Belum ada pengajuan" />
             </ChartCard>
-            <ChartCard title="Keperluan" description="Tinggal vs bisnis">
+            <ChartCard title="Keperluan" description="Field keperluanPengajuan">
               <PieBlock data={keperluanPie} empty="Belum ada data" />
             </ChartCard>
-            <ChartCard title="Status properti" description="Form daftar properti">
-              <PieBlock data={propertiStatusPie} empty="Belum ada properti" />
+            <ChartCard title="Tipe pengajuan" description="pengajuan_baru · perpanjang">
+              <PieBlock data={tipePie} empty="Belum ada data" />
             </ChartCard>
-            <ChartCard title="Penghuni: anak vs dewasa" description="Data isian form penghuni">
+            <ChartCard title="Bisnis: wilayah RW3" description="tinggalDiWilayahRw3 pada pengajuan bisnis">
+              <PieBlock data={bisnisWilayahPie} empty="Belum ada pengajuan bisnis" />
+            </ChartCard>
+            <ChartCard title="Setuju tata tertib" description="Checkbox setujuTataTertib">
+              <PieBlock data={setujuSyaratPie} empty="Belum ada data" />
+            </ChartCard>
+            <ChartCard title="Nomor unit/kamar" description="Field nomorUnit">
+              <PieBlock data={nomorUnitPie} empty="Belum ada data" />
+            </ChartCard>
+            <ChartCard title="Terhubung properti" description="pemilikKostId — kost terpilih vs bisnis luar">
+              <PieBlock data={propertiTerkaitPie} empty="Belum ada data" />
+            </ChartCard>
+            <ChartCard title="Pengajuan per RT" description="Field rt">
+              <BarBlock data={rtBar} empty="Belum ada data" />
+            </ChartCard>
+            <ChartCard title="Termin pembayaran" description="terminBulan (1/3/6/12)">
+              <BarBlock data={terminBar} empty="Belum ada data" />
+            </ChartCard>
+            <ChartCard title="Jumlah penghuni per pengajuan" description="Field jumlahPenghuni">
+              <BarBlock data={jumlahPenghuniBar} empty="Belum ada data" />
+            </ChartCard>
+            <ChartCard title="Tren pengajuan masuk" description="Berdasarkan created_at">
+              <BarBlock data={trenBar} empty="Belum ada data" />
+            </ChartCard>
+            <ChartCard title="Jenis tempat usaha" description="jenisTempatUsaha / bisnis">
+              <BarBlock data={jenisUsahaBar} empty="Belum ada pengajuan bisnis" />
+            </ChartCard>
+          </div>
+
+          <DashboardSection title="Form penghuni" description="Data per orang pada pengajuan tinggal / bisnis di wilayah" />
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <ChartCard title="Anak vs dewasa" description="Checkbox isAnak">
               <PieBlock data={anakPie} empty="Belum ada data penghuni" />
             </ChartCard>
-            <ChartCard title="Kendaraan penghuni" description="Field kendaraan pada form">
+            <ChartCard title="Jenis kelamin" description="Field jenisKelamin">
+              <PieBlock data={jenisKelaminPie} empty="Belum ada data" />
+            </ChartCard>
+            <ChartCard title="Kelompok usia" description="Dihitung dari tanggalLahir">
+              <BarBlock data={kelompokUsiaBar} empty="Belum ada data" />
+            </ChartCard>
+            <ChartCard title="Keperluan tinggal" description="Kerja · Kuliah · Usaha · Lainnya">
+              <BarBlock data={keperluanTinggalBar} empty="Belum ada data" />
+            </ChartCard>
+            <ChartCard title="Jenjang anak" description="Field namaSekolah (anak)">
+              <BarBlock data={jenjangAnakBar} empty="Belum ada data anak" />
+            </ChartCard>
+            <ChartCard title="Pekerjaan" description="Field pekerjaan (dewasa)">
+              <BarBlock data={pekerjaanBar} empty="Belum ada data" vertical height={260} />
+            </ChartCard>
+            <ChartCard title="Kendaraan" description="Checkbox punyaKendaraan">
               <PieBlock data={kendaraanPie} empty="Belum ada data" />
             </ChartCard>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <ChartCard title="Pengajuan per RT" description="Filter lokasi form">
-              {rtBar.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-8 text-center">Belum ada data</p>
-              ) : (
-                <ChartContainer config={barConfig} className="h-[240px] w-full">
-                  <BarChart data={rtBar} margin={{ left: 8, right: 8 }}>
-                    <CartesianGrid vertical={false} />
-                    <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
-                    <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={12} />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <Bar dataKey="count" fill="var(--color-count)" radius={4} />
-                  </BarChart>
-                </ChartContainer>
-              )}
+            <ChartCard title="Jenis kendaraan" description="jenisKendaraan + platNomor">
+              <BarBlock data={jenisKendaraanBar} empty="Belum ada kendaraan" />
             </ChartCard>
-            <ChartCard title="Properti per jenis" description="Form daftar properti">
-              {propertiJenisBar.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-8 text-center">Belum ada properti</p>
-              ) : (
-                <ChartContainer config={barConfig} className="h-[240px] w-full">
-                  <BarChart data={propertiJenisBar} margin={{ left: 8, right: 8 }}>
-                    <CartesianGrid vertical={false} />
-                    <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
-                    <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={12} />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <Bar dataKey="count" fill="var(--color-count)" radius={4} />
-                  </BarChart>
-                </ChartContainer>
-              )}
+            <ChartCard title="Upload foto KTP" description="Field fotoKtpPath">
+              <PieBlock data={fotoKtpPie} empty="Belum ada data" />
             </ChartCard>
-            <ChartCard title="Termin pembayaran" description="Pilihan bulan pada form bayar">
-              {terminBar.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-8 text-center">Belum ada data</p>
-              ) : (
-                <ChartContainer config={barConfig} className="h-[240px] w-full">
-                  <BarChart data={terminBar} margin={{ left: 8, right: 8 }}>
-                    <CartesianGrid vertical={false} />
-                    <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
-                    <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={12} />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <Bar dataKey="count" fill="var(--color-count)" radius={4} />
-                  </BarChart>
-                </ChartContainer>
-              )}
-            </ChartCard>
-            <ChartCard title="Tren pengajuan" description="Bulan terakhir (created_at)">
-              {trenBar.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-8 text-center">Belum ada data</p>
-              ) : (
-                <ChartContainer config={barConfig} className="h-[240px] w-full">
-                  <BarChart data={trenBar} margin={{ left: 8, right: 8 }}>
-                    <CartesianGrid vertical={false} />
-                    <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
-                    <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={12} />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <Bar dataKey="count" fill="var(--color-count)" radius={4} />
-                  </BarChart>
-                </ChartContainer>
-              )}
+            <ChartCard title="Nama tempat kerja" description="namaTempatKerja (dewasa)">
+              <BarBlock data={tempatKerjaBar} empty="Belum ada data" vertical height={240} />
             </ChartCard>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <ChartCard title="Top pekerjaan penghuni" description="Field pekerjaan pada form penghuni">
-              {pekerjaanBar.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-8 text-center">Belum ada data</p>
-              ) : (
-                <ChartContainer config={barConfig} className="h-[280px] w-full">
-                  <BarChart data={pekerjaanBar} layout="vertical" margin={{ left: 4, right: 12 }}>
-                    <CartesianGrid horizontal={false} />
-                    <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} fontSize={12} />
-                    <YAxis type="category" dataKey="label" width={100} tickLine={false} axisLine={false} fontSize={11} />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <Bar dataKey="count" fill="var(--color-count)" radius={4} />
-                  </BarChart>
-                </ChartContainer>
-              )}
+          <DashboardSection title="Form daftar properti" description="Kost, kontrakan, kiosk, lapak — pemilik & izin" />
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <ChartCard title="Status properti" description="aktif · menunggu_verifikasi">
+              <PieBlock data={propertiStatusPie} empty="Belum ada properti" />
             </ChartCard>
-            <ChartCard title="Jenis tempat usaha (bisnis)" description="Bisnis di RW vs luar wilayah">
-              <div className="flex flex-wrap gap-3 mb-4 text-sm">
-                <span className="rounded-md border px-3 py-1.5">
-                  Di wilayah RW3: <strong>{formatNumber(data.pengajuan.bisnisDiRw3)}</strong>
-                </span>
-                <span className="rounded-md border px-3 py-1.5">
-                  Luar wilayah: <strong>{formatNumber(data.pengajuan.bisnisLuar)}</strong>
-                </span>
-                <span className="rounded-md border px-3 py-1.5">
-                  Izin tinggal: <strong>{formatNumber(data.properti.izinTinggal)}</strong> properti
-                </span>
-                <span className="rounded-md border px-3 py-1.5">
-                  Izin bisnis: <strong>{formatNumber(data.properti.izinBisnis)}</strong> properti
-                </span>
-              </div>
-              {jenisUsahaBar.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4 text-center">Belum ada pengajuan bisnis</p>
-              ) : (
-                <ChartContainer config={barConfig} className="h-[200px] w-full">
-                  <BarChart data={jenisUsahaBar} margin={{ left: 8, right: 8 }}>
-                    <CartesianGrid vertical={false} />
-                    <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={10} />
-                    <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={12} />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <Bar dataKey="count" fill="var(--color-count)" radius={4} />
-                  </BarChart>
-                </ChartContainer>
-              )}
+            <ChartCard title="Jenis properti" description="jenisProperti">
+              <BarBlock data={propertiJenisBar} empty="Belum ada properti" />
+            </ChartCard>
+            <ChartCard title="Properti per RT" description="Field rt">
+              <BarBlock data={propertiRtBar} empty="Belum ada properti" />
+            </ChartCard>
+            <ChartCard title="Ukuran properti (pintu)" description="jumlahPintu → tier kecil/sedang/besar">
+              <BarBlock data={pintuTierBar} empty="Belum ada properti" />
+            </ChartCard>
+            <ChartCard title="Izin yang dibuka" description="izinTinggal · izinBisnis">
+              <PieBlock data={izinPropertiPie} empty="Belum ada properti" />
+            </ChartCard>
+            <ChartCard title="Penanggung jawab pengelola" description="namaPenanggungJawab">
+              <PieBlock data={pjPropertiPie} empty="Belum ada properti" />
+            </ChartCard>
+            <ChartCard title="Setuju tata tertib (properti)" description="Checkbox saat daftar properti">
+              <PieBlock data={propertiSetujuSyaratPie} empty="Belum ada properti" />
             </ChartCard>
           </div>
 
-          <Card className="border-border/70">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-base">Pengajuan terbaru</CardTitle>
-                <CardDescription>5 entri terakhir — data dari form yang masuk</CardDescription>
-              </div>
+          <Visitrw3Panel
+            title="Ringkasan izin properti"
+            description="Jumlah properti yang mengizinkan tiap jenis pengajuan"
+          >
+            <StatChips
+              items={[
+                { label: "Izin tinggal", value: formatNumber(data.properti.izinTinggal) },
+                { label: "Izin bisnis", value: formatNumber(data.properti.izinBisnis) },
+                { label: "Bisnis di RW3", value: formatNumber(data.pengajuan.bisnisDiRw3) },
+                { label: "Bisnis luar", value: formatNumber(data.pengajuan.bisnisLuar) },
+                { label: "Catatan pemohon properti", value: formatNumber(data.properti.denganCatatanPemohon) },
+              ]}
+            />
+          </Visitrw3Panel>
+
+          <Visitrw3Panel
+            title="Pengajuan terbaru"
+            description="5 entri terakhir dari form publik"
+            actions={
               <Link href="/admin/visitrw3/antrian">
-                <Button variant="outline" size="sm">
-                  Buka antrian
-                </Button>
+                <Button variant="outline" size="sm">Buka antrian</Button>
               </Link>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {data.pengajuanTerbaru.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Belum ada pengajuan</p>
-              ) : (
-                data.pengajuanTerbaru.map((p) => (
-                  <div
-                    key={p.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm"
-                  >
+            }
+          >
+            {data.pengajuanTerbaru.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Belum ada pengajuan</p>
+            ) : (
+              <div className="space-y-2">
+                {data.pengajuanTerbaru.map((p) => (
+                  <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/50 bg-muted/20 px-3 py-2.5 text-sm">
                     <div>
-                      <p className="font-mono font-medium">{p.nomorVisitrw3}</p>
+                      <p className="font-mono font-semibold text-[hsl(163,55%,22%)]">{p.nomorVisitrw3}</p>
                       <p className="text-xs text-muted-foreground">
-                        RT {String(p.rt).padStart(2, "0")} · {keperluanLabel[p.keperluanPengajuan] ?? p.keperluanPengajuan}
+                        RT {String(p.rt).padStart(2, "0")} · {visitrw3KeperluanLabels[p.keperluanPengajuan] ?? p.keperluanPengajuan}
                       </p>
                     </div>
                     <Badge variant={p.status === "menunggu_survey" ? "secondary" : "outline"}>
-                      {statusLabel[p.status] ?? p.status}
+                      {visitrw3StatusLabels[p.status] ?? p.status}
                     </Badge>
                   </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
+                ))}
+              </div>
+            )}
+          </Visitrw3Panel>
 
           <p className="text-xs text-muted-foreground">
-            Statistik penghuni mencakup semua baris isian form pada pengajuan (termasuk yang belum disetujui).
-            Kontribusi hanya menjumlahkan pengajuan yang sudah dicatat ke Kas RW.
+            Statistik penghuni diambil dari tabel visitrw3_penghuni (semua pengajuan). Penghuni aktif hanya yang sudah
+            disetujui dan tercatat di warga_singgah. Field bisnis seperti jam operasional, alamat usaha, dan persetujuan
+            tetangga tidak diagregasi numerik karena bersifat teks/unik per pengajuan — lihat detail di antrian.
           </p>
         </>
       ) : (
         !isLoading &&
         !isError && (
-          <Card>
-            <CardContent className="py-8 text-center text-sm text-muted-foreground">
+          <Visitrw3Panel>
+            <p className="py-4 text-center text-sm text-muted-foreground">
               Data dashboard tidak tersedia.{" "}
               <button type="button" className="underline text-primary" onClick={() => refetch()}>
                 Muat ulang
               </button>
-            </CardContent>
-          </Card>
+            </p>
+          </Visitrw3Panel>
         )
       )}
-    </div>
+    </Visitrw3AdminShell>
   );
 }

@@ -87,7 +87,10 @@ export type WargaFormSectionDef = {
 
 
 
-const SKIP_KEYS = new Set(["kkId", "namaLengkap", "nik", "noKkDiKtp", "namaAlias"]);
+const SKIP_KEYS = new Set(["kkId", "namaLengkap", "nik", "noKkDiKtp", "namaAlias", "kewarganegaraan"]);
+
+/** Field yang tidak ditampilkan di kartu distribusi dashboard (meski ada di respons cache lama). */
+export const ANALYTICS_HIDDEN_DISTRIBUTIONS = new Set(["kewarganegaraan"]);
 
 
 
@@ -150,8 +153,6 @@ export const WARGA_FORM_SECTIONS: WargaFormSectionDef[] = [
       cat("statusPerkawinan", "Status Perkawinan"),
 
       cat("agama", "Agama"),
-
-      cat("kewarganegaraan", "Kewarganegaraan"),
 
     ],
 
@@ -300,6 +301,6 @@ export function wargaFormSectionFieldKeys(): Record<string, string[]> {
 
 
 export const PENGANGGURAN_DEFINISI =
-  "Warga usia ≥18 dengan status «Mencari Kerja» atau «Belum Bekerja». Ibu/mengurus rumah tangga, pelajar/mahasiswa, dan pensiun bukan pengangguran. Data lama tanpa status dipetakan dari teks pekerjaan.";
+  "Warga usia 19–64 dengan status ILO «Mencari Kerja» atau «Belum Bekerja». Pelajar, lansia 65+, dan ibu rumah tangga bukan pengangguran. Data lama tanpa status_pekerjaan: pekerjaan kosong atau «Belum/Tidak Bekerja». «Lainnya» = jabatan BPS, bukan pengangguran.";
 
 

@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Visitrw3AdminNav } from "@/components/admin/visitrw3-admin-nav";
+import { Visitrw3AdminShell, Visitrw3Panel, Visitrw3StatCard } from "@/components/admin/visitrw3-admin-ui";
 import { getApiErrorMessage, readJsonSafely } from "@/lib/queryClient";
 import { rtOptions } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -284,7 +285,7 @@ export default function AdminVisitrw3Kalender() {
   const selectedPenghuni = selectedKey ? byHabisDate[selectedKey] || [] : [];
 
   return (
-    <div className="space-y-4">
+    <Visitrw3AdminShell>
       <Visitrw3AdminNav
         title="Kalender kontrak"
         description="Lihat jatuh tempo izin tinggal dan siapa yang perlu diingatkan untuk perpanjang"
@@ -323,43 +324,17 @@ export default function AdminVisitrw3Kalender() {
       {isLoading ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-20 rounded-lg" />
+            <Skeleton key={i} className="h-24 rounded-2xl" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <Card className="border-red-200 bg-red-50/50">
-            <CardContent className="py-3 px-3">
-              <p className="text-[10px] font-medium text-red-800">Sudah habis</p>
-              <p className="text-xl font-bold text-red-700" data-testid="stat-sudah-habis">
-                {ringkasan.sudahHabis}
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="border-amber-200 bg-amber-50/50">
-            <CardContent className="py-3 px-3">
-              <p className="text-[10px] font-medium text-amber-800">Habis hari ini</p>
-              <p className="text-xl font-bold text-amber-700" data-testid="stat-hari-ini">
-                {ringkasan.hariIni}
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="border-amber-100 bg-amber-50/30">
-            <CardContent className="py-3 px-3">
-              <p className="text-[10px] font-medium text-amber-800">7 hari ke depan</p>
-              <p className="text-xl font-bold text-amber-700" data-testid="stat-7-hari">
-                {ringkasan.dalam7Hari}
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="border-[hsl(163,55%,22%)]/20 bg-[hsl(163,55%,22%)]/5">
-            <CardContent className="py-3 px-3">
-              <p className="text-[10px] font-medium text-[hsl(163,55%,22%)]">Antrian perpanjang</p>
-              <p className="text-xl font-bold text-[hsl(163,55%,22%)]" data-testid="stat-antrian-perpanjang">
-                {antrianPerpanjang.length}
-              </p>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <Visitrw3StatCard title="Sudah habis" value={String(ringkasan.sudahHabis)} icon={AlertTriangle} tone="warning" />
+          <Visitrw3StatCard title="Habis hari ini" value={String(ringkasan.hariIni)} icon={Clock} tone="warning" />
+          <Visitrw3StatCard title="7 hari ke depan" value={String(ringkasan.dalam7Hari)} icon={CalendarDays} tone="gold" />
+          <div data-testid="stat-antrian-perpanjang">
+            <Visitrw3StatCard title="Antrian perpanjang" value={String(antrianPerpanjang.length)} icon={RefreshCw} />
+          </div>
         </div>
       )}
 
@@ -588,6 +563,6 @@ export default function AdminVisitrw3Kalender() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </Visitrw3AdminShell>
   );
 }

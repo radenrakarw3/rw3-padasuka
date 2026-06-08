@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, getQueryFn, getApiErrorMessage } from "@/lib/queryClient";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, RefreshCw } from "lucide-react";
 import { Visitrw3AdminNav } from "@/components/admin/visitrw3-admin-nav";
+import { Visitrw3AdminShell, Visitrw3Panel } from "@/components/admin/visitrw3-admin-ui";
 
 type SettingRow = {
   id: number;
@@ -127,51 +127,48 @@ export default function AdminVisitrw3Pengaturan() {
 
   if (isLoading && rows.length === 0 && !isError) {
     return (
-      <div className="p-4 max-w-3xl mx-auto space-y-4">
+      <Visitrw3AdminShell>
         {header}
         <div className="flex justify-center py-12">
           <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
         </div>
-      </div>
+      </Visitrw3AdminShell>
     );
   }
 
   if (isError && !rows.length) {
     return (
-      <div className="p-4 max-w-3xl mx-auto space-y-4">
+      <Visitrw3AdminShell>
         {header}
-        <Card>
-          <CardContent className="pt-6 space-y-3">
-            <p className="text-sm text-destructive">Gagal memuat pengaturan: {getApiErrorMessage(error)}</p>
-            <p className="text-xs text-muted-foreground">
-              Pastikan server berjalan dan Anda sudah login sebagai admin. Tabel pengaturan akan dibuat otomatis saat
-              dimuat ulang.
-            </p>
-            <Button onClick={() => refetch()}>Coba lagi</Button>
-          </CardContent>
-        </Card>
-      </div>
+        <div className="max-w-3xl space-y-5">
+          <Visitrw3Panel>
+            <div className="space-y-3">
+              <p className="text-sm text-destructive">Gagal memuat pengaturan: {getApiErrorMessage(error)}</p>
+              <p className="text-xs text-muted-foreground">
+                Pastikan server berjalan dan Anda sudah login sebagai admin. Tabel pengaturan akan dibuat otomatis saat
+                dimuat ulang.
+              </p>
+              <Button onClick={() => refetch()}>Coba lagi</Button>
+            </div>
+          </Visitrw3Panel>
+        </div>
+      </Visitrw3AdminShell>
     );
   }
 
   return (
-    <div className="p-4 max-w-3xl mx-auto space-y-6">
+    <Visitrw3AdminShell>
       {header}
 
+      <div className="max-w-3xl space-y-5">
       <p className="text-sm text-muted-foreground">
         Tarif berjenjang sebagai panduan admin saat survey (lapak/kiosk/lain; kost/kontrakan menurut jumlah pintu).
         Kontribusi aktual diisi saat menyetujui pengajuan di antrian.
       </p>
 
       {FEE_GROUPS.map((group) => (
-        <Card key={group.title}>
-          <CardHeader>
-            <CardTitle className="text-base">{group.title}</CardTitle>
-            {group.description && (
-              <p className="text-xs text-muted-foreground font-normal">{group.description}</p>
-            )}
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <Visitrw3Panel key={group.title} title={group.title} description={group.description}>
+          <div className="space-y-4">
             {group.keys.map((key) => {
               const meta = rows.find((r) => r.key === key);
               return (
@@ -199,15 +196,12 @@ export default function AdminVisitrw3Pengaturan() {
                 </div>
               );
             })}
-          </CardContent>
-        </Card>
+          </div>
+        </Visitrw3Panel>
       ))}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Tata tertib</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
+      <Visitrw3Panel title="Tata tertib">
+        <div className="space-y-6">
           {TEXT_KEYS.map((key) => {
             const meta = rows.find((r) => r.key === key);
             const val = valueFor(key);
@@ -225,14 +219,15 @@ export default function AdminVisitrw3Pengaturan() {
               </div>
             );
           })}
-        </CardContent>
-      </Card>
+        </div>
+      </Visitrw3Panel>
 
       {ALL_FEE_KEYS.some((k) => !rows.find((r) => r.key === k)) && (
         <p className="text-xs text-muted-foreground text-center">
           Beberapa tarif tier belum ter-seed. Klik Muat ulang setelah restart server, atau simpan tiap field di atas.
         </p>
       )}
-    </div>
+      </div>
+    </Visitrw3AdminShell>
   );
 }

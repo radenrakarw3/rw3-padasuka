@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -13,7 +14,15 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { pekerjaanLegacyOptions, keperluanTinggalOptions, rtOptions } from "@/lib/constants";
 import { Visitrw3AdminNav } from "@/components/admin/visitrw3-admin-nav";
-import { Plus, Pencil, Trash2, User, Phone, Briefcase, Calendar, Users as UsersIcon, X, RefreshCw, History } from "lucide-react";
+import {
+  Visitrw3AdminShell,
+  Visitrw3EmptyState,
+  Visitrw3FormCard,
+  Visitrw3ListItem,
+  Visitrw3RtBadge,
+  Visitrw3Toolbar,
+} from "@/components/admin/visitrw3-admin-ui";
+import { Plus, Pencil, Trash2, User, Phone, Briefcase, Calendar, Users as UsersIcon, RefreshCw, History } from "lucide-react";
 
 interface PemilikKost {
   id: number;
@@ -228,7 +237,7 @@ export default function AdminVisitrw3Penghuni() {
   });
 
   return (
-    <div className="space-y-4">
+    <Visitrw3AdminShell>
       <Visitrw3AdminNav
         title="Penghuni & kontrak"
         description={`${wargaList?.length || 0} penghuni aktif · edit, perpanjang, atau hapus manual`}
@@ -239,16 +248,13 @@ export default function AdminVisitrw3Penghuni() {
         }
       />
 
-      <div className="flex gap-2 flex-wrap">
-        <Input
-          placeholder="Cari nama/NIK/kost..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="text-sm flex-1 min-w-[150px]"
-          data-testid="input-search-warga-singgah"
-        />
+      <Visitrw3Toolbar
+        search={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Cari nama/NIK/kost..."
+      >
         <Select value={filterRt} onValueChange={setFilterRt}>
-          <SelectTrigger className="w-28" data-testid="select-filter-rt-singgah">
+          <SelectTrigger className="w-28 h-9" data-testid="select-filter-rt-singgah">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -259,7 +265,7 @@ export default function AdminVisitrw3Penghuni() {
           </SelectContent>
         </Select>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-32" data-testid="select-filter-status-singgah">
+          <SelectTrigger className="w-36 h-9" data-testid="select-filter-status-singgah">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -269,15 +275,10 @@ export default function AdminVisitrw3Penghuni() {
             <SelectItem value="habis">Habis</SelectItem>
           </SelectContent>
         </Select>
-      </div>
+      </Visitrw3Toolbar>
 
       {showForm && (
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold">{editData ? "Edit penghuni" : "Tambah penghuni"}</h3>
-              <Button size="icon" variant="ghost" onClick={resetForm}><X className="w-4 h-4" /></Button>
-            </div>
+        <Visitrw3FormCard title={editData ? "Edit penghuni" : "Tambah penghuni"} onClose={resetForm}>
             <form onSubmit={handleSubmit} className="space-y-3">
               <div>
                 <Label className="text-xs">Kost/Kontrakan</Label>
@@ -307,14 +308,14 @@ export default function AdminVisitrw3Penghuni() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs">Pekerjaan</Label>
-                  <Select value={formData.pekerjaan} onValueChange={(v) => setFormData({ ...formData, pekerjaan: v })}>
-                    <SelectTrigger data-testid="select-pekerjaan-singgah"><SelectValue placeholder="Pilih" /></SelectTrigger>
-                    <SelectContent>
-                      {pekerjaanLegacyOptions.map((p) => (
-                        <SelectItem key={p} value={p}>{p}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    value={formData.pekerjaan}
+                    onValueChange={(v) => setFormData({ ...formData, pekerjaan: v })}
+                    options={pekerjaanLegacyOptions}
+                    placeholder="Pilih pekerjaan"
+                    searchPlaceholder="Cari pekerjaan…"
+                    data-testid="select-pekerjaan-singgah"
+                  />
                 </div>
                 <div>
                   <Label className="text-xs">Keperluan Tinggal</Label>
@@ -346,66 +347,75 @@ export default function AdminVisitrw3Penghuni() {
                 {(createMutation.isPending || updateMutation.isPending) ? "Menyimpan..." : editData ? "Perbarui" : "Simpan"}
               </Button>
             </form>
-          </CardContent>
-        </Card>
+        </Visitrw3FormCard>
       )}
 
       {isLoading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-32 w-full rounded-lg" />)}
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-32 w-full rounded-xl" />)}
         </div>
       ) : filtered.length === 0 ? (
-        <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">Belum ada data warga singgah</CardContent></Card>
+        <Visitrw3EmptyState
+          icon={User}
+          title="Belum ada data penghuni"
+          description="Penghuni akan muncul setelah pengajuan disetujui, atau tambahkan manual dari sini."
+          action={
+            <Button size="sm" onClick={() => { resetForm(); setShowForm(true); }}>
+              <Plus className="w-4 h-4 mr-1" /> Tambah penghuni
+            </Button>
+          }
+        />
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {filtered.map((item) => {
             const status = getStatusKontrak(item.tanggalHabisKontrak);
             const daysLeft = getDaysRemaining(item.tanggalHabisKontrak);
+            const accent =
+              status.label === "Habis" ? "danger" : status.label.startsWith("H-") ? "warning" : "success";
             return (
-              <Card
+              <Visitrw3ListItem
                 key={item.id}
-                className={`${status.label === "Habis" ? "border-red-300" : status.label.startsWith("H-") ? "border-amber-300" : "border-green-300"}`}
-                data-testid={`card-warga-singgah-${item.id}`}
-              >
-                <CardContent className="py-3 px-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <User className="w-4 h-4 text-[hsl(163,55%,22%)] flex-shrink-0" />
-                        <span className="font-semibold text-sm" data-testid={`text-nama-singgah-${item.id}`}>{item.namaLengkap}</span>
-                        <Badge variant={status.variant} className="text-[10px]" data-testid={`badge-status-${item.id}`}>{status.label}</Badge>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground">NIK: {item.nik}</p>
-                      <p className="text-[11px] text-muted-foreground">{item.namaKost} — RT {String(item.rtKost).padStart(2, "0")}</p>
-                      <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-1 flex-wrap">
-                        <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{item.nomorWhatsapp}</span>
-                        <span className="flex items-center gap-1"><Briefcase className="w-3 h-3" />{item.pekerjaan}</span>
-                        <span className="flex items-center gap-1"><UsersIcon className="w-3 h-3" />{item.jumlahPenghuni} orang</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-1">
-                        <Calendar className="w-3 h-3" />
-                        <span>{item.tanggalMulaiKontrak} — {item.tanggalHabisKontrak}</span>
-                        <span className="font-medium">({daysLeft > 0 ? `${daysLeft} hari lagi` : daysLeft === 0 ? "Hari ini" : `${Math.abs(daysLeft)} hari lewat`})</span>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">Keperluan: {item.keperluanTinggal}</p>
-                    </div>
-                    <div className="flex flex-col gap-1 flex-shrink-0">
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleEdit(item)} data-testid={`button-edit-singgah-${item.id}`}>
-                        <Pencil className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-500" onClick={() => { setPerpanjangTarget(item); setPerpanjangData({ tanggalMulaiBaru: item.tanggalHabisKontrak, tanggalHabisBaru: "" }); }} data-testid={`button-perpanjang-${item.id}`}>
-                        <RefreshCw className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-purple-500" onClick={() => setRiwayatTarget(item.id)} data-testid={`button-riwayat-${item.id}`}>
-                        <History className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => setDeleteTarget(item)} data-testid={`button-delete-singgah-${item.id}`}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
+                testId={`card-warga-singgah-${item.id}`}
+                accent={accent}
+                actions={
+                  <div className="flex gap-0.5">
+                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleEdit(item)} data-testid={`button-edit-singgah-${item.id}`}>
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-blue-600" onClick={() => { setPerpanjangTarget(item); setPerpanjangData({ tanggalMulaiBaru: item.tanggalHabisKontrak, tanggalHabisBaru: "" }); }} data-testid={`button-perpanjang-${item.id}`}>
+                      <RefreshCw className="w-4 h-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-purple-600" onClick={() => setRiwayatTarget(item.id)} data-testid={`button-riwayat-${item.id}`}>
+                      <History className="w-4 h-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-red-500" onClick={() => setDeleteTarget(item)} data-testid={`button-delete-singgah-${item.id}`}>
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
                   </div>
-                </CardContent>
-              </Card>
+                }
+              >
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <User className="w-4 h-4 text-[hsl(163,55%,22%)] shrink-0" />
+                  <span className="font-semibold text-sm" data-testid={`text-nama-singgah-${item.id}`}>{item.namaLengkap}</span>
+                  <Badge variant={status.variant} className="text-[10px]" data-testid={`badge-status-${item.id}`}>{status.label}</Badge>
+                  <Visitrw3RtBadge rt={item.rtKost} />
+                </div>
+                <p className="text-xs text-muted-foreground font-mono">{item.nik}</p>
+                <p className="text-xs text-muted-foreground">{item.namaKost}</p>
+                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mt-1.5">
+                  <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{item.nomorWhatsapp}</span>
+                  <span className="flex items-center gap-1"><Briefcase className="w-3 h-3" />{item.pekerjaan}</span>
+                  <span className="flex items-center gap-1"><UsersIcon className="w-3 h-3" />{item.jumlahPenghuni} orang</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-1">
+                  <Calendar className="w-3 h-3 shrink-0" />
+                  <span>{item.tanggalMulaiKontrak} — {item.tanggalHabisKontrak}</span>
+                  <span className="font-medium text-foreground">
+                    {daysLeft > 0 ? `${daysLeft} hari lagi` : daysLeft === 0 ? "Hari ini" : `${Math.abs(daysLeft)} hari lewat`}
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Keperluan: {item.keperluanTinggal}</p>
+              </Visitrw3ListItem>
             );
           })}
         </div>
@@ -478,6 +488,6 @@ export default function AdminVisitrw3Penghuni() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </Visitrw3AdminShell>
   );
 }

@@ -1,0 +1,365 @@
+import { resolvePekerjaanCanon } from "@shared/pekerjaan-status";
+
+/**
+ * Daftar jabatan/pekerjaan — SSOT dropdown form warga.
+ * BPS + jabatan umum pemukiman/kota agar pencarian lebih tepat sasaran.
+ */
+export const pekerjaanOptions = [
+  // Pemerintahan & keamanan
+  "Pegawai Negeri Sipil (PNS)",
+  "PPPK (Pegawai Pemerintah dengan Perjanjian Kerja)",
+  "ASN (Aparatur Sipil Negara)",
+  "Tentara Nasional Indonesia (TNI)",
+  "Kepolisian RI (POLRI)",
+  "Anggota DPR-RI",
+  "Anggota DPD",
+  "Anggota DPRD Provinsi",
+  "Anggota DPRD Kabupaten/Kota",
+  "Perangkat Desa",
+  "Kepala Desa",
+  "Lurah/Kepala Kelurahan",
+  "Satpam/Security",
+  "Petugas Keamanan",
+  "Satpol PP",
+  "Damkar/Pemadam Kebakaran",
+  "Petugas Parkir",
+
+  // Pendidikan
+  "Guru",
+  "Guru TK/PAUD",
+  "Guru SD",
+  "Guru SMP",
+  "Guru SMA/SMK",
+  "Guru Agama",
+  "Guru Les/Bimbingan Belajar",
+  "Dosen",
+  "Instruktur/Pelatih",
+  "Pustakawan",
+  "Peneliti",
+
+  // Kesehatan
+  "Dokter",
+  "Dokter Gigi",
+  "Dokter Umum",
+  "Dokter Spesialis",
+  "Bidan",
+  "Perawat",
+  "Perawat Home Care",
+  "Apoteker",
+  "Asisten Apoteker",
+  "Psikiater/Psikolog",
+  "Fisioterapis",
+  "Terapis",
+  "Tabib",
+  "Paraji",
+  "Tukang Gigi",
+  "Kader Posyandu",
+  "Petugas Kesehatan",
+  "Petugas Laboratorium Kesehatan",
+  "Radiografer",
+  "Optometris",
+  "Pegawai Rumah Sakit",
+  "Pegawai Puskesmas",
+  "Pegawai Klinik",
+  "Pegawai Apotek",
+
+  // Hukum & keuangan
+  "Pengacara",
+  "Notaris",
+  "Akuntan",
+  "Auditor",
+  "Konsultan",
+  "Konsultan Pajak",
+  "Pialang",
+  "Bankir/Pegawai Bank",
+  "Teller Bank",
+  "Customer Service Bank",
+  "Agen Asuransi",
+  "Pegawai Asuransi",
+  "Agen BRILink/PDAM/PPOB",
+
+  // Teknik, arsitektur, IT
+  "Arsitek",
+  "Insinyur/Teknik",
+  "Teknisi Listrik",
+  "Teknisi Elektronik",
+  "Teknisi AC/Refrigerasi",
+  "Teknisi HP/Komputer",
+  "Teknisi Jaringan/IT",
+  "Programmer/Developer",
+  "Web Developer",
+  "Desainer Grafis",
+  "UI/UX Designer",
+  "Operator Komputer/Data Entry",
+  "Admin Sosial Media",
+  "Content Creator",
+  "Influencer",
+  "Fotografer",
+  "Videografer",
+  "Editor Video",
+
+  // Pertanian, perikanan, peternakan
+  "Petani/Pekebun",
+  "Petani Sayur",
+  "Petani Padi",
+  "Petani Hortikultura",
+  "Peternak",
+  "Peternak Sapi/Kambing",
+  "Peternak Unggas",
+  "Nelayan/Perikanan",
+  "Nelayan Laut",
+  "Pembudidaya Ikan",
+  "Buruh Tani/Perkebunan",
+  "Buruh Nelayan/Perikanan",
+  "Buruh Peternakan",
+  "Penyuluh Pertanian",
+
+  // Industri & pabrik
+  "Industri",
+  "Karyawan Pabrik",
+  "Operator Mesin",
+  "Operator Produksi",
+  "Quality Control (QC)",
+  "Gudang/Warehouse",
+  "Pengawas Produksi",
+  "Teknisi Pabrik",
+  "Karyawan Tekstil/Garmen",
+  "Operator Jahit",
+  "Karyawan Footwear/Sepatu",
+  "Karyawan Logam/Besi",
+  "Karyawan Kayu/Mebel",
+
+  // Konstruksi
+  "Konstruksi",
+  "Mandor Proyek",
+  "Tukang Bangunan",
+  "Tukang Batu",
+  "Tukang Kayu",
+  "Tukang Las/Pandai Besi",
+  "Tukang Cat",
+  "Tukang Keramik/Granit",
+  "Tukang Atap",
+  "Tukang Plafon",
+  "Konsultan Konstruksi",
+  "Surveyor",
+  "Buruh Bangunan",
+
+  // Transportasi & logistik
+  "Transportasi",
+  "Sopir",
+  "Sopir Pribadi",
+  "Sopir Bus/Angkot",
+  "Sopir Truk",
+  "Sopir Travel",
+  "Driver Ojek Online",
+  "Driver Taksi Online",
+  "Driver Grab/Gojek",
+  "Kurir",
+  "Kurir Paket/E-commerce",
+  "Pengemudi Becak/Bentor",
+  "Pramugari/Pramugara",
+  "Pilot",
+  "Pelaut",
+  "Nahkoda",
+  "ABK (Anak Buah Kapal)",
+
+  // Perdagangan & retail
+  "Perdagangan",
+  "Pedagang",
+  "Pedagang Keliling",
+  "Pedagang Pasar",
+  "Pedagang Kaki Lima",
+  "Pemilik Toko/Warung",
+  "Kasir",
+  "Pramuniaga/Sales",
+  "Sales Marketing",
+  "Sales Properti",
+  "Agen Properti",
+  "Marketing",
+  "Merchandiser",
+  "Pegawai Minimarket",
+  "Pegawai Supermarket",
+  "Pegawai Mall",
+  "Konter HP/Pulsa",
+
+  // Kuliner & hospitality
+  "Juru Masak",
+  "Koki",
+  "Asisten Koki",
+  "Barista",
+  "Pelayan Restoran/Cafe",
+  "Pemilik Warung Makan",
+  "Tukang Bakso",
+  "Tukang Gorengan",
+  "Pembuat Kue/Roti",
+  "Catering",
+  "Pramuwisma",
+  "Resepsionis Hotel",
+  "Housekeeping Hotel",
+
+  // Kecantikan & perawatan diri
+  "Penata Rias",
+  "Penata Busana",
+  "Penata Rambut",
+  "Tukang Cukur",
+  "Tukang Salon",
+  "Spa/Massage Therapist",
+  "Manicure/Pedicure",
+
+  // Jasa rumah tangga
+  "Pembantu Rumah Tangga",
+  "Baby Sitter",
+  "Pengasuh Anak",
+  "Perawat Lansia",
+  "Jasa Kebersihan/Cleaning Service",
+  "Pegawai Laundry",
+
+  // Kerajinan & servis teknis
+  "Tukang Jahit",
+  "Penjahit",
+  "Tukang Sol Sepatu",
+  "Tukang Sepatu",
+  "Tukang Kunci",
+  "Tukang Ledeng/Plumbing",
+  "Tukang Listrik",
+  "Mekanik",
+  "Mekanik Motor",
+  "Mekanik Mobil",
+  "Bengkel Motor",
+  "Bengkel Mobil",
+  "Tukang AC",
+  "Servis Elektronik",
+  "Servis HP",
+  "Servis Komputer/Laptop",
+  "Tukang Las",
+  "Tukang Kaca",
+  "Tukang Aluminium/Kusen",
+  "Tukang Pagar",
+  "Tukang Cetak/Banner",
+  "Percetakan",
+  "Pengrajin Kayu",
+  "Pengrajin Logam",
+  "Pengrajin Batik",
+  "Pengrajin Keramik",
+  "Pengrajin Anyaman",
+
+  // Kreatif, media, hiburan
+  "Seniman",
+  "Musisi",
+  "Penyanyi",
+  "Penari",
+  "Aktor/Pemain Film",
+  "Penulis",
+  "Jurnalis",
+  "Wartawan",
+  "Penyiar Televisi",
+  "Penyiar Radio",
+  "Podcaster",
+  "Promotor Acara",
+  "Event Organizer",
+  "Wedding Organizer",
+  "DJ",
+
+  // Agama & kemasyarakatan
+  "Imam Masjid",
+  "Ustadz/Mubaligh",
+  "Pendeta",
+  "Pastor",
+  "Biarawati",
+  "Pengurus Masjid/Mushola",
+  "Pengurus Organisasi Kemasyarakatan",
+  "Pengurus RT/RW",
+  "Ketua RT",
+  "Ketua RW",
+  "Pengurus Karang Taruna",
+  "Pengurus PKK",
+  "Relawan Sosial",
+
+  // Kantor & wiraswasta
+  "Karyawan Swasta",
+  "Karyawan BUMN",
+  "Karyawan BUMD",
+  "Karyawan Honorer",
+  "Karyawan Kontrak",
+  "Karyawan Outsourcing",
+  "Staff Administrasi",
+  "Sekretaris",
+  "Resepsionis Kantor",
+  "Front Office",
+  "Customer Service",
+  "Call Center",
+  "HRD/SDM",
+  "Bagian Keuangan",
+  "Bagian Gudang",
+  "Bagian Pengiriman",
+  "Supervisor",
+  "Manager",
+  "Direktur",
+  "Wiraswasta",
+  "Pengusaha UMKM",
+  "Pemilik Usaha Mikro",
+  "Pemilik Usaha Kecil",
+  "Franchise",
+  "Reseller/Dropshipper",
+  "Agen Produk",
+  "Jasa",
+  "Jasa Service Umum",
+  "Freelancer",
+  "Pekerja Lepas",
+  "Buruh Harian Lepas",
+  "Buruh Pabrik",
+  "Buruh Pelabuhan",
+  "Buruh Cargo",
+
+  // Profesi & jasa lain
+  "Penerjemah",
+  "Pemandu Wisata/Tour Guide",
+  "Travel Agent",
+  "Agen Tiket/Travel",
+  "Petugas Bandara",
+  "Petugas Stasiun",
+  "Petugas Pos",
+  "Juru Ukur",
+  "Perancang Busana/Fashion Designer",
+  "Stylist",
+  "Paranormal",
+
+  // Sektor umum (label BPS)
+  "Lainnya",
+] as const;
+
+/** Status + jabatan dalam satu dropdown (form warga RW). */
+export const pekerjaanLegacyOptions = [
+  "Belum/Tidak Bekerja",
+  "Bimbingan Orang Tua",
+  "Ibu Rumah Tangga",
+  "Pelajar",
+  "Pensiunan",
+  ...pekerjaanOptions,
+] as const;
+
+const VALID_PEKERJAAN = new Set<string>(pekerjaanLegacyOptions);
+
+export function isPekerjaanStandar(pekerjaan: string | null | undefined): boolean {
+  const raw = (pekerjaan || "").trim();
+  if (!raw) return true;
+  return VALID_PEKERJAAN.has(resolvePekerjaanCanon(raw));
+}
+
+/** Cari pekerjaan — untuk autocomplete (substring, case-insensitive). */
+export function searchPekerjaanOptions(
+  query: string,
+  options: readonly string[] = pekerjaanLegacyOptions,
+  limit = 50,
+): string[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [...options].slice(0, limit);
+  const hits: string[] = [];
+  for (const o of options) {
+    if (o.toLowerCase().includes(q)) {
+      hits.push(o);
+      if (hits.length >= limit) break;
+    }
+  }
+  return hits;
+}

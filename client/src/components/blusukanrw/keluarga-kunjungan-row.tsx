@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { ChevronRight, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { blusukanKkHref } from "@/lib/blusukan-navigation";
 
 export type KeluargaKunjunganRow = {
   kkId: number;
@@ -12,6 +13,7 @@ export type KeluargaKunjunganRow = {
   jumlahAnggota: number;
   completionPercent: number;
   belumVerifikasi: number;
+  anggotaBermasalah: number;
   kunjunganTerakhir: { hasil: string; createdAt: string | null } | null;
   perluKunjungan: boolean;
 };
@@ -54,7 +56,7 @@ export function KeluargaKunjunganRowCard({
   const lokasi = formatLokasi(row);
 
   return (
-    <Link href={`/blusukanrw/kk/${row.kkId}`}>
+    <Link href={blusukanKkHref(row.kkId, "kunjungan")}>
       <article
         className={cn(
           "block rounded-xl border bg-card p-4 transition-colors active:bg-muted/40 touch-manipulation",
@@ -112,6 +114,7 @@ export function KeluargaKunjunganRowCard({
               </span>
               <span className="text-[11px] text-muted-foreground tabular-nums">
                 Data {row.completionPercent}%
+                {row.anggotaBermasalah > 0 ? ` · ${row.anggotaBermasalah} perlu perbaikan` : ""}
                 {row.belumVerifikasi > 0 ? ` · ${row.belumVerifikasi} belum verifikasi` : ""}
               </span>
             </div>

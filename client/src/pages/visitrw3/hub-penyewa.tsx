@@ -1,19 +1,27 @@
-import { FilePlus, RefreshCw, Search } from "lucide-react";
+import { Link } from "wouter";
+import { FilePlus, RefreshCw, Search, BookOpen } from "lucide-react";
 import { Visitrw3Shell } from "@/components/visitrw3-shell";
 import { ServiceCard } from "@/components/gov/service-card";
 
 export default function Visitrw3HubPenyewa() {
   return (
     <Visitrw3Shell title="Penyewa / penghuni" backHref="/visitrw3">
-      <p className="prose-gov mb-4 text-sm text-muted-foreground">
+      <p className="prose-gov mb-2 text-sm text-muted-foreground">
         Untuk warga singgah yang mengajukan izin tinggal atau bisnis di properti terdaftar RW 03.
       </p>
+      <Link
+        href="/visitrw3/panduan"
+        className="inline-flex items-center gap-1.5 text-sm text-brand font-medium mb-4 hover:underline"
+      >
+        <BookOpen className="w-4 h-4" />
+        Baca panduan sebelum mengisi
+      </Link>
       <div className="space-y-3">
         <ServiceCard
           href="/visitrw3/pengajuan"
           icon={FilePlus}
           title="Pengajuan baru"
-          description="Tinggal atau bisnis — lengkapi data penghuni dan pembayaran"
+          description="Isi langkah demi langkah — tidak perlu sekaligus"
           variant="solid"
         />
         <ServiceCard

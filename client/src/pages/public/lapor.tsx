@@ -12,6 +12,7 @@ import { PublicKioskLayout } from "@/components/public-kiosk-layout";
 import { FormStepper } from "@/components/gov/form-stepper";
 import { SuccessPanel } from "@/components/gov/success-panel";
 import { ACTIVE_RT_NUMBERS } from "@shared/rt";
+import { formatLaporanRef, subJenisInfrastrukturOptions } from "@shared/program-kerja";
 
 const STEPS = [
   { id: "kontak", label: "Identitas" },
@@ -37,6 +38,9 @@ export default function PublicLapor() {
   const [judul, setJudul] = useState("");
   const [isi, setIsi] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [referenceId, setReferenceId] = useState("");
+  const [subJenis, setSubJenis] = useState("");
+  const [fotoLaporan, setFotoLaporan] = useState("");
   const [waError, setWaError] = useState("");
 
   const mutation = useMutation({
@@ -46,12 +50,17 @@ export default function PublicLapor() {
         nomorRt: parseInt(nomorRt, 10),
         nomorWa,
         jenisLaporan,
+        subJenis: jenisLaporan === "infrastruktur" && subJenis ? subJenis : undefined,
+        fotoLaporan: fotoLaporan || undefined,
         judul,
         isi,
       });
-      return res.json();
+      return res.json() as Promise<{ id: number; nomorReferensi?: string }>;
     },
-    onSuccess: () => setSubmitted(true),
+    onSuccess: (data) => {
+      setReferenceId(data.nomorReferensi ?? formatLaporanRef(data.id));
+      setSubmitted(true);
+    },
     onError: (error: unknown) => {
       toast({ title: "Gagal mengirim", description: getApiErrorMessage(error), variant: "destructive" });
     },
@@ -62,12 +71,15 @@ export default function PublicLapor() {
       <PublicKioskLayout title="Laporan masalah" backHref="/">
         <SuccessPanel
           title="Laporan terkirim"
+          referenceLabel="Nomor referensi"
+          referenceValue={referenceId}
           nextSteps={[
             "Pengurus RW akan meninjau laporan Anda.",
             "Anda dapat dihubungi melalui WhatsApp jika diperlukan klarifikasi.",
-            "Simpan nomor ini jika ingin menanyakan status.",
+            "Gunakan nomor referensi untuk cek status laporan.",
           ]}
-          primaryAction={{ label: "Kembali ke beranda", href: "/" }}
+          primaryAction={{ label: "Cek status laporan", href: "/lapor/status" }}
+          secondaryAction={{ label: "Kembali ke beranda", href: "/" }}
         />
       </PublicKioskLayout>
     );
@@ -170,7 +182,7 @@ export default function PublicLapor() {
             </div>
             <div className="space-y-2">
               <Label>Jenis laporan</Label>
-              <Select value={jenisLaporan} onValueChange={setJenisLaporan}>
+              <Select value={jenisLaporan} onValueChange={(v) => { setJenisLaporan(v); if (v !== "infrastruktur") setSubJenis(""); }}>
                 <SelectTrigger data-testid="select-jenis-laporan">
                   <SelectValue placeholder="Pilih jenis" />
                 </SelectTrigger>
@@ -183,12 +195,47 @@ export default function PublicLapor() {
                 </SelectContent>
               </Select>
             </div>
+            {jenisLaporan === "infrastruktur" && (
+              <div className="space-y-2">
+                <Label>Sub-jenis infrastruktur</Label>
+                <Select value={subJenis} onValueChange={setSubJenis}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih sub-jenis (opsional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {subJenisInfrastrukturOptions.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Laporan drainase/genangan mendukung program Wilayah Bebas Banjir.
+                </p>
+              </div>
+            )}
           </fieldset>
         )}
 
         {step === 1 && (
           <fieldset className="space-y-4 border-0 p-0 m-0">
             <legend className="sr-only">Detail laporan</legend>
+            <div className="space-y-2">
+              <Label htmlFor="foto">Foto (opsional)</Label>
+              <Input
+                id="foto"
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) { setFotoLaporan(""); return; }
+                  const reader = new FileReader();
+                  reader.onload = () => setFotoLaporan(reader.result as string);
+                  reader.readAsDataURL(file);
+                }}
+              />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="judul">Judul</Label>
               <Input

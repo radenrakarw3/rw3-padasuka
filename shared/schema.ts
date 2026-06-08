@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, serial, integer, boolean, timestamp, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, serial, integer, boolean, timestamp, jsonb, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { isActiveRt } from "./rt";
@@ -32,7 +32,9 @@ export const kartuKeluarga = pgTable("kartu_keluarga", {
   /** Daftar kendaraan KK — JSON [{ jenis, platNomor }]. */
   kendaraanData: text("kendaraan_data"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_kartu_keluarga_rt").on(table.rt),
+]);
 
 export const warga = pgTable("warga", {
   id: serial("id").primaryKey(),
@@ -50,6 +52,8 @@ export const warga = pgTable("warga", {
   kedudukanKeluarga: text("kedudukan_keluarga").notNull(),
   tempatLahir: text("tempat_lahir"),
   tanggalLahir: text("tanggal_lahir"),
+  /** Kategori umur master — dihitung dari tanggal_lahir (SSOT shared/kategori-umur.ts). */
+  kategoriUmur: text("kategori_umur"),
   golonganDarah: text("golongan_darah"),
   kewarganegaraan: text("kewarganegaraan").notNull().default("WNI"),
   suku: text("suku"),
@@ -125,7 +129,11 @@ export const warga = pgTable("warga", {
   tanggalVerifikasiData: text("tanggal_verifikasi_data"),
   catatanVerifikasi: text("catatan_verifikasi"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_warga_kk_id").on(table.kkId),
+  index("idx_warga_status_kependudukan").on(table.statusKependudukan),
+  index("idx_warga_kategori_umur").on(table.kategoriUmur),
+]);
 
 export const rtData = pgTable("rt_data", {
   id: serial("id").primaryKey(),
@@ -140,8 +148,11 @@ export const laporan = pgTable("laporan", {
   kkId: integer("kk_id").references(() => kartuKeluarga.id),
   wargaSinggahId: integer("warga_singgah_id"),
   jenisLaporan: text("jenis_laporan").notNull().default("umum"),
+  subJenis: text("sub_jenis"),
   judul: text("judul").notNull(),
   isi: text("isi").notNull(),
+  fotoLaporan: text("foto_laporan"),
+  proyekId: integer("proyek_id"),
   status: text("status").notNull().default("pending"),
   tanggapanAdmin: text("tanggapan_admin"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -752,6 +763,58 @@ export const programRw = pgTable("program_rw", {
   kategoriSasaran: text("kategori_sasaran").notNull().default("semua"),
   targetRt: integer("target_rt"),
   status: text("status").notNull().default("rencana"),
+  pilar: text("pilar").notNull().default("digitalisasi"),
+  subProgram: text("sub_program"),
+  targetNilai: integer("target_nilai"),
+  capaianNilai: integer("capaian_nilai").default(0),
+  satuanTarget: text("satuan_target"),
+  publik: boolean("publik").notNull().default(false),
+  prioritas: integer("prioritas").notNull().default(2),
+  pic: text("pic"),
+  anggaran: integer("anggaran"),
+  sumberDana: text("sumber_dana"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const proyekInfrastruktur = pgTable("proyek_infrastruktur", {
+  id: serial("id").primaryKey(),
+  nama: text("nama").notNull(),
+  pilar: text("pilar").notNull().default("infrastruktur"),
+  subProgram: text("sub_program").notNull(),
+  rt: integer("rt"),
+  lokasi: text("lokasi"),
+  latitude: text("latitude"),
+  longitude: text("longitude"),
+  status: text("status").notNull().default("inventaris"),
+  prioritas: integer("prioritas").notNull().default(2),
+  estimasiBiaya: integer("estimasi_biaya"),
+  sumberDana: text("sumber_dana"),
+  fotoSebelum: text("foto_sebelum"),
+  fotoSesudah: text("foto_sesudah"),
+  catatan: text("catatan"),
+  publik: boolean("publik").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const umkmMakeover = pgTable("umkm_makeover", {
+  id: serial("id").primaryKey(),
+  usahaId: integer("usaha_id").references(() => usaha.id),
+  namaUnit: text("nama_unit").notNull(),
+  jenisUsaha: text("jenis_usaha").notNull(),
+  alamat: text("alamat").notNull(),
+  rt: integer("rt").notNull(),
+  statusMakeover: text("status_makeover").notNull().default("belum_dinilai"),
+  skorFasad: integer("skor_fasad"),
+  skorInterior: integer("skor_interior"),
+  skorEtalase: integer("skor_etalase"),
+  catatanMakeover: text("catatan_makeover"),
+  rencanaKerja: text("rencana_kerja"),
+  fotoSebelum: text("foto_sebelum"),
+  fotoSesudah: text("foto_sesudah"),
+  publik: boolean("publik").notNull().default(false),
+  tanggalTarget: text("tanggal_target"),
+  tanggalSelesai: text("tanggal_selesai"),
+  rantaiPasok: text("rantai_pasok"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -767,11 +830,17 @@ export const pesertaProgram = pgTable("peserta_program", {
 
 export const insertProgramRwSchema = createInsertSchema(programRw).omit({ id: true, createdAt: true });
 export const insertPesertaProgramSchema = createInsertSchema(pesertaProgram).omit({ id: true, createdAt: true });
+export const insertProyekInfrastrukturSchema = createInsertSchema(proyekInfrastruktur).omit({ id: true, createdAt: true });
+export const insertUmkmMakeoverSchema = createInsertSchema(umkmMakeover).omit({ id: true, createdAt: true });
 
 export type ProgramRw = typeof programRw.$inferSelect;
 export type InsertProgramRw = z.infer<typeof insertProgramRwSchema>;
 export type PesertaProgram = typeof pesertaProgram.$inferSelect;
 export type InsertPesertaProgram = z.infer<typeof insertPesertaProgramSchema>;
+export type ProyekInfrastruktur = typeof proyekInfrastruktur.$inferSelect;
+export type InsertProyekInfrastruktur = z.infer<typeof insertProyekInfrastrukturSchema>;
+export type UmkmMakeover = typeof umkmMakeover.$inferSelect;
+export type InsertUmkmMakeover = z.infer<typeof insertUmkmMakeoverSchema>;
 
 // ===================== RWCOIN ECOSYSTEM =====================
 

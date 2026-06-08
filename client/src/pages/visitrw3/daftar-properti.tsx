@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Visitrw3Shell } from "@/components/visitrw3-shell";
 import { Button } from "@/components/ui/button";
@@ -6,32 +7,114 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, getApiErrorMessage } from "@/lib/queryClient";
-import { rtOptions, jumlahPintuOptions, jenisPropertiOptions } from "@/lib/constants";
-import { Loader2 } from "lucide-react";
+import { apiRequest, getApiErrorMessage, readJsonSafely } from "@/lib/queryClient";
+import { rtOptions, jenisPropertiOptions } from "@/lib/constants";
+import { Loader2, ChevronRight, ChevronLeft, Plus, Minus, Home, Store, BookOpen } from "lucide-react";
 import { SuccessPanel } from "@/components/gov/success-panel";
 import { Visitrw3SyaratPanel } from "@/components/gov/visitrw3-syarat-panel";
+import { FormStepper } from "@/components/gov/form-stepper";
 import { settingsRowsToMap } from "@/lib/visitrw3-kontribusi";
-import { readJsonSafely } from "@/lib/queryClient";
+import {
+  izinDefaultFromJenis,
+  kegunaanPropertiLabel,
+  validatePropertiStep,
+  type PropertiDraft,
+} from "@/lib/visitrw3-validate-properti";
+
+const STEPS = [
+  { id: "jenis", label: "Jenis" },
+  { id: "nama", label: "Nama" },
+  { id: "lokasi", label: "Lokasi" },
+  { id: "unit", label: "Unit" },
+  { id: "pemilik", label: "Pemilik" },
+  { id: "pengelola", label: "Pengelola" },
+  { id: "syarat", label: "Syarat" },
+  { id: "kirim", label: "Kirim" },
+] as const;
+
+const JENIS_HINTS: Record<string, string> = {
+  kost: "Tempat tinggal penyewa kamar",
+  kontrakan: "Rumah atau ruko disewakan",
+  kiosk: "Toko kecil / warung tetap",
+  lapak: "Jualan di lapak / gerobak",
+};
+
+function MicroStepHeader({
+  current,
+  total,
+  title,
+  hint,
+}: {
+  current: number;
+  total: number;
+  title: string;
+  hint?: string;
+}) {
+  return (
+    <div className="rounded-lg bg-brand/5 border border-brand/20 p-3 space-y-1">
+      <p className="text-xs text-muted-foreground">
+        Langkah {current} dari {total}
+      </p>
+      <p className="font-semibold text-sm">{title}</p>
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
 
 export default function Visitrw3DaftarProperti() {
   const { toast } = useToast();
+  const [step, setStep] = useState(0);
   const [namaKost, setNamaKost] = useState("");
   const [namaPemilik, setNamaPemilik] = useState("");
   const [nomorWaPemilik, setNomorWaPemilik] = useState("");
   const [namaPenanggungJawab, setNamaPenanggungJawab] = useState("");
   const [nomorWaPenanggungJawab, setNomorWaPenanggungJawab] = useState("");
+  const [pjSamaPemilik, setPjSamaPemilik] = useState(true);
   const [rt, setRt] = useState("");
   const [alamatLengkap, setAlamatLengkap] = useState("");
-  const [jumlahPintu, setJumlahPintu] = useState("1");
-  const [jenisProperti, setJenisProperti] = useState("kost");
+  const [jumlahPintu, setJumlahPintu] = useState(1);
+  const [jenisProperti, setJenisProperti] = useState<PropertiDraft["jenisProperti"]>("");
   const [izinTinggal, setIzinTinggal] = useState(true);
   const [izinBisnis, setIzinBisnis] = useState(false);
   const [catatan, setCatatan] = useState("");
   const [setujuTataTertib, setSetujuTataTertib] = useState(false);
   const [nomorHasil, setNomorHasil] = useState<string | null>(null);
+
+  const stepId = STEPS[step]?.id ?? "jenis";
+
+  const draft = useMemo<PropertiDraft>(
+    () => ({
+      jenisProperti,
+      namaKost,
+      rt,
+      alamatLengkap,
+      jumlahPintu,
+      namaPemilik,
+      nomorWaPemilik,
+      pjSamaPemilik,
+      namaPenanggungJawab,
+      nomorWaPenanggungJawab,
+      izinTinggal,
+      izinBisnis,
+      setujuTataTertib,
+    }),
+    [
+      jenisProperti,
+      namaKost,
+      rt,
+      alamatLengkap,
+      jumlahPintu,
+      namaPemilik,
+      nomorWaPemilik,
+      pjSamaPemilik,
+      namaPenanggungJawab,
+      nomorWaPenanggungJawab,
+      izinTinggal,
+      izinBisnis,
+      setujuTataTertib,
+    ],
+  );
 
   const { data: settingsRows = [], isLoading: settingsLoading } = useQuery({
     queryKey: ["/api/public/visitrw3/settings"],
@@ -50,11 +133,11 @@ export default function Visitrw3DaftarProperti() {
         namaKost: namaKost.trim(),
         namaPemilik: namaPemilik.trim(),
         nomorWaPemilik: nomorWaPemilik.trim(),
-        namaPenanggungJawab: namaPenanggungJawab.trim(),
-        nomorWaPenanggungJawab: nomorWaPenanggungJawab.trim(),
+        namaPenanggungJawab: pjSamaPemilik ? namaPemilik.trim() : namaPenanggungJawab.trim(),
+        nomorWaPenanggungJawab: pjSamaPemilik ? nomorWaPemilik.trim() : nomorWaPenanggungJawab.trim(),
         rt: parseInt(rt, 10),
         alamatLengkap: alamatLengkap.trim(),
-        jumlahPintu: parseInt(jumlahPintu, 10),
+        jumlahPintu,
         jenisProperti,
         izinTinggal,
         izinBisnis,
@@ -69,18 +152,29 @@ export default function Visitrw3DaftarProperti() {
     },
   });
 
-  function validate(): string | null {
-    if (!namaKost.trim()) return "Nama kost/kontrakan wajib diisi";
-    if (!namaPemilik.trim()) return "Nama pemilik wajib diisi";
-    if (!nomorWaPemilik.trim()) return "Nomor WhatsApp pemilik wajib diisi";
-    if (!namaPenanggungJawab.trim()) return "Nama penanggung jawab pengelola wajib diisi";
-    if (!nomorWaPenanggungJawab.trim()) return "WhatsApp penanggung jawab wajib diisi";
-    if (!rt) return "Pilih RT";
-    if (!alamatLengkap.trim()) return "Alamat lengkap wajib diisi";
-    if (!izinTinggal && !izinBisnis) return "Pilih minimal satu jenis izin (tinggal atau bisnis)";
-    if (!setujuTataTertib) return "Anda harus menyetujui syarat dan tata tertib";
-    return null;
+  const showErr = (msg: string) => {
+    toast({ title: "Lengkapi data", description: msg, variant: "destructive" });
+  };
+
+  function pickJenis(value: PropertiDraft["jenisProperti"]) {
+    if (!value) return;
+    setJenisProperti(value);
+    const izin = izinDefaultFromJenis(value);
+    setIzinTinggal(izin.izinTinggal);
+    setIzinBisnis(izin.izinBisnis);
   }
+
+  function goStep(delta: number) {
+    setStep((s) => Math.min(Math.max(0, s + delta), STEPS.length - 1));
+  }
+
+  function lanjut() {
+    const err = validatePropertiStep(stepId, draft);
+    if (err) return showErr(err);
+    goStep(1);
+  }
+
+  const isHunian = jenisProperti === "kost" || jenisProperti === "kontrakan";
 
   if (nomorHasil) {
     return (
@@ -103,167 +197,346 @@ export default function Visitrw3DaftarProperti() {
 
   return (
     <Visitrw3Shell title="Daftar properti" backHref="/visitrw3/pemilik">
-      <p className="prose-gov mb-4">
-        Formulir untuk pemilik kost, kontrakan, atau properti sewa di wilayah RW 03. Setelah diverifikasi admin,
-        properti Anda dapat dipilih pada pengajuan Visit RW3.
+      <p className="prose-gov mb-2 text-sm">
+        Isi langkah demi langkah — tekan <strong>Lanjut</strong> setelah setiap bagian.
       </p>
-      <form
-        className="space-y-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          const err = validate();
-          if (err) {
-            toast({ title: "Lengkapi data", description: err, variant: "destructive" });
-            return;
-          }
-          mutation.mutate();
-        }}
+      <Link
+        href="/visitrw3/panduan"
+        className="inline-flex items-center gap-1.5 text-sm text-brand font-medium mb-4 hover:underline"
       >
-        <div className="space-y-2">
-          <Label>Nama kost / kontrakan *</Label>
-          <Input
-            value={namaKost}
-            onChange={(e) => setNamaKost(e.target.value)}
-            placeholder="Contoh: Kost Melati"
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>Nama pemilik *</Label>
-          <Input value={namaPemilik} onChange={(e) => setNamaPemilik(e.target.value)} required />
-        </div>
-        <div className="space-y-2">
-          <Label>WhatsApp pemilik *</Label>
-          <Input
-            value={nomorWaPemilik}
-            onChange={(e) => setNomorWaPemilik(e.target.value)}
-            placeholder="08xxxxxxxxxx"
-            required
-          />
-        </div>
-        <div className="rounded-lg border p-3 space-y-3 bg-muted/30">
-          <p className="text-sm font-medium">Penanggung jawab pengelola *</p>
-          <p className="text-xs text-muted-foreground">
-            Orang yang dipercaya mengelola properti sehari-hari (boleh berbeda dari pemilik).
-          </p>
-          <div className="space-y-2">
-            <Label className="text-xs">Nama</Label>
-            <Input
-              value={namaPenanggungJawab}
-              onChange={(e) => setNamaPenanggungJawab(e.target.value)}
-              placeholder="Nama penanggung jawab"
-              required
+        <BookOpen className="w-4 h-4" />
+        Bingung? Baca panduan
+      </Link>
+      <FormStepper steps={[...STEPS]} currentStep={step} />
+
+      <div className="space-y-4">
+        {stepId === "jenis" && (
+          <>
+            <MicroStepHeader
+              current={step + 1}
+              total={STEPS.length}
+              title="Properti Anda jenis apa?"
+              hint="Pilih yang paling sesuai dengan properti Anda."
             />
-          </div>
-          <div className="space-y-2">
-            <Label className="text-xs">WhatsApp</Label>
-            <Input
-              value={nomorWaPenanggungJawab}
-              onChange={(e) => setNomorWaPenanggungJawab(e.target.value)}
-              placeholder="08xxxxxxxxxx"
-              required
-            />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <Label>RT *</Label>
-            <Select value={rt} onValueChange={setRt}>
-              <SelectTrigger>
-                <SelectValue placeholder="Pilih RT" />
-              </SelectTrigger>
-              <SelectContent>
-                {rtOptions.map((n) => (
-                  <SelectItem key={n} value={String(n)}>
-                    RT {String(n).padStart(2, "0")}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Jumlah pintu / unit *</Label>
-            <Select value={jumlahPintu} onValueChange={setJumlahPintu}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {jumlahPintuOptions.map((n) => (
-                  <SelectItem key={n} value={String(n)}>
-                    {n} pintu
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        <div className="space-y-2">
-          <Label>Jenis properti *</Label>
-          <Select value={jenisProperti} onValueChange={setJenisProperti}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
+            <div className="grid grid-cols-2 gap-3">
               {jenisPropertiOptions.map((o) => (
-                <SelectItem key={o.value} value={o.value}>
-                  {o.label}
-                </SelectItem>
+                <Button
+                  key={o.value}
+                  type="button"
+                  variant={jenisProperti === o.value ? "default" : "outline"}
+                  className="h-auto py-4 flex-col gap-1"
+                  onClick={() => pickJenis(o.value)}
+                >
+                  {o.value === "kiosk" || o.value === "lapak" ? (
+                    <Store className="w-5 h-5 mb-0.5" />
+                  ) : (
+                    <Home className="w-5 h-5 mb-0.5" />
+                  )}
+                  <span className="font-medium">{o.label}</span>
+                  <span className="text-[10px] font-normal opacity-80">{JENIS_HINTS[o.value]}</span>
+                </Button>
               ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label>Alamat lengkap *</Label>
-          <Textarea
-            value={alamatLengkap}
-            onChange={(e) => setAlamatLengkap(e.target.value)}
-            rows={2}
-            placeholder="Jl., gang, nomor rumah, patokan"
-            required
+            </div>
+            {jenisProperti && (
+              <p className="text-sm rounded-lg bg-muted/50 border p-3 text-muted-foreground">
+                {kegunaanPropertiLabel(jenisProperti, izinTinggal, izinBisnis)}
+              </p>
+            )}
+          </>
+        )}
+
+        {stepId === "nama" && (
+          <>
+            <MicroStepHeader
+              current={step + 1}
+              total={STEPS.length}
+              title="Nama properti"
+              hint="Nama yang dikenal warga, misalnya nama kost atau warung."
+            />
+            <div className="space-y-2">
+              <Label>Nama kost / kontrakan / usaha</Label>
+              <Input
+                className="h-12"
+                value={namaKost}
+                onChange={(e) => setNamaKost(e.target.value)}
+                placeholder="Contoh: Kost Melati, Warung Bu Siti"
+                autoFocus
+              />
+            </div>
+          </>
+        )}
+
+        {stepId === "lokasi" && (
+          <>
+            <MicroStepHeader
+              current={step + 1}
+              total={STEPS.length}
+              title="Lokasi properti"
+              hint="Pilih RT dan tulis alamat lengkap."
+            />
+            <div className="space-y-2">
+              <Label>RT</Label>
+              <Select value={rt} onValueChange={setRt}>
+                <SelectTrigger className="h-12">
+                  <SelectValue placeholder="Pilih RT" />
+                </SelectTrigger>
+                <SelectContent>
+                  {rtOptions.map((n) => (
+                    <SelectItem key={n} value={String(n)}>
+                      RT {String(n).padStart(2, "0")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Alamat lengkap</Label>
+              <Textarea
+                value={alamatLengkap}
+                onChange={(e) => setAlamatLengkap(e.target.value)}
+                rows={3}
+                placeholder="Jl., gang, nomor rumah, patokan"
+              />
+            </div>
+          </>
+        )}
+
+        {stepId === "unit" && (
+          <>
+            <MicroStepHeader
+              current={step + 1}
+              total={STEPS.length}
+              title="Berapa unit / kamar / pintu?"
+              hint="Tekan + atau −. Untuk lapak/kiosk biasanya 1."
+            />
+            <div className="rounded-xl border bg-card p-6 text-center space-y-3">
+              <Label>Jumlah unit</Label>
+              <div className="flex items-center justify-center gap-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-12 w-12"
+                  disabled={jumlahPintu <= 1}
+                  onClick={() => setJumlahPintu((n) => Math.max(1, n - 1))}
+                >
+                  <Minus className="w-5 h-5" />
+                </Button>
+                <span className="text-3xl font-bold tabular-nums w-12">{jumlahPintu}</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-12 w-12"
+                  disabled={jumlahPintu >= 50}
+                  onClick={() => setJumlahPintu((n) => Math.min(50, n + 1))}
+                >
+                  <Plus className="w-5 h-5" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {isHunian ? "Jumlah kamar atau pintu yang disewakan" : "Biasanya 1 untuk kiosk/lapak"}
+              </p>
+            </div>
+            {jenisProperti === "kontrakan" && (
+              <div className="space-y-3 rounded-xl border p-4 bg-card">
+                <p className="text-sm font-medium">Di kontrakan ini juga ada usaha?</p>
+                <p className="text-xs text-muted-foreground">
+                  Misalnya warung atau toko di bagian depan rumah.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant={!izinBisnis ? "default" : "outline"}
+                    className="h-auto py-3"
+                    onClick={() => setIzinBisnis(false)}
+                  >
+                    Tidak
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={izinBisnis ? "default" : "outline"}
+                    className="h-auto py-3"
+                    onClick={() => setIzinBisnis(true)}
+                  >
+                    Ya, ada usaha
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {stepId === "pemilik" && (
+          <>
+            <MicroStepHeader
+              current={step + 1}
+              total={STEPS.length}
+              title="Data pemilik"
+              hint="Nama dan WhatsApp yang bisa dihubungi admin."
+            />
+            <div className="space-y-2">
+              <Label>Nama pemilik</Label>
+              <Input
+                className="h-12"
+                value={namaPemilik}
+                onChange={(e) => setNamaPemilik(e.target.value)}
+                placeholder="Nama lengkap pemilik"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>WhatsApp pemilik</Label>
+              <Input
+                className="h-12"
+                value={nomorWaPemilik}
+                onChange={(e) => setNomorWaPemilik(e.target.value)}
+                placeholder="08xxxxxxxxxx"
+              />
+            </div>
+          </>
+        )}
+
+        {stepId === "pengelola" && (
+          <>
+            <MicroStepHeader
+              current={step + 1}
+              total={STEPS.length}
+              title="Siapa pengelola sehari-hari?"
+              hint="Orang yang mengurus properti. Boleh sama dengan pemilik."
+            />
+            <div className="grid grid-cols-1 gap-3">
+              <Button
+                type="button"
+                variant={pjSamaPemilik ? "default" : "outline"}
+                className="h-auto py-4 justify-start px-4"
+                onClick={() => setPjSamaPemilik(true)}
+              >
+                <span className="text-left">
+                  <span className="block font-medium">Saya sendiri (pemilik)</span>
+                  <span className="block text-xs font-normal opacity-80 mt-0.5">
+                    Pakai nama & WhatsApp pemilik tadi
+                  </span>
+                </span>
+              </Button>
+              <Button
+                type="button"
+                variant={!pjSamaPemilik ? "default" : "outline"}
+                className="h-auto py-4 justify-start px-4"
+                onClick={() => setPjSamaPemilik(false)}
+              >
+                <span className="text-left">
+                  <span className="block font-medium">Ada pengelola lain</span>
+                  <span className="block text-xs font-normal opacity-80 mt-0.5">
+                    Misalnya karyawan atau keluarga yang mengurus
+                  </span>
+                </span>
+              </Button>
+            </div>
+            {!pjSamaPemilik && (
+              <div className="space-y-3 rounded-xl border p-4 bg-card">
+                <div className="space-y-2">
+                  <Label>Nama pengelola</Label>
+                  <Input
+                    className="h-12"
+                    value={namaPenanggungJawab}
+                    onChange={(e) => setNamaPenanggungJawab(e.target.value)}
+                    placeholder="Nama penanggung jawab"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>WhatsApp pengelola</Label>
+                  <Input
+                    className="h-12"
+                    value={nomorWaPenanggungJawab}
+                    onChange={(e) => setNomorWaPenanggungJawab(e.target.value)}
+                    placeholder="08xxxxxxxxxx"
+                  />
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {stepId === "syarat" && (
+          <Visitrw3SyaratPanel
+            tataMasyarakat={settingsMap.tata_tertib_masyarakat ?? ""}
+            tataKhusus={settingsMap.tata_tertib_pemilik ?? ""}
+            setuju={setujuTataTertib}
+            onSetuju={setSetujuTataTertib}
+            loading={settingsLoading}
           />
+        )}
+
+        {stepId === "kirim" && (
+          <>
+            <MicroStepHeader
+              current={step + 1}
+              total={STEPS.length}
+              title="Siap dikirim?"
+              hint="Periksa ringkasan di bawah. Catatan boleh dikosongkan."
+            />
+            <div className="rounded-xl border bg-muted/30 p-4 space-y-2 text-sm">
+              <p>
+                <span className="text-muted-foreground">Properti:</span>{" "}
+                <span className="font-medium">{namaKost}</span>
+              </p>
+              <p>
+                <span className="text-muted-foreground">Jenis:</span>{" "}
+                {jenisPropertiOptions.find((o) => o.value === jenisProperti)?.label}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Lokasi:</span> RT {String(rt).padStart(2, "0")} — {alamatLengkap}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Pemilik:</span> {namaPemilik} ({nomorWaPemilik})
+              </p>
+              <p className="text-xs pt-1 border-t border-border/60">
+                {kegunaanPropertiLabel(jenisProperti, izinTinggal, izinBisnis)}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Catatan untuk admin (opsional)</Label>
+              <Textarea
+                value={catatan}
+                onChange={(e) => setCatatan(e.target.value)}
+                rows={2}
+                placeholder="Ada info tambahan? (boleh dikosongkan)"
+              />
+            </div>
+          </>
+        )}
+
+        <div className="flex gap-2 pt-2">
+          {step > 0 && (
+            <Button variant="outline" className="touch-target" type="button" onClick={() => goStep(-1)}>
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+          )}
+          {stepId !== "kirim" ? (
+            <Button
+              className="flex-1 touch-target"
+              type="button"
+              disabled={stepId === "jenis" && !jenisProperti}
+              onClick={lanjut}
+            >
+              Lanjut <ChevronRight className="w-4 h-4 ml-1" />
+            </Button>
+          ) : (
+            <Button
+              className="flex-1 touch-target"
+              type="button"
+              disabled={mutation.isPending || !setujuTataTertib}
+              onClick={() => {
+                const err = validatePropertiStep("syarat", draft);
+                if (err) return showErr(err);
+                mutation.mutate();
+              }}
+            >
+              {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Kirim pendaftaran"}
+            </Button>
+          )}
         </div>
-        <div className="rounded-lg border p-3 space-y-3 bg-muted/30">
-          <p className="text-sm font-medium">Izin pengajuan Visit RW3 *</p>
-          <p className="text-xs text-muted-foreground">
-            Centang jenis pengajuan yang boleh menggunakan properti ini.
-          </p>
-          <div className="flex items-center gap-2">
-            <Checkbox id="izin-tinggal" checked={izinTinggal} onCheckedChange={(c) => setIzinTinggal(Boolean(c))} />
-            <Label htmlFor="izin-tinggal" className="font-normal">
-              Izinkan pengajuan tinggal
-            </Label>
-          </div>
-          <div className="flex items-center gap-2">
-            <Checkbox id="izin-bisnis" checked={izinBisnis} onCheckedChange={(c) => setIzinBisnis(Boolean(c))} />
-            <Label htmlFor="izin-bisnis" className="font-normal">
-              Izinkan pengajuan bisnis
-            </Label>
-          </div>
-        </div>
-        <div className="space-y-2">
-          <Label>Catatan (opsional)</Label>
-          <Textarea
-            value={catatan}
-            onChange={(e) => setCatatan(e.target.value)}
-            rows={2}
-            placeholder="Informasi tambahan untuk admin"
-          />
-        </div>
-        <Visitrw3SyaratPanel
-          tataMasyarakat={settingsMap.tata_tertib_masyarakat ?? ""}
-          tataKhusus={settingsMap.tata_tertib_pemilik ?? ""}
-          setuju={setujuTataTertib}
-          onSetuju={setSetujuTataTertib}
-          loading={settingsLoading}
-        />
-        <Button
-          type="submit"
-          className="w-full touch-target"
-          disabled={mutation.isPending || !setujuTataTertib}
-        >
-          {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Kirim pendaftaran"}
-        </Button>
-      </form>
+      </div>
     </Visitrw3Shell>
   );
 }

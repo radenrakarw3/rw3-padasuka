@@ -17,6 +17,7 @@ import {
   KeluargaKunjunganRowCard,
   type KeluargaKunjunganRow,
 } from "@/components/blusukanrw/keluarga-kunjungan-row";
+import { blusukanKkHref } from "@/lib/blusukan-navigation";
 import { cn } from "@/lib/utils";
 
 type KunjunganFilter = "perlu" | "semua" | "selesai";
@@ -68,6 +69,8 @@ export default function BlusukanrwKunjungan() {
         filter,
       }),
     placeholderData: (prev) => prev,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const rows = data?.rows ?? [];
@@ -99,7 +102,8 @@ export default function BlusukanrwKunjungan() {
       setNewKk(defaultNewKk);
       queryClient.invalidateQueries({ queryKey: [BLUSUKAN_API.keluarga] });
       queryClient.invalidateQueries({ queryKey: [BLUSUKAN_API.kkList] });
-      setLocation(`/blusukanrw/kk/${kk.id}`);
+      queryClient.invalidateQueries({ queryKey: [BLUSUKAN_API.dashboard] });
+      setLocation(blusukanKkHref(kk.id, "kunjungan"));
     },
     onError: (e: unknown) => {
       toast({
@@ -208,7 +212,7 @@ export default function BlusukanrwKunjungan() {
               {counts.perlu} keluarga menunggu kunjungan
             </p>
             <p className="text-xs text-amber-800/90 mt-0.5">
-              Urutan: belum pernah → data belum lengkap → perlu ulang
+              Urutan: belum pernah → data bermasalah → belum lengkap → perlu ulang
             </p>
           </div>
         </div>

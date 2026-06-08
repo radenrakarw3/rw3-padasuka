@@ -1,4 +1,4 @@
-import { Building2, Users } from "lucide-react";
+import { Building2, Users, BookOpen } from "lucide-react";
 import { Visitrw3Shell } from "@/components/visitrw3-shell";
 import { ServiceCard } from "@/components/gov/service-card";
 
@@ -23,6 +23,13 @@ export default function Visitrw3Hub() {
           description="Pengajuan tinggal, bisnis, perpanjang, dan cek status izin"
           variant="solid"
           iconClassName="bg-accent"
+        />
+        <ServiceCard
+          href="/visitrw3/panduan"
+          icon={BookOpen}
+          title="Panduan & tanya jawab"
+          description="Alur lengkap, dokumen yang disiapkan, dan perkiraan biaya"
+          variant="outline"
         />
       </div>
     </Visitrw3Shell>

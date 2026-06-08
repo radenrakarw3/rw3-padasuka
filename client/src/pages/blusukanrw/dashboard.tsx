@@ -7,7 +7,27 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { BLUSUKAN_API } from "@shared/blusukan-api";
 import { blusukanApi } from "@/lib/blusukan-api";
 import { BLUSUKAN_RT_NUMBERS } from "@shared/rt";
-import { Users, Home, CheckCircle2, ClipboardList, FileCheck, AlertCircle } from "lucide-react";
+import { PENGANGGURAN_KETERANGAN } from "@shared/pekerjaan-labor";
+import {
+  Users,
+  Home,
+  CheckCircle2,
+  ClipboardList,
+  FileCheck,
+  AlertCircle,
+  UserX,
+  ShieldAlert,
+} from "lucide-react";
+
+type DataIssueCounts = {
+  tanpa_tanggal_lahir: number;
+  kategori_belum_sinkron: number;
+  tanpa_status_pekerjaan: number;
+  status_pekerjaan_tidak_selaras: number;
+  tanpa_pekerjaan: number;
+  pekerjaan_tidak_standar: number;
+  pekerjaan_salah_kategori: number;
+};
 
 type DashboardData = {
   totalKk: number;
@@ -20,6 +40,12 @@ type DashboardData = {
   percentDiverifikasi: number;
   percentKunjunganSelesai: number;
   perluKunjungan: number;
+  pengangguran: number;
+  pengangguranRatePercent: number;
+  dataIssues: {
+    wargaBermasalah: number;
+    counts: DataIssueCounts;
+  };
   perRt: {
     rt: number;
     kk: number;
@@ -41,6 +67,39 @@ function KelengkapanBar({ percent }: { percent: number }) {
   );
 }
 
+function StatMini({
+  icon: Icon,
+  label,
+  value,
+  hint,
+  tone = "default",
+}: {
+  icon: typeof Home;
+  label: string;
+  value: string | number;
+  hint?: string;
+  tone?: "default" | "warning" | "info";
+}) {
+  const toneClass =
+    tone === "warning"
+      ? "border-amber-200/80 bg-amber-50/40"
+      : tone === "info"
+        ? "border-sky-200/80 bg-sky-50/40"
+        : "";
+  return (
+    <Card className={toneClass}>
+      <CardContent className="p-3">
+        <div className="flex items-center gap-2 text-muted-foreground mb-1">
+          <Icon className="w-4 h-4 shrink-0" />
+          <span className="text-xs leading-tight">{label}</span>
+        </div>
+        <p className="text-xl font-bold tabular-nums">{value}</p>
+        {hint && <p className="text-[10px] text-muted-foreground mt-1 leading-snug">{hint}</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function BlusukanrwDashboard() {
   const [rtFilter, setRtFilter] = useState<number | "semua">("semua");
   const rtParam = rtFilter === "semua" ? undefined : rtFilter;
@@ -48,14 +107,34 @@ export default function BlusukanrwDashboard() {
   const { data, isLoading } = useQuery({
     queryKey: [BLUSUKAN_API.dashboard, rtParam],
     queryFn: () => blusukanApi.dashboard<DashboardData>(rtParam),
+    staleTime: 0,
+    refetchOnMount: "always",
   });
+
+  const topIssues = data
+    ? (
+        [
+          ["tanpa_status_pekerjaan", "Status pekerjaan kosong"],
+          ["status_pekerjaan_tidak_selaras", "Status vs pekerjaan"],
+          ["pekerjaan_salah_kategori", "Pekerjaan tidak sesuai usia"],
+          ["tanpa_pekerjaan", "Pekerjaan kosong"],
+          ["kategori_belum_sinkron", "Kategori umur"],
+        ] as const
+      )
+        .map(([key, label]) => ({
+          label,
+          count: data.dataIssues.counts[key],
+        }))
+        .filter((x) => x.count > 0)
+        .slice(0, 4)
+    : [];
 
   return (
     <div className="space-y-4">
       <div>
         <h2 className="text-lg font-bold">Dashboard Blusukan</h2>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Kelengkapan form sensus terbaru — data KK, anggota, pekerjaan, bansos, kendaraan
+          Sensus lapangan RT 01–04 · selaras statistik kependudukan (status ILO, kategori umur)
         </p>
       </div>
 
@@ -88,24 +167,8 @@ export default function BlusukanrwDashboard() {
       ) : data ? (
         <>
           <div className="grid grid-cols-2 gap-3">
-            <Card>
-              <CardContent className="p-3">
-                <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                  <Home className="w-4 h-4" />
-                  <span className="text-xs">KK</span>
-                </div>
-                <p className="text-2xl font-bold tabular-nums">{data.totalKk}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-3">
-                <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                  <Users className="w-4 h-4" />
-                  <span className="text-xs">Warga</span>
-                </div>
-                <p className="text-2xl font-bold tabular-nums">{data.totalWarga}</p>
-              </CardContent>
-            </Card>
+            <StatMini icon={Home} label="Kartu keluarga" value={data.totalKk} />
+            <StatMini icon={Users} label="Total warga" value={data.totalWarga} />
 
             <Card className="col-span-2">
               <CardContent className="p-3">
@@ -123,41 +186,35 @@ export default function BlusukanrwDashboard() {
                     </p>
                   </div>
                 </div>
-                {data.wargaBelumLengkap > 0 && (
-                  <p className="text-xs text-amber-800 mt-2 flex items-center gap-1">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                    {data.wargaBelumLengkap} anggota belum form lengkap
-                  </p>
-                )}
               </CardContent>
             </Card>
 
-            <Card>
-              <CardContent className="p-3">
-                <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                  <FileCheck className="w-4 h-4" />
-                  <span className="text-xs">Diverifikasi petugas</span>
-                </div>
-                <p className="text-xl font-bold tabular-nums">{data.percentDiverifikasi}%</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">Semua anggota KK sudah diverifikasi</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-3">
-                <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span className="text-xs">Kunjungan selesai</span>
-                </div>
-                <p className="text-xl font-bold tabular-nums">{data.percentKunjunganSelesai}%</p>
-              </CardContent>
-            </Card>
+            <StatMini
+              icon={ShieldAlert}
+              label="Perlu perbaikan data"
+              value={data.dataIssues.wargaBermasalah}
+              hint="Status ILO, pekerjaan, kategori umur"
+              tone="warning"
+            />
+            <StatMini
+              icon={UserX}
+              label="Pengangguran"
+              value={data.pengangguran}
+              hint={`${data.pengangguranRatePercent}% eligible · ${PENGANGGURAN_KETERANGAN}`}
+              tone="info"
+            />
+
+            <StatMini icon={FileCheck} label="Diverifikasi petugas" value={`${data.percentDiverifikasi}%`} />
+            <StatMini icon={CheckCircle2} label="Kunjungan selesai" value={`${data.percentKunjunganSelesai}%`} />
 
             <Card className="col-span-2 border-amber-200/80 bg-amber-50/50">
               <CardContent className="p-3 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-xs text-amber-900 font-medium">Perlu dikunjungi</p>
                   <p className="text-2xl font-bold text-amber-950 tabular-nums">{data.perluKunjungan}</p>
-                  <p className="text-[10px] text-amber-800/90">Belum pernah / perlu ulang kunjungan</p>
+                  <p className="text-[10px] text-amber-800/90">
+                    Prioritas: belum kunjungi → data bermasalah → belum lengkap
+                  </p>
                 </div>
                 <Link href="/blusukanrw/kunjungan">
                   <Button size="sm" className="gap-1 shrink-0" style={{ backgroundColor: "hsl(163,55%,22%)" }}>
@@ -168,6 +225,28 @@ export default function BlusukanrwDashboard() {
               </CardContent>
             </Card>
           </div>
+
+          {topIssues.length > 0 && (
+            <Card>
+              <CardContent className="p-3 space-y-2">
+                <p className="text-sm font-semibold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-700" />
+                  Masalah data terbanyak
+                </p>
+                <ul className="space-y-1.5">
+                  {topIssues.map((item) => (
+                    <li key={item.label} className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">{item.label}</span>
+                      <span className="font-semibold tabular-nums">{item.count}</span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-[11px] text-muted-foreground pt-1">
+                  Perbaiki saat kunjungan — form anggota menampilkan peringatan otomatis.
+                </p>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardContent className="p-3 space-y-3">
@@ -188,6 +267,13 @@ export default function BlusukanrwDashboard() {
               ))}
             </CardContent>
           </Card>
+
+          {data.wargaBelumLengkap > 0 && (
+            <p className="text-xs text-amber-800 flex items-center gap-1 px-1">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+              {data.wargaBelumLengkap} anggota belum form lengkap
+            </p>
+          )}
 
           <Link href="/blusukanrw/kunjungan">
             <Button className="w-full gap-2 h-11 touch-manipulation" style={{ backgroundColor: "hsl(163,55%,22%)" }}>

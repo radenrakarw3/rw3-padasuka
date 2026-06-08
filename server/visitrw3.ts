@@ -13,7 +13,19 @@ import {
 import { storage } from "./storage";
 import { ACTIVE_RT_NUMBERS } from "@shared/rt";
 import { hitungTanggalBerlaku } from "@shared/visitrw3-kontribusi";
+import {
+  type Visitrw3DashboardStats,
+  emptyVisitrw3DashboardStats,
+  kelompokUsiaLabel,
+  labelIzinProperti,
+  labelJumlahPenghuniPengajuan,
+  labelJumlahPintuTier,
+} from "@shared/visitrw3-analytics";
+
+export { emptyVisitrw3DashboardStats } from "@shared/visitrw3-analytics";
 import { seedVisitrw3Settings } from "./visitrw3-settings";
+
+export type { Visitrw3DashboardStats } from "@shared/visitrw3-analytics";
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const TERMIN_VALUES = [1, 3, 6, 12] as const;
@@ -84,7 +96,7 @@ export const pengajuanBaruSchema = z.object({
   jumlahPenghuni: z.number().int().min(1).max(20),
   tanggalBayar: z.string().regex(DATE_REGEX),
   terminBulan: z.number().refine((n): n is (typeof TERMIN_VALUES)[number] => TERMIN_VALUES.includes(n as (typeof TERMIN_VALUES)[number])),
-  catatanPemohon: z.string().min(1, "Catatan wajib diisi"),
+  catatanPemohon: z.string().optional().nullable(),
   penghuni: z.array(penghuniInputSchema).min(1),
   setujuTataTertib: z.literal(true, { errorMap: () => ({ message: "Persetujuan syarat wajib" }) }),
 });
@@ -832,56 +844,6 @@ export async function approvePengajuan(
   return { pengajuan: { ...pengajuan, status: "disetujui" }, wargaSinggah: ws, kasRwId };
 }
 
-export type Visitrw3DashboardStats = {
-  ringkasan: {
-    totalPengajuan: number;
-    menungguSurvey: number;
-    disetujui: number;
-    ditolak: number;
-    totalProperti: number;
-    propertiMenunggu: number;
-    penghuniAktif: number;
-    totalKontribusiKasRw: number;
-  };
-  pengajuan: {
-    byKeperluan: Record<string, number>;
-    byTipe: Record<string, number>;
-    byStatus: Record<string, number>;
-    byRt: { rt: number; count: number }[];
-    byTerminBulan: { termin: number; count: number }[];
-    bisnisDiRw3: number;
-    bisnisLuar: number;
-    byJenisTempatUsaha: { label: string; count: number }[];
-  };
-  penghuni: {
-    totalBaris: number;
-    anakVsDewasa: { anak: number; dewasa: number };
-    byJenisKelamin: Record<string, number>;
-    topPekerjaan: { label: string; count: number }[];
-    denganKendaraan: number;
-    tanpaKendaraan: number;
-    byJenisKendaraan: { label: string; count: number }[];
-  };
-  properti: {
-    byJenisProperti: { label: string; count: number }[];
-    byStatusProperti: { label: string; count: number }[];
-    byRt: { rt: number; count: number }[];
-    izinTinggal: number;
-    izinBisnis: number;
-    byJumlahPintu: { label: string; count: number }[];
-  };
-  trenBulan: { bulan: string; count: number }[];
-  pengajuanTerbaru: {
-    id: number;
-    nomorVisitrw3: string;
-    keperluanPengajuan: string;
-    status: string;
-    rt: number;
-    createdAt: string | null;
-  }[];
-  rtList: number[];
-};
-
 function incCount(map: Record<string, number>, key: string) {
   map[key] = (map[key] ?? 0) + 1;
 }
@@ -912,51 +874,6 @@ function monthKey(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   return `${y}-${m}`;
-}
-
-export function emptyVisitrw3DashboardStats(): Visitrw3DashboardStats {
-  return {
-    ringkasan: {
-      totalPengajuan: 0,
-      menungguSurvey: 0,
-      disetujui: 0,
-      ditolak: 0,
-      totalProperti: 0,
-      propertiMenunggu: 0,
-      penghuniAktif: 0,
-      totalKontribusiKasRw: 0,
-    },
-    pengajuan: {
-      byKeperluan: {},
-      byTipe: {},
-      byStatus: {},
-      byRt: [],
-      byTerminBulan: [],
-      bisnisDiRw3: 0,
-      bisnisLuar: 0,
-      byJenisTempatUsaha: [],
-    },
-    penghuni: {
-      totalBaris: 0,
-      anakVsDewasa: { anak: 0, dewasa: 0 },
-      byJenisKelamin: {},
-      topPekerjaan: [],
-      denganKendaraan: 0,
-      tanpaKendaraan: 0,
-      byJenisKendaraan: [],
-    },
-    properti: {
-      byJenisProperti: [],
-      byStatusProperti: [],
-      byRt: [],
-      izinTinggal: 0,
-      izinBisnis: 0,
-      byJumlahPintu: [],
-    },
-    trenBulan: [],
-    pengajuanTerbaru: [],
-    rtList: [...ACTIVE_RT_NUMBERS],
-  };
 }
 
 export function isMissingVisitrw3TableError(error: unknown): boolean {
@@ -1001,12 +918,20 @@ export async function getVisitrw3DashboardStats(rtFilter?: number): Promise<Visi
   const byRtPengajuan: Record<number, number> = {};
   const byTermin: Record<number, number> = {};
   const byJenisTempat: Record<string, number> = {};
+  const byJumlahPenghuni: Record<string, number> = {};
   let bisnisDiRw3 = 0;
   let bisnisLuar = 0;
   let totalKontribusiKasRw = 0;
   let menungguSurvey = 0;
   let disetujui = 0;
   let ditolak = 0;
+  let setujuTataTertibYa = 0;
+  let setujuTataTertibTidak = 0;
+  let denganNomorUnit = 0;
+  let tanpaNomorUnit = 0;
+  let denganCatatanPemohon = 0;
+  let denganProperti = 0;
+  let tanpaProperti = 0;
   const trenMap: Record<string, number> = {};
 
   for (const p of pengajuanList) {
@@ -1015,10 +940,22 @@ export async function getVisitrw3DashboardStats(rtFilter?: number): Promise<Visi
     incCount(byStatus, p.status);
     byRtPengajuan[p.rt] = (byRtPengajuan[p.rt] ?? 0) + 1;
     byTermin[p.terminBulan] = (byTermin[p.terminBulan] ?? 0) + 1;
+    incCount(byJumlahPenghuni, labelJumlahPenghuniPengajuan(p.jumlahPenghuni));
 
     if (p.status === "menunggu_survey") menungguSurvey++;
     else if (p.status === "disetujui") disetujui++;
     else if (p.status === "ditolak") ditolak++;
+
+    if (p.setujuTataTertib) setujuTataTertibYa++;
+    else setujuTataTertibTidak++;
+
+    if (p.nomorUnit?.trim()) denganNomorUnit++;
+    else tanpaNomorUnit++;
+
+    if (p.catatanPemohon?.trim()) denganCatatanPemohon++;
+
+    if (p.pemilikKostId != null) denganProperti++;
+    else tanpaProperti++;
 
     if (p.kasRwId != null && p.estimasiKontribusi != null) {
       totalKontribusiKasRw += p.estimasiKontribusi;
@@ -1045,17 +982,36 @@ export async function getVisitrw3DashboardStats(rtFilter?: number): Promise<Visi
 
   const anakVsDewasa = { anak: 0, dewasa: 0 };
   const byJenisKelamin: Record<string, number> = {};
+  const byKelompokUsia: Record<string, number> = {};
+  const byKeperluanTinggal: Record<string, number> = {};
+  const byJenjangAnak: Record<string, number> = {};
+  const byTempatKerja: Record<string, number> = {};
   const byPekerjaan: Record<string, number> = {};
   const byJenisKendaraan: Record<string, number> = {};
   let denganKendaraan = 0;
   let tanpaKendaraan = 0;
+  let withFotoKtp = 0;
+  let withoutFotoKtp = 0;
 
   for (const pn of penghuniList) {
     if (pn.isAnak) anakVsDewasa.anak++;
     else anakVsDewasa.dewasa++;
 
     if (pn.jenisKelamin?.trim()) incCount(byJenisKelamin, pn.jenisKelamin.trim());
+
+    const umur = hitungUmur(pn.tanggalLahir);
+    if (umur >= 0) incCount(byKelompokUsia, kelompokUsiaLabel(umur));
+
+    if (pn.keperluanTinggal?.trim()) incCount(byKeperluanTinggal, pn.keperluanTinggal.trim());
+
+    if (pn.isAnak && pn.namaSekolah?.trim()) incCount(byJenjangAnak, pn.namaSekolah.trim());
+
     if (pn.pekerjaan?.trim()) incCount(byPekerjaan, pn.pekerjaan.trim());
+
+    if (!pn.isAnak && pn.namaTempatKerja?.trim()) incCount(byTempatKerja, pn.namaTempatKerja.trim());
+
+    if (pn.fotoKtpPath?.trim()) withFotoKtp++;
+    else withoutFotoKtp++;
 
     if (pn.punyaKendaraan) {
       denganKendaraan++;
@@ -1072,19 +1028,30 @@ export async function getVisitrw3DashboardStats(rtFilter?: number): Promise<Visi
   const byStatusProperti: Record<string, number> = {};
   const byRtProperti: Record<number, number> = {};
   const byJumlahPintu: Record<string, number> = {};
+  const byIzinKombinasi: Record<string, number> = {};
   let izinTinggal = 0;
   let izinBisnis = 0;
   let propertiMenunggu = 0;
+  let denganPenanggungJawab = 0;
+  let tanpaPenanggungJawab = 0;
+  let propertiSetujuTataTertibYa = 0;
+  let propertiSetujuTataTertibTidak = 0;
+  let propertiDenganCatatan = 0;
 
   for (const pk of propertiList) {
     incCount(byJenisProperti, pk.jenisProperti || "kost");
     incCount(byStatusProperti, pk.statusProperti || "aktif");
     byRtProperti[pk.rt] = (byRtProperti[pk.rt] ?? 0) + 1;
-    const pintuKey = String(pk.jumlahPintu ?? 1);
-    incCount(byJumlahPintu, pintuKey);
+    incCount(byJumlahPintu, labelJumlahPintuTier(pk.jumlahPintu ?? 1));
+    incCount(byIzinKombinasi, labelIzinProperti(Boolean(pk.izinTinggal), Boolean(pk.izinBisnis)));
     if (pk.izinTinggal) izinTinggal++;
     if (pk.izinBisnis) izinBisnis++;
     if (pk.statusProperti === "menunggu_verifikasi") propertiMenunggu++;
+    if (pk.namaPenanggungJawab?.trim()) denganPenanggungJawab++;
+    else tanpaPenanggungJawab++;
+    if (pk.setujuTataTertib) propertiSetujuTataTertibYa++;
+    else propertiSetujuTataTertibTidak++;
+    if (pk.catatanPemohon?.trim()) propertiDenganCatatan++;
   }
 
   const rtSet = new Set<number>([...ACTIVE_RT_NUMBERS]);
@@ -1110,18 +1077,31 @@ export async function getVisitrw3DashboardStats(rtFilter?: number): Promise<Visi
       byTerminBulan: Object.entries(byTermin)
         .map(([termin, count]) => ({ termin: Number(termin), count }))
         .sort((a, b) => a.termin - b.termin),
+      byJumlahPenghuni: mapToSortedRows(byJumlahPenghuni),
       bisnisDiRw3,
       bisnisLuar,
       byJenisTempatUsaha: mapToSortedRows(byJenisTempat),
+      setujuTataTertib: { ya: setujuTataTertibYa, tidak: setujuTataTertibTidak },
+      denganNomorUnit,
+      tanpaNomorUnit,
+      denganCatatanPemohon,
+      denganProperti,
+      tanpaProperti,
     },
     penghuni: {
       totalBaris: penghuniList.length,
       anakVsDewasa,
-      byJenisKelamin,
+      byJenisKelamin: mapToSortedRows(byJenisKelamin),
+      byKelompokUsia: mapToSortedRows(byKelompokUsia),
+      byKeperluanTinggal: mapToSortedRows(byKeperluanTinggal),
+      byJenjangAnak: mapToSortedRows(byJenjangAnak),
       topPekerjaan: mapToSortedRows(byPekerjaan, 8),
       denganKendaraan,
       tanpaKendaraan,
       byJenisKendaraan: mapToSortedRows(byJenisKendaraan),
+      withFotoKtp,
+      withoutFotoKtp,
+      topTempatKerja: mapToSortedRows(byTempatKerja, 8),
     },
     properti: {
       byJenisProperti: mapToSortedRows(byJenisProperti),
@@ -1129,7 +1109,12 @@ export async function getVisitrw3DashboardStats(rtFilter?: number): Promise<Visi
       byRt: rtRows(byRtProperti),
       izinTinggal,
       izinBisnis,
+      byIzinKombinasi: mapToSortedRows(byIzinKombinasi),
       byJumlahPintu: mapToSortedRows(byJumlahPintu),
+      denganPenanggungJawab,
+      tanpaPenanggungJawab,
+      setujuTataTertib: { ya: propertiSetujuTataTertibYa, tidak: propertiSetujuTataTertibTidak },
+      denganCatatanPemohon: propertiDenganCatatan,
     },
     trenBulan,
     pengajuanTerbaru: pengajuanList.slice(0, 5).map((p) => ({
@@ -1252,17 +1237,15 @@ export async function ensureVisitrw3Schema() {
   }
 }
 
-/** Development: contoh properti aktif agar pengajuan tinggal/bisnis dapat diuji di localhost. */
+/** Development: seed contoh properti hanya saat tabel pemilik_kost masih kosong (setup awal localhost). */
 export async function seedVisitrw3DevPropertiIfNeeded() {
   if (process.env.NODE_ENV === "production") return;
   if (process.env.SEED_VISITRW3_DEMO === "0") return;
 
-  const all = await db.select().from(pemilikKost);
-  const hasUsable = all.some(
-    (k) =>
-      (k.statusProperti ?? "aktif") === "aktif" && (k.izinTinggal || k.izinBisnis),
-  );
-  if (hasUsable) return;
+  const all = await db.select({ id: pemilikKost.id }).from(pemilikKost);
+  // Hanya seed saat tabel benar-benar kosong (setup awal dev).
+  // Jangan buat ulang demo setelah admin menghapus properti.
+  if (all.length > 0) return;
 
   const demoRows = [
     {

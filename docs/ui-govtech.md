@@ -27,6 +27,7 @@ Gunakan utility Tailwind dari design system, hindari `hsl(163,...)` hardcoded di
 | `EmptyState` | Daftar kosong, nomor tidak ditemukan |
 | `SuccessPanel` | Konfirmasi setelah submit |
 | `StatusTimeline` | Lacak status pengajuan |
+| `GovStatistic` / `GovStatisticRow` / `GovStatisticSection` | Indikator angka di dashboard admin (kependudukan, layanan) |
 
 ## Layout kiosk
 

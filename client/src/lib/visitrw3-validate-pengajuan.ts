@@ -127,58 +127,109 @@ export function validatePersetujuanTetangga(rows: PersetujuanTetanggaRow[]): str
   return null;
 }
 
+export function validateSinglePenghuni(
+  p: PenghuniDraft,
+  keperluan: "tinggal" | "bisnis",
+): string | null {
+  const label = p.isAnak ? "Anak" : "Dewasa";
+
+  if (!p.namaLengkap.trim()) return "Isi nama lengkap";
+  if (!p.tanggalLahir) return "Pilih tanggal lahir";
+
+  if (p.isAnak) {
+    if (!p.namaSekolah.trim()) return "Pilih jenjang pendidikan anak";
+    if (!(visitrw3JenjangAnakOptions as readonly string[]).includes(p.namaSekolah)) {
+      return "Pilih jenjang pendidikan yang valid";
+    }
+    return null;
+  }
+
+  if (!p.nik || p.nik.length !== 16) return "NIK harus 16 digit";
+  if (!p.nomorWhatsapp.trim()) return "Isi nomor WhatsApp";
+  if (!p.jenisKelamin) return "Pilih jenis kelamin";
+  if (!p.pekerjaan) return "Pilih pekerjaan";
+  if (keperluan === "tinggal" && !p.keperluanTinggal) return "Pilih keperluan tinggal";
+  const u = umur(p.tanggalLahir);
+  if (!p.namaTempatKerja.trim()) return "Isi nama tempat kerja";
+  if (u < 21 && !p.namaSekolah.trim()) return "Isi nama sekolah (usia di bawah 21 tahun)";
+  if (!p.fotoKtpPath) return "Unggah foto KTP";
+
+  if (p.kendaraanList.length > 0) {
+    for (let ki = 0; ki < p.kendaraanList.length; ki++) {
+      const k = p.kendaraanList[ki];
+      if (!k.jenis.trim()) return `Pilih jenis kendaraan #${ki + 1}`;
+      const parts = k.platParts;
+      const plat = joinPlatNomor(parts) || k.plat;
+      if (!isPlatLengkap(parts) && !plat.trim()) {
+        return `Lengkapi plat nomor kendaraan #${ki + 1}`;
+      }
+      if (!isPlatLengkap(parts)) return `Lengkapi semua bagian plat nomor kendaraan #${ki + 1}`;
+    }
+  }
+  return null;
+}
+
 export function validatePenghuniList(
   penghuni: PenghuniDraft[],
   keperluan: "tinggal" | "bisnis",
 ): string | null {
   for (let i = 0; i < penghuni.length; i++) {
-    const p = penghuni[i];
-    const label = p.isAnak ? `Anak` : `Dewasa`;
-
-    if (!p.namaLengkap.trim()) return `${label}: nama lengkap wajib diisi`;
-    if (!p.tanggalLahir) return `${label} ${p.namaLengkap || i + 1}: tanggal lahir wajib diisi`;
-
-    if (p.isAnak) {
-      if (!p.namaSekolah.trim()) {
-        return `Anak ${p.namaLengkap}: jenjang pendidikan wajib dipilih`;
-      }
-      if (!(visitrw3JenjangAnakOptions as readonly string[]).includes(p.namaSekolah)) {
-        return `Anak ${p.namaLengkap}: pilih jenjang pendidikan yang valid`;
-      }
-      continue;
-    }
-
-    if (!p.nik || p.nik.length !== 16) return `Dewasa ${p.namaLengkap}: NIK 16 digit wajib`;
-    if (!p.nomorWhatsapp.trim()) return `Dewasa ${p.namaLengkap}: nomor WhatsApp wajib`;
-    if (!p.jenisKelamin) return `Dewasa ${p.namaLengkap}: jenis kelamin wajib dipilih`;
-    if (!p.pekerjaan) return `Dewasa ${p.namaLengkap}: pekerjaan wajib dipilih`;
-    if (keperluan === "tinggal" && !p.keperluanTinggal) {
-      return `Dewasa ${p.namaLengkap}: keperluan tinggal wajib dipilih`;
-    }
-    const u = umur(p.tanggalLahir);
-    if (!p.namaTempatKerja.trim()) {
-      return `Dewasa ${p.namaLengkap}: tempat kerja wajib diisi`;
-    }
-    if (u < 21 && !p.namaSekolah.trim()) {
-      return `Dewasa ${p.namaLengkap}: nama sekolah wajib diisi (usia di bawah 21 tahun)`;
-    }
-    if (!p.fotoKtpPath) return `Dewasa ${p.namaLengkap}: foto KTP wajib diunggah`;
-
-    if (p.kendaraanList.length > 0) {
-      for (let ki = 0; ki < p.kendaraanList.length; ki++) {
-        const k = p.kendaraanList[ki];
-        if (!k.jenis.trim()) return `Dewasa ${p.namaLengkap}: jenis kendaraan #${ki + 1} wajib`;
-        const parts = k.platParts;
-        const plat = joinPlatNomor(parts) || k.plat;
-        if (!isPlatLengkap(parts) && !plat.trim()) {
-          return `Dewasa ${p.namaLengkap}: plat nomor kendaraan #${ki + 1} wajib lengkap (kode, nomor, akhiran)`;
-        }
-        if (!isPlatLengkap(parts)) {
-          return `Dewasa ${p.namaLengkap}: isi semua bagian plat nomor kendaraan #${ki + 1}`;
-        }
-      }
+    const err = validateSinglePenghuni(penghuni[i], keperluan);
+    if (err) {
+      const p = penghuni[i];
+      const who = p.namaLengkap.trim() || (p.isAnak ? `Anak ${i + 1}` : `Dewasa ${i + 1}`);
+      return `${who}: ${err}`;
     }
   }
+  return null;
+}
+
+export function validateSingleTetangga(
+  slot: { label: string },
+  row: PersetujuanTetanggaRow | undefined,
+): string | null {
+  if (!row?.namaWarga.trim()) return `Isi nama warga (${slot.label})`;
+  if (!row.nomorWhatsapp.trim()) return `Isi nomor WhatsApp (${slot.label})`;
+  return null;
+}
+
+export function validateLokasiSubTinggal(sub: "rt" | "kost", rt: string, pemilikKostId: string): string | null {
+  if (sub === "rt" && !rt) return "Pilih RT tempat tinggal";
+  if (sub === "kost" && !pemilikKostId) return "Pilih kost atau kontrakan";
+  return null;
+}
+
+export function validateLokasiSubBisnis(
+  sub: "wilayah" | "usaha" | "operasional" | "pj" | "rt" | "kost",
+  input: BisnisLokasiInput,
+): string | null {
+  if (sub === "wilayah" && input.tinggalDiWilayahRw3 === null) {
+    return "Pilih apakah Anda tinggal di wilayah RW 03";
+  }
+  if (sub === "usaha") {
+    if (!input.namaUsaha.trim()) return "Isi nama usaha";
+    if (!input.penanggungJawab.trim()) return "Isi nama penanggung jawab";
+    if (!input.jenisTempatUsaha) return "Pilih jenis tempat usaha";
+    if (input.jenisTempatUsaha === "lainnya" && !input.jenisTempatUsahaLain.trim()) {
+      return "Jelaskan jenis usaha Anda";
+    }
+    return null;
+  }
+  if (sub === "operasional") {
+    if (!input.jamBuka.trim() || !TIME_REGEX.test(input.jamBuka)) return "Isi jam buka (contoh 08:00)";
+    if (!input.jamTutup.trim() || !TIME_REGEX.test(input.jamTutup)) return "Isi jam tutup (contoh 21:00)";
+    if (!input.alamatUsaha.trim()) return "Isi alamat usaha di RW 03";
+    return null;
+  }
+  if (sub === "pj") {
+    if (!input.pjNik || input.pjNik.length !== 16) return "NIK penanggung jawab harus 16 digit";
+    if (!input.pjNomorWhatsapp.trim()) return "Isi WhatsApp penanggung jawab";
+    if (!input.pjTanggalLahir) return "Pilih tanggal lahir penanggung jawab";
+    if (!input.pjFotoKtpPath) return "Unggah foto KTP penanggung jawab";
+    return null;
+  }
+  if (sub === "rt" && !input.rt) return "Pilih RT lokasi usaha";
+  if (sub === "kost" && !input.pemilikKostId) return "Pilih kost/kontrakan tempat tinggal";
   return null;
 }
 
@@ -203,6 +254,5 @@ export function validateStepBayar(
       ? "Nomor unit/lokasi usaha wajib diisi"
       : "Nomor unit/kamar wajib diisi";
   }
-  if (!catatan.trim()) return "Catatan wajib diisi";
   return null;
 }

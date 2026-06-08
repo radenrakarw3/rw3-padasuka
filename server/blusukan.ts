@@ -1,11 +1,14 @@
 import { pool } from "./db";
 import { storage } from "./storage";
 import { ACTIVE_RT_NUMBERS, isActiveRt, assertKkInPemukimanScope } from "@shared/rt";
+import { countAnggotaBermasalah } from "@shared/blusukan-analytics";
+import { countPengangguranRows } from "@shared/pekerjaan-labor";
 import {
   computeBlusukanKkCompleteness,
   computeBlusukanWargaCompleteness,
   countBelumDiverifikasi,
 } from "@shared/profile-completeness";
+import { buildWargaDataIssueReport } from "@shared/warga-data-issues";
 import type { BlusukanKunjungan, KartuKeluarga, Warga } from "@shared/schema";
 
 export async function ensureBlusukanSchema() {
@@ -36,11 +39,13 @@ function kunjunganPriority(
   latest: LatestKunjungan | undefined,
   completionPercent: number,
   belumVerifikasi: number,
+  anggotaBermasalah: number,
 ): number {
   let score = 0;
   if (needsVisit(latest)) score += 1000;
   score += 100 - completionPercent;
   score += belumVerifikasi * 10;
+  score += anggotaBermasalah * 15;
   return score;
 }
 
@@ -105,6 +110,15 @@ export async function getBlusukanDashboard(rtFilter?: number) {
 
   const totalKk = kkList.length;
   const totalWarga = allWarga.length;
+  const kkRtMap = new Map(kkList.map((k) => [k.id, k.rt]));
+  const wargaWithRt = allWarga.map((w) => ({
+    ...w,
+    rt: kkRtMap.get(w.kkId) ?? 0,
+  }));
+  const issueReport = buildWargaDataIssueReport(
+    wargaWithRt.filter((w) => isActiveRt(w.rt)),
+  );
+  const { total: pengangguran, eligible: pengangguranEligible } = countPengangguranRows(allWarga);
 
   return {
     totalKk,
@@ -117,6 +131,13 @@ export async function getBlusukanDashboard(rtFilter?: number) {
     percentDiverifikasi: totalKk ? Math.round((diverifikasi / totalKk) * 100) : 0,
     percentKunjunganSelesai: totalKk ? Math.round((kunjunganSelesai / totalKk) * 100) : 0,
     perluKunjungan,
+    pengangguran,
+    pengangguranRatePercent:
+      pengangguranEligible > 0 ? Math.round((pengangguran / pengangguranEligible) * 100) : 0,
+    dataIssues: {
+      wargaBermasalah: issueReport.totalBermasalah,
+      counts: issueReport.counts,
+    },
     perRt: ACTIVE_RT_NUMBERS.map((rt) => ({
       rt,
       kk: byRt[rt].kk,
@@ -138,6 +159,7 @@ export type BlusukanKeluargaRow = {
   jumlahAnggota: number;
   completionPercent: number;
   belumVerifikasi: number;
+  anggotaBermasalah: number;
   kunjunganTerakhir: { hasil: string; createdAt: string | null } | null;
   perluKunjungan: boolean;
 };
@@ -185,6 +207,7 @@ export async function listBlusukanKeluarga(
     const kepala = anggota.find((w) => w.kedudukanKeluarga === "Kepala Keluarga");
     const comp = computeBlusukanKkCompleteness(anggota, kk);
     const belumVerifikasi = countBelumDiverifikasi(anggota);
+    const anggotaBermasalah = countAnggotaBermasalah(anggota, kk.rt);
     const latest = latestMap.get(kk.id);
 
     if (query) {
@@ -210,6 +233,7 @@ export async function listBlusukanKeluarga(
       jumlahAnggota: anggota.length,
       completionPercent: comp.completionPercent,
       belumVerifikasi,
+      anggotaBermasalah,
       kunjunganTerakhir: latest
         ? {
             hasil: latest.hasil,
@@ -217,7 +241,7 @@ export async function listBlusukanKeluarga(
           }
         : null,
       perluKunjungan: needsVisit(latest),
-      _priority: kunjunganPriority(latest, comp.completionPercent, belumVerifikasi),
+      _priority: kunjunganPriority(latest, comp.completionPercent, belumVerifikasi, anggotaBermasalah),
     });
   }
 

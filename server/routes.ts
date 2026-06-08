@@ -11,12 +11,15 @@ import * as XLSX from "xlsx";
 import { storage } from "./storage";
 import { pool } from "./db";
 import { cache, CacheKey, TTL, invalidateWarga, invalidateKk } from "./cache";
-import { insertKkSchema, patchKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertPengajuanBansosSchema, insertDonasiCampaignSchema, insertDonasiSchema, insertKasRwSchema, insertPemilikKostSchema, insertWargaSinggahSchema, insertUsahaSchema, insertKaryawanUsahaSchema, insertIzinTetanggaSchema, insertSurveyUsahaSchema, insertProgramRwSchema, insertPesertaProgramSchema } from "@shared/schema";
+import { insertKkSchema, patchKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertPengajuanBansosSchema, insertDonasiCampaignSchema, insertDonasiSchema, insertKasRwSchema, insertPemilikKostSchema, insertWargaSinggahSchema, insertUsahaSchema, insertKaryawanUsahaSchema, insertIzinTetanggaSchema, insertSurveyUsahaSchema, insertProgramRwSchema, insertPesertaProgramSchema, insertProyekInfrastrukturSchema, insertUmkmMakeoverSchema } from "@shared/schema";
+import { buildProgramKerjaDashboard } from "@shared/program-kerja-analytics";
+import { formatLaporanRef } from "@shared/program-kerja";
+import { getBlusukanDashboard } from "./blusukan";
 import { z } from "zod";
 import { ACTIVE_RT_NUMBERS, isActiveRt, assertKkInPemukimanScope } from "@shared/rt";
 import { formatLaporanKioskIsi, formatRtLabel } from "@shared/laporan-pelapor";
 import { generateWithGemini } from "./gemini";
-import { buildKependudukanStats, buildSegmentRows } from "./kependudukan-stats";
+import { buildKependudukanStats } from "./kependudukan-stats";
 import { isFieldFilled } from "@shared/kependudukan-analytics";
 
 function resolveAppVersion() {
@@ -414,27 +417,6 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
     }
   });
 
-  app.get("/api/stats/segment/:section/:field", requireAdmin, async (req, res) => {
-    try {
-      const section = req.params.section as string;
-      const field = req.params.field as string;
-      const value = (req.query.value as string) ?? "";
-      const rtParam = req.query.rt ? parseInt(req.query.rt as string) : undefined;
-      const rtFilter = rtParam && !isNaN(rtParam) ? rtParam : undefined;
-
-      if (rtFilter !== undefined && !isActiveRt(rtFilter)) {
-        return res.status(400).json({ message: "Filter hanya untuk RT 01–04" });
-      }
-      const allKkRaw = await storage.getAllKkPemukiman();
-      const kkIds = new Set(allKkRaw.map((k) => k.id));
-      const allWargaRaw = (await storage.getAllWargaPemukiman()).filter((w) => kkIds.has(w.kkId));
-      const rows = buildSegmentRows(allWargaRaw, allKkRaw, section, field, value, rtFilter);
-      res.json({ section, field, value, total: rows.length, rows });
-    } catch {
-      res.status(500).json({ message: "Gagal mengambil daftar segment" });
-    }
-  });
-
   app.get("/api/kk/:id/detail", requireAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id as string);
@@ -654,6 +636,8 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
     }),
     nomorWa: z.string().min(9, "Nomor WhatsApp tidak valid"),
     jenisLaporan: z.string().min(1),
+    subJenis: z.string().optional(),
+    fotoLaporan: z.string().optional(),
     judul: z.string().min(3),
     isi: z.string().min(10),
   });
@@ -694,6 +678,8 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
 
       const data = await storage.createLaporan({
         jenisLaporan: parsed.jenisLaporan,
+        subJenis: parsed.subJenis,
+        fotoLaporan: parsed.fotoLaporan,
         judul: parsed.judul,
         isi: formatLaporanKioskIsi({
           namaPelapor: parsed.namaPelapor,
@@ -703,9 +689,82 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
         }),
       });
 
-      return res.json(data);
+      return res.json({ ...data, nomorReferensi: formatLaporanRef(data.id) });
     } catch (error: any) {
       return res.status(400).json({ message: error.message || "Gagal mengirim laporan" });
+    }
+  });
+
+  app.get("/api/public/laporan/:id/status", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id as string, 10);
+      if (isNaN(id)) return res.status(400).json({ message: "Nomor laporan tidak valid" });
+      const lap = await storage.getLaporanById(id);
+      if (!lap) return res.status(404).json({ message: "Laporan tidak ditemukan" });
+      return res.json({
+        nomorReferensi: formatLaporanRef(lap.id),
+        judul: lap.judul,
+        jenisLaporan: lap.jenisLaporan,
+        subJenis: lap.subJenis,
+        status: lap.status,
+        tanggapanAdmin: lap.tanggapanAdmin,
+        createdAt: lap.createdAt,
+      });
+    } catch (error: any) {
+      return res.status(500).json({ message: error.message || "Gagal memuat status laporan" });
+    }
+  });
+
+  app.get("/api/public/program-kerja", async (_req, res) => {
+    try {
+      await storage.seedDefaultPrograms();
+      const programs = await storage.getPublicProgramKerja();
+      const proyek = await storage.getPublicProyekInfrastruktur();
+      const umkm = await storage.getPublicUmkmMakeover();
+      res.json({ programs, proyek, umkm });
+    } catch (error: any) {
+      console.error("[program-kerja] GET /api/public/program-kerja:", error);
+      res.status(500).json({ message: error?.message || "Gagal memuat program kerja" });
+    }
+  });
+
+  app.get("/api/public/transparansi", async (_req, res) => {
+    try {
+      const laporanStats = await storage.getLaporanStats();
+      const blusukan = await getBlusukanDashboard();
+      const properti = await storage.getAllPemilikKost();
+      const penghuni = await storage.getAllWargaSinggah();
+      const penghuniAktif = penghuni.filter((p) => p.status === "aktif").length;
+      const programs = await storage.getPublicProgramKerja();
+      const rateSelesai =
+        laporanStats.total > 0
+          ? Math.round((laporanStats.selesai / laporanStats.total) * 100)
+          : 0;
+      res.json({
+        laporanRateSelesai: rateSelesai,
+        totalLaporan: laporanStats.total,
+        propertiVisitRw3: properti.length,
+        penghuniAktif,
+        sensusKelengkapan: blusukan.avgKelengkapan,
+        totalKk: blusukan.totalKk,
+        programBerjalan: programs.filter((p) => p.status === "berjalan").length,
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/public/kampung-umkm", async (_req, res) => {
+    try {
+      const units = await storage.getPublicUmkmMakeover();
+      const all = await storage.getAllUmkmMakeover();
+      const selesai = all.filter((u) => u.statusMakeover === "selesai").length;
+      res.json({
+        units,
+        progress: { total: all.length, selesai, percent: all.length ? Math.round((selesai / all.length) * 100) : 0 },
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
     }
   });
 
@@ -1766,6 +1825,42 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
   });
 
   // ===================== PROGRAM RW =====================
+  app.get("/api/admin/blusukan-summary", requireAdmin, async (req, res) => {
+    try {
+      const rtParam = req.query.rt ? parseInt(req.query.rt as string) : undefined;
+      const rtFilter = rtParam && !isNaN(rtParam) ? rtParam : undefined;
+      const data = await getBlusukanDashboard(rtFilter);
+      res.json(data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/program-kerja/dashboard", requireAdmin, async (_req, res) => {
+    try {
+      await storage.seedDefaultPrograms();
+      const programs = await storage.getAllProgramRw();
+      const laporanStats = await storage.getLaporanStats();
+      const snapshot = await storage.captureCurrentSnapshot();
+      const dashboard = buildProgramKerjaDashboard(programs, laporanStats, snapshot.indeksKemajuan);
+      const blusukan = await getBlusukanDashboard();
+      const proyek = await storage.getAllProyekInfrastruktur();
+      const umkm = await storage.getAllUmkmMakeover();
+      res.json({ ...dashboard, blusukan, proyek, umkm });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/program-rw/seed-defaults", requireAdmin, async (_req, res) => {
+    try {
+      const data = await storage.seedDefaultPrograms();
+      res.json(data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.get("/api/program-rw", requireAdmin, async (req, res) => {
     try {
       const data = await storage.getAllProgramRw();
@@ -1854,6 +1949,102 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
     try {
       await storage.deletePesertaProgram(parseInt(req.params.pesertaId as string));
       res.json({ message: "Peserta dihapus" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ===================== PROYEK INFRASTRUKTUR =====================
+  app.get("/api/proyek-infrastruktur", requireAdmin, async (_req, res) => {
+    try {
+      res.json(await storage.getAllProyekInfrastruktur());
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/proyek-infrastruktur/:id", requireAdmin, async (req, res) => {
+    try {
+      const data = await storage.getProyekInfrastrukturById(parseInt(req.params.id as string));
+      if (!data) return res.status(404).json({ message: "Proyek tidak ditemukan" });
+      res.json(data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/proyek-infrastruktur", requireAdmin, async (req, res) => {
+    try {
+      const parsed = insertProyekInfrastrukturSchema.parse(req.body);
+      res.json(await storage.createProyekInfrastruktur(parsed));
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/proyek-infrastruktur/:id", requireAdmin, async (req, res) => {
+    try {
+      const parsed = insertProyekInfrastrukturSchema.partial().parse(req.body);
+      const data = await storage.updateProyekInfrastruktur(parseInt(req.params.id as string), parsed);
+      if (!data) return res.status(404).json({ message: "Proyek tidak ditemukan" });
+      res.json(data);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/proyek-infrastruktur/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteProyekInfrastruktur(parseInt(req.params.id as string));
+      res.json({ message: "Proyek dihapus" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ===================== UMKM MAKEOVER =====================
+  app.get("/api/umkm-makeover", requireAdmin, async (_req, res) => {
+    try {
+      res.json(await storage.getAllUmkmMakeover());
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/umkm-makeover/:id", requireAdmin, async (req, res) => {
+    try {
+      const data = await storage.getUmkmMakeoverById(parseInt(req.params.id as string));
+      if (!data) return res.status(404).json({ message: "Unit tidak ditemukan" });
+      res.json(data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/umkm-makeover", requireAdmin, async (req, res) => {
+    try {
+      const parsed = insertUmkmMakeoverSchema.parse(req.body);
+      res.json(await storage.createUmkmMakeover(parsed));
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/umkm-makeover/:id", requireAdmin, async (req, res) => {
+    try {
+      const parsed = insertUmkmMakeoverSchema.partial().parse(req.body);
+      const data = await storage.updateUmkmMakeover(parseInt(req.params.id as string), parsed);
+      if (!data) return res.status(404).json({ message: "Unit tidak ditemukan" });
+      res.json(data);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/umkm-makeover/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteUmkmMakeover(parseInt(req.params.id as string));
+      res.json({ message: "Unit dihapus" });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

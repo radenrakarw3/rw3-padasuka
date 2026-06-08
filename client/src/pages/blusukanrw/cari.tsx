@@ -8,6 +8,7 @@ import { Search, MessageCircle, ChevronRight } from "lucide-react";
 import { readJsonSafely } from "@/lib/queryClient";
 import { toWhatsappLink } from "@/components/kependudukan/warga-form";
 import { isActiveRt } from "@shared/rt";
+import { blusukanKkHref } from "@/lib/blusukan-navigation";
 
 type CariRow = {
   wargaId: number;
@@ -84,7 +85,7 @@ export default function BlusukanrwCari() {
                     KK {row.nomorKk} · RT {String(row.rt).padStart(2, "0")} · {row.kedudukanKeluarga}
                   </p>
                 </div>
-                <Link href={`/blusukanrw/kk/${row.kkId}`}>
+                <Link href={blusukanKkHref(row.kkId, "cari")}>
                   <Button size="icon" variant="ghost" type="button">
                     <ChevronRight className="w-5 h-5" />
                   </Button>
@@ -103,7 +104,7 @@ export default function BlusukanrwCari() {
                     Belum ada WA
                   </Badge>
                 )}
-                <Link href={`/blusukanrw/kk/${row.kkId}`}>
+                <Link href={blusukanKkHref(row.kkId, "cari")}>
                   <Button size="sm" variant="secondary" className="text-xs h-8">
                     Buka KK
                   </Button>

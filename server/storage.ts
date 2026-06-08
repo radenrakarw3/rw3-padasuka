@@ -2,6 +2,14 @@ import { eq, and, or, desc, sql, count, gte, asc, getTableColumns, inArray } fro
 import { ACTIVE_RT_NUMBERS } from "@shared/rt";
 import { getWargaAge } from "@shared/warga-form-tier";
 import { needsLiterasi, needsStatusAngkatanKerja } from "@shared/warga-international";
+import {
+  buildKelompokUsiaMap,
+  pekerjaanUntukUsiaAnakKecil,
+  pekerjaanUntukUsiaLansia,
+  pekerjaanUntukUsiaPelajar,
+  resolveKategoriUmur,
+} from "@shared/kategori-umur";
+import { resolvePekerjaanCanon } from "@shared/pekerjaan-status";
 import { isPengangguran } from "./kependudukan-stats";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "./db";
@@ -10,7 +18,7 @@ import {
   profileEditRequest, adminUser, waBlast, waBlastRecipient, pengajuanBansos, donasiCampaign, donasi, kasRw,
   pemilikKost, wargaSinggah, riwayatKontrak, visitrw3Pengajuan, blusukanKunjungan,
   usaha, karyawanUsaha, izinTetangga, surveyUsaha, riwayatStiker, monthlySnapshot,
-  programRw, pesertaProgram,
+  programRw, pesertaProgram, proyekInfrastruktur, umkmMakeover,
   mitra, rwcoinWallet, rwcoinTransaksi, mitraVoucher, mitraDiskon, rwcoinWithdraw, rwcoinOtp, rwcoinPendingTransaksi, kasRwcoin, rwcoinTopupRequest, wargaSavedLogin, curhatWarga, tripayTransaction,
   iuranKk, iuranSetting, rwcoinSettings,
   type KartuKeluarga, type InsertKartuKeluarga,
@@ -37,6 +45,8 @@ import {
   type MonthlySnapshot, type InsertMonthlySnapshot,
   type ProgramRw, type InsertProgramRw,
   type PesertaProgram, type InsertPesertaProgram,
+  type ProyekInfrastruktur, type InsertProyekInfrastruktur,
+  type UmkmMakeover, type InsertUmkmMakeover,
   type Mitra, type RwcoinWallet, type RwcoinTransaksi, type KasRwcoin,
   type MitraVoucher, type MitraDiskon, type RwcoinWithdraw, type RwcoinOtp, type RwcoinPendingTransaksi,
   type RwcoinTopupRequest, type CurhatWarga,
@@ -54,8 +64,41 @@ function normalizeStoredPhone(phone?: string | null): string | null {
 }
 
 function normalizeWargaPayload<T extends Partial<InsertWarga>>(data: T): T {
+  const tanggalLahir = Object.prototype.hasOwnProperty.call(data, "tanggalLahir")
+    ? data.tanggalLahir
+    : undefined;
+  const kategoriUmur =
+    tanggalLahir !== undefined ? resolveKategoriUmur(tanggalLahir) : undefined;
+  const age = tanggalLahir !== undefined ? getWargaAge(tanggalLahir) : null;
+  const lansia = age !== null && age !== undefined ? age >= 60 : undefined;
+  const anakKecilPekerjaan =
+    age !== null && age !== undefined
+      ? pekerjaanUntukUsiaAnakKecil(data.pekerjaan, age)
+      : undefined;
+  const pelajarPekerjaan =
+    age !== null && age !== undefined
+      ? pekerjaanUntukUsiaPelajar(data.pekerjaan, age)
+      : undefined;
+  const lansiaPekerjaan =
+    age !== null && age !== undefined
+      ? pekerjaanUntukUsiaLansia(data.pekerjaan, age)
+      : undefined;
+  const pekerjaanByUsia = anakKecilPekerjaan ?? pelajarPekerjaan ?? lansiaPekerjaan;
+  const pekerjaanCanon = Object.prototype.hasOwnProperty.call(data, "pekerjaan")
+    ? (() => {
+        const raw = data.pekerjaan;
+        if (raw == null || raw === "") return raw;
+        const canon = resolvePekerjaanCanon(raw);
+        return canon !== raw ? canon : undefined;
+      })()
+    : undefined;
+  const pekerjaanFinal = pekerjaanByUsia ?? pekerjaanCanon;
+
   return {
     ...data,
+    ...(kategoriUmur !== undefined ? { kategoriUmur } : {}),
+    ...(lansia !== undefined ? { lansia } : {}),
+    ...(pekerjaanFinal !== undefined ? { pekerjaan: pekerjaanFinal } : {}),
     ...(Object.prototype.hasOwnProperty.call(data, "nomorWhatsapp")
       ? { nomorWhatsapp: normalizeStoredPhone(data.nomorWhatsapp) }
       : {}),
@@ -97,6 +140,7 @@ export interface IStorage {
 
   getLaporanByKkId(kkId: number): Promise<Laporan[]>;
   getAllLaporan(): Promise<Laporan[]>;
+  getLaporanById(id: number): Promise<Laporan | undefined>;
   createLaporan(data: InsertLaporan): Promise<Laporan>;
   updateLaporanStatus(id: number, status: string, tanggapan?: string): Promise<Laporan | undefined>;
 
@@ -260,6 +304,23 @@ export interface IStorage {
   addPesertaProgram(data: InsertPesertaProgram): Promise<PesertaProgram>;
   updateKehadiranPeserta(id: number, kehadiran: string, catatan?: string): Promise<PesertaProgram | undefined>;
   deletePesertaProgram(id: number): Promise<void>;
+  getPublicProgramKerja(): Promise<ProgramRw[]>;
+  seedDefaultPrograms(): Promise<ProgramRw[]>;
+  getLaporanStats(): Promise<{ total: number; pending: number; selesai: number; infrastruktur: number; infrastrukturSelesai: number }>;
+
+  getAllProyekInfrastruktur(): Promise<ProyekInfrastruktur[]>;
+  getProyekInfrastrukturById(id: number): Promise<ProyekInfrastruktur | undefined>;
+  getPublicProyekInfrastruktur(): Promise<ProyekInfrastruktur[]>;
+  createProyekInfrastruktur(data: InsertProyekInfrastruktur): Promise<ProyekInfrastruktur>;
+  updateProyekInfrastruktur(id: number, data: Partial<InsertProyekInfrastruktur>): Promise<ProyekInfrastruktur | undefined>;
+  deleteProyekInfrastruktur(id: number): Promise<void>;
+
+  getAllUmkmMakeover(): Promise<UmkmMakeover[]>;
+  getUmkmMakeoverById(id: number): Promise<UmkmMakeover | undefined>;
+  getPublicUmkmMakeover(): Promise<UmkmMakeover[]>;
+  createUmkmMakeover(data: InsertUmkmMakeover): Promise<UmkmMakeover>;
+  updateUmkmMakeover(id: number, data: Partial<InsertUmkmMakeover>): Promise<UmkmMakeover | undefined>;
+  deleteUmkmMakeover(id: number): Promise<void>;
 
   // ============ RWCOIN ============
   getAllMitra(): Promise<Mitra[]>;
@@ -589,10 +650,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllWargaPemukiman(): Promise<Warga[]> {
-    const kkPemukiman = await this.getAllKkPemukiman();
-    const kkIds = kkPemukiman.map((k) => k.id);
-    if (kkIds.length === 0) return [];
-    return db.select().from(warga).where(inArray(warga.kkId, kkIds)).orderBy(warga.namaLengkap);
+    return db
+      .select(getTableColumns(warga))
+      .from(warga)
+      .innerJoin(kartuKeluarga, eq(warga.kkId, kartuKeluarga.id))
+      .where(inArray(kartuKeluarga.rt, [...ACTIVE_RT_NUMBERS]))
+      .orderBy(warga.namaLengkap);
   }
 
   async createWarga(data: InsertWarga): Promise<Warga> {
@@ -603,8 +666,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateWarga(id: number, data: Partial<InsertWarga>): Promise<Warga | undefined> {
-    const [before] = await db.select({ kkId: warga.kkId }).from(warga).where(eq(warga.id, id));
-    const payload = normalizeWargaPayload(data);
+    const [before] = await db
+      .select({ kkId: warga.kkId, tanggalLahir: warga.tanggalLahir, pekerjaan: warga.pekerjaan })
+      .from(warga)
+      .where(eq(warga.id, id));
+    const payload = normalizeWargaPayload({
+      ...data,
+      tanggalLahir: Object.prototype.hasOwnProperty.call(data, "tanggalLahir")
+        ? data.tanggalLahir
+        : before?.tanggalLahir,
+      pekerjaan: Object.prototype.hasOwnProperty.call(data, "pekerjaan")
+        ? data.pekerjaan
+        : before?.pekerjaan,
+    });
     const [result] = await db.update(warga).set(payload).where(eq(warga.id, id)).returning();
     if (result) {
       await this.syncKkJumlahPenghuni(result.kkId);
@@ -663,6 +737,11 @@ export class DatabaseStorage implements IStorage {
 
   async getAllLaporan(): Promise<Laporan[]> {
     return db.select().from(laporan).orderBy(desc(laporan.createdAt));
+  }
+
+  async getLaporanById(id: number): Promise<Laporan | undefined> {
+    const [result] = await db.select().from(laporan).where(eq(laporan.id, id));
+    return result;
   }
 
   async createLaporan(data: InsertLaporan): Promise<Laporan> {
@@ -1305,31 +1384,7 @@ export class DatabaseStorage implements IStorage {
       : pekerjaanSorted;
 
     const today = new Date();
-    const kelompokUsia: Record<string, number> = {
-      "0-5": 0, "6-17": 0, "18-25": 0, "26-40": 0, "41-55": 0, "56-64": 0, "65+": 0, "Tidak Diketahui": 0,
-    };
-    for (const w of allWarga) {
-      if (!w.tanggalLahir) {
-        kelompokUsia["Tidak Diketahui"]++;
-        continue;
-      }
-      const birth = new Date(w.tanggalLahir);
-      if (isNaN(birth.getTime())) {
-        kelompokUsia["Tidak Diketahui"]++;
-        continue;
-      }
-      let age = today.getFullYear() - birth.getFullYear();
-      const m = today.getMonth() - birth.getMonth();
-      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
-      if (age <= 5) kelompokUsia["0-5"]++;
-      else if (age <= 17) kelompokUsia["6-17"]++;
-      else if (age <= 25) kelompokUsia["18-25"]++;
-      else if (age <= 40) kelompokUsia["26-40"]++;
-      else if (age <= 55) kelompokUsia["41-55"]++;
-      else if (age < 65) kelompokUsia["56-64"]++;
-      else kelompokUsia["65+"]++;
-    }
-    if (kelompokUsia["Tidak Diketahui"] === 0) delete kelompokUsia["Tidak Diketahui"];
+    const kelompokUsia = buildKelompokUsiaMap(allWarga);
 
     const waOwnership = {
       punya: allWarga.filter(w => w.nomorWhatsapp).length,
@@ -2253,6 +2308,120 @@ export class DatabaseStorage implements IStorage {
 
   async deletePesertaProgram(id: number): Promise<void> {
     await db.delete(pesertaProgram).where(eq(pesertaProgram.id, id));
+  }
+
+  async getPublicProgramKerja(): Promise<ProgramRw[]> {
+    return db
+      .select()
+      .from(programRw)
+      .where(eq(programRw.publik, true))
+      .orderBy(asc(programRw.prioritas), desc(programRw.tanggalPelaksanaan));
+  }
+
+  async seedDefaultPrograms(): Promise<ProgramRw[]> {
+    const { SUB_PROGRAM_DEFS } = await import("@shared/program-kerja");
+    const existing = await this.getAllProgramRw();
+    if (existing.length > 0) return existing;
+    const today = new Date().toISOString().slice(0, 10);
+    const created: ProgramRw[] = [];
+    for (const def of SUB_PROGRAM_DEFS) {
+      const row = await this.createProgramRw({
+        namaProgram: def.nama,
+        deskripsi: def.deskripsi,
+        tanggalPelaksanaan: today,
+        kategoriSasaran: "semua",
+        status: "rencana",
+        pilar: def.pilar,
+        subProgram: def.slug,
+        publik: true,
+        prioritas: 2,
+      });
+      created.push(row);
+    }
+    return created;
+  }
+
+  async getLaporanStats(): Promise<{
+    total: number;
+    pending: number;
+    selesai: number;
+    infrastruktur: number;
+    infrastrukturSelesai: number;
+  }> {
+    const all = await this.getAllLaporan();
+    const infrastruktur = all.filter((l) => l.jenisLaporan === "infrastruktur");
+    return {
+      total: all.length,
+      pending: all.filter((l) => l.status === "pending").length,
+      selesai: all.filter((l) => l.status === "selesai").length,
+      infrastruktur: infrastruktur.length,
+      infrastrukturSelesai: infrastruktur.filter((l) => l.status === "selesai").length,
+    };
+  }
+
+  async getAllProyekInfrastruktur(): Promise<ProyekInfrastruktur[]> {
+    return db.select().from(proyekInfrastruktur).orderBy(desc(proyekInfrastruktur.createdAt));
+  }
+
+  async getProyekInfrastrukturById(id: number): Promise<ProyekInfrastruktur | undefined> {
+    const [result] = await db.select().from(proyekInfrastruktur).where(eq(proyekInfrastruktur.id, id));
+    return result;
+  }
+
+  async getPublicProyekInfrastruktur(): Promise<ProyekInfrastruktur[]> {
+    return db
+      .select()
+      .from(proyekInfrastruktur)
+      .where(eq(proyekInfrastruktur.publik, true))
+      .orderBy(desc(proyekInfrastruktur.createdAt));
+  }
+
+  async createProyekInfrastruktur(data: InsertProyekInfrastruktur): Promise<ProyekInfrastruktur> {
+    const [result] = await db.insert(proyekInfrastruktur).values(data).returning();
+    return result;
+  }
+
+  async updateProyekInfrastruktur(
+    id: number,
+    data: Partial<InsertProyekInfrastruktur>,
+  ): Promise<ProyekInfrastruktur | undefined> {
+    const [result] = await db.update(proyekInfrastruktur).set(data).where(eq(proyekInfrastruktur.id, id)).returning();
+    return result;
+  }
+
+  async deleteProyekInfrastruktur(id: number): Promise<void> {
+    await db.delete(proyekInfrastruktur).where(eq(proyekInfrastruktur.id, id));
+  }
+
+  async getAllUmkmMakeover(): Promise<UmkmMakeover[]> {
+    return db.select().from(umkmMakeover).orderBy(desc(umkmMakeover.createdAt));
+  }
+
+  async getUmkmMakeoverById(id: number): Promise<UmkmMakeover | undefined> {
+    const [result] = await db.select().from(umkmMakeover).where(eq(umkmMakeover.id, id));
+    return result;
+  }
+
+  async getPublicUmkmMakeover(): Promise<UmkmMakeover[]> {
+    return db
+      .select()
+      .from(umkmMakeover)
+      .where(and(eq(umkmMakeover.publik, true), eq(umkmMakeover.statusMakeover, "selesai")))
+      .orderBy(desc(umkmMakeover.tanggalSelesai));
+  }
+
+  async createUmkmMakeover(data: InsertUmkmMakeover): Promise<UmkmMakeover> {
+    const [result] = await db.insert(umkmMakeover).values(data).returning();
+    return result;
+  }
+
+  async updateUmkmMakeover(id: number, data: Partial<InsertUmkmMakeover>): Promise<UmkmMakeover | undefined> {
+    const [result] = await db.update(umkmMakeover).set(data).where(eq(umkmMakeover.id, id)).returning();
+    return result;
+  }
+
+  async deleteUmkmMakeover(id: number): Promise<void> {
+    await db.delete(umkmMakeover).where(eq(umkmMakeover.id, id));
   }
 
   // ============ RWCOIN ============

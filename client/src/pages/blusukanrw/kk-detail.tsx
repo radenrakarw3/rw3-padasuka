@@ -4,7 +4,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, MapPin, Loader2, Plus, Trash2, CheckCircle2, AlertCircle } from "lucide-react";
 import { BLUSUKAN_API } from "@shared/blusukan-api";
 import { blusukanApi } from "@/lib/blusukan-api";
+import { mapWargaToIssueSlice } from "@shared/blusukan-analytics";
+import { getEffectiveKategoriUmur, getKategoriUmurDef } from "@shared/kategori-umur";
 import { computeBlusukanWargaCompleteness } from "@shared/profile-completeness";
+import { detectWargaDataIssues, summarizeWargaIssues } from "@shared/warga-data-issues";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -30,6 +33,12 @@ import {
 } from "@/components/blusukanrw/kk-form-fields";
 import { formatKkKendaraanDisplay } from "@shared/kk-kendaraan";
 import { BlusukanPanelNav, type BlusukanPanel } from "@/components/blusukanrw/panel-nav";
+import type { KeluargaKunjunganRow } from "@/components/blusukanrw/keluarga-kunjungan-row";
+import {
+  blusukanBackRoute,
+  blusukanKkHref,
+  parseBlusukanFrom,
+} from "@/lib/blusukan-navigation";
 import { BlusukanFullScreenForm } from "@/components/blusukanrw/blusukan-form-ui";
 import {
   AlertDialog,
@@ -54,6 +63,8 @@ export default function BlusukanrwKkDetail() {
   const [, params] = useRoute("/blusukanrw/kk/:id");
   const [, setLocation] = useLocation();
   const id = params?.id ? parseInt(params.id, 10) : NaN;
+  const fromPage = parseBlusukanFrom(typeof window !== "undefined" ? window.location.search : "");
+  const back = blusukanBackRoute(fromPage);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const kkPickerRef = useRef<HTMLDivElement>(null);
@@ -62,6 +73,7 @@ export default function BlusukanrwKkDetail() {
     queryKey: [BLUSUKAN_API.kk(id), id],
     queryFn: () => blusukanApi.kk.get<KkDetailResponse>(id),
     enabled: !isNaN(id),
+    staleTime: 0,
   });
 
   const { data: kkList } = useQuery({
@@ -69,7 +81,7 @@ export default function BlusukanrwKkDetail() {
     queryFn: () => blusukanApi.kkList(),
   });
 
-  const [panel, setPanel] = useState<BlusukanPanel>("kk");
+  const [panel, setPanel] = useState<BlusukanPanel>(() => (fromPage === "kunjungan" ? "anggota" : "kk"));
   const [kkForm, setKkForm] = useState<KkFormValues | null>(null);
   const [catatanKunjungan, setCatatanKunjungan] = useState("");
   const [editWarga, setEditWarga] = useState<Warga | null>(null);
@@ -113,11 +125,35 @@ export default function BlusukanrwKkDetail() {
   const editInvalid = Object.keys(editErrors).length > 0;
   const newInvalid = Object.keys(newWargaErrors).length > 0;
 
-  const invalidateAll = () => {
-    queryClient.invalidateQueries({ queryKey: [BLUSUKAN_API.kk(id)] });
-    queryClient.invalidateQueries({ queryKey: [BLUSUKAN_API.keluarga] });
-    queryClient.invalidateQueries({ queryKey: [BLUSUKAN_API.dashboard] });
-    queryClient.invalidateQueries({ queryKey: [BLUSUKAN_API.kkList] });
+  const invalidateAll = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: [BLUSUKAN_API.kk(id)] }),
+      queryClient.invalidateQueries({ queryKey: [BLUSUKAN_API.keluarga] }),
+      queryClient.invalidateQueries({ queryKey: [BLUSUKAN_API.dashboard] }),
+      queryClient.invalidateQueries({ queryKey: [BLUSUKAN_API.kkList] }),
+    ]);
+
+  const goToNextKunjungan = async () => {
+    await invalidateAll();
+    const next = await blusukanApi.keluarga<KeluargaKunjunganRow>({
+      filter: "perlu",
+      page: 1,
+      limit: 10,
+    });
+    const candidate = next.rows.find((row) => row.kkId !== id);
+    if (candidate) {
+      toast({
+        title: "Kunjungan dicatat",
+        description: "Lanjut ke keluarga berikutnya di antrian.",
+      });
+      setLocation(blusukanKkHref(candidate.kkId, "kunjungan"));
+      return;
+    }
+    toast({
+      title: "Kunjungan dicatat",
+      description: "Antrian kunjungan kosong — progres diperbarui di dashboard.",
+    });
+    setLocation("/blusukanrw/dashboard");
   };
 
   const saveKkMutation = useMutation({
@@ -150,10 +186,14 @@ export default function BlusukanrwKkDetail() {
       await blusukanApi.warga.patch(wargaId, toBlusukanWargaPayload(form));
     },
     onSuccess: () => {
-      toast({ title: "Data warga tersimpan" });
+      toast({
+        title: "Data warga tersimpan",
+        description: "Buka tab Kunjungan lalu simpan untuk menutup kunjungan dan memperbarui dashboard.",
+      });
       setEditWarga(null);
       setEditForm(null);
-      invalidateAll();
+      void invalidateAll();
+      setPanel("kunjungan");
     },
     onError: (e: unknown) => {
       toast({
@@ -236,10 +276,8 @@ export default function BlusukanrwKkDetail() {
       });
     },
     onSuccess: () => {
-      toast({ title: "Kunjungan dicatat" });
       setCatatanKunjungan("");
-      invalidateAll();
-      setLocation("/blusukanrw/kunjungan");
+      void goToNextKunjungan();
     },
     onError: (e: unknown) => {
       toast({
@@ -273,19 +311,21 @@ export default function BlusukanrwKkDetail() {
         : null;
 
   return (
-    <div className="pb-28" style={{ paddingBottom: wargaFormOpen ? undefined : "max(7rem, calc(5rem + env(safe-area-inset-bottom)))" }}>
+    <div className="pb-32" style={{ paddingBottom: wargaFormOpen ? undefined : "max(8rem, calc(6rem + env(safe-area-inset-bottom)))" }}>
       <div className="flex items-center gap-2 mb-3 -ml-2">
-        <Link href="/blusukanrw/kunjungan">
+        <Link href={back.href}>
           <Button variant="ghost" size="sm">
             <ArrowLeft className="w-4 h-4 mr-1" />
-            Antrian
+            {back.label}
           </Button>
         </Link>
-        <Link href="/blusukanrw/dashboard">
-          <Button variant="ghost" size="sm" className="text-muted-foreground">
-            Dashboard
-          </Button>
-        </Link>
+        {fromPage !== "dashboard" && (
+          <Link href="/blusukanrw/dashboard">
+            <Button variant="ghost" size="sm" className="text-muted-foreground">
+              Dashboard
+            </Button>
+          </Link>
+        )}
       </div>
 
       {isLoading && <Skeleton className="h-48 w-full" />}
@@ -380,10 +420,16 @@ export default function BlusukanrwKkDetail() {
               {data.anggota.map((w) => {
                 const pct = computeBlusukanWargaCompleteness(w).completionPercent;
                 const ok = pct === 100;
+                const katId = getEffectiveKategoriUmur(w);
+                const katDef = getKategoriUmurDef(katId);
+                const issues = detectWargaDataIssues(mapWargaToIssueSlice(w, data.kk.rt));
+                const hasIssues = issues.length > 0;
                 return (
                   <div
                     key={w.id}
-                    className="flex items-center gap-2 rounded-xl border bg-card p-3 shadow-sm touch-manipulation"
+                    className={`flex items-center gap-2 rounded-xl border bg-card p-3 shadow-sm touch-manipulation ${
+                      hasIssues ? "border-amber-200/80" : ""
+                    }`}
                   >
                     <button
                       type="button"
@@ -392,11 +438,17 @@ export default function BlusukanrwKkDetail() {
                     >
                       <p className="text-base font-semibold truncate">{w.namaLengkap}</p>
                       <p className="text-sm text-muted-foreground">
-                        {w.kedudukanKeluarga}
+                        {w.kedudukanKeluarga} · {katDef.shortLabel}
                         {w.nomorWhatsapp ? ` · ${w.nomorWhatsapp}` : ""}
                       </p>
-                      <div className="flex items-center gap-1.5 mt-1.5">
-                        {ok ? (
+                      {(w.statusPekerjaan || w.pekerjaan) && (
+                        <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                          {w.statusPekerjaan || "—"}
+                          {w.pekerjaan ? ` · ${w.pekerjaan}` : ""}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                        {ok && !hasIssues ? (
                           <CheckCircle2 className="w-4 h-4 text-[hsl(163,55%,32%)]" />
                         ) : (
                           <AlertCircle className="w-4 h-4 text-amber-600" />
@@ -404,6 +456,11 @@ export default function BlusukanrwKkDetail() {
                         <span className="text-xs text-muted-foreground">
                           Profil {pct}% · {w.statusVerifikasiData}
                         </span>
+                        {hasIssues && (
+                          <Badge variant="outline" className="text-[10px] font-normal border-amber-300 text-amber-900">
+                            {summarizeWargaIssues(issues)}
+                          </Badge>
+                        )}
                       </div>
                     </button>
                     <Button
@@ -566,7 +623,7 @@ export default function BlusukanrwKkDetail() {
 
       {data && kkForm && footerPrimary && !wargaFormOpen && (
         <div
-          className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur border-t p-4 max-w-lg mx-auto shadow-[0_-4px_20px_rgba(0,0,0,0.06)]"
+          className="fixed bottom-16 left-0 right-0 z-50 bg-background/95 backdrop-blur border-t p-4 max-w-lg mx-auto shadow-[0_-4px_20px_rgba(0,0,0,0.06)]"
           style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
         >
           <Button

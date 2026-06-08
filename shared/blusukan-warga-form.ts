@@ -2,6 +2,12 @@
  * SSOT form warga Blusukan RW — disederhanakan untuk sensus lapangan RW 03.
  */
 
+import {
+  applyKategoriUmurDefaults,
+  isPekerjaanSalahUntukKategori,
+  pekerjaanWajibUntukKategori,
+  resolveKategoriUmur,
+} from "@shared/kategori-umur";
 import { getWargaAge, needsWhatsapp, showWhatsappField } from "@shared/warga-form-tier";
 import { inferStatusPekerjaanFromLegacyPekerjaan } from "@shared/pekerjaan-labor";
 import { needsPekerjaanDetail, needsStatusAngkatanKerja } from "@shared/warga-international";
@@ -137,9 +143,30 @@ export function mapWargaToBlusukanForm(w: Warga): BlusukanWargaFormValues {
   };
 }
 
+export function applyBlusukanKategoriDefaults(
+  form: BlusukanWargaFormValues,
+): BlusukanWargaFormValues {
+  const kategoriId = resolveKategoriUmur(form.tanggalLahir);
+  const defaults = applyKategoriUmurDefaults(kategoriId, form);
+  return {
+    ...form,
+    ...(defaults.pekerjaan ? { pekerjaan: defaults.pekerjaan } : {}),
+  };
+}
+
 export function toBlusukanWargaPayload(form: BlusukanWargaFormValues) {
   const age = getWargaAge(form.tanggalLahir);
+  const kategoriUmur = resolveKategoriUmur(form.tanggalLahir);
+  const withDefaults = applyBlusukanKategoriDefaults(form);
   const lansia = age !== null && age >= 60;
+  const pekerjaanWajib = pekerjaanWajibUntukKategori(kategoriUmur);
+  const pekerjaan =
+    needsPekerjaanDetail(withDefaults.statusPekerjaan)
+      ? withDefaults.pekerjaan || null
+      : pekerjaanWajib
+        ? withDefaults.pekerjaan || pekerjaanWajib
+        : withDefaults.pekerjaan || null;
+
   return {
     kkId: parseInt(form.kkId, 10),
     namaLengkap: form.namaLengkap,
@@ -167,10 +194,15 @@ export function toBlusukanWargaPayload(form: BlusukanWargaFormValues) {
     sedangKuliah: form.sedangKuliah,
     namaKampus: form.sedangKuliah ? form.namaKampus || null : null,
     semester: form.sedangKuliah ? form.semester || null : null,
-    statusPekerjaan: form.statusPekerjaan || null,
-    pekerjaan: needsPekerjaanDetail(form.statusPekerjaan) ? form.pekerjaan || null : null,
-    namaTempatKerja: needsPekerjaanDetail(form.statusPekerjaan) ? form.namaTempatKerja || null : null,
-    alamatTempatKerja: needsPekerjaanDetail(form.statusPekerjaan) ? form.alamatTempatKerja || null : null,
+    kategoriUmur,
+    statusPekerjaan: withDefaults.statusPekerjaan || null,
+    pekerjaan,
+    namaTempatKerja: needsPekerjaanDetail(withDefaults.statusPekerjaan)
+      ? withDefaults.namaTempatKerja || null
+      : null,
+    alamatTempatKerja: needsPekerjaanDetail(withDefaults.statusPekerjaan)
+      ? withDefaults.alamatTempatKerja || null
+      : null,
     punyaUsahaLuarRw3: form.punyaUsahaLuarRw3,
     namaUsahaLuarRw3: form.punyaUsahaLuarRw3 ? form.namaUsahaLuarRw3 || null : null,
     punyaPenyakitKronis: form.punyaPenyakitKronis,
@@ -224,12 +256,23 @@ export function validateBlusukanWargaForm(form: BlusukanWargaFormValues): Blusuk
     if (!form.semester) errors.semester = "Semester wajib dipilih";
   }
 
+  const kategoriUmur = resolveKategoriUmur(form.tanggalLahir);
+  const pekerjaanWajib = pekerjaanWajibUntukKategori(kategoriUmur);
+
   if (needsStatusAngkatanKerja(age)) {
     if (!form.statusPekerjaan) errors.statusPekerjaan = "Status pekerjaan wajib diisi";
     if (needsPekerjaanDetail(form.statusPekerjaan)) {
       if (!form.pekerjaan) errors.pekerjaan = "Pekerjaan wajib diisi";
       if (!form.namaTempatKerja.trim()) errors.namaTempatKerja = "Nama tempat kerja wajib diisi";
       if (!form.alamatTempatKerja.trim()) errors.alamatTempatKerja = "Alamat tempat kerja wajib diisi";
+    }
+  }
+
+  if (pekerjaanWajib) {
+    if (!form.pekerjaan?.trim()) {
+      errors.pekerjaan = `Pekerjaan wajib: ${pekerjaanWajib}`;
+    } else if (isPekerjaanSalahUntukKategori(form.pekerjaan, kategoriUmur)) {
+      errors.pekerjaan = `Usia ini wajib pekerjaan «${pekerjaanWajib}»`;
     }
   }
 
@@ -264,6 +307,9 @@ export function getBlusukanRequiredFieldKeys(form: BlusukanWargaFormValues): str
     "statusBansosIndividu",
   ];
   if (needsWhatsapp(age)) keys.push("nomorWhatsapp");
+  const kategoriUmur = resolveKategoriUmur(form.tanggalLahir);
+  const pekerjaanWajib = pekerjaanWajibUntukKategori(kategoriUmur);
+  if (pekerjaanWajib) keys.push("pekerjaan");
   if (needsStatusAngkatanKerja(age)) {
     keys.push("statusPekerjaan");
     if (needsPekerjaanDetail(form.statusPekerjaan)) {

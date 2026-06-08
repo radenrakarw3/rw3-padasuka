@@ -1,10 +1,23 @@
-import { useMemo, type Dispatch, RefObject, SetStateAction } from "react";
+import { useEffect, useMemo, type Dispatch, RefObject, SetStateAction } from "react";
 import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import type { KartuKeluarga } from "@shared/schema";
 import {
+  getKategoriUmurDef,
+  pekerjaanWajibUntukKategori,
+  resolveKategoriUmur,
+} from "@shared/kategori-umur";
+import { PENGANGGURAN_KETERANGAN } from "@shared/pekerjaan-labor";
+import { pekerjaanLegacyOptions } from "@shared/pekerjaan-options";
+import {
+  detectWargaDataIssues,
+  summarizeWargaIssues,
+} from "@shared/warga-data-issues";
+import {
+  applyBlusukanKategoriDefaults,
   type BlusukanWargaFormValues,
   type BlusukanWargaFormErrors,
   getWargaAge,
@@ -13,7 +26,6 @@ import {
 } from "@shared/blusukan-warga-form";
 import { needsPekerjaanDetail, needsStatusAngkatanKerja } from "@shared/warga-international";
 import {
-  pekerjaanOptions,
   agamaOptions,
   jenisKelaminOptions,
   statusPerkawinanOptions,
@@ -30,6 +42,7 @@ import {
   BlusukanField,
   BlusukanFormSection,
   BlusukanNativeSelect,
+  BlusukanSearchableSelect,
   blusukanInputClass,
   blusukanTextareaClass,
 } from "./blusukan-form-ui";
@@ -62,7 +75,38 @@ export function BlusukanWargaFormFields({
   kkList?: KartuKeluarga[];
 }) {
   const age = useMemo(() => getWargaAge(formData.tanggalLahir), [formData.tanggalLahir]);
+  const kategoriId = useMemo(() => resolveKategoriUmur(formData.tanggalLahir), [formData.tanggalLahir]);
+  const kategoriDef = useMemo(() => getKategoriUmurDef(kategoriId), [kategoriId]);
+  const pekerjaanWajib = pekerjaanWajibUntukKategori(kategoriId);
+  const showPekerjaanJabatan =
+    !!pekerjaanWajib || needsStatusAngkatanKerja(age) || !!formData.pekerjaan?.trim();
+
   const selectedKk = kkList?.find((kk) => kk.id.toString() === formData.kkId);
+
+  const previewIssues = useMemo(() => {
+    if (!formData.tanggalLahir) return [];
+    return detectWargaDataIssues({
+      id: 0,
+      kkId: parseInt(formData.kkId, 10) || 0,
+      rt: selectedKk?.rt ?? 0,
+      namaLengkap: formData.namaLengkap,
+      nik: formData.nik,
+      kedudukanKeluarga: formData.kedudukanKeluarga,
+      tanggalLahir: formData.tanggalLahir,
+      kategoriUmur: kategoriId,
+      pekerjaan: formData.pekerjaan,
+      statusPekerjaan: formData.statusPekerjaan,
+      nomorWhatsapp: formData.nomorWhatsapp,
+    });
+  }, [formData, kategoriId, selectedKk?.rt]);
+
+  useEffect(() => {
+    if (!formData.tanggalLahir || kategoriId === "belum_diisi") return;
+    setFormData((prev) => {
+      const next = applyBlusukanKategoriDefaults(prev);
+      return next.pekerjaan !== prev.pekerjaan ? next : prev;
+    });
+  }, [kategoriId, formData.tanggalLahir, setFormData]);
   const filteredKkList =
     kkList?.filter((kk) => {
       if (!searchVal) return true;
@@ -87,6 +131,24 @@ export function BlusukanWargaFormFields({
 
   return (
     <div className="space-y-4 pb-2">
+      {formData.tanggalLahir && kategoriId !== "belum_diisi" && (
+        <div className="rounded-lg border bg-muted/40 px-3 py-2 flex flex-wrap items-center gap-2">
+          <Badge variant="outline" className="font-normal">
+            {kategoriDef.label} ({kategoriDef.shortLabel})
+          </Badge>
+          {pekerjaanWajib && (
+            <span className="text-xs text-muted-foreground">Wajib pekerjaan: {pekerjaanWajib}</span>
+          )}
+        </div>
+      )}
+
+      {previewIssues.length > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-950">
+          <p className="font-semibold mb-1">Perlu diperbaiki</p>
+          <p>{summarizeWargaIssues(previewIssues)}</p>
+        </div>
+      )}
+
       {showPindahKk && kkList && kkList.length > 0 && (
         <BlusukanFormSection title="Pindah KK" subtitle="Hanya jika pindah domisili" defaultOpen={false}>
           <div className="space-y-2 relative" ref={pickerRef}>
@@ -309,13 +371,15 @@ export function BlusukanWargaFormFields({
         )}
       </BlusukanFormSection>
 
-      <BlusukanFormSection title="Pekerjaan" subtitle="Status kerja & usaha luar RW" defaultOpen={false}>
+      <BlusukanFormSection
+        title="Pekerjaan"
+        subtitle="Status ILO, jabatan, & usaha luar RW"
+        defaultOpen={!!pekerjaanWajib || needsStatusAngkatanKerja(age)}
+      >
         {needsStatusAngkatanKerja(age) && (
           <>
-            <BlusukanField label="Status pekerjaan *" error={errors.statusPekerjaan}>
-              <p className="text-xs text-muted-foreground mb-2">
-                Ibu/mengurus rumah tangga bukan pengangguran. Pilih «Mencari Kerja» hanya jika sedang aktif cari kerja.
-              </p>
+            <BlusukanField label="Status pekerjaan (ILO) *" error={errors.statusPekerjaan}>
+              <p className="text-xs text-muted-foreground mb-2">{PENGANGGURAN_KETERANGAN}</p>
               <BlusukanNativeSelect
                 value={formData.statusPekerjaan}
                 onChange={(v) => {
@@ -334,11 +398,12 @@ export function BlusukanWargaFormFields({
             {needsPekerjaanDetail(formData.statusPekerjaan) && (
               <>
                 <BlusukanField label="Pekerjaan / jabatan *" error={errors.pekerjaan}>
-                  <BlusukanNativeSelect
+                  <BlusukanSearchableSelect
                     value={formData.pekerjaan}
                     onChange={(v) => updateField("pekerjaan", v)}
-                    options={pekerjaanOptions}
+                    options={pekerjaanLegacyOptions}
                     placeholder="Pilih pekerjaan"
+                    searchPlaceholder="Cari pekerjaan…"
                   />
                 </BlusukanField>
                 <BlusukanField label="Nama tempat kerja *" error={errors.namaTempatKerja}>
@@ -350,6 +415,17 @@ export function BlusukanWargaFormFields({
               </>
             )}
           </>
+        )}
+        {showPekerjaanJabatan && !needsPekerjaanDetail(formData.statusPekerjaan) && (
+          <BlusukanField label={pekerjaanWajib ? `Pekerjaan * (${pekerjaanWajib})` : "Pekerjaan / status"} error={errors.pekerjaan}>
+            <BlusukanSearchableSelect
+              value={formData.pekerjaan}
+              onChange={(v) => updateField("pekerjaan", v)}
+              options={pekerjaanLegacyOptions}
+              placeholder="Pilih pekerjaan"
+              searchPlaceholder="Cari pekerjaan…"
+            />
+          </BlusukanField>
         )}
         <BlusukanCheckRow
           id={`usaha-luar-${testIdPrefix}`}

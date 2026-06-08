@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import {
   Users, Megaphone, Scale,
-  LogOut, Menu, X, Building2, Wallet, FileText, BarChart3,
+  LogOut, Menu, X, Building2, Wallet, FileText, BarChart3, Target,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import logoGold from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
@@ -13,6 +13,10 @@ type NavItem = { path: string; icon: typeof Megaphone; label: string };
 const navFormWarga: NavItem[] = [
   { path: "/admin/laporan", icon: Megaphone, label: "Laporan" },
   { path: "/admin/visitrw3/antrian", icon: Building2, label: "Visit RW3" },
+];
+
+const navProgramKerja: NavItem[] = [
+  { path: "/admin/program-kerja", icon: Target, label: "Program Kerja" },
 ];
 
 const navPengelolaan: NavItem[] = [
@@ -28,7 +32,10 @@ function isNavActive(location: string, path: string): boolean {
     return location === path || location.startsWith("/admin/visitrw3/");
   }
   if (path === "/admin/kependudukan") {
-    return location === path || location.startsWith("/admin/kependudukan");
+    return location === path;
+  }
+  if (path === "/admin/program-kerja") {
+    return location === path || location.startsWith("/admin/program-kerja/");
   }
   return location === path || location.startsWith(`${path}/`);
 }
@@ -124,6 +131,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 Form warga
               </p>
               {navFormWarga.map((item) => (
+                <NavButton key={item.path} item={item} location={location} onNavigate={go} />
+              ))}
+            </div>
+            <div className="space-y-1 border-t border-border/60 pt-3">
+              <p className="px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Program kerja
+              </p>
+              {navProgramKerja.map((item) => (
                 <NavButton key={item.path} item={item} location={location} onNavigate={go} />
               ))}
             </div>

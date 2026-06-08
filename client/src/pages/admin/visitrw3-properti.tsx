@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, getApiErrorMessage, getQueryFn, readJsonSafely } from "@/lib/queryClient";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +18,15 @@ import {
 import { rtOptions, jumlahPintuOptions, jenisPropertiOptions } from "@/lib/constants";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Visitrw3AdminNav } from "@/components/admin/visitrw3-admin-nav";
-import { Plus, Pencil, Trash2, Building2, Phone, MapPin, X, DoorOpen, Check } from "lucide-react";
+import {
+  Visitrw3AdminShell,
+  Visitrw3EmptyState,
+  Visitrw3FormCard,
+  Visitrw3ListItem,
+  Visitrw3RtBadge,
+  Visitrw3Toolbar,
+} from "@/components/admin/visitrw3-admin-ui";
+import { Plus, Pencil, Trash2, Building2, Phone, MapPin, DoorOpen, Check } from "lucide-react";
 
 interface PemilikKost {
   id: number;
@@ -213,7 +220,7 @@ export default function AdminVisitrw3Properti() {
   const menungguCount = (pemilikList || []).filter((p) => p.statusProperti === "menunggu_verifikasi").length;
 
   return (
-    <div className="space-y-4">
+    <Visitrw3AdminShell>
       <Visitrw3AdminNav
         title="Properti (kost & kontrakan)"
         description={
@@ -228,16 +235,13 @@ export default function AdminVisitrw3Properti() {
         }
       />
 
-      <div className="flex gap-2">
-        <Input
-          placeholder="Cari nama kost/pemilik..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="text-sm"
-          data-testid="input-search-pemilik"
-        />
+      <Visitrw3Toolbar
+        search={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Cari nama kost/pemilik..."
+      >
         <Select value={filterRt} onValueChange={setFilterRt}>
-          <SelectTrigger className="w-28" data-testid="select-filter-rt-pemilik">
+          <SelectTrigger className="w-28 h-9" data-testid="select-filter-rt-pemilik">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -248,7 +252,7 @@ export default function AdminVisitrw3Properti() {
           </SelectContent>
         </Select>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-36">
+          <SelectTrigger className="w-36 h-9">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -257,15 +261,10 @@ export default function AdminVisitrw3Properti() {
             <SelectItem value="aktif">Aktif</SelectItem>
           </SelectContent>
         </Select>
-      </div>
+      </Visitrw3Toolbar>
 
       {showForm && (
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold">{editData ? "Edit properti" : "Tambah properti"}</h3>
-              <Button size="icon" variant="ghost" onClick={resetForm}><X className="w-4 h-4" /></Button>
-            </div>
+        <Visitrw3FormCard title={editData ? "Edit properti" : "Tambah properti"} onClose={resetForm}>
             <form onSubmit={handleSubmit} className="space-y-3">
               <div>
                 <Label className="text-xs">Nama Kost/Kontrakan</Label>
@@ -358,93 +357,87 @@ export default function AdminVisitrw3Properti() {
                 {(createMutation.isPending || updateMutation.isPending) ? "Menyimpan..." : editData ? "Perbarui" : "Simpan"}
               </Button>
             </form>
-          </CardContent>
-        </Card>
+        </Visitrw3FormCard>
       )}
 
       {isLoading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-28 w-full rounded-lg" />)}
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-28 w-full rounded-xl" />)}
         </div>
       ) : filtered.length === 0 ? (
-        <Card>
-          <CardContent className="py-8 text-center space-y-2">
-            <Building2 className="w-10 h-10 mx-auto text-muted-foreground" aria-hidden />
-            <p className="text-sm font-medium">
-              {(pemilikList?.length ?? 0) === 0 ? "Belum ada properti terdaftar" : "Tidak ada properti yang cocok dengan filter"}
-            </p>
-            <p className="text-xs text-muted-foreground max-w-md mx-auto">
-              {(pemilikList?.length ?? 0) === 0
-                ? "Tambahkan properti di sini atau arahkan pemilik mendaftar lewat form publik, lalu setujui agar muncul di pengajuan tinggal/bisnis."
-                : "Ubah kata kunci pencarian atau filter RT/status."}
-            </p>
-            {(pemilikList?.length ?? 0) === 0 && (
-              <Button size="sm" className="mt-2" onClick={() => { resetForm(); setShowForm(true); }}>
+        <Visitrw3EmptyState
+          icon={Building2}
+          title={(pemilikList?.length ?? 0) === 0 ? "Belum ada properti terdaftar" : "Tidak ada properti yang cocok dengan filter"}
+          description={
+            (pemilikList?.length ?? 0) === 0
+              ? "Tambahkan properti di sini atau arahkan pemilik mendaftar lewat form publik, lalu setujui agar muncul di pengajuan tinggal/bisnis."
+              : "Ubah kata kunci pencarian atau filter RT/status."
+          }
+          action={
+            (pemilikList?.length ?? 0) === 0 ? (
+              <Button size="sm" onClick={() => { resetForm(); setShowForm(true); }}>
                 <Plus className="w-4 h-4 mr-1" /> Tambah properti
               </Button>
-            )}
-          </CardContent>
-        </Card>
+            ) : undefined
+          }
+        />
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {filtered.map((item) => (
-            <Card key={item.id} data-testid={`card-pemilik-${item.id}`}>
-              <CardContent className="py-3 px-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Building2 className="w-4 h-4 text-[hsl(163,55%,22%)] flex-shrink-0" />
-                      <span className="font-semibold text-sm truncate" data-testid={`text-nama-kost-${item.id}`}>{item.namaKost}</span>
-                      <span className="text-[10px] bg-[hsl(163,55%,22%)] text-white px-1.5 py-0.5 rounded flex-shrink-0">RT {String(item.rt).padStart(2, "0")}</span>
-                      {(item.statusProperti ?? "aktif") === "menunggu_verifikasi" && (
-                        <span className="text-[10px] bg-amber-500 text-white px-1.5 py-0.5 rounded">Menunggu</span>
-                      )}
-                    </div>
-                    {item.nomorPendaftaran && (
-                      <p className="text-[10px] font-mono text-muted-foreground mb-0.5">{item.nomorPendaftaran}</p>
-                    )}
-                    <p className="text-xs text-muted-foreground mb-1">Pemilik: {item.namaPemilik}</p>
-                    {item.namaPenanggungJawab && (
-                      <p className="text-xs text-muted-foreground mb-1">
-                        PJ pengelola: {item.namaPenanggungJawab}
-                        {item.nomorWaPenanggungJawab ? ` · ${item.nomorWaPenanggungJawab}` : ""}
-                      </p>
-                    )}
-                    {item.catatanPemohon && (
-                      <p className="text-xs text-muted-foreground italic mb-1">Catatan: {item.catatanPemohon}</p>
-                    )}
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{item.nomorWaPemilik}</span>
-                      <span className="flex items-center gap-1"><DoorOpen className="w-3 h-3" />{item.jumlahPintu} pintu</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><MapPin className="w-3 h-3" />{item.alamatLengkap}</p>
-                  </div>
-                  <div className="flex gap-1 flex-shrink-0">
-                    {item.statusProperti === "menunggu_verifikasi" && (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7 text-green-600"
-                        title="Setujui properti"
-                        onClick={() => {
-                          setSurveyForm(defaultSurveyKontribusiState());
-                          setApproveTarget(item);
-                        }}
-                        disabled={approveMutation.isPending}
-                      >
-                        <Check className="w-3.5 h-3.5" />
-                      </Button>
-                    )}
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleEdit(item)} data-testid={`button-edit-pemilik-${item.id}`}>
-                      <Pencil className="w-3.5 h-3.5" />
+            <Visitrw3ListItem
+              key={item.id}
+              testId={`card-pemilik-${item.id}`}
+              accent={(item.statusProperti ?? "aktif") === "menunggu_verifikasi" ? "warning" : "default"}
+              actions={
+                <>
+                  {item.statusProperti === "menunggu_verifikasi" && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-green-600"
+                      title="Setujui properti"
+                      onClick={() => {
+                        setSurveyForm(defaultSurveyKontribusiState());
+                        setApproveTarget(item);
+                      }}
+                      disabled={approveMutation.isPending}
+                    >
+                      <Check className="w-4 h-4" />
                     </Button>
-                    <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => setDeleteTarget(item)} data-testid={`button-delete-pemilik-${item.id}`}>
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                  )}
+                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleEdit(item)} data-testid={`button-edit-pemilik-${item.id}`}>
+                    <Pencil className="w-4 h-4" />
+                  </Button>
+                  <Button size="icon" variant="ghost" className="h-8 w-8 text-red-500" onClick={() => setDeleteTarget(item)} data-testid={`button-delete-pemilik-${item.id}`}>
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </>
+              }
+            >
+              <div className="flex flex-wrap items-center gap-2 mb-1">
+                <Building2 className="w-4 h-4 text-[hsl(163,55%,22%)] shrink-0" />
+                <span className="font-semibold text-sm truncate" data-testid={`text-nama-kost-${item.id}`}>{item.namaKost}</span>
+                <Visitrw3RtBadge rt={item.rt} />
+                {(item.statusProperti ?? "aktif") === "menunggu_verifikasi" && (
+                  <span className="text-[10px] font-semibold bg-amber-500 text-white px-2 py-0.5 rounded-full">Menunggu</span>
+                )}
+              </div>
+              {item.nomorPendaftaran && (
+                <p className="text-[10px] font-mono text-muted-foreground mb-1">{item.nomorPendaftaran}</p>
+              )}
+              <p className="text-xs text-muted-foreground">Pemilik: {item.namaPemilik}</p>
+              {item.namaPenanggungJawab && (
+                <p className="text-xs text-muted-foreground">
+                  PJ: {item.namaPenanggungJawab}
+                  {item.nomorWaPenanggungJawab ? ` · ${item.nomorWaPenanggungJawab}` : ""}
+                </p>
+              )}
+              <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mt-1.5">
+                <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{item.nomorWaPemilik}</span>
+                <span className="flex items-center gap-1"><DoorOpen className="w-3 h-3" />{item.jumlahPintu} pintu</span>
+                <span className="flex items-center gap-1 min-w-0"><MapPin className="w-3 h-3 shrink-0" /><span className="truncate">{item.alamatLengkap}</span></span>
+              </div>
+            </Visitrw3ListItem>
           ))}
         </div>
       )}
@@ -510,6 +503,6 @@ export default function AdminVisitrw3Properti() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </Visitrw3AdminShell>
   );
 }

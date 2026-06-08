@@ -1,9 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, getApiErrorMessage, readJsonSafely } from "@/lib/queryClient";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
@@ -12,12 +10,20 @@ import {
   surveyKontribusiToBody,
   type Visitrw3SurveyKontribusiState,
 } from "@/components/gov/visitrw3-survey-kontribusi-fields";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Check, X, Eye } from "lucide-react";
+import { Check, X, Eye, ClipboardList } from "lucide-react";
 import { Visitrw3AdminNav } from "@/components/admin/visitrw3-admin-nav";
+import {
+  Visitrw3AdminShell,
+  Visitrw3ChipFilters,
+  Visitrw3EmptyState,
+  Visitrw3ListItem,
+  Visitrw3MonoId,
+  Visitrw3RtBadge,
+} from "@/components/admin/visitrw3-admin-ui";
+import { StatusBadge, visitrw3StatusVariant } from "@/components/gov/status-badge";
 import { formatKendaraanDisplay } from "@/lib/visitrw3-kendaraan";
 import { formatRupiah } from "@/lib/visitrw3-kontribusi";
 
@@ -96,63 +102,75 @@ export default function AdminVisitrw3Antrian() {
       toast({ title: "Gagal", description: getApiErrorMessage(e), variant: "destructive" }),
   });
 
+  const filterOptions = [
+    { value: "menunggu_survey" as const, label: "Menunggu survey" },
+    { value: "disetujui" as const, label: "Disetujui" },
+    { value: "ditolak" as const, label: "Ditolak" },
+    { value: "semua" as const, label: "Semua" },
+  ];
+
   return (
-    <div className="space-y-4">
+    <Visitrw3AdminShell>
       <Visitrw3AdminNav
         title="Antrian pengajuan"
         description="Survey, setujui/tolak, dan catat kontribusi ke Kas RW"
         actions={
-          <Select value={filter} onValueChange={setFilter}>
-            <SelectTrigger className="w-[200px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="menunggu_survey">Menunggu survey</SelectItem>
-              <SelectItem value="disetujui">Disetujui</SelectItem>
-              <SelectItem value="ditolak">Ditolak</SelectItem>
-              <SelectItem value="semua">Semua</SelectItem>
-            </SelectContent>
-          </Select>
+          <Visitrw3ChipFilters options={filterOptions} value={filter as typeof filterOptions[number]["value"]} onChange={setFilter} />
         }
       />
 
       {isLoading ? (
-        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-40 w-full rounded-2xl" />
       ) : list.length === 0 ? (
-        <div className="rounded-xl border border-dashed bg-muted/30 p-6 text-center space-y-2">
-          <p className="text-sm font-medium">
-            {filter === "menunggu_survey" ? "Antrian kosong" : "Tidak ada pengajuan pada filter ini"}
-          </p>
-          <p className="text-xs text-muted-foreground max-w-md mx-auto">
-            {filter === "menunggu_survey"
+        <Visitrw3EmptyState
+          icon={ClipboardList}
+          title={filter === "menunggu_survey" ? "Antrian kosong" : "Tidak ada pengajuan pada filter ini"}
+          description={
+            filter === "menunggu_survey"
               ? "Pengajuan baru dari warga akan muncul di sini. Pastikan properti sudah aktif agar pengajuan tinggal/bisnis dalam wilayah bisa diproses."
-              : "Ubah filter status untuk melihat riwayat disetujui atau ditolak."}
-          </p>
-        </div>
+              : "Ubah filter status untuk melihat riwayat disetujui atau ditolak."
+          }
+        />
       ) : (
         <div className="space-y-2">
           {list.map((row) => (
-            <Card key={row.id}>
-              <CardContent className="p-4 flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <p className="font-mono font-semibold">{row.nomorVisitrw3}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {row.tipe} · {row.keperluanPengajuan} · RT {String(row.rt).padStart(2, "0")} · {row.jumlahPenghuni} org
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge>{row.status}</Badge>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setSurveyForm(defaultSurveyKontribusiState());
-                      setDetailId(row.id);
-                    }}
-                  >
-                    <Eye className="w-4 h-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            <Visitrw3ListItem
+              key={row.id}
+              accent={
+                row.status === "menunggu_survey" ? "warning" : row.status === "ditolak" ? "danger" : "success"
+              }
+              onClick={() => {
+                setSurveyForm(defaultSurveyKontribusiState());
+                setDetailId(row.id);
+              }}
+              actions={
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="h-8 gap-1"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSurveyForm(defaultSurveyKontribusiState());
+                    setDetailId(row.id);
+                  }}
+                >
+                  <Eye className="w-4 h-4" />
+                  Detail
+                </Button>
+              }
+            >
+              <div className="flex flex-wrap items-center gap-2 mb-1">
+                <Visitrw3MonoId>{row.nomorVisitrw3}</Visitrw3MonoId>
+                <Visitrw3RtBadge rt={row.rt} />
+                <StatusBadge variant={visitrw3StatusVariant(row.status)} />
+              </div>
+              <p className="text-xs text-muted-foreground capitalize">
+                {row.tipe.replace(/_/g, " ")} · {row.keperluanPengajuan} · {row.jumlahPenghuni} penghuni
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Berlaku sampai {row.tanggalBerlakuSampai}
+              </p>
+            </Visitrw3ListItem>
           ))}
         </div>
       )}
@@ -341,6 +359,6 @@ export default function AdminVisitrw3Antrian() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </Visitrw3AdminShell>
   );
 }

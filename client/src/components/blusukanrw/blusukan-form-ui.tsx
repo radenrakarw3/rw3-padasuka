@@ -3,6 +3,7 @@ import { ArrowLeft, ChevronDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 /** Hindari zoom otomatis iOS (< 16px) + target sentuh 48px. */
@@ -33,6 +34,31 @@ export function BlusukanField({
       {children}
       {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
+  );
+}
+
+export function BlusukanSearchableSelect({
+  value,
+  onChange,
+  options,
+  placeholder,
+  searchPlaceholder = "Cari…",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: readonly string[] | string[];
+  placeholder?: string;
+  searchPlaceholder?: string;
+}) {
+  return (
+    <SearchableSelect
+      value={value}
+      onValueChange={onChange}
+      options={options}
+      placeholder={placeholder}
+      searchPlaceholder={searchPlaceholder}
+      triggerClassName={blusukanSelectClass}
+    />
   );
 }
 

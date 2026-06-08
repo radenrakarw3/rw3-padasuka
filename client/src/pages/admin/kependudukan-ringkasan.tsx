@@ -1,557 +1,441 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Home, Percent, RefreshCw, UserX, Users, ClipboardList } from "lucide-react";
 import { Link } from "wouter";
-import { Filter, RefreshCw } from "lucide-react";
-import { KependudukanAdminNav } from "@/components/admin/kependudukan-admin-nav";
+import { KategoriUmurPanel, PekerjaanPanel, formatNumber } from "@/components/admin/kependudukan-stats-ui";
 import {
-  BarBlock,
-  MetricCard,
-  PieBlock,
-  SectionPanel,
-  formatNumber,
-  toPieData,
-} from "@/components/admin/kependudukan-stats-ui";
-import type { KependudukanStats, SectionStats, SegmentRow } from "@/components/admin/kependudukan-types";
-import type { KependudukanLegacySummary, MonthlySnapshot } from "@/types/dashboard-stats";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+  GovStatistic,
+  GovStatisticRow,
+  GovStatisticSection,
+} from "@/components/gov/statistic";
+import type { KependudukanStats } from "@/components/admin/kependudukan-types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { rtOptions } from "@/lib/constants";
-import { PENGANGGURAN_DEFINISI } from "@shared/kependudukan-analytics";
-import { fetchPublicJson, getApiErrorMessage, readJsonSafely } from "@/lib/queryClient";
-import { useLocation } from "wouter";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { KependudukanDataIssues } from "@/components/admin/kependudukan-data-issues";
+import { PENGANGGURAN_KETERANGAN } from "@shared/pekerjaan-labor";
+import { ACTIVE_RT_NUMBERS } from "@shared/rt";
+import { countPengangguranWarga, type WargaIssueSlice } from "@shared/warga-data-issues";
+import { fetchPublicJson, getApiErrorMessage } from "@/lib/queryClient";
 
-function normalizeLegacy(raw: KependudukanLegacySummary | undefined): KependudukanLegacySummary | null {
-  if (!raw) return null;
+type WargaWithKk = WargaIssueSlice & {
+  pekerjaan: string | null;
+  statusPekerjaan?: string | null;
+  kategoriUmur?: string | null;
+  nomorWhatsapp?: string | null;
+};
+
+type KkRow = { id: number; rt: number };
+
+function enrichKkStats(
+  stats: KependudukanStats,
+  wargaRows: WargaWithKk[],
+  kkRows: KkRow[] | undefined,
+  rtFilter: string,
+): KependudukanStats {
+  const scopedRt = rtFilter === "semua" ? undefined : Number(rtFilter);
+  const kkFromApi = (kkRows ?? []).filter((k) =>
+    scopedRt === undefined ? true : k.rt === scopedRt,
+  );
+
+  let totalKk = stats.totalKk;
+  let perRt = stats.perRt ?? [];
+
+  if (kkFromApi.length > 0) {
+    totalKk = kkFromApi.length;
+    perRt = [...ACTIVE_RT_NUMBERS].map((rt) => {
+      const existing = perRt.find((p) => p.rt === rt);
+      return {
+        rt,
+        warga:
+          existing?.warga ??
+          wargaRows.filter((w) => w.rt === rt).length,
+        kk: kkRows!.filter((k) => k.rt === rt).length,
+      };
+    });
+  } else if (totalKk === 0 && wargaRows.length > 0) {
+    const kkIds = new Set(wargaRows.map((w) => w.kkId));
+    totalKk = kkIds.size;
+    perRt = [...ACTIVE_RT_NUMBERS].map((rt) => {
+      const rowsRt = wargaRows.filter((w) => w.rt === rt);
+      const kkIdsRt = new Set(rowsRt.map((w) => w.kkId));
+      const existing = perRt.find((p) => p.rt === rt);
+      return {
+        rt,
+        warga: existing?.warga ?? rowsRt.length,
+        kk: kkIdsRt.size,
+      };
+    });
+  } else if (totalKk === 0) {
+    const kkFromPerRt = perRt.reduce((sum, p) => sum + (p.kk ?? 0), 0);
+    if (kkFromPerRt > 0) totalKk = kkFromPerRt;
+  }
+
+  const totalWarga =
+    scopedRt === undefined
+      ? stats.totalWarga
+      : wargaRows.filter((w) => w.rt === scopedRt).length;
+  const rataRataAnggotaPerKk =
+    totalKk > 0 ? Math.round((totalWarga / totalKk) * 10) / 10 : 0;
+
   return {
-    ...raw,
-    pengangguran: raw.pengangguran ?? { total: 0, perUsia: {}, daftarNama: [] },
-    capaian: {
-      waPercent: raw.capaian?.waPercent ?? 0,
-      bansosPercent: raw.capaian?.bansosPercent ?? 0,
-      literasiPercent: raw.capaian?.literasiPercent ?? 0,
-      iloPercent: raw.capaian?.iloPercent ?? 0,
-      crvsPercent: raw.capaian?.crvsPercent ?? 0,
-      wgDetailPercent: raw.capaian?.wgDetailPercent ?? 0,
-    },
-    crvs: raw.crvs ?? { anak: 0, punyaAkta: 0, punyaKia: 0, punyaSalahSatu: 0 },
-    peristiwa: raw.peristiwa ?? {
-      aktif: 0,
-      lahir: 0,
-      pindahMasuk: 0,
-      pindahKeluar: 0,
-      meninggal: 0,
-      domisiliAktif: raw.totalWarga ?? 0,
-    },
-    literasi: raw.literasi ?? {},
-    statusPekerjaan: raw.statusPekerjaan ?? {},
-    kelompokUsia: raw.kelompokUsia ?? {},
-    bansos: raw.bansos ?? { penerima: 0, bukan: 0 },
-    perRt: raw.perRt ?? [],
+    ...stats,
+    totalKk,
+    rataRataAnggotaPerKk,
+    perRt,
   };
 }
 
-function RtFilter({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="w-[140px] h-9">
-        <Filter className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" />
-        <SelectValue placeholder="RT" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="semua">Semua RT (01–04)</SelectItem>
-        {rtOptions.map((rt) => (
-          <SelectItem key={rt} value={String(rt)}>
-            RT {String(rt).padStart(2, "0")}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
+function normalizeStats(raw: unknown): KependudukanStats | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
 
-function SegmentDialog({
-  open,
-  onOpenChange,
-  section,
-  field,
-  value,
-  rtFilter,
-}: {
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-  section: string;
-  field: string;
-  value: string;
-  rtFilter: string;
-}) {
-  const q = rtFilter === "semua" ? "" : `&rt=${rtFilter}`;
-  const { data, isLoading } = useQuery({
-    queryKey: ["/api/stats/segment", section, field, value, rtFilter],
-    queryFn: async () => {
-      const res = await fetch(
-        `/api/stats/segment/${encodeURIComponent(section)}/${encodeURIComponent(field)}?value=${encodeURIComponent(value)}${q}`,
-        { credentials: "include" },
-      );
-      if (!res.ok) throw new Error("Gagal memuat daftar");
-      return readJsonSafely<{ rows: SegmentRow[]; total: number }>(res);
+  if (typeof r.totalWarga === "number") {
+    const p = (r.pengangguran as Record<string, unknown> | undefined) ?? {};
+    const pekerjaanRaw = r.pekerjaan as Record<string, unknown> | undefined;
+    const perRtRaw = (r.perRt as { rt: number; warga: number; kk?: number }[]) ?? [];
+    const perRtMapped = perRtRaw.map((x) => ({
+      rt: x.rt,
+      warga: x.warga,
+      kk: x.kk ?? 0,
+    }));
+    const kkFromPerRt = perRtMapped.reduce((sum, p) => sum + p.kk, 0);
+    const totalKk =
+      typeof r.totalKk === "number" && r.totalKk > 0 ? r.totalKk : kkFromPerRt;
+    const rataRataAnggotaPerKk =
+      typeof r.rataRataAnggotaPerKk === "number" && r.rataRataAnggotaPerKk > 0
+        ? r.rataRataAnggotaPerKk
+        : totalKk > 0
+          ? Math.round((r.totalWarga / totalKk) * 10) / 10
+          : 0;
+    return {
+      generatedAt: String(r.generatedAt ?? new Date().toISOString()),
+      rtFilter: typeof r.rtFilter === "number" ? r.rtFilter : undefined,
+      totalWarga: r.totalWarga,
+      totalKk,
+      rataRataAnggotaPerKk,
+      kelompokUsia: (r.kelompokUsia as Record<string, number>) ?? {},
+      perRt: perRtMapped,
+      pengangguran: {
+        total: Number(p.total ?? 0),
+        ratePercent: Number(p.ratePercent ?? 0),
+      },
+      pekerjaan: {
+        distribusi: (pekerjaanRaw?.distribusi as Record<string, number>) ?? {},
+      },
+    };
+  }
+
+  const legacy = r.legacy as Record<string, unknown> | undefined;
+  const totals = r.totals as { warga?: number } | undefined;
+  if (!legacy) return null;
+
+  const legacyPeng = legacy.pengangguran as Record<string, unknown> | undefined;
+  const totalWarga = totals?.warga ?? (legacy.totalWarga as number) ?? 0;
+  const pengTotal = Number(legacyPeng?.total ?? 0);
+
+  const perRtLegacy = ((legacy.perRt as { rt: number; warga: number; kk?: number }[]) ?? []).map(
+    (x) => ({
+      rt: x.rt,
+      warga: x.warga,
+      kk: x.kk ?? 0,
+    }),
+  );
+
+  return {
+    generatedAt: String(r.generatedAt ?? new Date().toISOString()),
+    rtFilter: typeof r.rtFilter === "number" ? r.rtFilter : undefined,
+    totalWarga,
+    totalKk: 0,
+    rataRataAnggotaPerKk: 0,
+    kelompokUsia: (legacy.kelompokUsia as Record<string, number>) ?? {},
+    perRt: perRtLegacy,
+    pengangguran: {
+      total: pengTotal,
+      ratePercent: totalWarga > 0 ? Math.round((pengTotal / totalWarga) * 100) : 0,
     },
-    enabled: open && !!field,
-  });
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Daftar warga ({data?.total ?? 0})</DialogTitle>
-        </DialogHeader>
-        <div className="overflow-y-auto flex-1 -mx-1 px-1">
-          {isLoading && <Skeleton className="h-32 w-full" />}
-          {!isLoading && (data?.rows?.length ?? 0) === 0 && (
-            <p className="text-sm text-muted-foreground py-4 text-center">Tidak ada data</p>
-          )}
-          <ul className="space-y-2">
-            {data?.rows?.map((r) => (
-              <li key={r.wargaId} className="rounded-lg border p-3 text-sm">
-                <p className="font-medium">{r.namaLengkap}</p>
-                <p className="text-xs text-muted-foreground font-mono">{r.nik}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  RT {r.rt != null ? String(r.rt).padStart(2, "0") : "—"} · KK {r.nomorKk ?? "—"}
-                  {r.fieldValue ? ` · ${r.fieldValue}` : ""}
-                </p>
-                <Link href={`/admin/kependudukan/kk/${r.kkId}`}>
-                  <span className="text-xs text-primary underline mt-1 inline-block cursor-pointer">Lihat KK</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
+    pekerjaan: { distribusi: {} },
+  };
 }
 
 export default function KependudukanRingkasan() {
-  const [, setLocation] = useLocation();
   const [rtFilter, setRtFilter] = useState("semua");
-  const [drill, setDrill] = useState<{ section: string; field: string; value: string } | null>(null);
+  const rtFilterNum = rtFilter === "semua" ? undefined : Number(rtFilter);
 
-  const { data, isLoading, isError, error, refetch, isFetching, isPending } = useQuery<KependudukanStats>({
+  const { data: blusukanSummary } = useQuery<{
+    avgKelengkapan: number;
+    perluKunjungan: number;
+    percentLengkap: number;
+    totalKk: number;
+  }>({
+    queryKey: ["/api/admin/blusukan-summary", rtFilter],
+    queryFn: async () => {
+      const q = rtFilterNum ? `?rt=${rtFilterNum}` : "";
+      const res = await fetch(`/api/admin/blusukan-summary${q}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Gagal memuat data Blusukan");
+      return res.json();
+    },
+  });
+
+  const {
+    data: rawData,
+    isLoading: statsLoading,
+    isError,
+    error,
+    refetch: refetchStats,
+    isFetching: statsFetching,
+    isPending: statsPending,
+  } = useQuery({
     queryKey: ["/api/stats/kependudukan", rtFilter],
     queryFn: async () => {
       const q = rtFilter === "semua" ? "" : `?rt=${encodeURIComponent(rtFilter)}`;
-      return fetchPublicJson<KependudukanStats>(`/api/stats/kependudukan${q}`, undefined, 120_000);
+      return fetchPublicJson<unknown>(`/api/stats/kependudukan${q}`, undefined, 120_000);
     },
     staleTime: 60_000,
     retry: 1,
   });
 
-  const { data: monthly } = useQuery<MonthlySnapshot[]>({
-    queryKey: ["/api/stats/monthly"],
-    queryFn: () => fetchPublicJson<MonthlySnapshot[]>("/api/stats/monthly", undefined, 60_000),
-    staleTime: 120_000,
-    retry: false,
+  const {
+    data: wargaList,
+    isLoading: wargaLoading,
+    isError: wargaError,
+    refetch: refetchWarga,
+    isFetching: wargaFetching,
+  } = useQuery({
+    queryKey: ["/api/warga-with-kk"],
+    queryFn: () => fetchPublicJson<WargaWithKk[]>("/api/warga-with-kk", undefined, 120_000),
+    staleTime: 60_000,
+    retry: 1,
   });
 
-  const legacy = useMemo(() => normalizeLegacy(data?.legacy), [data?.legacy]);
-  const pengangguranRate = useMemo(() => {
-    if (!legacy?.totalWarga) return 0;
-    return Math.round((legacy.pengangguran.total / legacy.totalWarga) * 100);
-  }, [legacy]);
+  const {
+    data: kkList,
+    isLoading: kkLoading,
+    refetch: refetchKk,
+    isFetching: kkFetching,
+  } = useQuery({
+    queryKey: ["/api/kk"],
+    queryFn: () => fetchPublicJson<KkRow[]>("/api/kk", undefined, 120_000),
+    staleTime: 60_000,
+    retry: 1,
+  });
 
-  const sectionByKey = useMemo(() => {
-    const m = new Map<string, SectionStats>();
-    (data?.sections ?? []).forEach((s) => m.set(s.key, s));
-    return m;
-  }, [data?.sections]);
+  const data = useMemo(() => normalizeStats(rawData), [rawData]);
 
-  const openDrill = (section: string, field: string, value: string) => {
-    setDrill({ section, field, value });
+  const wargaFiltered = useMemo(() => {
+    if (!wargaList?.length) return [];
+    return rtFilter === "semua" ? wargaList : wargaList.filter((w) => w.rt === Number(rtFilter));
+  }, [wargaList, rtFilter]);
+
+  const pengangguran = useMemo(() => {
+    const { total, eligible } = countPengangguranWarga(wargaFiltered);
+    return {
+      total,
+      ratePercent: eligible > 0 ? Math.round((total / eligible) * 100) : 0,
+    };
+  }, [wargaFiltered]);
+
+  const displayStats = useMemo(() => {
+    if (!data) return null;
+    return enrichKkStats(data, wargaFiltered, kkList, rtFilter);
+  }, [data, wargaFiltered, kkList, rtFilter]);
+
+  const refetchAll = () => {
+    refetchStats();
+    refetchWarga();
+    refetchKk();
   };
 
-  const showLoading = isPending || isLoading;
+  const showLoading = statsPending || statsLoading || wargaLoading || kkLoading;
+  const isFetching = statsFetching || wargaFetching || kkFetching;
+
+  if (showLoading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-10 w-64" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <Skeleton key={i} className="h-24 rounded-xl" />
+          ))}
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-24 rounded-xl" />
+          ))}
+        </div>
+        <Skeleton className="h-72 rounded-xl" />
+        <Skeleton className="h-72 rounded-xl" />
+      </div>
+    );
+  }
 
   return (
-    <div>
-      <KependudukanAdminNav
-        title="Kependudukan RW"
-        description="RT 01–04 — angka dari form Data Warga & Kartu Keluarga"
-        actions={
-          <>
-            <RtFilter value={rtFilter} onChange={setRtFilter} />
-            <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-              <RefreshCw className={`w-4 h-4 mr-1 ${isFetching ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-          </>
-        }
-      />
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight">Statistik Kependudukan</h1>
+          <p className="text-sm text-muted-foreground">RT 01–04 — data warga pemukiman RW 03</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Select value={rtFilter} onValueChange={setRtFilter}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue placeholder="Filter RT" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="semua">Semua RT</SelectItem>
+              {[1, 2, 3, 4].map((rt) => (
+                <SelectItem key={rt} value={String(rt)}>
+                  RT {String(rt).padStart(2, "0")}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" onClick={refetchAll} disabled={isFetching}>
+            <RefreshCw className={`w-4 h-4 mr-1 ${isFetching ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        </div>
+      </div>
 
-      {isError && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertTitle>Gagal memuat ringkasan kependudukan</AlertTitle>
+      {(isError || wargaError) && (
+        <Alert variant="destructive">
+          <AlertTitle>Gagal memuat statistik</AlertTitle>
           <AlertDescription className="flex flex-col gap-3">
             <span>{getApiErrorMessage(error)}</span>
-            <span className="text-xs opacity-90">
-              Pastikan server dev sudah di-restart setelah update. Endpoint:{" "}
-              <code className="font-mono">/api/stats/kependudukan</code>
-            </span>
-            <Button type="button" variant="outline" size="sm" className="w-fit" onClick={() => refetch()}>
+            <Button type="button" variant="outline" size="sm" className="w-fit" onClick={refetchAll}>
               Coba lagi
             </Button>
           </AlertDescription>
         </Alert>
       )}
 
-      {showLoading && (
-        <div className="grid gap-4 md:grid-cols-3">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <Skeleton key={i} className="h-24 rounded-xl" />
-          ))}
-          <p className="text-sm text-muted-foreground col-span-full">Menghitung statistik dari data warga & KK…</p>
-        </div>
-      )}
-
-      {!showLoading && !isError && data && legacy && (
-        <Tabs defaultValue="ringkasan" className="space-y-4">
-          <TabsList className="flex flex-wrap h-auto gap-1 bg-muted/50 p-1">
-            <TabsTrigger value="ringkasan">Ringkasan</TabsTrigger>
-            <TabsTrigger value="pokok">Data pokok</TabsTrigger>
-            <TabsTrigger value="kontak">Kontak & aktivitas</TabsTrigger>
-            <TabsTrigger value="tambahan">Tambahan</TabsTrigger>
-            <TabsTrigger value="kk">KK</TabsTrigger>
-            <TabsTrigger value="kualitas">Kualitas</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="ringkasan" className="space-y-6 mt-4">
-            {data.totals.warga === 0 && (
-              <Alert>
-                <AlertTitle>Belum ada data warga</AlertTitle>
-                <AlertDescription>
-                  Tambah kartu keluarga dan data warga di tab Kartu Keluarga / Cari Warga agar ringkasan terisi.
-                </AlertDescription>
-              </Alert>
-            )}
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              <MetricCard
-                title="Total warga"
-                value={formatNumber(data.totals.warga)}
-                description={`${formatNumber(legacy.peristiwa.domisiliAktif)} domisili aktif`}
-              />
-              <MetricCard
-                title="Pindah keluar"
-                value={formatNumber(legacy.peristiwa.pindahKeluar)}
-                description="Termasuk data legacy «Pindah»"
-                onClick={() => setLocation("/admin/kependudukan/peristiwa")}
-              />
-              <MetricCard
-                title="Meninggal"
-                value={formatNumber(legacy.peristiwa.meninggal)}
-                description="Arsip — catat di tab Peristiwa"
-                onClick={() => setLocation("/admin/kependudukan/peristiwa")}
-              />
-              <MetricCard
-                title="Lahir / pindah masuk"
-                value={formatNumber(legacy.peristiwa.lahir + legacy.peristiwa.pindahMasuk)}
-                description="Menunggu verifikasi → Aktif"
-                onClick={() => setLocation("/admin/kependudukan/peristiwa")}
-              />
-              <MetricCard
-                title="Pengangguran (ILO)"
-                value={formatNumber(legacy.pengangguran.total)}
-                description={`${pengangguranRate}% dari warga · usia ≥18`}
-                onClick={() => openDrill("derived", "pengangguran", "ya")}
-              />
-              <MetricCard
-                title="Literasi terisi"
-                value={`${legacy.capaian.literasiPercent}%`}
-                description={`Usia ≥7 · ${formatNumber(legacy.crvs.anak)} anak di data`}
-              />
-              <MetricCard
-                title="Status kerja (ILO)"
-                value={`${legacy.capaian.iloPercent}%`}
-                description="Usia ≥15 · form inti"
-              />
-              <MetricCard
-                title="CRVS anak"
-                value={`${legacy.capaian.crvsPercent}%`}
-                description={`Akta/KIA · ${legacy.crvs.punyaSalahSatu}/${legacy.crvs.anak} anak <18`}
-              />
-              <MetricCard
-                title="Penerima bansos (KK)"
-                value={formatNumber(legacy.bansos.penerima)}
-                description={`${legacy.capaian.bansosPercent}% KK`}
-              />
-              <MetricCard
-                title="Layak bansos"
-                value={formatNumber(legacy.totalLayakBansos)}
-                description="KK ditandai layak"
-              />
-              <MetricCard
-                title="Disabilitas"
-                value={formatNumber(legacy.totalDisabilitas)}
-                description="Warga dengan disabilitas"
-              />
-              <MetricCard
-                title="Ibu hamil"
-                value={formatNumber(legacy.totalIbuHamil)}
-                description="Saat ini"
-              />
-              <MetricCard
-                title="WA terdaftar"
-                value={`${legacy.capaian.waPercent}%`}
-                description="Kelengkapan kontak"
-              />
-              <MetricCard
-                title="KK inkonsisten"
-                value={formatNumber(data.kk.penghuniMismatch)}
-                description="Jumlah penghuni ≠ anggota"
-              />
-            </div>
-
-            <Card className="border-amber-200/80 bg-amber-50/50 dark:bg-amber-950/20">
-              <CardContent className="p-4 text-sm text-muted-foreground">
-                <strong className="text-foreground">Definisi pengangguran:</strong> {PENGANGGURAN_DEFINISI}
-              </CardContent>
-            </Card>
-
-            <div className="grid gap-4 lg:grid-cols-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Pengangguran per kelompok usia</CardTitle>
-                  <CardDescription>Definisi ILO — usia ≥18</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <BarBlock
-                    data={Object.entries(legacy.pengangguran.perUsia).map(([label, count]) => ({ label, count }))}
-                    empty="Tidak ada data"
-                  />
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Piramida usia</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <PieBlock data={toPieData(legacy.kelompokUsia)} empty="Tidak ada data" />
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Literasi (UNESCO)</CardTitle>
-                  <CardDescription>Populasi usia ≥7 tahun</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <PieBlock data={toPieData(legacy.literasi)} empty="Belum ada data" />
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Status angkatan kerja (ILO)</CardTitle>
-                  <CardDescription>Populasi usia ≥15 tahun</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <PieBlock data={toPieData(legacy.statusPekerjaan)} empty="Belum ada data" />
-                </CardContent>
-              </Card>
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Perbandingan RT</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-left text-muted-foreground">
-                        <th className="py-2 pr-4">RT</th>
-                        <th className="py-2 pr-4">KK</th>
-                        <th className="py-2 pr-4">Warga</th>
-                        <th className="py-2 pr-4">Bansos</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {legacy.perRt.map((r) => (
-                        <tr key={r.rt} className="border-b border-border/50">
-                          <td className="py-2 font-medium">RT {String(r.rt).padStart(2, "0")}</td>
-                          <td className="py-2">{r.kk}</td>
-                          <td className="py-2">{r.warga}</td>
-                          <td className="py-2">{r.bansos}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
-
-            {monthly && monthly.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Tren bulanan (snapshot)</CardTitle>
-                  <CardDescription>Pengangguran & indeks kemajuan data</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto text-sm">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="text-muted-foreground border-b">
-                          <th className="text-left py-2">Bulan</th>
-                          <th className="text-right py-2">Warga</th>
-                          <th className="text-right py-2">Pengangguran</th>
-                          <th className="text-right py-2">Indeks</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {monthly.slice(-6).map((m) => (
-                          <tr key={m.month} className="border-b border-border/40">
-                            <td className="py-1.5">{m.month}</td>
-                            <td className="text-right">{m.totalWarga}</td>
-                            <td className="text-right">{m.pengangguran}</td>
-                            <td className="text-right">{m.indeksKemajuan}%</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-
-          {(["pokok", "kontak", "tambahan"] as const).map(
-            (key) => {
-              const section = sectionByKey.get(key);
-              if (!section) return null;
-              return (
-                <TabsContent key={key} value={key}>
-                  {key === "kontak" && (
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-4">
-                      <MetricCard
-                        title="Literasi"
-                        value={`${legacy.capaian.literasiPercent}%`}
-                        description="Usia ≥7 terisi"
-                        onClick={() => openDrill("kontak", "literasi", "__empty__")}
-                      />
-                      <MetricCard
-                        title="Angkatan kerja (ILO)"
-                        value={`${legacy.capaian.iloPercent}%`}
-                        description="Status kerja usia ≥15"
-                        onClick={() => openDrill("kontak", "statusPekerjaan", "__empty__")}
-                      />
-                      <MetricCard
-                        title="WG detail"
-                        value={`${legacy.capaian.wgDetailPercent}%`}
-                        description="Domain melihat & berjalan"
-                      />
-                      <MetricCard
-                        title="Pengangguran"
-                        value={formatNumber(legacy.pengangguran.total)}
-                        description="Status Mencari/Belum kerja"
-                        onClick={() => openDrill("derived", "pengangguran", "ya")}
-                      />
-                    </div>
-                  )}
-                  <SectionPanel section={section} onDrill={openDrill} />
-                </TabsContent>
-              );
-            },
-          )}
-
-          <TabsContent value="kk" className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <MetricCard title="Total KK" value={formatNumber(data.kk.totalKk)} description="Rumah tangga" />
-              <MetricCard title="Penerima bansos" value={formatNumber(data.kk.penerimaBansos)} description="Tingkat KK" />
-              <MetricCard title="Layak bansos" value={formatNumber(data.kk.layakBansos)} description="Flag layak" />
-              <MetricCard title="Ekonomi terisi" value={formatNumber(data.kk.kkEkonomiTerisi)} description="Penghasilan bulanan diisi" />
-            </div>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {data.kk.distributions?.map((d) => (
-                <Card key={d.field} className="border-border/70">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">{d.label}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <PieBlock data={toPieData(d.buckets)} empty="Belum ada data" />
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="kualitas">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Kelengkapan per bagian form</CardTitle>
-                <CardDescription>Semakin tinggi, semakin bisa dipercaya untuk keputusan program</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {(data.qualityBySection ?? [])
-                  .slice()
-                  .sort((a, b) => a.fillPercent - b.fillPercent)
-                  .map((q) => (
-                    <div key={q.key}>
-                      <div className="flex justify-between text-sm mb-1">
-                        <span className="font-medium">{q.title}</span>
-                        <span className="font-mono">{q.fillPercent}%</span>
-                      </div>
-                      <div className="h-2 rounded-full bg-muted">
-                        <div
-                          className="h-full rounded-full bg-[hsl(163,55%,32%)]"
-                          style={{ width: `${q.fillPercent}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      )}
-
-      {!showLoading && !isError && data && !legacy && (
-        <Alert className="mb-4">
-          <AlertTitle>Format data tidak lengkap</AlertTitle>
-          <AlertDescription className="flex flex-col gap-2">
-            <span>Server mengembalikan respons tanpa ringkasan legacy. Restart server dev lalu klik Refresh.</span>
-            <Button type="button" variant="outline" size="sm" className="w-fit" onClick={() => refetch()}>
-              Refresh
+      {!isError && rawData != null && !data && (
+        <Alert>
+          <AlertTitle>Format data tidak dikenali</AlertTitle>
+          <AlertDescription className="flex flex-col gap-3">
+            <span>Respons API statistik tidak sesuai format yang diharapkan.</span>
+            <Button type="button" variant="outline" size="sm" className="w-fit" onClick={refetchAll}>
+              Coba lagi
             </Button>
           </AlertDescription>
         </Alert>
       )}
 
-      {!showLoading && !isError && !data && (
-        <Alert>
-          <AlertTitle>Data tidak tersedia</AlertTitle>
-          <AlertDescription>Klik Refresh atau restart server dev lalu muat ulang halaman.</AlertDescription>
-        </Alert>
-      )}
+      {displayStats && (
+        <>
+          <GovStatisticSection
+            title="Ringkasan RW"
+            description={
+              rtFilter === "semua"
+                ? "Seluruh RT 01–04 pemukiman RW 03"
+                : `Filter aktif: RT ${rtFilter.padStart(2, "0")}`
+            }
+          >
+            <GovStatisticRow cols={5}>
+              <GovStatistic
+                label="Total warga"
+                value={formatNumber(displayStats.totalWarga)}
+                description={rtFilter === "semua" ? "Seluruh RT 01–04" : `RT ${rtFilter.padStart(2, "0")}`}
+                icon={Users}
+              />
+              <GovStatistic
+                label="Kartu keluarga"
+                value={formatNumber(displayStats.totalKk)}
+                description="Rumah tangga terdaftar"
+                icon={Home}
+              />
+              <GovStatistic
+                label="Rata-rata anggota/KK"
+                value={String(displayStats.rataRataAnggotaPerKk)}
+                description="Jumlah warga per kartu keluarga"
+                icon={Users}
+                tone="info"
+              />
+              <GovStatistic
+                label="Pengangguran"
+                value={formatNumber(pengangguran.total)}
+                description={PENGANGGURAN_KETERANGAN}
+                icon={UserX}
+                tone="warning"
+              />
+              <GovStatistic
+                label="Tingkat pengangguran"
+                value={`${pengangguran.ratePercent}%`}
+                description="Dari warga dewasa eligible"
+                icon={Percent}
+                tone="warning"
+              />
+            </GovStatisticRow>
+          </GovStatisticSection>
 
-      <SegmentDialog
-        open={!!drill}
-        onOpenChange={(o) => !o && setDrill(null)}
-        section={drill?.section ?? ""}
-        field={drill?.field ?? ""}
-        value={drill?.value ?? ""}
-        rtFilter={rtFilter}
-      />
+          <GovStatisticSection title="Per RT" description="Klik kartu untuk memfilter statistik">
+            <GovStatisticRow cols={4}>
+              {(displayStats.perRt ?? []).map((r) => (
+                <GovStatistic
+                  key={r.rt}
+                  label={`RT ${String(r.rt).padStart(2, "0")}`}
+                  value={formatNumber(r.warga)}
+                  description={`${formatNumber(r.kk)} KK · klik untuk filter`}
+                  selected={rtFilter === String(r.rt)}
+                  onClick={() => setRtFilter(String(r.rt))}
+                />
+              ))}
+            </GovStatisticRow>
+          </GovStatisticSection>
+
+          <KategoriUmurPanel warga={wargaFiltered} />
+
+          <PekerjaanPanel warga={wargaFiltered} />
+
+          {blusukanSummary && (
+            <GovStatisticSection
+              title="Sensus lapangan (Blusukan RW)"
+              description="Kelengkapan data kependudukan — operasional lapangan"
+            >
+              <GovStatisticRow cols={4}>
+                <GovStatistic
+                  label="Kelengkapan rata-rata"
+                  value={`${blusukanSummary.avgKelengkapan}%`}
+                  description="Form sensus per KK"
+                  icon={ClipboardList}
+                  tone="info"
+                />
+                <GovStatistic
+                  label="KK lengkap"
+                  value={`${blusukanSummary.percentLengkap}%`}
+                  description="Dari total KK pemukiman"
+                  icon={Home}
+                />
+                <GovStatistic
+                  label="Perlu kunjungan"
+                  value={formatNumber(blusukanSummary.perluKunjungan)}
+                  description="KK belum dikunjungi"
+                  icon={Users}
+                  tone="warning"
+                />
+                <GovStatistic
+                  label="Total KK"
+                  value={formatNumber(blusukanSummary.totalKk)}
+                  description="RT 01–04"
+                  icon={Home}
+                />
+              </GovStatisticRow>
+              <Link href="/blusukanrw/dashboard" className="text-sm text-primary underline mt-2 inline-block">
+                Buka Blusukan RW untuk operasional lapangan →
+              </Link>
+            </GovStatisticSection>
+          )}
+
+          <KependudukanDataIssues warga={wargaFiltered} />
+        </>
+      )}
     </div>
   );
 }

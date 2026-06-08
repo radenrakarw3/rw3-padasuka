@@ -36,6 +36,14 @@ const jenisLaporanLabels: Record<string, string> = {
   lainnya: "Lainnya",
 };
 
+const subJenisLabels: Record<string, string> = {
+  drainase: "Drainase",
+  genangan: "Genangan air",
+  penerangan: "Penerangan jalan",
+  jalan: "Kondisi jalan",
+  sampah: "Persampahan",
+};
+
 type SumberLaporan = "kiosk" | "warga" | "singgah";
 
 function sumberLaporanKey(lap: Laporan): SumberLaporan {
@@ -352,6 +360,7 @@ export default function AdminKelolaLaporan() {
           const StatusIcon = sc.icon;
           const canUpdate = lap.status !== "selesai" && lap.status !== "ditolak";
           const jenisLabel = jenisLaporanLabels[lap.jenisLaporan] || lap.jenisLaporan;
+          const subLabel = lap.subJenis ? subJenisLabels[lap.subJenis] ?? lap.subJenis : null;
           const info = pelaporInfo(lap, wargaList, singgahList, kkList);
           const waUrl = info.nomorWa ? toWaMeUrl(info.nomorWa, pesanWaPelapor(lap, info)) : null;
           const isiTampil = stripLaporanMetaPrefix(lap.isi);
@@ -381,6 +390,7 @@ export default function AdminKelolaLaporan() {
                       {info.rtLabel ? ` · ${info.rtLabel}` : ""}
                       {" · "}
                       {sumberLaporanLabels[sumberLaporanKey(lap)]} · {jenisLabel}
+                      {subLabel ? ` · ${subLabel}` : ""}
                     </p>
                   </div>
                   <Badge className={`${sc.color} text-[10px] flex-shrink-0 gap-1`}>
@@ -389,6 +399,13 @@ export default function AdminKelolaLaporan() {
                   </Badge>
                 </div>
                 <p className="text-xs whitespace-pre-wrap">{isiTampil || lap.isi}</p>
+                {lap.fotoLaporan && (
+                  <img
+                    src={lap.fotoLaporan.startsWith("data:") ? lap.fotoLaporan : `data:image/jpeg;base64,${lap.fotoLaporan}`}
+                    alt="Foto laporan"
+                    className="rounded-lg max-h-40 object-cover border"
+                  />
+                )}
 
                 {waUrl && (
                   <Button
