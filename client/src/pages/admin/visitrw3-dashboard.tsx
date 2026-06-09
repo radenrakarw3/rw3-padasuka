@@ -18,12 +18,21 @@ import { Button } from "@/components/ui/button";
 import { Visitrw3AdminNav } from "@/components/admin/visitrw3-admin-nav";
 import { Visitrw3AdminShell, Visitrw3Panel, Visitrw3StatCard } from "@/components/admin/visitrw3-admin-ui";
 import {
+  AreaTrendBlock,
   BarBlock,
   ChartCard,
   DashboardSection,
+  DonutBlock,
+  FunnelBlock,
+  HistogramBlock,
+  CHART_GOLD,
+  MetricRingBlock,
+  PIE_COLORS,
   pairsToPie,
-  PieBlock,
+  RadialBarBlock,
+  RankedBarBlock,
   rowsToPie,
+  StackedPercentBlock,
   StatChips,
   toPieData,
 } from "@/components/admin/visitrw3-dashboard-charts";
@@ -76,30 +85,30 @@ export default function AdminVisitrw3Dashboard() {
   });
 
   const statusPie = useMemo(() => toPieData(data?.pengajuan.byStatus ?? {}, visitrw3StatusLabels), [data?.pengajuan.byStatus]);
-  const keperluanPie = useMemo(() => toPieData(data?.pengajuan.byKeperluan ?? {}, visitrw3KeperluanLabels), [data?.pengajuan.byKeperluan]);
-  const tipePie = useMemo(() => toPieData(data?.pengajuan.byTipe ?? {}, visitrw3TipeLabels), [data?.pengajuan.byTipe]);
-  const bisnisWilayahPie = useMemo(() => {
+  const funnelPengajuan = useMemo(() => {
+    if (!data?.ringkasan) return [];
+    return [
+      { label: "Total masuk", value: data.ringkasan.totalPengajuan, fill: PIE_COLORS[0] },
+      { label: "Menunggu survey", value: data.ringkasan.menungguSurvey, fill: PIE_COLORS[2] },
+      { label: "Disetujui", value: data.ringkasan.disetujui, fill: PIE_COLORS[1] },
+      { label: "Ditolak", value: data.ringkasan.ditolak, fill: PIE_COLORS[3] },
+    ];
+  }, [data?.ringkasan]);
+
+  const keperluanSegments = useMemo(() => {
+    if (!data?.pengajuan) return [];
+    return toPieData(data.pengajuan.byKeperluan ?? {}, visitrw3KeperluanLabels);
+  }, [data?.pengajuan]);
+
+  const bisnisWilayahSegments = useMemo(() => {
     if (!data?.pengajuan) return [];
     return pairsToPie([
       { label: "Bisnis di wilayah RW3", value: data.pengajuan.bisnisDiRw3 },
       { label: "Bisnis luar wilayah", value: data.pengajuan.bisnisLuar },
     ]);
   }, [data?.pengajuan]);
-  const setujuSyaratPie = useMemo(() => {
-    if (!data?.pengajuan) return [];
-    return pairsToPie([
-      { label: "Setuju tata tertib", value: data.pengajuan.setujuTataTertib.ya },
-      { label: "Belum setuju", value: data.pengajuan.setujuTataTertib.tidak },
-    ]);
-  }, [data?.pengajuan]);
-  const nomorUnitPie = useMemo(() => {
-    if (!data?.pengajuan) return [];
-    return pairsToPie([
-      { label: "Ada nomor unit", value: data.pengajuan.denganNomorUnit },
-      { label: "Tanpa nomor unit", value: data.pengajuan.tanpaNomorUnit },
-    ]);
-  }, [data?.pengajuan]);
-  const propertiTerkaitPie = useMemo(() => {
+
+  const propertiTerkaitSegments = useMemo(() => {
     if (!data?.pengajuan) return [];
     return pairsToPie([
       { label: "Terhubung properti", value: data.pengajuan.denganProperti },
@@ -107,7 +116,7 @@ export default function AdminVisitrw3Dashboard() {
     ]);
   }, [data?.pengajuan]);
 
-  const anakPie = useMemo(() => {
+  const anakSegments = useMemo(() => {
     if (!data?.penghuni) return [];
     const { anak, dewasa } = data.penghuni.anakVsDewasa;
     return pairsToPie([
@@ -115,21 +124,53 @@ export default function AdminVisitrw3Dashboard() {
       { label: "Anak", value: anak },
     ]);
   }, [data?.penghuni]);
-  const jenisKelaminPie = useMemo(() => rowsToPie(data?.penghuni.byJenisKelamin ?? []), [data?.penghuni.byJenisKelamin]);
-  const kendaraanPie = useMemo(() => {
+
+  const jenisKelaminRadial = useMemo(() => rowsToPie(data?.penghuni.byJenisKelamin ?? []), [data?.penghuni.byJenisKelamin]);
+  const terminRadial = useMemo(
+    () =>
+      rowsToPie(
+        (data?.pengajuan.byTerminBulan ?? []).map((r) => ({
+          label: `${r.termin} bulan`,
+          count: r.count,
+        })),
+      ),
+    [data?.pengajuan.byTerminBulan],
+  );
+  const tipeRadial = useMemo(() => toPieData(data?.pengajuan.byTipe ?? {}, visitrw3TipeLabels), [data?.pengajuan.byTipe]);
+
+  const kendaraanSegments = useMemo(() => {
     if (!data?.penghuni) return [];
     return pairsToPie([
       { label: "Punya kendaraan", value: data.penghuni.denganKendaraan },
       { label: "Tanpa kendaraan", value: data.penghuni.tanpaKendaraan },
     ]);
   }, [data?.penghuni]);
-  const fotoKtpPie = useMemo(() => {
-    if (!data?.penghuni) return [];
-    return pairsToPie([
-      { label: "Foto KTP terunggah", value: data.penghuni.withFotoKtp },
-      { label: "Tanpa foto KTP", value: data.penghuni.withoutFotoKtp },
-    ]);
+
+  const setujuSyaratPct = useMemo(() => {
+    if (!data?.pengajuan) return null;
+    const { ya, tidak } = data.pengajuan.setujuTataTertib;
+    const total = ya + tidak;
+    return total > 0 ? (ya / total) * 100 : null;
+  }, [data?.pengajuan]);
+
+  const fotoKtpPct = useMemo(() => {
+    if (!data?.penghuni) return null;
+    const total = data.penghuni.withFotoKtp + data.penghuni.withoutFotoKtp;
+    return total > 0 ? (data.penghuni.withFotoKtp / total) * 100 : null;
   }, [data?.penghuni]);
+
+  const approvalRatePct = useMemo(() => {
+    if (!data?.ringkasan) return null;
+    const { disetujui, ditolak } = data.ringkasan;
+    const decided = disetujui + ditolak;
+    return decided > 0 ? (disetujui / decided) * 100 : null;
+  }, [data?.ringkasan]);
+
+  const pjPropertiPct = useMemo(() => {
+    if (!data?.properti) return null;
+    const total = data.properti.denganPenanggungJawab + data.properti.tanpaPenanggungJawab;
+    return total > 0 ? (data.properti.denganPenanggungJawab / total) * 100 : null;
+  }, [data?.properti]);
 
   const propertiStatusPie = useMemo(
     () =>
@@ -141,21 +182,17 @@ export default function AdminVisitrw3Dashboard() {
       ),
     [data?.properti.byStatusProperti],
   );
-  const izinPropertiPie = useMemo(() => rowsToPie(data?.properti.byIzinKombinasi ?? []), [data?.properti.byIzinKombinasi]);
-  const pjPropertiPie = useMemo(() => {
-    if (!data?.properti) return [];
-    return pairsToPie([
-      { label: "Ada PJ pengelola", value: data.properti.denganPenanggungJawab },
-      { label: "Tanpa PJ", value: data.properti.tanpaPenanggungJawab },
-    ]);
-  }, [data?.properti]);
-  const propertiSetujuSyaratPie = useMemo(() => {
-    if (!data?.properti) return [];
-    return pairsToPie([
-      { label: "Setuju tata tertib", value: data.properti.setujuTataTertib.ya },
-      { label: "Belum setuju", value: data.properti.setujuTataTertib.tidak },
-    ]);
-  }, [data?.properti]);
+  const izinPropertiDonut = useMemo(() => rowsToPie(data?.properti.byIzinKombinasi ?? []), [data?.properti.byIzinKombinasi]);
+  const propertiJenisRadial = useMemo(
+    () =>
+      rowsToPie(
+        (data?.properti.byJenisProperti ?? []).map((r) => ({
+          label: labelPropertiJenis(r.label),
+          count: r.count,
+        })),
+      ),
+    [data?.properti.byJenisProperti],
+  );
 
   const rtBar = useMemo(
     () => (data?.pengajuan.byRt ?? []).map((r) => ({ label: `RT ${String(r.rt).padStart(2, "0")}`, count: r.count })),
@@ -165,27 +202,16 @@ export default function AdminVisitrw3Dashboard() {
     () => (data?.properti.byRt ?? []).map((r) => ({ label: `RT ${String(r.rt).padStart(2, "0")}`, count: r.count })),
     [data?.properti.byRt],
   );
-  const propertiJenisBar = useMemo(
-    () => (data?.properti.byJenisProperti ?? []).map((r) => ({ label: labelPropertiJenis(r.label), count: r.count })),
-    [data?.properti.byJenisProperti],
-  );
-  const terminBar = useMemo(
-    () => (data?.pengajuan.byTerminBulan ?? []).map((r) => ({ label: `${r.termin} bln`, count: r.count })),
-    [data?.pengajuan.byTerminBulan],
-  );
-  const jumlahPenghuniBar = useMemo(
-    () => data?.pengajuan.byJumlahPenghuni ?? [],
-    [data?.pengajuan.byJumlahPenghuni],
-  );
-  const pekerjaanBar = useMemo(() => data?.penghuni.topPekerjaan ?? [], [data?.penghuni.topPekerjaan]);
-  const keperluanTinggalBar = useMemo(() => data?.penghuni.byKeperluanTinggal ?? [], [data?.penghuni.byKeperluanTinggal]);
-  const jenjangAnakBar = useMemo(() => data?.penghuni.byJenjangAnak ?? [], [data?.penghuni.byJenjangAnak]);
-  const kelompokUsiaBar = useMemo(() => data?.penghuni.byKelompokUsia ?? [], [data?.penghuni.byKelompokUsia]);
-  const jenisKendaraanBar = useMemo(() => data?.penghuni.byJenisKendaraan ?? [], [data?.penghuni.byJenisKendaraan]);
-  const tempatKerjaBar = useMemo(() => data?.penghuni.topTempatKerja ?? [], [data?.penghuni.topTempatKerja]);
-  const jenisUsahaBar = useMemo(() => data?.pengajuan.byJenisTempatUsaha ?? [], [data?.pengajuan.byJenisTempatUsaha]);
+  const jumlahPenghuniRanked = useMemo(() => data?.pengajuan.byJumlahPenghuni ?? [], [data?.pengajuan.byJumlahPenghuni]);
+  const pekerjaanRanked = useMemo(() => data?.penghuni.topPekerjaan ?? [], [data?.penghuni.topPekerjaan]);
+  const keperluanTinggalRanked = useMemo(() => data?.penghuni.byKeperluanTinggal ?? [], [data?.penghuni.byKeperluanTinggal]);
+  const jenjangAnakRanked = useMemo(() => data?.penghuni.byJenjangAnak ?? [], [data?.penghuni.byJenjangAnak]);
+  const kelompokUsiaHist = useMemo(() => data?.penghuni.byKelompokUsia ?? [], [data?.penghuni.byKelompokUsia]);
+  const jenisKendaraanRanked = useMemo(() => data?.penghuni.byJenisKendaraan ?? [], [data?.penghuni.byJenisKendaraan]);
+  const tempatKerjaRanked = useMemo(() => data?.penghuni.topTempatKerja ?? [], [data?.penghuni.topTempatKerja]);
+  const jenisUsahaRanked = useMemo(() => data?.pengajuan.byJenisTempatUsaha ?? [], [data?.pengajuan.byJenisTempatUsaha]);
   const pintuTierBar = useMemo(() => data?.properti.byJumlahPintu ?? [], [data?.properti.byJumlahPintu]);
-  const trenBar = useMemo(() => (data?.trenBulan ?? []).map((r) => ({ label: r.bulan, count: r.count })), [data?.trenBulan]);
+  const trenArea = useMemo(() => (data?.trenBulan ?? []).map((r) => ({ label: r.bulan, count: r.count })), [data?.trenBulan]);
 
   const pengajuanBaru = data?.pengajuan.byTipe?.pengajuan_baru ?? 0;
   const pengajuanPerpanjang = data?.pengajuan.byTipe?.perpanjang ?? 0;
@@ -269,102 +295,129 @@ export default function AdminVisitrw3Dashboard() {
             <Visitrw3StatCard title="Baris form penghuni" value={formatNumber(data.penghuni.totalBaris)} description="Isian penghuni pada pengajuan" icon={ClipboardList} />
           </div>
 
-          <DashboardSection title="Form pengajuan" description="Keperluan, lokasi, bayar, bisnis, dan persetujuan syarat" />
+          <DashboardSection title="Form pengajuan" description="Alur, tren waktu, distribusi RT, dan komposisi keperluan" />
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <ChartCard title="Status pengajuan" description="menunggu_survey · disetujui · ditolak">
-              <PieBlock data={statusPie} empty="Belum ada pengajuan" />
+            <ChartCard title="Alur pengajuan" description="Corong dari masuk hingga keputusan admin">
+              <FunnelBlock stages={funnelPengajuan} empty="Belum ada pengajuan" />
             </ChartCard>
-            <ChartCard title="Keperluan" description="Field keperluanPengajuan">
-              <PieBlock data={keperluanPie} empty="Belum ada data" />
+            <ChartCard title="Tren pengajuan masuk" description="Area chart — 12 bulan terakhir (created_at)">
+              <AreaTrendBlock data={trenArea} empty="Belum ada data" />
             </ChartCard>
-            <ChartCard title="Tipe pengajuan" description="pengajuan_baru · perpanjang">
-              <PieBlock data={tipePie} empty="Belum ada data" />
+            <ChartCard title="Status pengajuan" description="Donut — menunggu · disetujui · ditolak">
+              <DonutBlock data={statusPie} empty="Belum ada pengajuan" centerLabel="pengajuan" />
             </ChartCard>
-            <ChartCard title="Bisnis: wilayah RW3" description="tinggalDiWilayahRw3 pada pengajuan bisnis">
-              <PieBlock data={bisnisWilayahPie} empty="Belum ada pengajuan bisnis" />
+            <ChartCard title="Tingkat disetujui" description="Persentase disetujui dari yang sudah diputuskan">
+              <MetricRingBlock
+                percent={approvalRatePct}
+                label="Tingkat persetujuan"
+                detail={
+                  data.ringkasan.disetujui + data.ringkasan.ditolak > 0
+                    ? `${data.ringkasan.disetujui} disetujui · ${data.ringkasan.ditolak} ditolak`
+                    : undefined
+                }
+                empty="Belum ada keputusan admin"
+                color={PIE_COLORS[1]}
+              />
             </ChartCard>
-            <ChartCard title="Setuju tata tertib" description="Checkbox setujuTataTertib">
-              <PieBlock data={setujuSyaratPie} empty="Belum ada data" />
+            <ChartCard title="Keperluan pengajuan" description="Bar 100% — tinggal vs bisnis">
+              <StackedPercentBlock segments={keperluanSegments} empty="Belum ada data" />
             </ChartCard>
-            <ChartCard title="Nomor unit/kamar" description="Field nomorUnit">
-              <PieBlock data={nomorUnitPie} empty="Belum ada data" />
+            <ChartCard title="Tipe pengajuan" description="Radial — pengajuan baru vs perpanjang">
+              <RadialBarBlock data={tipeRadial} empty="Belum ada data" />
             </ChartCard>
-            <ChartCard title="Terhubung properti" description="pemilikKostId — kost terpilih vs bisnis luar">
-              <PieBlock data={propertiTerkaitPie} empty="Belum ada data" />
+            <ChartCard title="Termin pembayaran" description="Radial — 1 / 3 / 6 / 12 bulan">
+              <RadialBarBlock data={terminRadial} empty="Belum ada data" />
             </ChartCard>
-            <ChartCard title="Pengajuan per RT" description="Field rt">
+            <ChartCard title="Pengajuan per RT" description="Batang — sebaran wilayah">
               <BarBlock data={rtBar} empty="Belum ada data" />
             </ChartCard>
-            <ChartCard title="Termin pembayaran" description="terminBulan (1/3/6/12)">
-              <BarBlock data={terminBar} empty="Belum ada data" />
+            <ChartCard title="Bisnis: wilayah RW3" description="Bar 100% — di dalam vs luar wilayah">
+              <StackedPercentBlock segments={bisnisWilayahSegments} empty="Belum ada pengajuan bisnis" />
             </ChartCard>
-            <ChartCard title="Jumlah penghuni per pengajuan" description="Field jumlahPenghuni">
-              <BarBlock data={jumlahPenghuniBar} empty="Belum ada data" />
+            <ChartCard title="Terhubung properti" description="Bar 100% — kost terpilih vs bisnis luar">
+              <StackedPercentBlock segments={propertiTerkaitSegments} empty="Belum ada data" />
             </ChartCard>
-            <ChartCard title="Tren pengajuan masuk" description="Berdasarkan created_at">
-              <BarBlock data={trenBar} empty="Belum ada data" />
+            <ChartCard title="Setuju tata tertib" description="Ring KPI — persetujuan syarat form">
+              <MetricRingBlock
+                percent={setujuSyaratPct}
+                label="Persetujuan syarat"
+                detail={`${data.pengajuan.setujuTataTertib.ya} setuju · ${data.pengajuan.setujuTataTertib.tidak} belum`}
+                empty="Belum ada data"
+              />
             </ChartCard>
-            <ChartCard title="Jenis tempat usaha" description="jenisTempatUsaha / bisnis">
-              <BarBlock data={jenisUsahaBar} empty="Belum ada pengajuan bisnis" />
+            <ChartCard title="Jenis tempat usaha" description="Peringkat — lapak · kiosk · lainnya">
+              <RankedBarBlock data={jenisUsahaRanked} empty="Belum ada pengajuan bisnis" />
             </ChartCard>
-          </div>
-
-          <DashboardSection title="Form penghuni" description="Data per orang pada pengajuan tinggal / bisnis di wilayah" />
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <ChartCard title="Anak vs dewasa" description="Checkbox isAnak">
-              <PieBlock data={anakPie} empty="Belum ada data penghuni" />
-            </ChartCard>
-            <ChartCard title="Jenis kelamin" description="Field jenisKelamin">
-              <PieBlock data={jenisKelaminPie} empty="Belum ada data" />
-            </ChartCard>
-            <ChartCard title="Kelompok usia" description="Dihitung dari tanggalLahir">
-              <BarBlock data={kelompokUsiaBar} empty="Belum ada data" />
-            </ChartCard>
-            <ChartCard title="Keperluan tinggal" description="Kerja · Kuliah · Usaha · Lainnya">
-              <BarBlock data={keperluanTinggalBar} empty="Belum ada data" />
-            </ChartCard>
-            <ChartCard title="Jenjang anak" description="Field namaSekolah (anak)">
-              <BarBlock data={jenjangAnakBar} empty="Belum ada data anak" />
-            </ChartCard>
-            <ChartCard title="Pekerjaan" description="Field pekerjaan (dewasa)">
-              <BarBlock data={pekerjaanBar} empty="Belum ada data" vertical height={260} />
-            </ChartCard>
-            <ChartCard title="Kendaraan" description="Checkbox punyaKendaraan">
-              <PieBlock data={kendaraanPie} empty="Belum ada data" />
-            </ChartCard>
-            <ChartCard title="Jenis kendaraan" description="jenisKendaraan + platNomor">
-              <BarBlock data={jenisKendaraanBar} empty="Belum ada kendaraan" />
-            </ChartCard>
-            <ChartCard title="Upload foto KTP" description="Field fotoKtpPath">
-              <PieBlock data={fotoKtpPie} empty="Belum ada data" />
-            </ChartCard>
-            <ChartCard title="Nama tempat kerja" description="namaTempatKerja (dewasa)">
-              <BarBlock data={tempatKerjaBar} empty="Belum ada data" vertical height={240} />
+            <ChartCard title="Jumlah penghuni / pengajuan" description="Peringkat — ukuran rombongan">
+              <RankedBarBlock data={jumlahPenghuniRanked} empty="Belum ada data" />
             </ChartCard>
           </div>
 
-          <DashboardSection title="Form daftar properti" description="Kost, kontrakan, kiosk, lapak — pemilik & izin" />
+          <DashboardSection title="Form penghuni" description="Demografi, pekerjaan, kendaraan, dan kelengkapan dokumen" />
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <ChartCard title="Status properti" description="aktif · menunggu_verifikasi">
-              <PieBlock data={propertiStatusPie} empty="Belum ada properti" />
+            <ChartCard title="Anak vs dewasa" description="Bar 100% — komposisi penghuni form">
+              <StackedPercentBlock segments={anakSegments} empty="Belum ada data penghuni" />
             </ChartCard>
-            <ChartCard title="Jenis properti" description="jenisProperti">
-              <BarBlock data={propertiJenisBar} empty="Belum ada properti" />
+            <ChartCard title="Jenis kelamin" description="Radial — distribusi gender">
+              <RadialBarBlock data={jenisKelaminRadial} empty="Belum ada data" />
             </ChartCard>
-            <ChartCard title="Properti per RT" description="Field rt">
-              <BarBlock data={propertiRtBar} empty="Belum ada properti" />
+            <ChartCard title="Kelompok usia" description="Histogram — dari tanggal lahir">
+              <HistogramBlock data={kelompokUsiaHist} empty="Belum ada data" />
             </ChartCard>
-            <ChartCard title="Ukuran properti (pintu)" description="jumlahPintu → tier kecil/sedang/besar">
+            <ChartCard title="Keperluan tinggal" description="Peringkat — kerja · kuliah · usaha">
+              <RankedBarBlock data={keperluanTinggalRanked} empty="Belum ada data" />
+            </ChartCard>
+            <ChartCard title="Pekerjaan" description="Peringkat — top pekerjaan dewasa">
+              <RankedBarBlock data={pekerjaanRanked} empty="Belum ada data" maxItems={8} />
+            </ChartCard>
+            <ChartCard title="Jenjang anak" description="Peringkat — jenjang pendidikan anak">
+              <RankedBarBlock data={jenjangAnakRanked} empty="Belum ada data anak" />
+            </ChartCard>
+            <ChartCard title="Kendaraan" description="Bar 100% — punya vs tidak">
+              <StackedPercentBlock segments={kendaraanSegments} empty="Belum ada data" />
+            </ChartCard>
+            <ChartCard title="Jenis kendaraan" description="Peringkat — motor · mobil · lainnya">
+              <RankedBarBlock data={jenisKendaraanRanked} empty="Belum ada kendaraan" />
+            </ChartCard>
+            <ChartCard title="Kelengkapan foto KTP" description="Ring KPI — upload dokumen">
+              <MetricRingBlock
+                percent={fotoKtpPct}
+                label="Foto KTP terunggah"
+                detail={`${data.penghuni.withFotoKtp} lengkap · ${data.penghuni.withoutFotoKtp} belum`}
+                empty="Belum ada data"
+                color={PIE_COLORS[4]}
+              />
+            </ChartCard>
+            <ChartCard title="Nama tempat kerja" description="Peringkat — lokasi kerja penghuni">
+              <RankedBarBlock data={tempatKerjaRanked} empty="Belum ada data" maxItems={6} />
+            </ChartCard>
+          </div>
+
+          <DashboardSection title="Form daftar properti" description="Jenis, lokasi RT, ukuran, dan izin pengajuan" />
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <ChartCard title="Status properti" description="Donut — aktif · menunggu verifikasi">
+              <DonutBlock data={propertiStatusPie} empty="Belum ada properti" centerLabel="properti" />
+            </ChartCard>
+            <ChartCard title="Jenis properti" description="Radial — kost · kontrakan · kiosk · lapak">
+              <RadialBarBlock data={propertiJenisRadial} empty="Belum ada properti" />
+            </ChartCard>
+            <ChartCard title="Properti per RT" description="Batang — sebaran lokasi">
+              <BarBlock data={propertiRtBar} empty="Belum ada properti" color={CHART_GOLD} />
+            </ChartCard>
+            <ChartCard title="Ukuran properti (pintu)" description="Batang — tier kecil / sedang / besar">
               <BarBlock data={pintuTierBar} empty="Belum ada properti" />
             </ChartCard>
-            <ChartCard title="Izin yang dibuka" description="izinTinggal · izinBisnis">
-              <PieBlock data={izinPropertiPie} empty="Belum ada properti" />
+            <ChartCard title="Izin yang dibuka" description="Donut — kombinasi izin tinggal & bisnis">
+              <DonutBlock data={izinPropertiDonut} empty="Belum ada properti" centerLabel="izin" />
             </ChartCard>
-            <ChartCard title="Penanggung jawab pengelola" description="namaPenanggungJawab">
-              <PieBlock data={pjPropertiPie} empty="Belum ada properti" />
-            </ChartCard>
-            <ChartCard title="Setuju tata tertib (properti)" description="Checkbox saat daftar properti">
-              <PieBlock data={propertiSetujuSyaratPie} empty="Belum ada properti" />
+            <ChartCard title="Penanggung jawab pengelola" description="Ring KPI — kelengkapan data PJ">
+              <MetricRingBlock
+                percent={pjPropertiPct}
+                label="Properti ada PJ"
+                detail={`${data.properti.denganPenanggungJawab} lengkap · ${data.properti.tanpaPenanggungJawab} belum`}
+                empty="Belum ada properti"
+                color={CHART_GOLD}
+              />
             </ChartCard>
           </div>
 

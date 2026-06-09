@@ -158,6 +158,27 @@ export const laporan = pgTable("laporan", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+/** Antrian bantuan air saat kekeringan — tiket dikeluarkan setelah survey RW. */
+export const laporanKekeringan = pgTable("laporan_kekeringan", {
+  id: serial("id").primaryKey(),
+  nomorAntrian: text("nomor_antrian").notNull().unique(),
+  nomorTiket: text("nomor_tiket").unique(),
+  namaPelapor: text("nama_pelapor").notNull(),
+  nomorRt: integer("nomor_rt").notNull(),
+  nomorWa: text("nomor_wa").notNull(),
+  alamat: text("alamat").notNull(),
+  jumlahPenghuni: integer("jumlah_penghuni").notNull(),
+  keterangan: text("keterangan"),
+  status: text("status").notNull().default("menunggu_survey"),
+  catatanSurvey: text("catatan_survey"),
+  tanggalSurvey: text("tanggal_survey"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_laporan_kekeringan_status").on(table.status),
+  index("idx_laporan_kekeringan_jumlah").on(table.jumlahPenghuni),
+  index("idx_laporan_kekeringan_rt").on(table.nomorRt),
+]);
+
 export const suratWarga = pgTable("surat_warga", {
   id: serial("id").primaryKey(),
   nomorSurat: text("nomor_surat"),
@@ -569,6 +590,15 @@ export const insertWargaSchema = createInsertSchema(warga).omit({ id: true, crea
 });
 export const insertRtSchema = createInsertSchema(rtData).omit({ id: true });
 export const insertLaporanSchema = createInsertSchema(laporan).omit({ id: true, createdAt: true, status: true, tanggapanAdmin: true });
+export const insertLaporanKekeringanSchema = createInsertSchema(laporanKekeringan).omit({
+  id: true,
+  createdAt: true,
+  nomorAntrian: true,
+  nomorTiket: true,
+  status: true,
+  catatanSurvey: true,
+  tanggalSurvey: true,
+});
 export const insertSuratWargaSchema = createInsertSchema(suratWarga).omit({ id: true, createdAt: true, status: true, isiSurat: true, pdfCode: true, pdfPath: true, nomorSurat: true, fileSurat: true, metodeLayanan: true });
 export const insertSuratRwSchema = createInsertSchema(suratRw).omit({ id: true, createdAt: true });
 export const insertProfileEditSchema = createInsertSchema(profileEditRequest).omit({ id: true, createdAt: true, status: true });
@@ -634,6 +664,8 @@ export type RtData = typeof rtData.$inferSelect;
 export type InsertRtData = z.infer<typeof insertRtSchema>;
 export type Laporan = typeof laporan.$inferSelect;
 export type InsertLaporan = z.infer<typeof insertLaporanSchema>;
+export type LaporanKekeringan = typeof laporanKekeringan.$inferSelect;
+export type InsertLaporanKekeringan = z.infer<typeof insertLaporanKekeringanSchema>;
 export type SuratWarga = typeof suratWarga.$inferSelect;
 export type InsertSuratWarga = z.infer<typeof insertSuratWargaSchema>;
 export type SuratRw = typeof suratRw.$inferSelect;

@@ -10,7 +10,7 @@ import express from "express";
 import * as XLSX from "xlsx";
 import { storage } from "./storage";
 import { pool } from "./db";
-import { cache, CacheKey, TTL, invalidateWarga, invalidateKk } from "./cache";
+import { cache, CacheKey, TTL, invalidateWarga, invalidateKk, invalidateVisitrw3Dashboard } from "./cache";
 import { insertKkSchema, patchKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertPengajuanBansosSchema, insertDonasiCampaignSchema, insertDonasiSchema, insertKasRwSchema, insertPemilikKostSchema, insertWargaSinggahSchema, insertUsahaSchema, insertKaryawanUsahaSchema, insertIzinTetanggaSchema, insertSurveyUsahaSchema, insertProgramRwSchema, insertPesertaProgramSchema, insertProyekInfrastrukturSchema, insertUmkmMakeoverSchema } from "@shared/schema";
 import { buildProgramKerjaDashboard } from "@shared/program-kerja-analytics";
 import { formatLaporanRef } from "@shared/program-kerja";
@@ -797,6 +797,104 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
     res.json(data);
   });
 
+  const publicLaporanKekeringanSchema = z.object({
+    namaPelapor: z.string().min(2, "Nama pelapor wajib diisi"),
+    nomorRt: z.coerce.number().int().refine((n) => (ACTIVE_RT_NUMBERS as readonly number[]).includes(n), {
+      message: "RT tidak valid",
+    }),
+    nomorWa: z.string().min(9, "Nomor WhatsApp tidak valid"),
+    alamat: z.string().min(5, "Alamat wajib diisi"),
+    jumlahPenghuni: z.coerce.number().int().min(1, "Minimal 1 orang").max(30, "Maksimal 30 orang"),
+    keterangan: z.string().optional(),
+  });
+
+  app.post("/api/public/laporan-kekeringan", async (req, res) => {
+    try {
+      const parsed = publicLaporanKekeringanSchema.parse(req.body);
+      const data = await storage.createLaporanKekeringan({
+        namaPelapor: parsed.namaPelapor.trim(),
+        nomorRt: parsed.nomorRt,
+        nomorWa: parsed.nomorWa.trim(),
+        alamat: parsed.alamat.trim(),
+        jumlahPenghuni: parsed.jumlahPenghuni,
+        keterangan: parsed.keterangan?.trim() || null,
+      });
+      return res.json({
+        id: data.id,
+        nomorAntrian: data.nomorAntrian,
+        status: data.status,
+      });
+    } catch (error: any) {
+      return res.status(400).json({ message: error.message || "Gagal mengirim laporan kekeringan" });
+    }
+  });
+
+  app.get("/api/public/laporan-kekeringan/:nomor/status", async (req, res) => {
+    try {
+      const nomor = String(req.params.nomor).trim().toUpperCase();
+      const row =
+        (await storage.getLaporanKekeringanByNomorAntrian(nomor)) ??
+        (await storage.getLaporanKekeringanByNomorTiket(nomor));
+      if (!row) return res.status(404).json({ message: "Laporan kekeringan tidak ditemukan" });
+      return res.json({
+        nomorAntrian: row.nomorAntrian,
+        nomorTiket: row.nomorTiket,
+        namaPelapor: row.namaPelapor,
+        nomorRt: row.nomorRt,
+        jumlahPenghuni: row.jumlahPenghuni,
+        status: row.status,
+        catatanSurvey: row.catatanSurvey,
+        tanggalSurvey: row.tanggalSurvey,
+        createdAt: row.createdAt,
+      });
+    } catch (error: any) {
+      return res.status(500).json({ message: error.message || "Gagal memuat status" });
+    }
+  });
+
+  app.get("/api/laporan-kekeringan", requireAdmin, async (_req, res) => {
+    const data = await storage.getAllLaporanKekeringan();
+    res.json(data);
+  });
+
+  app.patch("/api/laporan-kekeringan/:id/survey", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id as string, 10);
+      if (isNaN(id)) return res.status(400).json({ message: "ID tidak valid" });
+      const { catatanSurvey, tanggalSurvey } = req.body;
+      const tanggal = typeof tanggalSurvey === "string" && tanggalSurvey.trim()
+        ? tanggalSurvey.trim()
+        : new Date().toISOString().slice(0, 10);
+      const data = await storage.surveyLaporanKekeringan(id, { catatanSurvey, tanggalSurvey: tanggal });
+      if (!data) return res.status(404).json({ message: "Laporan tidak ditemukan atau sudah diproses" });
+      res.json(data);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message || "Gagal menyimpan survey" });
+    }
+  });
+
+  app.patch("/api/laporan-kekeringan/:id/reject", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id as string, 10);
+      if (isNaN(id)) return res.status(400).json({ message: "ID tidak valid" });
+      const alasan = typeof req.body?.catatanSurvey === "string" ? req.body.catatanSurvey.trim() : "";
+      if (!alasan) return res.status(400).json({ message: "Alasan penolakan wajib diisi" });
+      const data = await storage.rejectLaporanKekeringan(id, alasan);
+      if (!data) return res.status(404).json({ message: "Laporan tidak ditemukan atau sudah diproses" });
+      res.json(data);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message || "Gagal menolak laporan" });
+    }
+  });
+
+  app.patch("/api/laporan-kekeringan/:id/selesai", requireAdmin, async (req, res) => {
+    const id = parseInt(req.params.id as string, 10);
+    if (isNaN(id)) return res.status(400).json({ message: "ID tidak valid" });
+    const data = await storage.selesaiLaporanKekeringan(id);
+    if (!data) return res.status(404).json({ message: "Laporan tidak ditemukan atau belum ada tiket" });
+    res.json(data);
+  });
+
   app.get("/api/surat-warga", requireAuth, async (req, res) => {
     if (req.session.isAdmin) {
       const data = await storage.getAllSuratWarga();
@@ -1537,6 +1635,7 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
     try {
       const parsed = insertPemilikKostSchema.parse(req.body);
       const result = await storage.createPemilikKost(parsed);
+      invalidateVisitrw3Dashboard();
       res.json(result);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
@@ -1550,6 +1649,7 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
       if (!existing) return res.status(404).json({ message: "Pemilik kost tidak ditemukan" });
       const parsed = insertPemilikKostSchema.partial().parse(req.body);
       const result = await storage.updatePemilikKost(id, parsed);
+      invalidateVisitrw3Dashboard();
       res.json(result);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
@@ -1562,6 +1662,7 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
       const existing = await storage.getPemilikKostById(id);
       if (!existing) return res.status(404).json({ message: "Pemilik kost tidak ditemukan" });
       await storage.deletePemilikKost(id);
+      invalidateVisitrw3Dashboard();
       res.json({ message: "Pemilik kost berhasil dihapus" });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -1603,6 +1704,7 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
     try {
       const parsed = insertWargaSinggahSchema.parse(req.body);
       const result = await storage.createWargaSinggah(parsed);
+      invalidateVisitrw3Dashboard();
       res.json(result);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
@@ -1616,6 +1718,7 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
       if (!existing) return res.status(404).json({ message: "Warga singgah tidak ditemukan" });
       const parsed = insertWargaSinggahSchema.partial().parse(req.body);
       const result = await storage.updateWargaSinggah(id, parsed);
+      invalidateVisitrw3Dashboard();
       res.json(result);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
@@ -1631,6 +1734,7 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
       }
       const result = await storage.perpanjangKontrak(id, tanggalMulaiBaru, tanggalHabisBaru);
       if (!result) return res.status(404).json({ message: "Warga singgah tidak ditemukan" });
+      invalidateVisitrw3Dashboard();
       res.json(result);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
@@ -1643,6 +1747,7 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
       const existing = await storage.getWargaSinggahById(id);
       if (!existing) return res.status(404).json({ message: "Warga singgah tidak ditemukan" });
       await storage.deleteWargaSinggah(id);
+      invalidateVisitrw3Dashboard();
       res.json({ message: "Warga singgah berhasil dihapus" });
     } catch (error: any) {
       res.status(500).json({ message: error.message });

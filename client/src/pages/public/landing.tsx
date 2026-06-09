@@ -17,8 +17,8 @@ export default function PublicLanding() {
       <ServiceCard
         href="/lapor"
         icon={Megaphone}
-        title="Laporkan masalah"
-        description="Sampaikan keluhan atau laporan lingkungan RT"
+        title="Lapor warga"
+        description="Laporkan masalah lingkungan atau daftar antrian kekeringan air"
         variant="solid"
       />
       <ServiceCard

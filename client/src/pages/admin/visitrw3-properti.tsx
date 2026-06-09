@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, getApiErrorMessage, getQueryFn, readJsonSafely } from "@/lib/queryClient";
+import { invalidateVisitrw3Queries } from "@/lib/visitrw3-invalidate";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -83,9 +84,7 @@ export default function AdminVisitrw3Properti() {
       return readJsonSafely(res);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/pemilik-kost"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/public/pemilik-kost"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/visitrw3/dashboard-stats"] });
+      invalidateVisitrw3Queries(queryClient, { includeKas: false });
       toast({ title: "Berhasil", description: "Properti berhasil ditambahkan" });
       resetForm();
     },
@@ -99,8 +98,7 @@ export default function AdminVisitrw3Properti() {
       return readJsonSafely(res);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/pemilik-kost"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/public/pemilik-kost"] });
+      invalidateVisitrw3Queries(queryClient, { includeKas: false });
       toast({ title: "Berhasil", description: "Data properti berhasil diperbarui" });
       resetForm();
     },
@@ -114,11 +112,7 @@ export default function AdminVisitrw3Properti() {
       return readJsonSafely(res);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/pemilik-kost"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/public/pemilik-kost"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/visitrw3/dashboard-stats"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/kas-rw"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/kas-rw/summary"] });
+      invalidateVisitrw3Queries(queryClient);
       setApproveTarget(null);
       setSurveyForm(defaultSurveyKontribusiState());
       toast({
@@ -136,9 +130,7 @@ export default function AdminVisitrw3Properti() {
       return readJsonSafely(res);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/pemilik-kost"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/public/pemilik-kost"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/visitrw3/pengajuan"] });
+      invalidateVisitrw3Queries(queryClient, { includeKas: false });
       toast({ title: "Berhasil", description: "Properti berhasil dihapus" });
       setDeleteTarget(null);
     },

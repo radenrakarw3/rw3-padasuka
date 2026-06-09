@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, getApiErrorMessage, readJsonSafely } from "@/lib/queryClient";
+import { invalidateVisitrw3Queries } from "@/lib/visitrw3-invalidate";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -75,12 +76,7 @@ export default function AdminVisitrw3Antrian() {
       toast({ title: "Disetujui", description: "Kontribusi dicatat ke Kas RW" });
       setDetailId(null);
       setSurveyForm(defaultSurveyKontribusiState());
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/visitrw3/pengajuan"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/visitrw3/dashboard-stats"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/visitrw3/kalender"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/warga-singgah"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/kas-rw"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/kas-rw/summary"] });
+      invalidateVisitrw3Queries(queryClient);
     },
     onError: (e: unknown) =>
       toast({ title: "Gagal", description: getApiErrorMessage(e), variant: "destructive" }),
@@ -94,9 +90,7 @@ export default function AdminVisitrw3Antrian() {
     onSuccess: () => {
       toast({ title: "Ditolak" });
       setDetailId(null);
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/visitrw3/pengajuan"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/visitrw3/dashboard-stats"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/visitrw3/kalender"] });
+      invalidateVisitrw3Queries(queryClient, { includeKas: false });
     },
     onError: (e: unknown) =>
       toast({ title: "Gagal", description: getApiErrorMessage(e), variant: "destructive" }),

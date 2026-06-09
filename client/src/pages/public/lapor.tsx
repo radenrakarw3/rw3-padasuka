@@ -1,289 +1,61 @@
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { Loader2, ChevronRight, ChevronLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest, getApiErrorMessage } from "@/lib/queryClient";
+import { Megaphone, Droplets, ChevronRight } from "lucide-react";
+import { Link } from "wouter";
 import { PublicKioskLayout } from "@/components/public-kiosk-layout";
-import { FormStepper } from "@/components/gov/form-stepper";
-import { SuccessPanel } from "@/components/gov/success-panel";
-import { ACTIVE_RT_NUMBERS } from "@shared/rt";
-import { formatLaporanRef, subJenisInfrastrukturOptions } from "@shared/program-kerja";
+import { ServiceCard } from "@/components/gov/service-card";
+import infocimahiKekeringan from "@assets/infocimahi-kekeringan-cimahi.png";
 
-const STEPS = [
-  { id: "kontak", label: "Identitas" },
-  { id: "detail", label: "Detail" },
-];
-
-const jenisLaporanOptions = [
-  { value: "keamanan", label: "Keamanan" },
-  { value: "kebersihan", label: "Kebersihan" },
-  { value: "infrastruktur", label: "Infrastruktur" },
-  { value: "ketertiban", label: "Ketertiban" },
-  { value: "umum", label: "Umum" },
-  { value: "lainnya", label: "Lainnya" },
-];
-
-export default function PublicLapor() {
-  const { toast } = useToast();
-  const [step, setStep] = useState(0);
-  const [namaPelapor, setNamaPelapor] = useState("");
-  const [nomorRt, setNomorRt] = useState("");
-  const [nomorWa, setNomorWa] = useState("");
-  const [jenisLaporan, setJenisLaporan] = useState("");
-  const [judul, setJudul] = useState("");
-  const [isi, setIsi] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-  const [referenceId, setReferenceId] = useState("");
-  const [subJenis, setSubJenis] = useState("");
-  const [fotoLaporan, setFotoLaporan] = useState("");
-  const [waError, setWaError] = useState("");
-
-  const mutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/public/laporan", {
-        namaPelapor: namaPelapor.trim(),
-        nomorRt: parseInt(nomorRt, 10),
-        nomorWa,
-        jenisLaporan,
-        subJenis: jenisLaporan === "infrastruktur" && subJenis ? subJenis : undefined,
-        fotoLaporan: fotoLaporan || undefined,
-        judul,
-        isi,
-      });
-      return res.json() as Promise<{ id: number; nomorReferensi?: string }>;
-    },
-    onSuccess: (data) => {
-      setReferenceId(data.nomorReferensi ?? formatLaporanRef(data.id));
-      setSubmitted(true);
-    },
-    onError: (error: unknown) => {
-      toast({ title: "Gagal mengirim", description: getApiErrorMessage(error), variant: "destructive" });
-    },
-  });
-
-  if (submitted) {
-    return (
-      <PublicKioskLayout title="Laporan masalah" backHref="/">
-        <SuccessPanel
-          title="Laporan terkirim"
-          referenceLabel="Nomor referensi"
-          referenceValue={referenceId}
-          nextSteps={[
-            "Pengurus RW akan meninjau laporan Anda.",
-            "Anda dapat dihubungi melalui WhatsApp jika diperlukan klarifikasi.",
-            "Gunakan nomor referensi untuk cek status laporan.",
-          ]}
-          primaryAction={{ label: "Cek status laporan", href: "/lapor/status" }}
-          secondaryAction={{ label: "Kembali ke beranda", href: "/" }}
-        />
-      </PublicKioskLayout>
-    );
-  }
-
-  const goNext = () => {
-    if (namaPelapor.trim().length < 2) {
-      toast({ title: "Nama pelapor wajib diisi", variant: "destructive" });
-      return;
-    }
-    if (!nomorRt) {
-      toast({ title: "Pilih RT lokasi masalah", variant: "destructive" });
-      return;
-    }
-    const wa = nomorWa.replace(/\D/g, "");
-    if (wa.length < 9) {
-      setWaError("Nomor WhatsApp minimal 9 digit");
-      return;
-    }
-    setWaError("");
-    if (!jenisLaporan) {
-      toast({ title: "Pilih jenis laporan", variant: "destructive" });
-      return;
-    }
-    setStep(1);
-  };
-
+export default function PublicLaporHub() {
   return (
-    <PublicKioskLayout title="Laporan masalah" backHref="/">
+    <PublicKioskLayout title="Lapor warga" backHref="/">
       <p className="prose-gov mb-4">
-        Setelah dikirim, pengurus RW akan meninjau laporan dan dapat menghubungi Anda via WhatsApp.
+        Pilih jenis laporan yang ingin Anda sampaikan ke pengurus RW 03 Padasuka.
       </p>
-
-      <FormStepper steps={STEPS} currentStep={step} />
-
-      <form
-        className="space-y-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (step === 0) {
-            goNext();
-            return;
-          }
-          if (!judul.trim() || !isi.trim()) {
-            toast({ title: "Lengkapi judul dan detail laporan", variant: "destructive" });
-            return;
-          }
-          mutation.mutate();
-        }}
-      >
-        {step === 0 && (
-          <fieldset className="space-y-4 border-0 p-0 m-0">
-            <legend className="sr-only">Identitas pelapor</legend>
-            <div className="space-y-2">
-              <Label htmlFor="nama-pelapor">Nama pelapor</Label>
-              <Input
-                id="nama-pelapor"
-                placeholder="Nama lengkap"
-                value={namaPelapor}
-                onChange={(e) => setNamaPelapor(e.target.value)}
-                data-testid="input-nama-pelapor-laporan"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>RT lokasi masalah</Label>
-              <Select value={nomorRt} onValueChange={setNomorRt}>
-                <SelectTrigger data-testid="select-rt-laporan">
-                  <SelectValue placeholder="Pilih RT" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ACTIVE_RT_NUMBERS.map((n) => (
-                    <SelectItem key={n} value={String(n)}>
-                      RT {String(n).padStart(2, "0")}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="nomor-wa">Nomor WhatsApp</Label>
-              <Input
-                id="nomor-wa"
-                type="tel"
-                inputMode="tel"
-                placeholder="08xxxxxxxxxx"
-                value={nomorWa}
-                onChange={(e) => {
-                  setNomorWa(e.target.value);
-                  setWaError("");
-                }}
-                aria-invalid={!!waError}
-                aria-describedby={waError ? "wa-error" : undefined}
-                data-testid="input-nomor-wa-laporan"
-              />
-              {waError && (
-                <p id="wa-error" className="text-sm text-destructive" role="alert">
-                  {waError}
-                </p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label>Jenis laporan</Label>
-              <Select value={jenisLaporan} onValueChange={(v) => { setJenisLaporan(v); if (v !== "infrastruktur") setSubJenis(""); }}>
-                <SelectTrigger data-testid="select-jenis-laporan">
-                  <SelectValue placeholder="Pilih jenis" />
-                </SelectTrigger>
-                <SelectContent>
-                  {jenisLaporanOptions.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {jenisLaporan === "infrastruktur" && (
-              <div className="space-y-2">
-                <Label>Sub-jenis infrastruktur</Label>
-                <Select value={subJenis} onValueChange={setSubJenis}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih sub-jenis (opsional)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {subJenisInfrastrukturOptions.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Laporan drainase/genangan mendukung program Wilayah Bebas Banjir.
+      <div className="space-y-3">
+        <ServiceCard
+          href="/lapor/masalah"
+          icon={Megaphone}
+          title="Laporkan masalah"
+          description="Keluhan lingkungan, keamanan, kebersihan, infrastruktur, dan lainnya"
+          variant="solid"
+        />
+        <Link
+          href="/lapor/kekeringan"
+          className="block rounded-2xl overflow-hidden border-2 border-brand/20 bg-card shadow-sm transition-all hover:border-brand/35 hover:shadow-md group"
+          data-testid="card-laporan-kekeringan"
+        >
+          <img
+            src={infocimahiKekeringan}
+            alt="Waspada kemarau panjang — 3 kelurahan di Cimahi masuk daerah rawan kekeringan"
+            className="w-full aspect-[16/10] object-cover"
+          />
+          <div className="p-4 space-y-2">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-sky-100 border border-sky-200 flex items-center justify-center flex-shrink-0">
+                <Droplets className="w-5 h-5 text-sky-700" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="font-bold text-lg text-brand">Laporan kekeringan air</h2>
+                <p className="text-sm text-muted-foreground">
+                  Daftar antrian bantuan air — tiket dikeluarkan setelah survey RW
                 </p>
               </div>
-            )}
-          </fieldset>
-        )}
-
-        {step === 1 && (
-          <fieldset className="space-y-4 border-0 p-0 m-0">
-            <legend className="sr-only">Detail laporan</legend>
-            <div className="space-y-2">
-              <Label htmlFor="foto">Foto (opsional)</Label>
-              <Input
-                id="foto"
-                type="file"
-                accept="image/*"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) { setFotoLaporan(""); return; }
-                  const reader = new FileReader();
-                  reader.onload = () => setFotoLaporan(reader.result as string);
-                  reader.readAsDataURL(file);
-                }}
-              />
+              <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0 transition-transform group-hover:translate-x-0.5" />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="judul">Judul</Label>
-              <Input
-                id="judul"
-                value={judul}
-                onChange={(e) => setJudul(e.target.value)}
-                data-testid="input-judul-laporan"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="isi">Detail laporan</Label>
-              <Textarea
-                id="isi"
-                rows={5}
-                value={isi}
-                onChange={(e) => setIsi(e.target.value)}
-                data-testid="input-isi-laporan"
-              />
-            </div>
-          </fieldset>
-        )}
-
-        <div className="flex gap-2 pt-2">
-          {step > 0 && (
-            <Button type="button" variant="outline" className="touch-target flex-1" onClick={() => setStep(0)}>
-              <ChevronLeft className="w-4 h-4 mr-1" />
-              Kembali
-            </Button>
-          )}
-          <Button
-            type="submit"
-            className="touch-target flex-1"
-            disabled={mutation.isPending}
-            data-testid="button-kirim-laporan"
-          >
-            {mutation.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : step === 0 ? (
-              <>
-                Lanjut
-                <ChevronRight className="w-4 h-4 ml-1" />
-              </>
-            ) : (
-              "Kirim laporan"
-            )}
-          </Button>
-        </div>
-      </form>
+            <p className="text-[10px] text-muted-foreground">
+              Sumber:{" "}
+              <a
+                href="https://infocimahi.co"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-foreground"
+                onClick={(e) => e.stopPropagation()}
+              >
+                infocimahi.co
+              </a>
+            </p>
+          </div>
+        </Link>
+      </div>
     </PublicKioskLayout>
   );
 }

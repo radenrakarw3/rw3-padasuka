@@ -5,7 +5,7 @@ import logoGold from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
 
 const navItems = [
   { path: "/visitrw3", icon: Home, label: "Beranda" },
-  { path: "/visitrw3/laporan", icon: FileText, label: "Laporan" },
+  { path: "/lapor", icon: FileText, label: "Laporan" },
 ];
 
 export default function SinggahLayout({ children }: { children: React.ReactNode }) {

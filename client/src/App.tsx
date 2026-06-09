@@ -18,6 +18,9 @@ import { AuthProvider, useAuth } from "@/lib/auth";
 const PublicLanding = lazy(() => import("@/pages/public/landing"));
 
 const PublicLapor = lazy(() => import("@/pages/public/lapor"));
+const PublicLaporMasalah = lazy(() => import("@/pages/public/lapor-masalah"));
+const PublicLaporKekeringan = lazy(() => import("@/pages/public/lapor-kekeringan"));
+const PublicLaporKekeringanStatus = lazy(() => import("@/pages/public/lapor-kekeringan-status"));
 const PublicLaporStatus = lazy(() => import("@/pages/public/lapor-status"));
 const PublicProgram = lazy(() => import("@/pages/public/program"));
 const PublicProgramPilar = lazy(() => import("@/pages/public/program-pilar"));
@@ -57,6 +60,7 @@ const AdminVisitrw3Pengaturan = lazy(() => import("@/pages/admin/visitrw3-pengat
 const AdminKeuangan = lazy(() => import("@/pages/admin/keuangan"));
 
 const AdminKelolaLaporan = lazy(() => import("@/pages/admin/kelola-laporan"));
+const AdminKelolaKekeringan = lazy(() => import("@/pages/admin/kelola-kekeringan"));
 const AdminProgramKerjaDashboard = lazy(() => import("@/pages/admin/program-kerja-dashboard"));
 const AdminProgramKerjaKelola = lazy(() => import("@/pages/admin/program-kerja-kelola"));
 const AdminInfrastruktur = lazy(() => import("@/pages/admin/program-kerja-infrastruktur"));
@@ -110,6 +114,18 @@ function PageLoader() {
 
 function needsAuthSession(path: string) {
   return path.startsWith("/admin");
+}
+
+/** Redirect path lama /singgah/* ke alur Visit RW3 atau Lapor warga. */
+function singgahLegacyRedirect(rest?: string): string {
+  const path = (rest ?? "").replace(/^\//, "").toLowerCase();
+  if (!path || path === "beranda") return "/visitrw3";
+  if (path === "laporan" || path.startsWith("laporan/")) return "/lapor/masalah";
+  if (path === "pengajuan" || path.startsWith("pengajuan")) return "/visitrw3/pengajuan";
+  if (path === "perpanjang" || path.startsWith("perpanjang")) return "/visitrw3/perpanjang";
+  if (path === "status" || path.startsWith("status")) return "/visitrw3/status";
+  if (path === "login") return "/visitrw3/penyewa";
+  return "/visitrw3/penyewa";
 }
 
 
@@ -301,6 +317,7 @@ function AdminRoutes() {
         <Route path="/admin/kependudukan" component={AdminKependudukanRingkasan} />
 
         <Route path="/admin/laporan" component={AdminKelolaLaporan} />
+        <Route path="/admin/kekeringan" component={AdminKelolaKekeringan} />
 
         <Route path="/admin/surat-warga">{() => <Redirect to="/admin/laporan" />}</Route>
         <Route path="/admin/dashboard">{() => <Redirect to="/admin/kependudukan" />}</Route>
@@ -409,6 +426,9 @@ function PublicRoutes() {
     <Switch>
       {/* Beranda & form warga publik */}
       <Route path="/" component={PublicLanding} />
+      <Route path="/lapor/kekeringan/status" component={PublicLaporKekeringanStatus} />
+      <Route path="/lapor/kekeringan" component={PublicLaporKekeringan} />
+      <Route path="/lapor/masalah" component={PublicLaporMasalah} />
       <Route path="/lapor/status" component={PublicLaporStatus} />
       <Route path="/lapor" component={PublicLapor} />
       <Route path="/program/transparansi" component={PublicTransparansi} />
@@ -434,6 +454,7 @@ function PublicRoutes() {
       <Route path="/visitrw3/status-properti" component={Visitrw3StatusProperti} />
       <Route path="/visitrw3/status" component={Visitrw3Status} />
       <Route path="/visitrw3/panduan" component={Visitrw3Panduan} />
+      <Route path="/visitrw3/laporan">{() => <Redirect to="/lapor" />}</Route>
       <Route path="/visitrw3/login">{() => <Redirect to="/visitrw3/penyewa" />}</Route>
       <Route path="/visitrw3" component={Visitrw3Hub} />
 
@@ -448,8 +469,10 @@ function PublicRoutes() {
       <Route path="/rwcoin">{() => <Redirect to="/" />}</Route>
       <Route path="/tripay/:rest*">{() => <Redirect to="/" />}</Route>
       <Route path="/tripay">{() => <Redirect to="/" />}</Route>
-      <Route path="/singgah/:rest*">{() => <Redirect to="/visitrw3/penyewa" />}</Route>
-      <Route path="/singgah">{() => <Redirect to="/visitrw3/penyewa" />}</Route>
+      <Route path="/singgah/:rest*">
+        {(params) => <Redirect to={singgahLegacyRedirect(params["rest*"])} />}
+      </Route>
+      <Route path="/singgah">{() => <Redirect to="/visitrw3" />}</Route>
 
       <Route>{() => <Redirect to="/" />}</Route>
     </Switch>

@@ -23,6 +23,7 @@ import {
 } from "./visitrw3";
 import { loadVisitrw3SettingsRows, upsertVisitrw3Setting } from "./visitrw3-settings";
 import { visitrw3ApiErrorMessage } from "./visitrw3-api-error";
+import { invalidateVisitrw3Dashboard } from "./cache";
 import { ACTIVE_RT_NUMBERS } from "@shared/rt";
 
 const ktpDir = path.join(process.cwd(), "uploads", "visitrw3-ktp");
@@ -135,6 +136,7 @@ export function registerVisitrw3Routes(app: Express) {
   app.post("/api/public/visitrw3/daftar-properti", async (req, res) => {
     try {
       const properti = await createPendaftaranProperti(req.body);
+      invalidateVisitrw3Dashboard();
       res.json({
         nomorPendaftaran: properti.nomorPendaftaran,
         statusProperti: properti.statusProperti,
@@ -170,6 +172,7 @@ export function registerVisitrw3Routes(app: Express) {
     try {
       const id = parseInt(req.params.id as string, 10);
       const updated = await approveProperti(id, req.session.adminUsername || "admin", req.body ?? {});
+      invalidateVisitrw3Dashboard();
       res.json(updated);
     } catch (error: any) {
       res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Permintaan tidak valid") });
@@ -179,6 +182,7 @@ export function registerVisitrw3Routes(app: Express) {
   app.post("/api/public/visitrw3/pengajuan", async (req, res) => {
     try {
       const pengajuan = await createPengajuanBaru(req.body);
+      invalidateVisitrw3Dashboard();
       res.json({ nomorVisitrw3: pengajuan.nomorVisitrw3, status: pengajuan.status });
     } catch (error: unknown) {
       res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal mengirim pengajuan") });
@@ -188,6 +192,7 @@ export function registerVisitrw3Routes(app: Express) {
   app.post("/api/public/visitrw3/perpanjang", async (req, res) => {
     try {
       const result = await createPerpanjang(req.body);
+      invalidateVisitrw3Dashboard();
       res.json({
         nomorVisitrw3: result.nomorBaru,
         nomorLama: result.nomorLama,
@@ -292,6 +297,7 @@ export function registerVisitrw3Routes(app: Express) {
       const id = parseInt(req.params.id as string, 10);
       const adminUsername = req.session.adminUsername || "admin";
       const result = await approvePengajuan(id, adminUsername, req.body ?? {});
+      invalidateVisitrw3Dashboard();
       res.json(result);
     } catch (error: any) {
       res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Permintaan tidak valid") });
@@ -305,6 +311,7 @@ export function registerVisitrw3Routes(app: Express) {
       if (!alasan?.trim()) return res.status(400).json({ message: "Alasan penolakan wajib diisi" });
       const adminUsername = req.session.adminUsername || "admin";
       const result = await rejectPengajuan(id, adminUsername, alasan);
+      invalidateVisitrw3Dashboard();
       res.json(result);
     } catch (error: any) {
       res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Permintaan tidak valid") });

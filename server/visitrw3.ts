@@ -1147,35 +1147,15 @@ export async function rejectPengajuan(id: number, adminUsername: string, alasanT
 }
 
 export async function ensureVisitrw3Schema() {
-  try {
+  // CREATE dulu agar instalasi DB baru tidak gagal pada ALTER visitrw3_*.
   await pool.query(`
-    ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS izin_tinggal boolean NOT NULL DEFAULT true;
-    ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS izin_bisnis boolean NOT NULL DEFAULT false;
-    ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS jenis_properti text NOT NULL DEFAULT 'kost';
-    ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS nomor_pendaftaran text UNIQUE;
-    ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS status_properti text NOT NULL DEFAULT 'aktif';
-    ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS catatan_pemohon text;
-    ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS nama_penanggung_jawab text;
-    ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS nomor_wa_penanggung_jawab text;
-    ALTER TABLE warga_singgah ADD COLUMN IF NOT EXISTS nomor_visitrw3 text;
-    ALTER TABLE warga_singgah ADD COLUMN IF NOT EXISTS pengajuan_id integer;
-    ALTER TABLE warga_singgah ADD COLUMN IF NOT EXISTS termin_bulan integer;
-    ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS nomor_unit text;
-    ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS jenis_tempat_usaha text;
-    ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS jenis_tempat_usaha_lain text;
-    ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS tinggal_di_wilayah_rw3 boolean;
-    ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS jam_buka text;
-    ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS jam_tutup text;
-    ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS alamat_usaha text;
-    ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS persetujuan_tetangga text;
-    ALTER TABLE visitrw3_pengajuan ALTER COLUMN pemilik_kost_id DROP NOT NULL;
     CREATE TABLE IF NOT EXISTS visitrw3_pengajuan (
       id serial PRIMARY KEY,
       nomor_visitrw3 text NOT NULL UNIQUE,
       tipe text NOT NULL,
       status text NOT NULL DEFAULT 'menunggu_survey',
       keperluan_pengajuan text NOT NULL,
-      pemilik_kost_id integer NOT NULL REFERENCES pemilik_kost(id),
+      pemilik_kost_id integer REFERENCES pemilik_kost(id),
       rt integer NOT NULL,
       nama_usaha text,
       jenis_usaha text,
@@ -1220,32 +1200,48 @@ export async function ensureVisitrw3Schema() {
       keterangan text,
       updated_at timestamp DEFAULT now()
     );
+  `);
+
+  await pool.query(`
+    ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS izin_tinggal boolean NOT NULL DEFAULT true;
+    ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS izin_bisnis boolean NOT NULL DEFAULT false;
+    ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS jenis_properti text NOT NULL DEFAULT 'kost';
+    ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS nomor_pendaftaran text UNIQUE;
+    ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS status_properti text NOT NULL DEFAULT 'aktif';
+    ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS catatan_pemohon text;
+    ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS nama_penanggung_jawab text;
+    ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS nomor_wa_penanggung_jawab text;
+    ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS setuju_tata_tertib boolean NOT NULL DEFAULT false;
+    ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS settings_versi text;
+    ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS estimasi_kontribusi integer;
+    ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS kas_rw_id integer;
+    ALTER TABLE warga_singgah ADD COLUMN IF NOT EXISTS nomor_visitrw3 text;
+    ALTER TABLE warga_singgah ADD COLUMN IF NOT EXISTS pengajuan_id integer;
+    ALTER TABLE warga_singgah ADD COLUMN IF NOT EXISTS termin_bulan integer;
+    ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS nomor_unit text;
+    ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS jenis_tempat_usaha text;
+    ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS jenis_tempat_usaha_lain text;
+    ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS tinggal_di_wilayah_rw3 boolean;
+    ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS jam_buka text;
+    ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS jam_tutup text;
+    ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS alamat_usaha text;
+    ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS persetujuan_tetangga text;
     ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS setuju_tata_tertib boolean NOT NULL DEFAULT false;
     ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS settings_versi text;
     ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS estimasi_kontribusi integer;
     ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS rincian_kontribusi text;
-    ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS setuju_tata_tertib boolean NOT NULL DEFAULT false;
-    ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS settings_versi text;
-    ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS estimasi_kontribusi integer;
     ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS kas_rw_id integer;
-    ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS kas_rw_id integer;
+    ALTER TABLE visitrw3_pengajuan ALTER COLUMN pemilik_kost_id DROP NOT NULL;
   `);
+
   await seedVisitrw3Settings();
   await seedVisitrw3DevPropertiIfNeeded();
-  } catch (e) {
-    throw e;
-  }
 }
 
-/** Development: seed contoh properti hanya saat tabel pemilik_kost masih kosong (setup awal localhost). */
+/** Development: pastikan properti demo dev ada per nomorPendaftaran (upsert by nomor, bukan all-or-nothing). */
 export async function seedVisitrw3DevPropertiIfNeeded() {
   if (process.env.NODE_ENV === "production") return;
   if (process.env.SEED_VISITRW3_DEMO === "0") return;
-
-  const all = await db.select({ id: pemilikKost.id }).from(pemilikKost);
-  // Hanya seed saat tabel benar-benar kosong (setup awal dev).
-  // Jangan buat ulang demo setelah admin menghapus properti.
-  if (all.length > 0) return;
 
   const demoRows = [
     {
@@ -1284,13 +1280,20 @@ export async function seedVisitrw3DevPropertiIfNeeded() {
     },
   ] as const;
 
+  let inserted = 0;
   for (const row of demoRows) {
     const [existing] = await db
       .select({ id: pemilikKost.id })
       .from(pemilikKost)
       .where(eq(pemilikKost.nomorPendaftaran, row.nomorPendaftaran))
       .limit(1);
-    if (!existing) await db.insert(pemilikKost).values({ ...row });
+    if (!existing) {
+      await db.insert(pemilikKost).values({ ...row });
+      inserted++;
+    }
   }
-  console.log("[Visit RW3] Properti demo dev disiapkan (RT 01)");
+
+  if (inserted > 0) {
+    console.log(`[Visit RW3] Properti demo dev: ${inserted} baris ditambahkan`);
+  }
 }

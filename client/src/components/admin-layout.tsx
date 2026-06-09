@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import {
   Users, Megaphone, Scale,
-  LogOut, Menu, X, Building2, Wallet, FileText, BarChart3, Target,
+  LogOut, Menu, X, Building2, Wallet, FileText, BarChart3, Target, Droplets,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import logoGold from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
@@ -12,6 +12,7 @@ type NavItem = { path: string; icon: typeof Megaphone; label: string };
 
 const navFormWarga: NavItem[] = [
   { path: "/admin/laporan", icon: Megaphone, label: "Laporan" },
+  { path: "/admin/kekeringan", icon: Droplets, label: "Kekeringan" },
   { path: "/admin/visitrw3/antrian", icon: Building2, label: "Visit RW3" },
 ];
 
@@ -28,6 +29,7 @@ const navPengelolaan: NavItem[] = [
 
 function isNavActive(location: string, path: string): boolean {
   if (path === "/admin/laporan") return location === path || location.startsWith("/admin/laporan/");
+  if (path === "/admin/kekeringan") return location === path || location.startsWith("/admin/kekeringan/");
   if (path === "/admin/visitrw3/antrian") {
     return location === path || location.startsWith("/admin/visitrw3/");
   }

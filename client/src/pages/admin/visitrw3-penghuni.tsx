@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, getApiErrorMessage, getQueryFn, readJsonSafely } from "@/lib/queryClient";
+import { invalidateVisitrw3Queries } from "@/lib/visitrw3-invalidate";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -125,8 +126,7 @@ export default function AdminVisitrw3Penghuni() {
       return readJsonSafely(res);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/warga-singgah"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/visitrw3/kalender"] });
+      invalidateVisitrw3Queries(queryClient, { includeKas: false });
       toast({ title: "Berhasil", description: "Warga singgah berhasil ditambahkan" });
       resetForm();
     },
@@ -140,8 +140,7 @@ export default function AdminVisitrw3Penghuni() {
       return readJsonSafely(res);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/warga-singgah"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/visitrw3/kalender"] });
+      invalidateVisitrw3Queries(queryClient, { includeKas: false });
       toast({ title: "Berhasil", description: "Data warga singgah berhasil diperbarui" });
       resetForm();
     },
@@ -155,8 +154,7 @@ export default function AdminVisitrw3Penghuni() {
       return readJsonSafely(res);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/warga-singgah"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/visitrw3/kalender"] });
+      invalidateVisitrw3Queries(queryClient, { includeKas: false });
       toast({ title: "Berhasil", description: "Warga singgah berhasil dihapus" });
       setDeleteTarget(null);
     },
@@ -170,8 +168,7 @@ export default function AdminVisitrw3Penghuni() {
       return readJsonSafely(res);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/warga-singgah"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/visitrw3/kalender"] });
+      invalidateVisitrw3Queries(queryClient, { includeKas: false });
       toast({ title: "Berhasil", description: "Kontrak berhasil diperpanjang" });
       setPerpanjangTarget(null);
       setPerpanjangData({ tanggalMulaiBaru: "", tanggalHabisBaru: "" });

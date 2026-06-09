@@ -65,3 +65,8 @@ export function invalidateKk(): void {
   cache.invalidateByPrefix("dashboard:");
   cache.invalidateByPrefix("kependudukan:");
 }
+
+/** Statistik admin & transparansi publik (properti / penghuni Visit RW3). */
+export function invalidateVisitrw3Dashboard(): void {
+  cache.invalidateByPrefix("dashboard:");
+}

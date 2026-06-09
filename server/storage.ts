@@ -14,7 +14,7 @@ import { isPengangguran } from "./kependudukan-stats";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "./db";
 import {
-  kartuKeluarga, warga, rtData, laporan, suratWarga, suratRw,
+  kartuKeluarga, warga, rtData, laporan, laporanKekeringan, suratWarga, suratRw,
   profileEditRequest, adminUser, waBlast, waBlastRecipient, pengajuanBansos, donasiCampaign, donasi, kasRw,
   pemilikKost, wargaSinggah, riwayatKontrak, visitrw3Pengajuan, blusukanKunjungan,
   usaha, karyawanUsaha, izinTetangga, surveyUsaha, riwayatStiker, monthlySnapshot,
@@ -25,6 +25,7 @@ import {
   type Warga, type InsertWarga,
   type RtData, type InsertRtData,
   type Laporan, type InsertLaporan,
+  type LaporanKekeringan, type InsertLaporanKekeringan,
   type SuratWarga, type InsertSuratWarga,
   type SuratRw, type InsertSuratRw,
   type ProfileEditRequest, type InsertProfileEditRequest,
@@ -143,6 +144,18 @@ export interface IStorage {
   getLaporanById(id: number): Promise<Laporan | undefined>;
   createLaporan(data: InsertLaporan): Promise<Laporan>;
   updateLaporanStatus(id: number, status: string, tanggapan?: string): Promise<Laporan | undefined>;
+
+  getAllLaporanKekeringan(): Promise<LaporanKekeringan[]>;
+  getLaporanKekeringanById(id: number): Promise<LaporanKekeringan | undefined>;
+  getLaporanKekeringanByNomorAntrian(nomor: string): Promise<LaporanKekeringan | undefined>;
+  getLaporanKekeringanByNomorTiket(nomor: string): Promise<LaporanKekeringan | undefined>;
+  createLaporanKekeringan(data: InsertLaporanKekeringan): Promise<LaporanKekeringan>;
+  surveyLaporanKekeringan(
+    id: number,
+    opts: { catatanSurvey?: string; tanggalSurvey: string },
+  ): Promise<LaporanKekeringan | undefined>;
+  rejectLaporanKekeringan(id: number, catatanSurvey: string): Promise<LaporanKekeringan | undefined>;
+  selesaiLaporanKekeringan(id: number): Promise<LaporanKekeringan | undefined>;
 
   getSuratByKkId(kkId: number): Promise<SuratWarga[]>;
   getAllSuratWarga(): Promise<SuratWarga[]>;
@@ -753,6 +766,88 @@ export class DatabaseStorage implements IStorage {
     const updateData: any = { status };
     if (tanggapan !== undefined) updateData.tanggapanAdmin = tanggapan;
     const [result] = await db.update(laporan).set(updateData).where(eq(laporan.id, id)).returning();
+    return result;
+  }
+
+  async getAllLaporanKekeringan(): Promise<LaporanKekeringan[]> {
+    return db
+      .select()
+      .from(laporanKekeringan)
+      .orderBy(desc(laporanKekeringan.jumlahPenghuni), asc(laporanKekeringan.createdAt));
+  }
+
+  async getLaporanKekeringanById(id: number): Promise<LaporanKekeringan | undefined> {
+    const [result] = await db.select().from(laporanKekeringan).where(eq(laporanKekeringan.id, id));
+    return result;
+  }
+
+  async getLaporanKekeringanByNomorAntrian(nomor: string): Promise<LaporanKekeringan | undefined> {
+    const [result] = await db
+      .select()
+      .from(laporanKekeringan)
+      .where(eq(laporanKekeringan.nomorAntrian, nomor.trim().toUpperCase()));
+    return result;
+  }
+
+  async getLaporanKekeringanByNomorTiket(nomor: string): Promise<LaporanKekeringan | undefined> {
+    const [result] = await db
+      .select()
+      .from(laporanKekeringan)
+      .where(eq(laporanKekeringan.nomorTiket, nomor.trim().toUpperCase()));
+    return result;
+  }
+
+  async createLaporanKekeringan(data: InsertLaporanKekeringan): Promise<LaporanKekeringan> {
+    const [inserted] = await db
+      .insert(laporanKekeringan)
+      .values({ ...data, nomorAntrian: `TMP-${Date.now()}` })
+      .returning();
+    const nomorAntrian = `KRG-${inserted.id}`;
+    const [result] = await db
+      .update(laporanKekeringan)
+      .set({ nomorAntrian })
+      .where(eq(laporanKekeringan.id, inserted.id))
+      .returning();
+    return result;
+  }
+
+  async surveyLaporanKekeringan(
+    id: number,
+    opts: { catatanSurvey?: string; tanggalSurvey: string },
+  ): Promise<LaporanKekeringan | undefined> {
+    const nomorTiket = `TKT-KRG-${id}`;
+    const [result] = await db
+      .update(laporanKekeringan)
+      .set({
+        status: "tiket_keluar",
+        nomorTiket,
+        catatanSurvey: opts.catatanSurvey?.trim() || null,
+        tanggalSurvey: opts.tanggalSurvey,
+      })
+      .where(and(eq(laporanKekeringan.id, id), eq(laporanKekeringan.status, "menunggu_survey")))
+      .returning();
+    return result;
+  }
+
+  async rejectLaporanKekeringan(id: number, catatanSurvey: string): Promise<LaporanKekeringan | undefined> {
+    const [result] = await db
+      .update(laporanKekeringan)
+      .set({
+        status: "ditolak",
+        catatanSurvey: catatanSurvey.trim(),
+        tanggalSurvey: new Date().toISOString().slice(0, 10),
+      })
+      .where(and(eq(laporanKekeringan.id, id), eq(laporanKekeringan.status, "menunggu_survey")))
+      .returning();
+    return result;
+  }
+
+  async selesaiLaporanKekeringan(id: number): Promise<LaporanKekeringan | undefined> {
+    const [result] = await db
+      .update(laporanKekeringan)
+      .set({ status: "selesai" })
+      .where(and(eq(laporanKekeringan.id, id), eq(laporanKekeringan.status, "tiket_keluar")))
+      .returning();
     return result;
   }
 
