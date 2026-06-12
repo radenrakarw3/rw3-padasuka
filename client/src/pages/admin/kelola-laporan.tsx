@@ -398,7 +398,9 @@ export default function AdminKelolaLaporan() {
                     {sc.label}
                   </Badge>
                 </div>
-                <p className="text-xs whitespace-pre-wrap">{isiTampil || lap.isi}</p>
+                {isiTampil ? (
+                  <p className="text-xs whitespace-pre-wrap max-h-48 overflow-y-auto">{isiTampil}</p>
+                ) : null}
                 {lap.fotoLaporan && (
                   <img
                     src={lap.fotoLaporan.startsWith("data:") ? lap.fotoLaporan : `data:image/jpeg;base64,${lap.fotoLaporan}`}

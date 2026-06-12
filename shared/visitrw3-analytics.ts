@@ -1,5 +1,15 @@
 import { ACTIVE_RT_NUMBERS } from "@shared/rt";
 
+/** Properti seed lokal (PROP-DEV-*) — tidak dihitung statistik & tidak tampil publik. */
+export function isVisitrw3DemoProperti(row: { nomorPendaftaran?: string | null }): boolean {
+  const nomor = row.nomorPendaftaran?.trim() ?? "";
+  return nomor.startsWith("PROP-DEV-");
+}
+
+export function filterVisitrw3PropertiProduksi<T extends { nomorPendaftaran?: string | null }>(rows: T[]): T[] {
+  return rows.filter((r) => !isVisitrw3DemoProperti(r));
+}
+
 export type Visitrw3StatsRow = { label: string; count: number };
 
 export type Visitrw3DashboardStats = {

@@ -11,7 +11,7 @@ import {
   getPropertiByNomorPendaftaran,
   getPemilikKostPublic,
   approveProperti,
-  listPengajuanAdmin,
+  listPengajuanAdminEnriched,
   getPengajuanDetailAdmin,
   approvePengajuan,
   rejectPengajuan,
@@ -247,7 +247,7 @@ export function registerVisitrw3Routes(app: Express) {
   app.get("/api/admin/visitrw3/pengajuan", requireAdmin, async (req, res) => {
     try {
       const status = String(req.query.status || "menunggu_survey");
-      const list = await listPengajuanAdmin(status);
+      const list = await listPengajuanAdminEnriched(status);
       res.json(list);
     } catch (error: unknown) {
       res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat antrian pengajuan") });

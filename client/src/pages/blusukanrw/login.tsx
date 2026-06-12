@@ -18,7 +18,7 @@ export default function BlusukanrwLogin({ bootError }: { bootError?: string | nu
     setSubmitting(true);
     try {
       await login(pin);
-      setLocation("/blusukanrw/dashboard");
+      setLocation("/blusukanrw/quest");
     } catch (error: unknown) {
       setErr(error instanceof Error ? error.message : "Login gagal");
     } finally {

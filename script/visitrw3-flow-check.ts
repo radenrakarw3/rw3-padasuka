@@ -14,16 +14,6 @@ import {
   listPengajuanAdmin,
 } from "../server/visitrw3";
 
-function tetangga8() {
-  const pos = ["kanan", "kiri", "depan", "belakang"] as const;
-  const rows: { posisi: (typeof pos)[number]; slot: 1 | 2; namaWarga: string; nomorWhatsapp: string }[] = [];
-  for (const p of pos) {
-    rows.push({ posisi: p, slot: 1, namaWarga: `Warga ${p} A`, nomorWhatsapp: "081111111101" });
-    rows.push({ posisi: p, slot: 2, namaWarga: `Warga ${p} B`, nomorWhatsapp: "081111111102" });
-  }
-  return rows;
-}
-
 function randomNik() {
   const t = String(Date.now()).slice(-12);
   return `32${t}0001`.slice(0, 16);
@@ -105,7 +95,6 @@ async function main() {
         penanggungJawab: "PJ Bisnis Dalam",
         jumlahPenghuni: 1,
         ...baseBayar,
-        persetujuanTetangga: tetangga8(),
         penghuni: [
           {
             namaLengkap: "PJ Bisnis Dalam",
@@ -124,7 +113,7 @@ async function main() {
         ],
       });
       const detail = await getPengajuanDetailAdmin(p.id);
-      results.push({ name: "bisnis_dalam", ok: Boolean(detail?.pengajuan.persetujuanTetangga) });
+      results.push({ name: "bisnis_dalam", ok: Boolean(detail?.pengajuan.namaUsaha) });
     } catch (e) {
       const err = e instanceof Error ? e.message : String(e);
       results.push({ name: "bisnis_dalam", ok: false, err });
@@ -148,7 +137,6 @@ async function main() {
       alamatUsaha: "Jl. Test No. 1",
       jumlahPenghuni: 1,
       ...baseBayar,
-      persetujuanTetangga: tetangga8(),
       penghuni: [
         {
           namaLengkap: "PJ Luar",

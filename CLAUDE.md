@@ -78,6 +78,34 @@ SESSION_SECRET
 GEMINI_API_KEY
 ```
 
+## Environment Variables Opsional (WhatsApp / StarSender)
+
+```
+STARSENDER_API_KEY      # Wajib untuk kirim WA otomatis
+STARSENDER_DEVICE_ID    # Opsional — ID device StarSender
+PUBLIC_SITE_URL         # Default: https://rw3padasukacimahi.org (link di pesan WA)
+```
+
+Notifikasi otomatis via StarSender: Visit RW3 (pengajuan, approve/reject, pengingat kontrak H-7/H-1/habis), laporan masalah, laporan kekeringan. Modul: `server/wa-notify.ts`, `server/starsender.ts`.
+
+## Modul Propaganda (distribusi informasi WA)
+
+Halaman rahasia: `/admin/propaganda` (tidak di sidebar). Akses: login admin + PIN `1977` (`PROPAGANDA_PIN`).
+
+Sistem **Formula HELIX v2** (`shared/propaganda-helix.ts`) — gelombang mikro, interleave RT, seed deterministik, skor kemerataan. Tabel: `propaganda_campaign`, `propaganda_gelombang`, `propaganda_antrian`, `propaganda_log_kirim`, `propaganda_cooldown`. Dispatcher: klaim atomik `FOR UPDATE SKIP LOCKED`, audit log tiap kirim.
+
+```
+PROPAGANDA_PIN=1977
+PROPAGANDA_MIN_GAP_MS=15000
+PROPAGANDA_COOLDOWN_DAYS=7
+PROPAGANDA_MAX_PER_HOUR=40
+PROPAGANDA_MAX_PER_RT_HOUR=12
+PROPAGANDA_WAVE_MIN=15
+PROPAGANDA_WAVE_MAX=30
+PROPAGANDA_WAVE_REST_MS=600000
+PROPAGANDA_MAX_PER_BLAST=200
+```
+
 ---
 
 ## Catatan Penting

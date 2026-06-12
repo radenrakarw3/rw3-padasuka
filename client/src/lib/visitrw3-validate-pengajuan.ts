@@ -1,8 +1,6 @@
 import { visitrw3JenjangAnakOptions } from "./constants";
 import { joinPlatNomor, isPlatLengkap } from "./visitrw3-plat";
 import type { KendaraanRow } from "./visitrw3-kendaraan";
-import type { PersetujuanTetanggaRow } from "./visitrw3-tetangga";
-import { VISITRW3_TETANGGA_SLOTS } from "./visitrw3-tetangga";
 
 export type PenghuniDraft = {
   namaLengkap: string;
@@ -118,15 +116,6 @@ export function validateStepJumlah(jumlahDewasa: number) {
   return null;
 }
 
-export function validatePersetujuanTetangga(rows: PersetujuanTetanggaRow[]): string | null {
-  for (const slot of VISITRW3_TETANGGA_SLOTS) {
-    const row = rows.find((r) => r.posisi === slot.posisi && r.slot === slot.slot);
-    if (!row?.namaWarga.trim()) return `${slot.label}: nama warga wajib diisi`;
-    if (!row.nomorWhatsapp.trim()) return `${slot.label}: nomor WhatsApp wajib diisi`;
-  }
-  return null;
-}
-
 export function validateSinglePenghuni(
   p: PenghuniDraft,
   keperluan: "tinggal" | "bisnis",
@@ -181,15 +170,6 @@ export function validatePenghuniList(
       return `${who}: ${err}`;
     }
   }
-  return null;
-}
-
-export function validateSingleTetangga(
-  slot: { label: string },
-  row: PersetujuanTetanggaRow | undefined,
-): string | null {
-  if (!row?.namaWarga.trim()) return `Isi nama warga (${slot.label})`;
-  if (!row.nomorWhatsapp.trim()) return `Isi nomor WhatsApp (${slot.label})`;
   return null;
 }
 

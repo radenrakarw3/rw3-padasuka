@@ -13,11 +13,32 @@ import { pool } from "./db";
 import { cache, CacheKey, TTL, invalidateWarga, invalidateKk, invalidateVisitrw3Dashboard } from "./cache";
 import { insertKkSchema, patchKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertPengajuanBansosSchema, insertDonasiCampaignSchema, insertDonasiSchema, insertKasRwSchema, insertPemilikKostSchema, insertWargaSinggahSchema, insertUsahaSchema, insertKaryawanUsahaSchema, insertIzinTetanggaSchema, insertSurveyUsahaSchema, insertProgramRwSchema, insertPesertaProgramSchema, insertProyekInfrastrukturSchema, insertUmkmMakeoverSchema } from "@shared/schema";
 import { buildProgramKerjaDashboard } from "@shared/program-kerja-analytics";
-import { formatLaporanRef } from "@shared/program-kerja";
+import { formatLaporanRef, subJenisInfrastrukturOptions } from "@shared/program-kerja";
+import { filterVisitrw3PropertiProduksi } from "@shared/visitrw3-analytics";
 import { getBlusukanDashboard } from "./blusukan";
 import { z } from "zod";
 import { ACTIVE_RT_NUMBERS, isActiveRt, assertKkInPemukimanScope } from "@shared/rt";
-import { formatLaporanKioskIsi, formatRtLabel } from "@shared/laporan-pelapor";
+import {
+  formatLaporanAnonimIsi,
+  formatLaporanKioskIsi,
+  formatRtLabel,
+  parseLaporanPelaporMeta,
+} from "@shared/laporan-pelapor";
+import {
+  jenisLaporanMasalahLabel,
+  publicLaporanSchema,
+} from "@shared/laporan-public-form";
+import {
+  notifyLaporanBaruKeKetuaRt,
+  notifyLaporanDiterima,
+  notifyLaporanStatusForRecord,
+  notifyKekeringanDiterima,
+  notifyKekeringanTiketKeluar,
+  notifyKekeringanSelesai,
+  notifyKekeringanDitolak,
+  ensureWaNotifikasiSchema,
+  startVisitrw3ReminderScheduler,
+} from "./wa-notify";
 import { generateWithGemini } from "./gemini";
 import { buildKependudukanStats } from "./kependudukan-stats";
 import { isFieldFilled } from "@shared/kependudukan-analytics";
@@ -45,6 +66,8 @@ declare module "express-session" {
     adminNama?: string;
     blusukanAuth?: boolean;
     blusukanLoginAt?: number;
+    propagandaAuth?: boolean;
+    propagandaLoginAt?: number;
   }
 }
 
@@ -138,6 +161,10 @@ export async function registerRoutes(
   await ensureVisitrw3Schema().catch((error) => {
     console.error("Visit RW3 schema init error:", error);
   });
+  await ensureWaNotifikasiSchema().catch((error) => {
+    console.error("WA notifikasi schema init error:", error);
+  });
+  startVisitrw3ReminderScheduler();
   await pool
     .query(`
       CREATE TABLE IF NOT EXISTS laporan_kekeringan (
@@ -201,6 +228,11 @@ export async function registerRoutes(
 
   const { registerBlusukanRoutes } = await import("./blusukan-routes");
   await registerBlusukanRoutes(app);
+
+  const { registerPropagandaRoutes } = await import("./propaganda-routes");
+  await registerPropagandaRoutes(app);
+  const { startPropagandaDispatcher } = await import("./propaganda-dispatcher");
+  startPropagandaDispatcher();
 
   const { registerRw3lawRoutes } = await import("./rw3law-routes");
   registerRw3lawRoutes(app);
@@ -653,19 +685,6 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
     nomorWa: z.string().min(9, "Nomor WhatsApp tidak valid"),
   });
 
-  const publicLaporanSchema = z.object({
-    namaPelapor: z.string().min(2, "Nama pelapor wajib diisi"),
-    nomorRt: z.coerce.number().int().refine((n) => (ACTIVE_RT_NUMBERS as readonly number[]).includes(n), {
-      message: "RT tidak valid",
-    }),
-    nomorWa: z.string().min(9, "Nomor WhatsApp tidak valid"),
-    jenisLaporan: z.string().min(1),
-    subJenis: z.string().optional(),
-    fotoLaporan: z.string().optional(),
-    judul: z.string().min(3),
-    isi: z.string().min(10),
-  });
-
   app.post("/api/public/validate-warga", async (req, res) => {
     try {
       const parsed = publicWargaIdentitySchema.parse(req.body);
@@ -698,20 +717,44 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
   app.post("/api/public/laporan", async (req, res) => {
     try {
       const parsed = publicLaporanSchema.parse(req.body);
-      const nomorWa = parsed.nomorWa.trim();
+      const anonim = parsed.mode === "anonim";
+      const jenisLabel = jenisLaporanMasalahLabel(parsed.jenisLaporan);
+      const subJenisLabel = parsed.subJenis
+        ? subJenisInfrastrukturOptions.find((o) => o.value === parsed.subJenis)?.label
+        : undefined;
+
+      const judul = anonim
+        ? `Laporan ${jenisLabel} (Anonim)`
+        : parsed.judul!.trim();
+
+      const isi = anonim
+        ? formatLaporanAnonimIsi({ nomorRt: parsed.nomorRt, isi: parsed.isi })
+        : formatLaporanKioskIsi({
+            namaPelapor: parsed.namaPelapor!.trim(),
+            nomorRt: parsed.nomorRt,
+            nomorWa: parsed.nomorWa!.trim(),
+            isi: parsed.isi,
+          });
 
       const data = await storage.createLaporan({
         jenisLaporan: parsed.jenisLaporan,
         subJenis: parsed.subJenis,
         fotoLaporan: parsed.fotoLaporan,
-        judul: parsed.judul,
-        isi: formatLaporanKioskIsi({
-          namaPelapor: parsed.namaPelapor,
-          nomorRt: parsed.nomorRt,
-          nomorWa,
-          isi: parsed.isi,
-        }),
+        judul,
+        isi,
       });
+
+      notifyLaporanBaruKeKetuaRt(data, parsed.nomorRt, {
+        anonim,
+        namaPelapor: anonim ? undefined : parsed.namaPelapor?.trim(),
+        nomorWaPelapor: anonim ? undefined : parsed.nomorWa?.trim(),
+        jenisLabel,
+        subJenisLabel,
+      });
+
+      if (!anonim && parsed.nomorWa?.trim()) {
+        notifyLaporanDiterima(data, parsed.nomorWa.trim(), parsed.namaPelapor?.trim());
+      }
 
       return res.json({ ...data, nomorReferensi: formatLaporanRef(data.id) });
     } catch (error: any) {
@@ -756,7 +799,7 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
     try {
       const laporanStats = await storage.getLaporanStats();
       const blusukan = await getBlusukanDashboard();
-      const properti = await storage.getAllPemilikKost();
+      const properti = filterVisitrw3PropertiProduksi(await storage.getAllPemilikKost());
       const penghuni = await storage.getAllWargaSinggah();
       const penghuniAktif = penghuni.filter((p) => p.status === "aktif").length;
       const programs = await storage.getPublicProgramKerja();
@@ -818,6 +861,8 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
     const data = await storage.updateLaporanStatus(parseInt(req.params.id as string), status, tanggapan);
     if (!data) return res.status(404).json({ message: "Laporan tidak ditemukan" });
 
+    notifyLaporanStatusForRecord(data, status);
+
     res.json(data);
   });
 
@@ -843,6 +888,7 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
         jumlahPenghuni: parsed.jumlahPenghuni,
         keterangan: parsed.keterangan?.trim() || null,
       });
+      notifyKekeringanDiterima(data);
       return res.json({
         id: data.id,
         nomorAntrian: data.nomorAntrian,
@@ -891,6 +937,7 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
         : new Date().toISOString().slice(0, 10);
       const data = await storage.surveyLaporanKekeringan(id, { catatanSurvey, tanggalSurvey: tanggal });
       if (!data) return res.status(404).json({ message: "Laporan tidak ditemukan atau sudah diproses" });
+      notifyKekeringanTiketKeluar(data);
       res.json(data);
     } catch (error: any) {
       res.status(400).json({ message: error.message || "Gagal menyimpan survey" });
@@ -905,6 +952,7 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
       if (!alasan) return res.status(400).json({ message: "Alasan penolakan wajib diisi" });
       const data = await storage.rejectLaporanKekeringan(id, alasan);
       if (!data) return res.status(404).json({ message: "Laporan tidak ditemukan atau sudah diproses" });
+      notifyKekeringanDitolak(data, alasan);
       res.json(data);
     } catch (error: any) {
       res.status(400).json({ message: error.message || "Gagal menolak laporan" });
@@ -916,6 +964,7 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
     if (isNaN(id)) return res.status(400).json({ message: "ID tidak valid" });
     const data = await storage.selesaiLaporanKekeringan(id);
     if (!data) return res.status(404).json({ message: "Laporan tidak ditemukan atau belum ada tiket" });
+    notifyKekeringanSelesai(data);
     res.json(data);
   });
 
@@ -1527,6 +1576,18 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
     }
   });
 
+  app.post("/api/kas-rw/reset", requireAdmin, async (req, res) => {
+    try {
+      if (req.body?.confirm !== "RESET") {
+        return res.status(400).json({ message: 'Ketik konfirmasi "RESET" untuk mengosongkan semua transaksi Kas RW' });
+      }
+      const result = await storage.resetAllKasRw();
+      res.json({ message: "Kas RW direset ke nol", ...result });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // === Iuran Routes ===
 
   app.get("/api/iuran/setting", requireAdmin, async (_req, res) => {
@@ -1658,7 +1719,10 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
   app.post("/api/pemilik-kost", requireAdmin, async (req, res) => {
     try {
       const parsed = insertPemilikKostSchema.parse(req.body);
-      const result = await storage.createPemilikKost(parsed);
+      const result = await storage.createPemilikKost({
+        ...parsed,
+        statusProperti: "menunggu_verifikasi",
+      });
       invalidateVisitrw3Dashboard();
       res.json(result);
     } catch (error: any) {

@@ -10,6 +10,7 @@ import { apiRequest, getApiErrorMessage, readJsonSafely } from "@/lib/queryClien
 import { Loader2 } from "lucide-react";
 import { SuccessPanel } from "@/components/gov/success-panel";
 import { Visitrw3SyaratPanel } from "@/components/gov/visitrw3-syarat-panel";
+import { FeatureExplain } from "@/components/gov/feature-explain";
 import { settingsRowsToMap } from "@/lib/visitrw3-kontribusi";
 
 const TERMIN_OPTIONS = [
@@ -117,9 +118,17 @@ export default function Visitrw3Perpanjang() {
 
   return (
     <Visitrw3Shell title="Perpanjang izin" backHref="/visitrw3/penyewa">
-      <p className="prose-gov mb-4">
-        Masukkan nomor Visit RW3 yang sudah disetujui. Perpanjang tetap memerlukan persetujuan admin setelah survey.
-      </p>
+      <FeatureExplain title="Kapan pakai perpanjang?" className="mb-4">
+        <p>
+          Hanya untuk izin Visit RW3 yang <strong>sudah pernah disetujui</strong> dan ingin
+          diperpanjang masa berlakunya. Masukkan nomor <strong>VRW3-…</strong> lama, lalu isi tanggal
+          bayar & termin baru.
+        </p>
+        <p>
+          <strong>Bukan untuk pengajuan pertama.</strong> Kalau belum punya nomor VRW3, gunakan menu
+          Pengajuan baru. Perpanjang tetap diverifikasi admin setelah survey.
+        </p>
+      </FeatureExplain>
       <form
         className="space-y-4"
         onSubmit={(e) => {

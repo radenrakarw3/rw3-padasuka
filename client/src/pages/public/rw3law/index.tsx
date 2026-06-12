@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2, RefreshCw, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Rw3lawLayout } from "@/components/gov/rw3law-layout";
+import { FeatureExplain } from "@/components/gov/feature-explain";
 import {
   Select,
   SelectContent,
@@ -85,6 +86,18 @@ export default function Rw3lawIndex() {
           warga.
         </p>
       </div>
+
+      <FeatureExplain title="Untuk warga RW 03" className="mb-6">
+        <p>
+          RW3LAW berisi peraturan resmi lingkungan RW — tentang ketertiban, kebersihan, hewan
+          peliharaan, renovasi rumah, dan lainnya. Baca peraturan yang masih berlaku dan patuhi
+          sebagai pedoman hidup bertetangga.
+        </p>
+        <p>
+          Peraturan yang sudah dicabut tetap bisa dibuka sebagai arsip. Klik judul peraturan untuk
+          membaca teks lengkap.
+        </p>
+      </FeatureExplain>
 
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1.5 min-w-[200px]">

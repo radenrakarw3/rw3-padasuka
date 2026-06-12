@@ -1,11 +1,10 @@
 import { cn } from "@/lib/utils";
 
-export type BlusukanPanel = "kk" | "anggota" | "kunjungan";
+export type BlusukanPanel = "kk" | "anggota";
 
 const panels: { id: BlusukanPanel; label: string }[] = [
   { id: "kk", label: "KK" },
   { id: "anggota", label: "Anggota" },
-  { id: "kunjungan", label: "Kunjungan" },
 ];
 
 export function BlusukanPanelNav({

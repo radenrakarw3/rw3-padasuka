@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { PublicKioskLayout } from "@/components/public-kiosk-layout";
+import { FeatureExplain } from "@/components/gov/feature-explain";
 import { GovStatistic, GovStatisticRow, GovStatisticSection } from "@/components/gov/statistic";
 import type { TransparansiPublik } from "@shared/program-kerja-analytics";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,9 +16,11 @@ export default function PublicTransparansi() {
 
   return (
     <PublicKioskLayout title="Transparansi Capaian" backHref="/program">
-      <p className="prose-gov mb-4">
-        Ringkasan capaian program RW yang aman dipublikasikan. Data per KK tidak ditampilkan.
-      </p>
+      <FeatureExplain title="Data transparansi untuk warga" className="mb-4">
+        Ringkasan capaian program RW yang aman dipublikasikan — jumlah laporan, properti Visit RW3,
+        penghuni aktif, dan kelengkapan data sensus. Data pribadi per keluarga tidak ditampilkan di
+        halaman ini.
+      </FeatureExplain>
 
       {isLoading ? (
         <div className="space-y-3">

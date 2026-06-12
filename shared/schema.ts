@@ -261,6 +261,139 @@ export const waBlastRecipient = pgTable("wa_blast_recipient", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const PROPAGANDA_PROFIL = [
+  "cepat_aman",
+  "standar",
+  "merata",
+  "hati_hati",
+  "sangat_hati_hati",
+] as const;
+
+export type PropagandaProfil = (typeof PROPAGANDA_PROFIL)[number];
+
+export const PROPAGANDA_CAMPAIGN_STATUS = [
+  "draft",
+  "berjalan",
+  "jeda",
+  "selesai",
+  "dibatalkan",
+  "gagal",
+] as const;
+
+export const PROPAGANDA_ANTrian_STATUS = [
+  "menunggu",
+  "mengirim",
+  "terkirim",
+  "gagal",
+  "dilewati",
+  "dibatalkan",
+] as const;
+
+export const propagandaCampaign = pgTable("propaganda_campaign", {
+  id: serial("id").primaryKey(),
+  judul: text("judul").notNull(),
+  pesanTemplate: text("pesan_template").notNull(),
+  filterJson: text("filter_json").notNull().default("{}"),
+  profilDistribusi: text("profil_distribusi").notNull().default("standar"),
+  formulaVersi: text("formula_versi").notNull().default("helix-v2"),
+  distribusiPlanJson: text("distribusi_plan_json"),
+  helixSeed: text("helix_seed"),
+  fairnessScore: integer("fairness_score"),
+  abaikanCooldown: boolean("abaikan_cooldown").notNull().default(false),
+  status: text("status").notNull().default("draft"),
+  jumlahTarget: integer("jumlah_target").notNull().default(0),
+  jumlahTerkirim: integer("jumlah_terkirim").notNull().default(0),
+  jumlahGagal: integer("jumlah_gagal").notNull().default(0),
+  jumlahDilewati: integer("jumlah_dilewati").notNull().default(0),
+  jumlahMenunggu: integer("jumlah_menunggu").notNull().default(0),
+  jumlahGelombang: integer("jumlah_gelombang").notNull().default(0),
+  mulaiKirim: timestamp("mulai_kirim"),
+  estimasiSelesai: timestamp("estimasi_selesai"),
+  selesaiKirim: timestamp("selesai_kirim"),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const propagandaGelombang = pgTable("propaganda_gelombang", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id").notNull().references(() => propagandaCampaign.id, { onDelete: "cascade" }),
+  nomorGelombang: integer("nomor_gelombang").notNull(),
+  jumlahSlot: integer("jumlah_slot").notNull().default(0),
+  jumlahTerkirim: integer("jumlah_terkirim").notNull().default(0),
+  jumlahGagal: integer("jumlah_gagal").notNull().default(0),
+  jadwalMulai: timestamp("jadwal_mulai").notNull(),
+  jadwalSelesai: timestamp("jadwal_selesai").notNull(),
+  istirahatSesudahMs: integer("istirahat_sesudah_ms").notNull().default(0),
+  perRtJson: text("per_rt_json").notNull().default("{}"),
+  status: text("status").notNull().default("menunggu"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const propagandaAntrian = pgTable(
+  "propaganda_antrian",
+  {
+    id: serial("id").primaryKey(),
+    campaignId: integer("campaign_id").notNull().references(() => propagandaCampaign.id, { onDelete: "cascade" }),
+    gelombangId: integer("gelombang_id").references(() => propagandaGelombang.id, { onDelete: "set null" }),
+    wargaId: integer("warga_id"),
+    kkId: integer("kk_id"),
+    nama: text("nama").notNull(),
+    nomorWhatsapp: text("nomor_whatsapp").notNull(),
+    rt: integer("rt"),
+    pesan: text("pesan").notNull(),
+    jadwalKirim: timestamp("jadwal_kirim").notNull(),
+    urutanGlobal: integer("urutan_global").notNull().default(0),
+    urutanDalamGelombang: integer("urutan_dalam_gelombang").notNull().default(0),
+    status: text("status").notNull().default("menunggu"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    lastError: text("last_error"),
+    claimedAt: timestamp("claimed_at"),
+    sentAt: timestamp("sent_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    campaignPhoneUniq: uniqueIndex("propaganda_antrian_campaign_phone_idx").on(
+      table.campaignId,
+      table.nomorWhatsapp,
+    ),
+  }),
+);
+
+export const propagandaLogKirim = pgTable("propaganda_log_kirim", {
+  id: serial("id").primaryKey(),
+  antrianId: integer("antrian_id").references(() => propagandaAntrian.id, { onDelete: "set null" }),
+  campaignId: integer("campaign_id").notNull().references(() => propagandaCampaign.id, { onDelete: "cascade" }),
+  gelombangId: integer("gelombang_id").references(() => propagandaGelombang.id, { onDelete: "set null" }),
+  nomorWhatsapp: text("nomor_whatsapp").notNull(),
+  status: text("status").notNull(),
+  responseJson: text("response_json"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const propagandaCooldown = pgTable("propaganda_cooldown", {
+  nomorWhatsapp: text("nomor_whatsapp").primaryKey(),
+  lastCampaignId: integer("last_campaign_id").references(() => propagandaCampaign.id, { onDelete: "set null" }),
+  lastSentAt: timestamp("last_sent_at").notNull().defaultNow(),
+  totalTerkirim: integer("total_terkirim").notNull().default(1),
+});
+
+export const waNotifikasiLog = pgTable(
+  "wa_notifikasi_log",
+  {
+    id: serial("id").primaryKey(),
+    eventKey: text("event_key").notNull(),
+    nomorWhatsapp: text("nomor_whatsapp").notNull(),
+    referenceType: text("reference_type"),
+    referenceId: integer("reference_id"),
+    status: text("status").notNull(),
+    errorMessage: text("error_message"),
+    sentAt: timestamp("sent_at").defaultNow(),
+  },
+  (table) => ({
+    eventPhoneIdx: uniqueIndex("wa_notifikasi_log_event_phone_idx").on(table.eventKey, table.nomorWhatsapp),
+  }),
+);
+
 export const pengajuanBansos = pgTable("pengajuan_bansos", {
   id: serial("id").primaryKey(),
   kkId: integer("kk_id").notNull().references(() => kartuKeluarga.id),
@@ -316,7 +449,7 @@ export const pemilikKost = pgTable("pemilik_kost", {
   izinTinggal: boolean("izin_tinggal").notNull().default(true),
   izinBisnis: boolean("izin_bisnis").notNull().default(false),
   jenisProperti: text("jenis_properti").notNull().default("kost"),
-  statusProperti: text("status_properti").notNull().default("aktif"),
+  statusProperti: text("status_properti").notNull().default("menunggu_verifikasi"),
   catatanPemohon: text("catatan_pemohon"),
   setujuTataTertib: boolean("setuju_tata_tertib").notNull().default(false),
   settingsVersi: text("settings_versi"),
@@ -461,6 +594,46 @@ export const insertBlusukanKunjunganSchema = createInsertSchema(blusukanKunjunga
   hasil: z.enum(BLUSUKAN_HASIL),
   catatan: z.string().nullable().optional(),
   petugasLabel: z.string().nullable().optional(),
+});
+
+export const BLUSUKAN_QUEST_STATUS = ["aktif", "selesai"] as const;
+export type BlusukanQuestStatus = (typeof BLUSUKAN_QUEST_STATUS)[number];
+
+export const blusukanQuest = pgTable("blusukan_quest", {
+  id: serial("id").primaryKey(),
+  judul: text("judul").notNull(),
+  perihal: text("perihal").notNull(),
+  targetWargaId: integer("target_warga_id").references(() => warga.id),
+  targetWargaNama: text("target_warga_nama"),
+  targetKkId: integer("target_kk_id").references(() => kartuKeluarga.id),
+  deadline: text("deadline").notNull(),
+  progres: integer("progres").notNull().default(0),
+  catatan: text("catatan"),
+  status: text("status").notNull().default("aktif"),
+  catatanSelesai: text("catatan_selesai"),
+  selesaiAt: timestamp("selesai_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertBlusukanQuestSchema = createInsertSchema(blusukanQuest).omit({
+  id: true,
+  createdAt: true,
+  selesaiAt: true,
+}).extend({
+  judul: z.string().min(1, "Judul quest wajib diisi"),
+  perihal: z.string().min(1, "Perihal quest wajib diisi"),
+  targetWargaId: z.number().int().positive().nullable().optional(),
+  targetWargaNama: z.string().nullable().optional(),
+  targetKkId: z.number().int().positive().nullable().optional(),
+  deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format deadline: YYYY-MM-DD"),
+  progres: z.number().int().min(0).max(100).optional(),
+  catatan: z.string().nullable().optional(),
+  status: z.enum(BLUSUKAN_QUEST_STATUS).optional(),
+  catatanSelesai: z.string().nullable().optional(),
+});
+
+export const patchBlusukanQuestSchema = insertBlusukanQuestSchema.partial().extend({
+  status: z.enum(BLUSUKAN_QUEST_STATUS).optional(),
 });
 
 const insertKkBaseSchema = createInsertSchema(kartuKeluarga).omit({ id: true, createdAt: true });
@@ -678,6 +851,13 @@ export type WaBlast = typeof waBlast.$inferSelect;
 export type InsertWaBlast = z.infer<typeof insertWaBlastSchema>;
 export type WaBlastRecipient = typeof waBlastRecipient.$inferSelect;
 export type InsertWaBlastRecipient = typeof waBlastRecipient.$inferInsert;
+export type WaNotifikasiLog = typeof waNotifikasiLog.$inferSelect;
+export type InsertWaNotifikasiLog = typeof waNotifikasiLog.$inferInsert;
+export type PropagandaCampaign = typeof propagandaCampaign.$inferSelect;
+export type PropagandaGelombang = typeof propagandaGelombang.$inferSelect;
+export type PropagandaAntrian = typeof propagandaAntrian.$inferSelect;
+export type PropagandaLogKirim = typeof propagandaLogKirim.$inferSelect;
+export type PropagandaCooldown = typeof propagandaCooldown.$inferSelect;
 export type PengajuanBansos = typeof pengajuanBansos.$inferSelect;
 export type InsertPengajuanBansos = z.infer<typeof insertPengajuanBansosSchema>;
 export type DonasiCampaign = typeof donasiCampaign.$inferSelect;
@@ -1221,6 +1401,8 @@ export type RiwayatKontrak = typeof riwayatKontrak.$inferSelect;
 export type InsertRiwayatKontrak = z.infer<typeof insertRiwayatKontrakSchema>;
 export type BlusukanKunjungan = typeof blusukanKunjungan.$inferSelect;
 export type InsertBlusukanKunjungan = z.infer<typeof insertBlusukanKunjunganSchema>;
+export type BlusukanQuest = typeof blusukanQuest.$inferSelect;
+export type InsertBlusukanQuest = z.infer<typeof insertBlusukanQuestSchema>;
 export type Visitrw3Pengajuan = typeof visitrw3Pengajuan.$inferSelect;
 export type Visitrw3Settings = typeof visitrw3Settings.$inferSelect;
 export type Visitrw3Penghuni = typeof visitrw3Penghuni.$inferSelect;

@@ -1,11 +1,11 @@
 import { useLocation } from "wouter";
-import { LayoutDashboard, Home, Search, LogOut } from "lucide-react";
+import { Swords, MessageSquareWarning, Search, LogOut } from "lucide-react";
 import logoGold from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
 import { useBlusukanAuth } from "@/lib/blusukan-auth";
 
 const navItems = [
-  { path: "/blusukanrw/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { path: "/blusukanrw/kunjungan", icon: Home, label: "Kunjungan" },
+  { path: "/blusukanrw/quest", icon: Swords, label: "Quest RW" },
+  { path: "/blusukanrw/laporan", icon: MessageSquareWarning, label: "Laporan" },
   { path: "/blusukanrw/cari", icon: Search, label: "Cari" },
 ];
 

@@ -5,6 +5,7 @@ import { toWaMeUrl } from "@/lib/wa";
 import { readJsonSafely } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { PublicKioskLayout } from "@/components/public-kiosk-layout";
+import { FeatureExplain } from "@/components/gov/feature-explain";
 import { StatusBadge } from "@/components/gov/status-badge";
 import { ACTIVE_RT_NUMBERS } from "@shared/rt";
 
@@ -84,7 +85,12 @@ export default function PublicPelayanan() {
         </div>
       ) : (
         <>
-          <p className="prose-gov mb-4">Langkah 1 dari 2 · Pilih RT tempat Anda membutuhkan pelayanan.</p>
+          <FeatureExplain title="Untuk urusan apa?" className="mb-4">
+            Hubungi ketua RT wilayah Anda untuk konsultasi pelayanan warga — misalnya surat
+            keterangan, koordinasi lingkungan, atau hal yang perlu ditindaklanjuti di tingkat RT.
+            Pilih RT sesuai tempat tinggal Anda, lalu lanjut chat WhatsApp.
+          </FeatureExplain>
+          <p className="text-caption text-muted-foreground mb-3">Langkah 1 dari 2 · Pilih RT</p>
           <div className="space-y-2" role="list">
             {rtList.map((item) => (
               <button

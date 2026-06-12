@@ -16,7 +16,7 @@ import { db } from "./db";
 import {
   kartuKeluarga, warga, rtData, laporan, laporanKekeringan, suratWarga, suratRw,
   profileEditRequest, adminUser, waBlast, waBlastRecipient, pengajuanBansos, donasiCampaign, donasi, kasRw,
-  pemilikKost, wargaSinggah, riwayatKontrak, visitrw3Pengajuan, blusukanKunjungan,
+  pemilikKost, wargaSinggah, riwayatKontrak, visitrw3Pengajuan, blusukanKunjungan, blusukanQuest,
   usaha, karyawanUsaha, izinTetangga, surveyUsaha, riwayatStiker, monthlySnapshot,
   programRw, pesertaProgram, proyekInfrastruktur, umkmMakeover,
   mitra, rwcoinWallet, rwcoinTransaksi, mitraVoucher, mitraDiskon, rwcoinWithdraw, rwcoinOtp, rwcoinPendingTransaksi, kasRwcoin, rwcoinTopupRequest, wargaSavedLogin, curhatWarga, tripayTransaction,
@@ -53,6 +53,7 @@ import {
   type RwcoinTopupRequest, type CurhatWarga,
   type IuranKk, type IuranSetting, type RwcoinSettings,
   type BlusukanKunjungan, type InsertBlusukanKunjungan,
+  type BlusukanQuest, type InsertBlusukanQuest,
 } from "@shared/schema";
 
 function normalizeStoredPhone(phone?: string | null): string | null {
@@ -144,6 +145,7 @@ export interface IStorage {
   getLaporanById(id: number): Promise<Laporan | undefined>;
   createLaporan(data: InsertLaporan): Promise<Laporan>;
   updateLaporanStatus(id: number, status: string, tanggapan?: string): Promise<Laporan | undefined>;
+  deleteLaporan(id: number): Promise<boolean>;
 
   getAllLaporanKekeringan(): Promise<LaporanKekeringan[]>;
   getLaporanKekeringanById(id: number): Promise<LaporanKekeringan | undefined>;
@@ -194,6 +196,11 @@ export interface IStorage {
   getBlusukanKunjunganByKkId(kkId: number, limit?: number): Promise<BlusukanKunjungan[]>;
   createBlusukanKunjungan(data: InsertBlusukanKunjungan): Promise<BlusukanKunjungan>;
 
+  getBlusukanQuests(status?: "aktif" | "selesai"): Promise<BlusukanQuest[]>;
+  getBlusukanQuestById(id: number): Promise<BlusukanQuest | undefined>;
+  createBlusukanQuest(data: InsertBlusukanQuest): Promise<BlusukanQuest>;
+  updateBlusukanQuest(id: number, data: Partial<InsertBlusukanQuest>): Promise<BlusukanQuest | undefined>;
+
   getAdminByUsername(username: string): Promise<AdminUser | undefined>;
   getAllAdmins(): Promise<AdminUser[]>;
   createAdmin(data: InsertAdminUser): Promise<AdminUser>;
@@ -235,6 +242,7 @@ export interface IStorage {
   createKasRw(data: InsertKasRw): Promise<KasRw>;
   updateKasRw(id: number, data: Partial<InsertKasRw>): Promise<KasRw | undefined>;
   deleteKasRw(id: number): Promise<void>;
+  resetAllKasRw(): Promise<{ deleted: number }>;
   getKasRwSummary(): Promise<{ totalPemasukan: number; totalPengeluaran: number; saldo: number }>;
   getKasRwCampaignSummary(): Promise<Record<number, { pemasukan: number; pengeluaran: number; saldo: number }>>;
 
@@ -271,6 +279,7 @@ export interface IStorage {
   deleteWargaSinggah(id: number): Promise<void>;
   perpanjangKontrak(id: number, tanggalMulaiBaru: string, tanggalHabisBaru: string): Promise<WargaSinggah | undefined>;
   getWargaSinggahMendekatiHabis(hari: number): Promise<(WargaSinggah & { namaKost: string; namaPemilik: string; nomorWaPemilik: string })[]>;
+  getWargaSinggahKontrakPadaTanggal(offsetHari: number): Promise<(WargaSinggah & { namaKost: string; namaPemilik: string; nomorWaPemilik: string })[]>;
 
   getRiwayatKontrak(wargaSinggahId: number): Promise<RiwayatKontrak[]>;
 
@@ -767,6 +776,11 @@ export class DatabaseStorage implements IStorage {
     if (tanggapan !== undefined) updateData.tanggapanAdmin = tanggapan;
     const [result] = await db.update(laporan).set(updateData).where(eq(laporan.id, id)).returning();
     return result;
+  }
+
+  async deleteLaporan(id: number): Promise<boolean> {
+    const deleted = await db.delete(laporan).where(eq(laporan.id, id)).returning({ id: laporan.id });
+    return deleted.length > 0;
   }
 
   async getAllLaporanKekeringan(): Promise<LaporanKekeringan[]> {
@@ -1662,6 +1676,18 @@ export class DatabaseStorage implements IStorage {
     await db.delete(kasRw).where(eq(kasRw.id, id));
   }
 
+  async resetAllKasRw(): Promise<{ deleted: number }> {
+    return db.transaction(async (tx) => {
+      await tx
+        .update(iuranKk)
+        .set({ kasRwId: null, status: "belum", tanggalBayar: null, updatedAt: new Date() });
+      await tx.update(visitrw3Pengajuan).set({ kasRwId: null });
+      await tx.update(pemilikKost).set({ kasRwId: null });
+      const deleted = await tx.delete(kasRw).returning({ id: kasRw.id });
+      return { deleted: deleted.length };
+    });
+  }
+
   async getKasRwSummary(): Promise<{ totalPemasukan: number; totalPengeluaran: number; saldo: number }> {
     const all = await db.select().from(kasRw);
     let totalPemasukan = 0;
@@ -2066,6 +2092,41 @@ export class DatabaseStorage implements IStorage {
           eq(wargaSinggah.tanggalHabisKontrak, lowerStr)
         )
       ));
+
+    return results;
+  }
+
+  async getWargaSinggahKontrakPadaTanggal(
+    offsetHari: number,
+  ): Promise<(WargaSinggah & { namaKost: string; namaPemilik: string; nomorWaPemilik: string })[]> {
+    const target = new Date();
+    target.setDate(target.getDate() + offsetHari);
+    const targetStr = target.toISOString().split("T")[0];
+
+    const results = await db
+      .select({
+        id: wargaSinggah.id,
+        pemilikKostId: wargaSinggah.pemilikKostId,
+        namaLengkap: wargaSinggah.namaLengkap,
+        nik: wargaSinggah.nik,
+        nomorWhatsapp: wargaSinggah.nomorWhatsapp,
+        pekerjaan: wargaSinggah.pekerjaan,
+        tanggalMulaiKontrak: wargaSinggah.tanggalMulaiKontrak,
+        tanggalHabisKontrak: wargaSinggah.tanggalHabisKontrak,
+        jumlahPenghuni: wargaSinggah.jumlahPenghuni,
+        keperluanTinggal: wargaSinggah.keperluanTinggal,
+        status: wargaSinggah.status,
+        nomorVisitrw3: wargaSinggah.nomorVisitrw3,
+        pengajuanId: wargaSinggah.pengajuanId,
+        terminBulan: wargaSinggah.terminBulan,
+        createdAt: wargaSinggah.createdAt,
+        namaKost: pemilikKost.namaKost,
+        namaPemilik: pemilikKost.namaPemilik,
+        nomorWaPemilik: pemilikKost.nomorWaPemilik,
+      })
+      .from(wargaSinggah)
+      .innerJoin(pemilikKost, eq(wargaSinggah.pemilikKostId, pemilikKost.id))
+      .where(and(eq(wargaSinggah.status, "aktif"), eq(wargaSinggah.tanggalHabisKontrak, targetStr)));
 
     return results;
   }
@@ -3429,6 +3490,36 @@ export class DatabaseStorage implements IStorage {
 
   async createBlusukanKunjungan(data: InsertBlusukanKunjungan): Promise<BlusukanKunjungan> {
     const [row] = await db.insert(blusukanKunjungan).values(data).returning();
+    return row;
+  }
+
+  async getBlusukanQuests(status?: "aktif" | "selesai"): Promise<BlusukanQuest[]> {
+    if (status) {
+      return db
+        .select()
+        .from(blusukanQuest)
+        .where(eq(blusukanQuest.status, status))
+        .orderBy(asc(blusukanQuest.deadline), desc(blusukanQuest.createdAt));
+    }
+    return db.select().from(blusukanQuest).orderBy(desc(blusukanQuest.createdAt));
+  }
+
+  async getBlusukanQuestById(id: number): Promise<BlusukanQuest | undefined> {
+    const [row] = await db.select().from(blusukanQuest).where(eq(blusukanQuest.id, id));
+    return row;
+  }
+
+  async createBlusukanQuest(data: InsertBlusukanQuest): Promise<BlusukanQuest> {
+    const [row] = await db.insert(blusukanQuest).values(data).returning();
+    return row;
+  }
+
+  async updateBlusukanQuest(id: number, data: Partial<InsertBlusukanQuest>): Promise<BlusukanQuest | undefined> {
+    const patch: Partial<InsertBlusukanQuest> & { selesaiAt?: Date | null } = { ...data };
+    if (data.status === "selesai" && !patch.selesaiAt) {
+      patch.selesaiAt = new Date();
+    }
+    const [row] = await db.update(blusukanQuest).set(patch).where(eq(blusukanQuest.id, id)).returning();
     return row;
   }
 }

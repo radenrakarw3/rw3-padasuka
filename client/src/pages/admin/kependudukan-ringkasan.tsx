@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { KependudukanDataIssues } from "@/components/admin/kependudukan-data-issues";
+import { KependudukanCariWarga } from "@/components/admin/kependudukan-cari-warga";
 import { PENGANGGURAN_KETERANGAN } from "@shared/pekerjaan-labor";
 import { ACTIVE_RT_NUMBERS } from "@shared/rt";
 import { countPengangguranWarga, type WargaIssueSlice } from "@shared/warga-data-issues";
@@ -30,6 +31,10 @@ type WargaWithKk = WargaIssueSlice & {
   statusPekerjaan?: string | null;
   kategoriUmur?: string | null;
   nomorWhatsapp?: string | null;
+  nomorKk: string;
+  alamat: string;
+  jenisKelamin?: string | null;
+  statusKependudukan?: string | null;
 };
 
 type KkRow = { id: number; rt: number };
@@ -330,6 +335,8 @@ export default function KependudukanRingkasan() {
 
       {displayStats && (
         <>
+          <KependudukanCariWarga wargaList={wargaFiltered} />
+
           <GovStatisticSection
             title="Ringkasan RW"
             description={
@@ -427,7 +434,7 @@ export default function KependudukanRingkasan() {
                   icon={Home}
                 />
               </GovStatisticRow>
-              <Link href="/blusukanrw/dashboard" className="text-sm text-primary underline mt-2 inline-block">
+              <Link href="/blusukanrw/quest" className="text-sm text-primary underline mt-2 inline-block">
                 Buka Blusukan RW untuk operasional lapangan →
               </Link>
             </GovStatisticSection>

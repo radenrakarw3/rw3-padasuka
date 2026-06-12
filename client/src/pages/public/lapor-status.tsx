@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/gov/empty-state";
+import { FeatureExplain } from "@/components/gov/feature-explain";
 import { parseLaporanRef } from "@shared/program-kerja";
 import { fetchPublicJson, getApiErrorMessage } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -46,9 +47,12 @@ export default function PublicLaporStatus() {
 
   return (
     <PublicKioskLayout title="Cek status laporan" backHref="/lapor">
-      <p className="prose-gov mb-4">
-        Masukkan nomor referensi laporan Anda, contoh: LAP-12
-      </p>
+      <FeatureExplain title="Cek laporan masalah lingkungan" className="mb-4">
+        <p>
+          Masukkan nomor referensi dari konfirmasi laporan masalah (format <strong>LAP-…</strong>).
+          Status: menunggu → diproses → selesai. Bukan untuk antrian kekeringan air atau Visit RW3.
+        </p>
+      </FeatureExplain>
 
       <div className="space-y-4">
         <div className="space-y-2">

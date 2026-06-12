@@ -62,18 +62,21 @@ const AdminKeuangan = lazy(() => import("@/pages/admin/keuangan"));
 const AdminKelolaLaporan = lazy(() => import("@/pages/admin/kelola-laporan"));
 const AdminKelolaKekeringan = lazy(() => import("@/pages/admin/kelola-kekeringan"));
 const AdminProgramKerjaDashboard = lazy(() => import("@/pages/admin/program-kerja-dashboard"));
+const AdminPropaganda = lazy(() => import("@/pages/admin/propaganda"));
 const AdminProgramKerjaKelola = lazy(() => import("@/pages/admin/program-kerja-kelola"));
 const AdminInfrastruktur = lazy(() => import("@/pages/admin/program-kerja-infrastruktur"));
 const AdminUmkmMakeover = lazy(() => import("@/pages/admin/program-kerja-umkm"));
 
 import BlusukanrwLogin from "@/pages/blusukanrw/login";
-import BlusukanrwDashboard from "@/pages/blusukanrw/dashboard";
-import BlusukanrwKunjungan from "@/pages/blusukanrw/kunjungan";
+import BlusukanrwQuest from "@/pages/blusukanrw/quest";
+import BlusukanrwLaporan from "@/pages/blusukanrw/laporan";
 import BlusukanrwCari from "@/pages/blusukanrw/cari";
 import BlusukanrwKkDetail from "@/pages/blusukanrw/kk-detail";
 
 import goldLogo from "@assets/RW3-Cimahi-Logo-Gold.webp";
 import { BlusukanAuthProvider, useBlusukanAuth } from "@/lib/blusukan-auth";
+import { PropagandaAuthProvider } from "@/lib/propaganda-auth";
+import { PropagandaPinGate } from "@/components/admin/propaganda-pin-gate";
 import { BlusukanrwLayout } from "@/components/blusukanrw-layout";
 
 import emblemSvg from "@assets/rw03-emblem.svg";
@@ -346,6 +349,16 @@ function AdminRoutes() {
         <Route path="/admin/program-kerja/umkm" component={AdminUmkmMakeover} />
         <Route path="/admin/program-kerja" component={AdminProgramKerjaDashboard} />
 
+        <Route path="/admin/propaganda">
+          {() => (
+            <PropagandaAuthProvider>
+              <PropagandaPinGate>
+                <AdminPropaganda />
+              </PropagandaPinGate>
+            </PropagandaAuthProvider>
+          )}
+        </Route>
+
         <Route path="/admin">{() => <Redirect to="/admin/laporan" />}</Route>
 
         <Route>{() => <Redirect to="/admin/laporan" />}</Route>
@@ -400,12 +413,14 @@ function BlusukanrwRoutes() {
   return (
     <BlusukanrwLayout>
       <Switch>
-        <Route path="/blusukanrw/dashboard" component={BlusukanrwDashboard} />
-        <Route path="/blusukanrw/kunjungan" component={BlusukanrwKunjungan} />
+        <Route path="/blusukanrw/quest" component={BlusukanrwQuest} />
+        <Route path="/blusukanrw/laporan" component={BlusukanrwLaporan} />
         <Route path="/blusukanrw/cari" component={BlusukanrwCari} />
         <Route path="/blusukanrw/kk/:id" component={BlusukanrwKkDetail} />
-        <Route path="/blusukanrw/">{() => <Redirect to="/blusukanrw/dashboard" />}</Route>
-        <Route path="/blusukanrw">{() => <Redirect to="/blusukanrw/dashboard" />}</Route>
+        <Route path="/blusukanrw/dashboard">{() => <Redirect to="/blusukanrw/quest" />}</Route>
+        <Route path="/blusukanrw/kunjungan">{() => <Redirect to="/blusukanrw/laporan" />}</Route>
+        <Route path="/blusukanrw/">{() => <Redirect to="/blusukanrw/quest" />}</Route>
+        <Route path="/blusukanrw">{() => <Redirect to="/blusukanrw/quest" />}</Route>
       </Switch>
     </BlusukanrwLayout>
   );

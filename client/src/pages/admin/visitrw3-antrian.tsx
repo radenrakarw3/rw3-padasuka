@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest, getApiErrorMessage, readJsonSafely } from "@/lib/queryClient";
+import { queryClient, apiRequest, getApiErrorMessage, readJsonSafely, getQueryFn } from "@/lib/queryClient";
 import { invalidateVisitrw3Queries } from "@/lib/visitrw3-invalidate";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,10 +11,11 @@ import {
   surveyKontribusiToBody,
   type Visitrw3SurveyKontribusiState,
 } from "@/components/gov/visitrw3-survey-kontribusi-fields";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Check, X, Eye, ClipboardList } from "lucide-react";
+import { Check, X, Eye, ClipboardList, Building2, MessageCircle } from "lucide-react";
+import { toWaMeUrl } from "@/lib/wa";
 import { Visitrw3AdminNav } from "@/components/admin/visitrw3-admin-nav";
 import {
   Visitrw3AdminShell,
@@ -38,7 +39,68 @@ type PengajuanRow = {
   jumlahPenghuni: number;
   tanggalBerlakuSampai: string;
   createdAt: string;
+  kontakWhatsapp?: string | null;
+  namaKontak?: string | null;
 };
+
+type PropertiMenungguRow = {
+  id: number;
+  nomorPendaftaran: string | null;
+  namaKost: string;
+  namaPemilik: string;
+  nomorWaPemilik: string;
+  nomorWaPenanggungJawab?: string | null;
+  rt: number;
+  jenisProperti: string;
+  statusProperti: string;
+};
+
+function pesanWaPengajuan(row: Pick<PengajuanRow, "nomorVisitrw3" | "status" | "keperluanPengajuan" | "namaKontak">) {
+  const nama = row.namaKontak?.trim() || "Bapak/Ibu";
+  return (
+    `Assalamu'alaikum, ${nama}.\n\n` +
+    `Ini dari pengurus KPP RW 03 Padasuka terkait pengajuan Visit RW3 *${row.nomorVisitrw3}* ` +
+    `(${row.keperluanPengajuan}, status: ${row.status.replace(/_/g, " ")}).\n\n` +
+    `Mohon konfirmasi ketersediaan untuk survey / tindak lanjut. Terima kasih.`
+  );
+}
+
+function pesanWaProperti(row: Pick<PropertiMenungguRow, "namaKost" | "nomorPendaftaran" | "namaPemilik">) {
+  const nomor = row.nomorPendaftaran || "pendaftaran properti";
+  return (
+    `Assalamu'alaikum, ${row.namaPemilik}.\n\n` +
+    `Ini dari pengurus KPP RW 03 Padasuka terkait pendaftaran properti *${row.namaKost}* (${nomor}).\n\n` +
+    `Mohon konfirmasi ketersediaan untuk verifikasi. Terima kasih.`
+  );
+}
+
+function WaChatButton({
+  phone,
+  message,
+  label = "Chat WA",
+  className,
+}: {
+  phone?: string | null;
+  message: string;
+  label?: string;
+  className?: string;
+}) {
+  if (!phone?.trim()) return null;
+  const url = toWaMeUrl(phone, message);
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      className={`h-8 gap-1 text-green-700 border-green-200 hover:bg-green-50 ${className ?? ""}`}
+      asChild
+    >
+      <a href={url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+        <MessageCircle className="w-3.5 h-3.5" />
+        {label}
+      </a>
+    </Button>
+  );
+}
 
 export default function AdminVisitrw3Antrian() {
   const { toast } = useToast();
@@ -46,6 +108,10 @@ export default function AdminVisitrw3Antrian() {
   const [detailId, setDetailId] = useState<number | null>(null);
   const [surveyForm, setSurveyForm] = useState<Visitrw3SurveyKontribusiState>(defaultSurveyKontribusiState);
   const [alasanTolak, setAlasanTolak] = useState("");
+  const [approvePropertiTarget, setApprovePropertiTarget] = useState<PropertiMenungguRow | null>(null);
+  const [surveyPropertiForm, setSurveyPropertiForm] = useState<Visitrw3SurveyKontribusiState>(
+    defaultSurveyKontribusiState(),
+  );
 
   const { data: list = [], isLoading } = useQuery<PengajuanRow[]>({
     queryKey: ["/api/admin/visitrw3/pengajuan", filter],
@@ -55,6 +121,13 @@ export default function AdminVisitrw3Antrian() {
       return res.json();
     },
   });
+
+  const { data: propertiList = [], isLoading: propertiLoading } = useQuery<PropertiMenungguRow[]>({
+    queryKey: ["/api/pemilik-kost"],
+    queryFn: getQueryFn({ on401: "throw" }),
+  });
+
+  const propertiMenunggu = propertiList.filter((p) => p.statusProperti === "menunggu_verifikasi");
 
   const { data: detail, isLoading: detailLoading } = useQuery({
     queryKey: ["/api/admin/visitrw3/pengajuan", detailId],
@@ -76,6 +149,24 @@ export default function AdminVisitrw3Antrian() {
       toast({ title: "Disetujui", description: "Kontribusi dicatat ke Kas RW" });
       setDetailId(null);
       setSurveyForm(defaultSurveyKontribusiState());
+      invalidateVisitrw3Queries(queryClient);
+    },
+    onError: (e: unknown) =>
+      toast({ title: "Gagal", description: getApiErrorMessage(e), variant: "destructive" }),
+  });
+
+  const approvePropertiMutation = useMutation({
+    mutationFn: async ({ id, body }: { id: number; body: ReturnType<typeof surveyKontribusiToBody> }) => {
+      const res = await apiRequest("PATCH", `/api/admin/visitrw3/properti/${id}/approve`, body);
+      return readJsonSafely(res);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Properti disetujui",
+        description: "Properti aktif dan bisa dipilih penyewa di form pengajuan",
+      });
+      setApprovePropertiTarget(null);
+      setSurveyPropertiForm(defaultSurveyKontribusiState());
       invalidateVisitrw3Queries(queryClient);
     },
     onError: (e: unknown) =>
@@ -106,12 +197,77 @@ export default function AdminVisitrw3Antrian() {
   return (
     <Visitrw3AdminShell>
       <Visitrw3AdminNav
-        title="Antrian pengajuan"
-        description="Survey, setujui/tolak, dan catat kontribusi ke Kas RW"
+        title="Antrian Visit RW3"
+        description={
+          propertiMenunggu.length > 0
+            ? `${propertiMenunggu.length} pendaftaran properti menunggu verifikasi · lalu pengajuan penyewa`
+            : "Verifikasi properti baru dulu, lalu survey pengajuan tinggal/bisnis"
+        }
         actions={
           <Visitrw3ChipFilters options={filterOptions} value={filter as typeof filterOptions[number]["value"]} onChange={setFilter} />
         }
       />
+
+      {propertiLoading ? (
+        <Skeleton className="h-24 w-full rounded-2xl mb-4" />
+      ) : propertiMenunggu.length > 0 ? (
+        <section className="mb-6 space-y-2">
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2">
+            <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+              Pendaftaran properti — verifikasi dulu
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Properti dari form publik masuk antrian ini. Setujui agar muncul di pilihan penyewa.
+            </p>
+          </div>
+          {propertiMenunggu.map((row) => (
+            <Visitrw3ListItem
+              key={`prop-${row.id}`}
+              accent="warning"
+              actions={
+                <>
+                  <WaChatButton
+                    phone={row.nomorWaPemilik}
+                    message={pesanWaProperti(row)}
+                    label="Chat WA"
+                  />
+                  <Button
+                    size="sm"
+                    className="h-8 gap-1"
+                    onClick={() => {
+                      setSurveyPropertiForm(defaultSurveyKontribusiState());
+                      setApprovePropertiTarget(row);
+                    }}
+                    disabled={approvePropertiMutation.isPending}
+                  >
+                    <Check className="w-4 h-4" />
+                    Setujui
+                  </Button>
+                </>
+              }
+            >
+              <div className="flex flex-wrap items-center gap-2 mb-1">
+                <Building2 className="w-4 h-4 text-[hsl(163,55%,22%)] shrink-0" />
+                <span className="font-semibold text-sm">{row.namaKost}</span>
+                <Visitrw3RtBadge rt={row.rt} />
+                <span className="text-[10px] font-semibold bg-amber-500 text-white px-2 py-0.5 rounded-full">
+                  Menunggu verifikasi
+                </span>
+              </div>
+              {row.nomorPendaftaran && (
+                <p className="text-[10px] font-mono text-muted-foreground">{row.nomorPendaftaran}</p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Pemilik: {row.namaPemilik} · {row.jenisProperti}
+              </p>
+            </Visitrw3ListItem>
+          ))}
+        </section>
+      ) : null}
+
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+        Pengajuan penyewa / penghuni
+      </p>
 
       {isLoading ? (
         <Skeleton className="h-40 w-full rounded-2xl" />
@@ -138,19 +294,26 @@ export default function AdminVisitrw3Antrian() {
                 setDetailId(row.id);
               }}
               actions={
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="h-8 gap-1"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSurveyForm(defaultSurveyKontribusiState());
-                    setDetailId(row.id);
-                  }}
-                >
-                  <Eye className="w-4 h-4" />
-                  Detail
-                </Button>
+                <>
+                  <WaChatButton
+                    phone={row.kontakWhatsapp}
+                    message={pesanWaPengajuan(row)}
+                    label="Chat WA"
+                  />
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-8 gap-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSurveyForm(defaultSurveyKontribusiState());
+                      setDetailId(row.id);
+                    }}
+                  >
+                    <Eye className="w-4 h-4" />
+                    Detail
+                  </Button>
+                </>
               }
             >
               <div className="flex flex-wrap items-center gap-2 mb-1">
@@ -180,10 +343,22 @@ export default function AdminVisitrw3Antrian() {
             <div className="space-y-4 text-sm">
               <p className="font-mono font-bold">{detail.pengajuan.nomorVisitrw3}</p>
               {detail.kost && (
-                <p>
-                  <span className="text-muted-foreground">Kost: </span>
-                  {detail.kost.namaKost} — {detail.kost.namaPemilik}
-                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p>
+                    <span className="text-muted-foreground">Kost: </span>
+                    {detail.kost.namaKost} — {detail.kost.namaPemilik}
+                  </p>
+                  <WaChatButton
+                    phone={detail.kost.nomorWaPemilik}
+                    message={pesanWaPengajuan({
+                      nomorVisitrw3: detail.pengajuan.nomorVisitrw3,
+                      status: detail.pengajuan.status,
+                      keperluanPengajuan: detail.pengajuan.keperluanPengajuan,
+                      namaKontak: detail.kost.namaPemilik,
+                    })}
+                    label="WA pemilik"
+                  />
+                </div>
               )}
               <p>Berlaku sampai: {detail.pengajuan.tanggalBerlakuSampai} · Termin {detail.pengajuan.terminBulan} bln</p>
               {(detail.pengajuan.estimasiKontribusi != null || detail.pengajuan.setujuTataTertib) && (
@@ -288,8 +463,22 @@ export default function AdminVisitrw3Antrian() {
               <div className="space-y-2">
                 <p className="font-medium">Penghuni</p>
                 {detail.penghuni?.map((p: any) => (
-                  <div key={p.id} className="rounded border p-2">
-                    <p className="font-medium">{p.namaLengkap} {p.isAnak ? "(anak)" : ""}</p>
+                  <div key={p.id} className="rounded border p-2 space-y-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-medium">{p.namaLengkap} {p.isAnak ? "(anak)" : ""}</p>
+                      {!p.isAnak && p.nomorWhatsapp && (
+                        <WaChatButton
+                          phone={p.nomorWhatsapp}
+                          message={pesanWaPengajuan({
+                            nomorVisitrw3: detail.pengajuan.nomorVisitrw3,
+                            status: detail.pengajuan.status,
+                            keperluanPengajuan: detail.pengajuan.keperluanPengajuan,
+                            namaKontak: p.namaLengkap,
+                          })}
+                          label="Chat WA"
+                        />
+                      )}
+                    </div>
                     {!p.isAnak && <p className="text-xs">NIK: {p.nik} · WA: {p.nomorWhatsapp}</p>}
                     {p.punyaKendaraan && (
                       <p className="text-xs">
@@ -351,6 +540,50 @@ export default function AdminVisitrw3Antrian() {
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!approvePropertiTarget} onOpenChange={(o) => !o && setApprovePropertiTarget(null)}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Setujui pendaftaran properti</DialogTitle>
+          </DialogHeader>
+          {approvePropertiTarget && (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                {approvePropertiTarget.namaKost} · {approvePropertiTarget.nomorPendaftaran || `ID ${approvePropertiTarget.id}`}
+              </p>
+              <WaChatButton
+                phone={approvePropertiTarget.nomorWaPemilik}
+                message={pesanWaProperti(approvePropertiTarget)}
+                label="Hubungi pemilik (WA)"
+              />
+            </div>
+          )}
+          <Visitrw3SurveyKontribusiFields
+            {...surveyPropertiForm}
+            onChange={(patch) => setSurveyPropertiForm((s) => ({ ...s, ...patch }))}
+          />
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setApprovePropertiTarget(null)}>
+              Batal
+            </Button>
+            <Button
+              className="gap-1"
+              disabled={approvePropertiMutation.isPending || !approvePropertiTarget}
+              onClick={() => {
+                if (!approvePropertiTarget) return;
+                try {
+                  const body = surveyKontribusiToBody(surveyPropertiForm);
+                  approvePropertiMutation.mutate({ id: approvePropertiTarget.id, body });
+                } catch (e: unknown) {
+                  toast({ title: "Lengkapi kontribusi", description: getApiErrorMessage(e), variant: "destructive" });
+                }
+              }}
+            >
+              <Check className="w-4 h-4" /> Setujui properti
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </Visitrw3AdminShell>

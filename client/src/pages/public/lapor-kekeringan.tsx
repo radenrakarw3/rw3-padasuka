@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, getApiErrorMessage } from "@/lib/queryClient";
 import { PublicKioskLayout } from "@/components/public-kiosk-layout";
+import { FeatureExplain } from "@/components/gov/feature-explain";
 import { FormStepper } from "@/components/gov/form-stepper";
 import { SuccessPanel } from "@/components/gov/success-panel";
 import { ACTIVE_RT_NUMBERS } from "@shared/rt";
@@ -92,10 +93,16 @@ export default function PublicLaporKekeringan() {
 
   return (
     <PublicKioskLayout title="Laporan kekeringan air" backHref="/lapor">
-      <p className="prose-gov mb-4">
-        Laporkan kekurangan air di rumah Anda. Antrian diprioritaskan berdasarkan jumlah penghuni keluarga.
-        Tiket bantuan air dikeluarkan setelah petugas RW melakukan survey ke rumah.
-      </p>
+      <FeatureExplain title="Cara kerja antrian bantuan air" className="mb-4">
+        <p>
+          Laporkan kekurangan air di rumah Anda saat musim kemarau. Setelah mendaftar, Anda masuk
+          antrian — prioritas mengikuti jumlah penghuni keluarga.
+        </p>
+        <p>
+          Petugas RW akan <strong>survey ke rumah</strong> untuk verifikasi. Tiket distribusi air
+          (TKT-KRG-…) baru dikeluarkan setelah survey selesai. Simpan nomor antrian untuk cek status.
+        </p>
+      </FeatureExplain>
 
       <FormStepper steps={STEPS} currentStep={step} />
 

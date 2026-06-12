@@ -11,8 +11,6 @@ import { detectWargaDataIssues, summarizeWargaIssues } from "@shared/warga-data-
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import type { Warga } from "@shared/schema";
 import {
@@ -33,10 +31,8 @@ import {
 } from "@/components/blusukanrw/kk-form-fields";
 import { formatKkKendaraanDisplay } from "@shared/kk-kendaraan";
 import { BlusukanPanelNav, type BlusukanPanel } from "@/components/blusukanrw/panel-nav";
-import type { KeluargaKunjunganRow } from "@/components/blusukanrw/keluarga-kunjungan-row";
 import {
   blusukanBackRoute,
-  blusukanKkHref,
   parseBlusukanFrom,
 } from "@/lib/blusukan-navigation";
 import { BlusukanFullScreenForm } from "@/components/blusukanrw/blusukan-form-ui";
@@ -81,9 +77,8 @@ export default function BlusukanrwKkDetail() {
     queryFn: () => blusukanApi.kkList(),
   });
 
-  const [panel, setPanel] = useState<BlusukanPanel>(() => (fromPage === "kunjungan" ? "anggota" : "kk"));
+  const [panel, setPanel] = useState<BlusukanPanel>("kk");
   const [kkForm, setKkForm] = useState<KkFormValues | null>(null);
-  const [catatanKunjungan, setCatatanKunjungan] = useState("");
   const [editWarga, setEditWarga] = useState<Warga | null>(null);
   const [editForm, setEditForm] = useState<BlusukanWargaFormValues | null>(null);
   const [kkSearch, setKkSearch] = useState("");
@@ -128,33 +123,8 @@ export default function BlusukanrwKkDetail() {
   const invalidateAll = () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: [BLUSUKAN_API.kk(id)] }),
-      queryClient.invalidateQueries({ queryKey: [BLUSUKAN_API.keluarga] }),
-      queryClient.invalidateQueries({ queryKey: [BLUSUKAN_API.dashboard] }),
       queryClient.invalidateQueries({ queryKey: [BLUSUKAN_API.kkList] }),
     ]);
-
-  const goToNextKunjungan = async () => {
-    await invalidateAll();
-    const next = await blusukanApi.keluarga<KeluargaKunjunganRow>({
-      filter: "perlu",
-      page: 1,
-      limit: 10,
-    });
-    const candidate = next.rows.find((row) => row.kkId !== id);
-    if (candidate) {
-      toast({
-        title: "Kunjungan dicatat",
-        description: "Lanjut ke keluarga berikutnya di antrian.",
-      });
-      setLocation(blusukanKkHref(candidate.kkId, "kunjungan"));
-      return;
-    }
-    toast({
-      title: "Kunjungan dicatat",
-      description: "Antrian kunjungan kosong — progres diperbarui di dashboard.",
-    });
-    setLocation("/blusukanrw/dashboard");
-  };
 
   const saveKkMutation = useMutation({
     mutationFn: async () => {
@@ -186,14 +156,10 @@ export default function BlusukanrwKkDetail() {
       await blusukanApi.warga.patch(wargaId, toBlusukanWargaPayload(form));
     },
     onSuccess: () => {
-      toast({
-        title: "Data warga tersimpan",
-        description: "Buka tab Kunjungan lalu simpan untuk menutup kunjungan dan memperbarui dashboard.",
-      });
+      toast({ title: "Data warga tersimpan" });
       setEditWarga(null);
       setEditForm(null);
       void invalidateAll();
-      setPanel("kunjungan");
     },
     onError: (e: unknown) => {
       toast({
@@ -248,40 +214,11 @@ export default function BlusukanrwKkDetail() {
       setDeleteKkOpen(false);
       invalidateAll();
       queryClient.removeQueries({ queryKey: [BLUSUKAN_API.kk(id)] });
-      setLocation("/blusukanrw/dashboard");
+      setLocation("/blusukanrw/quest");
     },
     onError: (e: unknown) => {
       toast({
         title: "Gagal menghapus KK",
-        description: e instanceof Error ? e.message : "Terjadi kesalahan",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const kunjunganMutation = useMutation({
-    mutationFn: async () => {
-      if (kkForm && !saveKkMutation.isPending && data) {
-        const kendaraanErr = validateKkFormKendaraan(kkForm);
-        if (kendaraanErr) throw new Error(kendaraanErr);
-        await blusukanApi.kk.patch(
-          id,
-          toKkPayload(kkForm, { anggotaCount: data.anggota.length, preserve: data.kk }),
-        );
-      }
-      await blusukanApi.kunjungan({
-        kkId: id,
-        hasil: "selesai",
-        catatan: catatanKunjungan || null,
-      });
-    },
-    onSuccess: () => {
-      setCatatanKunjungan("");
-      void goToNextKunjungan();
-    },
-    onError: (e: unknown) => {
-      toast({
-        title: "Gagal",
         description: e instanceof Error ? e.message : "Terjadi kesalahan",
         variant: "destructive",
       });
@@ -302,13 +239,7 @@ export default function BlusukanrwKkDetail() {
   const footerPrimary =
     panel === "kk"
       ? { label: "Simpan KK", onClick: () => saveKkMutation.mutate(), pending: saveKkMutation.isPending }
-      : panel === "kunjungan"
-        ? {
-            label: "Simpan & selesai kunjungan",
-            onClick: () => kunjunganMutation.mutate(),
-            pending: kunjunganMutation.isPending || saveKkMutation.isPending,
-          }
-        : null;
+      : null;
 
   return (
     <div className="pb-32" style={{ paddingBottom: wargaFormOpen ? undefined : "max(8rem, calc(6rem + env(safe-area-inset-bottom)))" }}>
@@ -319,13 +250,6 @@ export default function BlusukanrwKkDetail() {
             {back.label}
           </Button>
         </Link>
-        {fromPage !== "dashboard" && (
-          <Link href="/blusukanrw/dashboard">
-            <Button variant="ghost" size="sm" className="text-muted-foreground">
-              Dashboard
-            </Button>
-          </Link>
-        )}
       </div>
 
       {isLoading && <Skeleton className="h-48 w-full" />}
@@ -482,37 +406,6 @@ export default function BlusukanrwKkDetail() {
             </div>
           )}
 
-          {panel === "kunjungan" && (
-            <div className="space-y-4">
-              {data.kunjunganTerakhir && (
-                <div className="rounded-lg bg-muted/50 p-3 text-sm">
-                  <p className="font-medium">Kunjungan terakhir</p>
-                  <p className="text-muted-foreground text-xs mt-1">
-                    {data.kunjunganTerakhir.hasil}
-                    {data.kunjunganTerakhir.createdAt
-                      ? ` · ${new Date(data.kunjunganTerakhir.createdAt).toLocaleDateString("id-ID")}`
-                      : ""}
-                  </p>
-                  {data.kunjunganTerakhir.catatan && (
-                    <p className="text-xs mt-2">{data.kunjunganTerakhir.catatan}</p>
-                  )}
-                </div>
-              )}
-              <div className="space-y-2">
-                <Label>Catatan kunjungan hari ini</Label>
-                <Textarea
-                  value={catatanKunjungan}
-                  onChange={(e) => setCatatanKunjungan(e.target.value)}
-                  rows={4}
-                  className="text-base min-h-[6rem] rounded-lg"
-                  placeholder="Contoh: Data KK dicek, 1 anggota tambah WA..."
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Tombol di bawah menyimpan perubahan KK (jika ada) lalu menandai kunjungan selesai.
-              </p>
-            </div>
-          )}
         </div>
       )}
 

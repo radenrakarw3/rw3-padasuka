@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Droplets, Database, Store, Target } from "lucide-react";
 import { PublicKioskLayout } from "@/components/public-kiosk-layout";
+import { FeatureExplain } from "@/components/gov/feature-explain";
 import { ProgramPilarCard } from "@/components/gov/program-pilar-card";
 import { groupProgramsByPilar } from "@shared/program-kerja-analytics";
 import { pilarProgramFokus, pilarProgramLabels, visiProgramRw } from "@shared/program-kerja";
@@ -31,6 +32,11 @@ export default function PublicProgram() {
   return (
     <PublicKioskLayout title="Program Kerja RW" backHref="/">
       <div className="space-y-6">
+        <FeatureExplain title="Apa ini?">
+          Halaman ini menampilkan program kerja resmi RW 03 — dibagi ke tiga pilar (infrastruktur,
+          digitalisasi, ekonomi). Warga bisa melihat visi pengurus, program yang sedang/sudah
+          dijalankan, dan capaiannya secara transparan.
+        </FeatureExplain>
         <div className="rounded-xl bg-brand/5 border border-brand/15 p-4">
           <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Visi RW 03</p>
           <p className="text-sm leading-relaxed">{visiProgramRw}</p>

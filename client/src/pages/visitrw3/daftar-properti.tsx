@@ -13,6 +13,7 @@ import { rtOptions, jenisPropertiOptions } from "@/lib/constants";
 import { Loader2, ChevronRight, ChevronLeft, Plus, Minus, Home, Store, BookOpen } from "lucide-react";
 import { SuccessPanel } from "@/components/gov/success-panel";
 import { Visitrw3SyaratPanel } from "@/components/gov/visitrw3-syarat-panel";
+import { FeatureExplain } from "@/components/gov/feature-explain";
 import { FormStepper } from "@/components/gov/form-stepper";
 import { settingsRowsToMap } from "@/lib/visitrw3-kontribusi";
 import {
@@ -197,6 +198,16 @@ export default function Visitrw3DaftarProperti() {
 
   return (
     <Visitrw3Shell title="Daftar properti" backHref="/visitrw3/pemilik">
+      <FeatureExplain title="Siapa yang harus isi form ini?" className="mb-3">
+        <p>
+          <strong>Pemilik</strong> kost, kontrakan, kiosk, atau lapak — bukan penyewa. Setelah
+          disetujui admin, properti Anda muncul di daftar pilihan penyewa saat mengajukan Visit RW3.
+        </p>
+        <p>
+          Anda akan mendapat nomor <strong>PROP-…</strong>. Penyewa tidak bisa mengajukan izin
+          sebelum properti ini aktif.
+        </p>
+      </FeatureExplain>
       <p className="prose-gov mb-2 text-sm">
         Isi langkah demi langkah — tekan <strong>Lanjut</strong> setelah setiap bagian.
       </p>

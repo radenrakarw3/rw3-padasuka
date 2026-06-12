@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StatusBadge, type GovStatusVariant } from "@/components/gov/status-badge";
+import { FeatureExplain } from "@/components/gov/feature-explain";
 import { Loader2, Search } from "lucide-react";
 
 type PropertiStatus = {
@@ -62,9 +63,16 @@ export default function Visitrw3StatusProperti() {
 
   return (
     <Visitrw3Shell title="Status properti" backHref="/visitrw3/pemilik">
-      <p className="prose-gov mb-4 text-sm text-muted-foreground">
-        Masukkan nomor pendaftaran properti (format PROP-…).
-      </p>
+      <FeatureExplain title="Nomor PROP — untuk pemilik properti" className="mb-4">
+        <p>
+          Masukkan nomor <strong>PROP-…</strong> yang Anda terima setelah mendaftarkan properti
+          (kost, kontrakan, kiosk, lapak).
+        </p>
+        <p>
+          <strong>Aktif</strong> = penyewa sudah bisa memilih properti ini saat pengajuan Visit RW3.{" "}
+          <strong>Menunggu verifikasi</strong> = admin RW masih meninjau pendaftaran Anda.
+        </p>
+      </FeatureExplain>
       <div className="space-y-3">
         <div className="space-y-2">
           <Label>Nomor pendaftaran</Label>

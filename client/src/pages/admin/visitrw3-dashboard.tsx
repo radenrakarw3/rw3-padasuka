@@ -468,8 +468,8 @@ export default function AdminVisitrw3Dashboard() {
 
           <p className="text-xs text-muted-foreground">
             Statistik penghuni diambil dari tabel visitrw3_penghuni (semua pengajuan). Penghuni aktif hanya yang sudah
-            disetujui dan tercatat di warga_singgah. Field bisnis seperti jam operasional, alamat usaha, dan persetujuan
-            tetangga tidak diagregasi numerik karena bersifat teks/unik per pengajuan — lihat detail di antrian.
+            disetujui dan tercatat di warga_singgah. Field bisnis seperti jam operasional dan alamat usaha tidak
+            diagregasi numerik karena bersifat teks/unik per pengajuan — lihat detail di antrian.
           </p>
         </>
       ) : (

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/gov/empty-state";
+import { FeatureExplain } from "@/components/gov/feature-explain";
 import { fetchPublicJson, getApiErrorMessage } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { kekeringanStatusLabels, type KekeringanStatus } from "@shared/laporan-kekeringan";
@@ -49,9 +50,13 @@ export default function PublicLaporKekeringanStatus() {
 
   return (
     <PublicKioskLayout title="Cek status kekeringan" backHref="/lapor/kekeringan">
-      <p className="prose-gov mb-4">
-        Masukkan nomor antrian (KRG-...) atau nomor tiket (TKT-KRG-...) Anda.
-      </p>
+      <FeatureExplain title="Lacak antrian bantuan air" className="mb-4">
+        <p>
+          Masukkan nomor <strong>KRG-…</strong> (antrian) atau <strong>TKT-KRG-…</strong> (tiket
+          distribusi air setelah survey). Alur: mendaftar → menunggu survey → tiket keluar → bantuan
+          air disalurkan.
+        </p>
+      </FeatureExplain>
 
       <div className="space-y-4">
         <div className="space-y-2">

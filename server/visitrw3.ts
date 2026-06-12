@@ -1,7 +1,7 @@
 import { z } from "zod";
 import crypto from "crypto";
 import { db, pool } from "./db";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, asc, inArray, sql } from "drizzle-orm";
 import {
   pemilikKost,
   visitrw3Pengajuan,
@@ -20,10 +20,20 @@ import {
   labelIzinProperti,
   labelJumlahPenghuniPengajuan,
   labelJumlahPintuTier,
+  filterVisitrw3PropertiProduksi,
+  isVisitrw3DemoProperti,
 } from "@shared/visitrw3-analytics";
 
 export { emptyVisitrw3DashboardStats } from "@shared/visitrw3-analytics";
 import { seedVisitrw3Settings } from "./visitrw3-settings";
+import {
+  notifyVisitrw3PengajuanBaru,
+  notifyVisitrw3Perpanjang,
+  notifyVisitrw3Disetujui,
+  notifyVisitrw3Ditolak,
+  notifyVisitrw3PropertiDidaftar,
+  notifyVisitrw3PropertiDisetujui,
+} from "./wa-notify";
 
 export type { Visitrw3DashboardStats } from "@shared/visitrw3-analytics";
 
@@ -69,13 +79,6 @@ const penghuniInputSchema = z.object({
   fotoKtpPath: z.string().optional().nullable(),
 });
 
-const persetujuanTetanggaSchema = z.object({
-  posisi: z.enum(["kanan", "kiri", "depan", "belakang"]),
-  slot: z.union([z.literal(1), z.literal(2)]),
-  namaWarga: z.string().min(1),
-  nomorWhatsapp: z.string().min(8),
-});
-
 const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export const pengajuanBaruSchema = z.object({
@@ -90,7 +93,6 @@ export const pengajuanBaruSchema = z.object({
   jamBuka: z.string().optional().nullable(),
   jamTutup: z.string().optional().nullable(),
   alamatUsaha: z.string().optional().nullable(),
-  persetujuanTetangga: z.array(persetujuanTetanggaSchema).optional().nullable(),
   penanggungJawab: z.string().optional().nullable(),
   nomorUnit: z.string().min(1, "Nomor unit/kamar wajib diisi"),
   jumlahPenghuni: z.number().int().min(1).max(20),
@@ -100,28 +102,6 @@ export const pengajuanBaruSchema = z.object({
   penghuni: z.array(penghuniInputSchema).min(1),
   setujuTataTertib: z.literal(true, { errorMap: () => ({ message: "Persetujuan syarat wajib" }) }),
 });
-
-function validatePersetujuanTetangga(list: z.infer<typeof persetujuanTetanggaSchema>[] | null | undefined) {
-  const required = [
-    { posisi: "kanan", slot: 1 },
-    { posisi: "kanan", slot: 2 },
-    { posisi: "kiri", slot: 1 },
-    { posisi: "kiri", slot: 2 },
-    { posisi: "depan", slot: 1 },
-    { posisi: "depan", slot: 2 },
-    { posisi: "belakang", slot: 1 },
-    { posisi: "belakang", slot: 2 },
-  ] as const;
-  if (!list || list.length < 8) {
-    throw new Error("Persetujuan tetangga wajib: 2 warga kanan, 2 kiri, 2 depan, 2 belakang");
-  }
-  for (const req of required) {
-    const row = list.find((r) => r.posisi === req.posisi && r.slot === req.slot);
-    if (!row?.namaWarga?.trim() || !row.nomorWhatsapp?.trim()) {
-      throw new Error(`Data warga tetangga ${req.posisi} #${req.slot} wajib diisi`);
-    }
-  }
-}
 
 function validateBisnisFields(parsed: z.infer<typeof pengajuanBaruSchema>) {
   if (!parsed.namaUsaha?.trim()) throw new Error("Nama usaha wajib diisi");
@@ -133,7 +113,6 @@ function validateBisnisFields(parsed: z.infer<typeof pengajuanBaruSchema>) {
   if (parsed.tinggalDiWilayahRw3 === undefined || parsed.tinggalDiWilayahRw3 === null) {
     throw new Error("Pilih apakah tinggal di wilayah RW 03 atau di luar wilayah");
   }
-  validatePersetujuanTetangga(parsed.persetujuanTetangga ?? undefined);
   if (parsed.tinggalDiWilayahRw3) {
     if (!parsed.pemilikKostId) throw new Error("Pilih kost/kontrakan tempat tinggal");
   } else {
@@ -256,6 +235,9 @@ function validatePenghuni(
 async function assertKostAllowed(pemilikKostId: number, rt: number, keperluan: "tinggal" | "bisnis") {
   const kost = await storage.getPemilikKostById(pemilikKostId);
   if (!kost || kost.rt !== rt) throw new Error("Kost/kontrakan tidak ditemukan untuk RT ini");
+  if (kost.statusProperti !== "aktif") {
+    throw new Error("Properti belum disetujui admin — tunggu verifikasi pendaftaran properti selesai");
+  }
   if (keperluan === "tinggal" && !kost.izinTinggal) throw new Error("Properti ini tidak menerima pengajuan tinggal");
   if (keperluan === "bisnis" && !kost.izinBisnis) throw new Error("Properti ini tidak menerima pengajuan bisnis");
   return kost;
@@ -283,10 +265,9 @@ async function assertNikAvailable(nik: string) {
 export async function getPemilikKostPublic(rt: number, keperluan: "tinggal" | "bisnis") {
   if (!(ACTIVE_RT_NUMBERS as readonly number[]).includes(rt)) return [];
   const all = await db.select().from(pemilikKost).where(eq(pemilikKost.rt, rt)).orderBy(pemilikKost.namaKost);
-  return all.filter((k) => {
-    const aktif = (k.statusProperti ?? "aktif") === "aktif";
+  return filterVisitrw3PropertiProduksi(all).filter((k) => {
     const izin = keperluan === "tinggal" ? k.izinTinggal : k.izinBisnis;
-    return aktif && izin;
+    return k.statusProperti === "aktif" && izin;
   });
 }
 
@@ -347,6 +328,7 @@ export async function createPendaftaranProperti(input: z.infer<typeof daftarProp
       setujuTataTertib: true,
     })
     .returning();
+  notifyVisitrw3PropertiDidaftar(row);
   return row;
 }
 
@@ -389,6 +371,7 @@ export async function approveProperti(
     })
     .where(eq(pemilikKost.id, id))
     .returning();
+  if (updated) notifyVisitrw3PropertiDisetujui(updated);
   return updated;
 }
 
@@ -435,9 +418,7 @@ export async function createPengajuanBaru(input: z.infer<typeof pengajuanBaruSch
         jamBuka: parsed.jamBuka || null,
         jamTutup: parsed.jamTutup || null,
         alamatUsaha: parsed.alamatUsaha || null,
-        persetujuanTetangga: parsed.persetujuanTetangga?.length
-          ? JSON.stringify(parsed.persetujuanTetangga)
-          : null,
+        persetujuanTetangga: null,
         penanggungJawab: parsed.penanggungJawab || null,
         nomorUnit: parsed.nomorUnit.trim(),
         jumlahPenghuni: parsed.jumlahPenghuni,
@@ -471,6 +452,14 @@ export async function createPengajuanBaru(input: z.infer<typeof pengajuanBaruSch
       });
     }
 
+    return pengajuan;
+  }).then(async (pengajuan) => {
+    const penghuni = await db
+      .select()
+      .from(visitrw3Penghuni)
+      .where(eq(visitrw3Penghuni.pengajuanId, pengajuan.id))
+      .orderBy(visitrw3Penghuni.urutan);
+    notifyVisitrw3PengajuanBaru(pengajuan, penghuni);
     return pengajuan;
   });
 }
@@ -527,6 +516,14 @@ export async function createPerpanjang(input: z.infer<typeof perpanjangSchema>) 
     })
     .returning();
 
+  const singgahId = pengajuan.wargaSinggahId ?? wsId;
+  if (singgahId) {
+    const [ws] = await db.select().from(wargaSinggah).where(eq(wargaSinggah.id, singgahId)).limit(1);
+    if (ws?.nomorWhatsapp) {
+      notifyVisitrw3Perpanjang(pengajuan, nomor, ws.nomorWhatsapp, ws.namaLengkap);
+    }
+  }
+
   return { pengajuan, nomorLama: nomor, nomorBaru };
 }
 
@@ -566,6 +563,38 @@ export async function listPengajuanAdmin(status?: string) {
     return db.select().from(visitrw3Pengajuan).where(eq(visitrw3Pengajuan.status, status)).orderBy(desc(visitrw3Pengajuan.createdAt));
   }
   return db.select().from(visitrw3Pengajuan).orderBy(desc(visitrw3Pengajuan.createdAt));
+}
+
+export async function listPengajuanAdminEnriched(status?: string) {
+  const list = await listPengajuanAdmin(status);
+  if (!list.length) return [];
+
+  const ids = list.map((p) => p.id);
+  const penghuniRows = await db
+    .select()
+    .from(visitrw3Penghuni)
+    .where(inArray(visitrw3Penghuni.pengajuanId, ids))
+    .orderBy(asc(visitrw3Penghuni.pengajuanId), asc(visitrw3Penghuni.urutan));
+
+  const kontakMap = new Map<number, { nomorWhatsapp: string; namaLengkap: string }>();
+  for (const p of penghuniRows) {
+    if (p.isAnak || !p.nomorWhatsapp?.trim()) continue;
+    if (!kontakMap.has(p.pengajuanId)) {
+      kontakMap.set(p.pengajuanId, {
+        nomorWhatsapp: p.nomorWhatsapp.trim(),
+        namaLengkap: p.namaLengkap,
+      });
+    }
+  }
+
+  return list.map((p) => {
+    const kontak = kontakMap.get(p.id);
+    return {
+      ...p,
+      kontakWhatsapp: kontak?.nomorWhatsapp ?? null,
+      namaKontak: kontak?.namaLengkap ?? null,
+    };
+  });
 }
 
 export type Visitrw3KalenderPenghuni = {
@@ -785,7 +814,9 @@ export async function approvePengajuan(
       .update(visitrw3Pengajuan)
       .set({ ...baseUpdate, wargaSinggahId: wsId })
       .where(eq(visitrw3Pengajuan.id, id));
-    return { pengajuan: { ...pengajuan, status: "disetujui" }, wargaSinggah: updated, kasRwId };
+    const approvedPengajuan = { ...pengajuan, ...baseUpdate, wargaSinggahId: wsId };
+    notifyVisitrw3Disetujui(approvedPengajuan, penghuni, detail.kost ?? null);
+    return { pengajuan: approvedPengajuan, wargaSinggah: updated, kasRwId };
   }
 
   const bisnisLuar =
@@ -793,7 +824,9 @@ export async function approvePengajuan(
 
   if (bisnisLuar) {
     await db.update(visitrw3Pengajuan).set(baseUpdate).where(eq(visitrw3Pengajuan.id, id));
-    return { pengajuan: { ...pengajuan, status: "disetujui" }, wargaSinggah: null, kasRwId };
+    const approvedPengajuan = { ...pengajuan, ...baseUpdate };
+    notifyVisitrw3Disetujui(approvedPengajuan, penghuni, detail.kost ?? null);
+    return { pengajuan: approvedPengajuan, wargaSinggah: null, kasRwId };
   }
 
   const dewasa = penghuni.filter((p) => !p.isAnak);
@@ -841,7 +874,9 @@ export async function approvePengajuan(
     .set({ ...baseUpdate, wargaSinggahId: ws.id })
     .where(eq(visitrw3Pengajuan.id, id));
 
-  return { pengajuan: { ...pengajuan, status: "disetujui" }, wargaSinggah: ws, kasRwId };
+  const approvedPengajuan = { ...pengajuan, ...baseUpdate, wargaSinggahId: ws.id };
+  notifyVisitrw3Disetujui(approvedPengajuan, penghuni, detail.kost ?? null);
+  return { pengajuan: approvedPengajuan, wargaSinggah: ws, kasRwId };
 }
 
 function incCount(map: Record<string, number>, key: string) {
@@ -882,11 +917,22 @@ export function isMissingVisitrw3TableError(error: unknown): boolean {
 }
 
 export async function getVisitrw3DashboardStats(rtFilter?: number): Promise<Visitrw3DashboardStats> {
-  const pengajuanList = await db
+  const allProperti = await db
     .select()
-    .from(visitrw3Pengajuan)
-    .where(rtFilter != null ? eq(visitrw3Pengajuan.rt, rtFilter) : undefined)
-    .orderBy(desc(visitrw3Pengajuan.createdAt));
+    .from(pemilikKost)
+    .where(rtFilter != null ? eq(pemilikKost.rt, rtFilter) : undefined);
+  const demoKostIds = new Set(
+    allProperti.filter((pk) => isVisitrw3DemoProperti(pk)).map((pk) => pk.id),
+  );
+  const propertiList = filterVisitrw3PropertiProduksi(allProperti);
+
+  const pengajuanList = (
+    await db
+      .select()
+      .from(visitrw3Pengajuan)
+      .where(rtFilter != null ? eq(visitrw3Pengajuan.rt, rtFilter) : undefined)
+      .orderBy(desc(visitrw3Pengajuan.createdAt))
+  ).filter((p) => p.pemilikKostId == null || !demoKostIds.has(p.pemilikKostId));
 
   const pengajuanIds = pengajuanList.map((p) => p.id);
   const penghuniList =
@@ -897,19 +943,21 @@ export async function getVisitrw3DashboardStats(rtFilter?: number): Promise<Visi
           .where(inArray(visitrw3Penghuni.pengajuanId, pengajuanIds))
       : [];
 
-  const propertiList = await db
-    .select()
-    .from(pemilikKost)
-    .where(rtFilter != null ? eq(pemilikKost.rt, rtFilter) : undefined);
-
   const wargaAktifRows = await db
     .select({ id: wargaSinggah.id })
     .from(wargaSinggah)
     .innerJoin(pemilikKost, eq(wargaSinggah.pemilikKostId, pemilikKost.id))
     .where(
       rtFilter != null
-        ? and(eq(wargaSinggah.status, "aktif"), eq(pemilikKost.rt, rtFilter))
-        : eq(wargaSinggah.status, "aktif"),
+        ? and(
+            eq(wargaSinggah.status, "aktif"),
+            eq(pemilikKost.rt, rtFilter),
+            sql`${pemilikKost.nomorPendaftaran} IS NULL OR ${pemilikKost.nomorPendaftaran} NOT LIKE 'PROP-DEV-%'`,
+          )
+        : and(
+            eq(wargaSinggah.status, "aktif"),
+            sql`${pemilikKost.nomorPendaftaran} IS NULL OR ${pemilikKost.nomorPendaftaran} NOT LIKE 'PROP-DEV-%'`,
+          ),
     );
 
   const byKeperluan: Record<string, number> = {};
@@ -1143,6 +1191,14 @@ export async function rejectPengajuan(id: number, adminUsername: string, alasanT
     })
     .where(eq(visitrw3Pengajuan.id, id))
     .returning();
+  if (updated) {
+    const penghuni = await db
+      .select()
+      .from(visitrw3Penghuni)
+      .where(eq(visitrw3Penghuni.pengajuanId, id))
+      .orderBy(visitrw3Penghuni.urutan);
+    notifyVisitrw3Ditolak(updated, penghuni, alasanTolak);
+  }
   return updated;
 }
 
@@ -1234,14 +1290,25 @@ export async function ensureVisitrw3Schema() {
     ALTER TABLE visitrw3_pengajuan ALTER COLUMN pemilik_kost_id DROP NOT NULL;
   `);
 
+  // Pendaftaran publik (PROP-…) yang belum disetujui admin tidak boleh tetap "aktif"
+  await pool.query(`
+    UPDATE pemilik_kost
+    SET status_properti = 'menunggu_verifikasi'
+    WHERE status_properti = 'aktif'
+      AND nomor_pendaftaran IS NOT NULL
+      AND nomor_pendaftaran NOT LIKE 'PROP-DEV-%'
+      AND kas_rw_id IS NULL
+      AND setuju_tata_tertib = true;
+  `);
+
   await seedVisitrw3Settings();
   await seedVisitrw3DevPropertiIfNeeded();
 }
 
-/** Development: pastikan properti demo dev ada per nomorPendaftaran (upsert by nomor, bukan all-or-nothing). */
+/** Development: properti demo hanya jika SEED_VISITRW3_DEMO=1 (tidak otomatis). */
 export async function seedVisitrw3DevPropertiIfNeeded() {
   if (process.env.NODE_ENV === "production") return;
-  if (process.env.SEED_VISITRW3_DEMO === "0") return;
+  if (process.env.SEED_VISITRW3_DEMO !== "1") return;
 
   const demoRows = [
     {

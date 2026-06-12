@@ -78,6 +78,11 @@ app.use((req, res, next) => {
     return res.status(status).json({ message });
   });
 
+  // API tanpa handler → JSON 404 (jangan jatuh ke Vite/HTML — bikin client loading tanpa akhir)
+  app.use("/api", (_req, res) => {
+    res.status(404).json({ message: "Endpoint API tidak ditemukan. Muat ulang server/deploy terbaru." });
+  });
+
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes

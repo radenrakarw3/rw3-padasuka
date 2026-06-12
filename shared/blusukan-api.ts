@@ -12,6 +12,10 @@ export const BLUSUKAN_API = {
     me: "/api/blusukan/auth/me",
   },
   dashboard: "/api/blusukan/dashboard",
+  quest: "/api/blusukan/quest",
+  questItem: (id: number | string) => `/api/blusukan/quest/${id}`,
+  laporan: "/api/blusukan/laporan",
+  laporanItem: (id: number | string) => `/api/blusukan/laporan/${id}`,
   keluarga: "/api/blusukan/keluarga",
   cari: "/api/blusukan/cari",
   /** Daftar KK pemukiman (picker pindah KK / form warga). */

@@ -8,9 +8,13 @@ import {
   patchKkSchema,
   insertWargaSchema,
   insertBlusukanKunjunganSchema,
+  insertBlusukanQuestSchema,
+  patchBlusukanQuestSchema,
   BLUSUKAN_HASIL,
+  BLUSUKAN_QUEST_STATUS,
 } from "@shared/schema";
 import { BLUSUKAN_API, BLUSUKAN_ROLE } from "@shared/blusukan-api";
+import { parseLaporanPelaporMeta, sanitizeLaporanIsiInput } from "@shared/laporan-pelapor";
 import { isActiveRt } from "@shared/rt";
 import {
   ensureBlusukanSchema,
@@ -24,6 +28,7 @@ import {
   type BlusukanKeluargaFilter,
 } from "./blusukan";
 import { saveSession } from "./session-save";
+import { notifyLaporanStatusForRecord } from "./wa-notify";
 
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
 const MAX_ATTEMPTS = 5;
@@ -369,6 +374,170 @@ export async function registerBlusukanRoutes(app: Express) {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Gagal mencatat kunjungan";
       res.status(400).json({ message });
+    }
+  });
+
+  app.get(BLUSUKAN_API.quest, requireBlusukan, async (req, res) => {
+    try {
+      const raw = typeof req.query.status === "string" ? req.query.status.trim().toLowerCase() : "";
+      const status =
+        raw === "aktif" || raw === "selesai"
+          ? (raw as (typeof BLUSUKAN_QUEST_STATUS)[number])
+          : undefined;
+      const rows = await storage.getBlusukanQuests(status);
+      res.json(rows);
+    } catch (error: unknown) {
+      console.error("[Blusukan] Gagal memuat quest:", error);
+      res.status(500).json({ message: "Gagal memuat quest" });
+    }
+  });
+
+  app.post(BLUSUKAN_API.quest, requireBlusukan, async (req, res) => {
+    try {
+      const parsed = insertBlusukanQuestSchema.parse(req.body);
+      if (parsed.targetWargaId) {
+        const w = await storage.getWargaById(parsed.targetWargaId);
+        if (!w) return res.status(400).json({ message: "Warga target tidak ditemukan" });
+        const kk = await storage.getKkById(w.kkId);
+        if (!assertKkInBlusukanScope(kk)) {
+          return res.status(400).json({ message: "Warga di luar RT 01–04" });
+        }
+        parsed.targetKkId = parsed.targetKkId ?? w.kkId;
+        parsed.targetWargaNama = parsed.targetWargaNama ?? w.namaLengkap;
+      }
+      const row = await storage.createBlusukanQuest({
+        ...parsed,
+        status: "aktif",
+        progres: parsed.progres ?? 0,
+      });
+      res.json(row);
+    } catch (error: unknown) {
+      const message =
+        error instanceof z.ZodError
+          ? error.errors[0]?.message
+          : error instanceof Error
+            ? error.message
+            : "Gagal membuat quest";
+      res.status(400).json({ message });
+    }
+  });
+
+  app.patch(BLUSUKAN_API.questItem(":id"), requireBlusukan, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id as string, 10);
+      if (isNaN(id)) return res.status(400).json({ message: "ID tidak valid" });
+      const existing = await storage.getBlusukanQuestById(id);
+      if (!existing) return res.status(404).json({ message: "Quest tidak ditemukan" });
+
+      const parsed = patchBlusukanQuestSchema.parse(req.body);
+      if (parsed.targetWargaId) {
+        const w = await storage.getWargaById(parsed.targetWargaId);
+        if (!w) return res.status(400).json({ message: "Warga target tidak ditemukan" });
+        const kk = await storage.getKkById(w.kkId);
+        if (!assertKkInBlusukanScope(kk)) {
+          return res.status(400).json({ message: "Warga di luar RT 01–04" });
+        }
+        parsed.targetKkId = parsed.targetKkId ?? w.kkId;
+        parsed.targetWargaNama = parsed.targetWargaNama ?? w.namaLengkap;
+      }
+
+      const row = await storage.updateBlusukanQuest(id, parsed);
+      res.json(row);
+    } catch (error: unknown) {
+      const message =
+        error instanceof z.ZodError
+          ? error.errors[0]?.message
+          : error instanceof Error
+            ? error.message
+            : "Gagal memperbarui quest";
+      res.status(400).json({ message });
+    }
+  });
+
+  app.get(BLUSUKAN_API.laporan, requireBlusukan, async (_req, res) => {
+    try {
+      const laporanList = await storage.getAllLaporan();
+      const wargaIds = [...new Set(laporanList.map((l) => l.wargaId).filter((id): id is number => id != null))];
+      const kkIds = [...new Set(laporanList.map((l) => l.kkId).filter((id): id is number => id != null))];
+
+      const wargaMap = new Map<number, Awaited<ReturnType<typeof storage.getWargaById>>>();
+      const kkMap = new Map<number, Awaited<ReturnType<typeof storage.getKkById>>>();
+
+      await Promise.all([
+        ...wargaIds.map(async (id) => {
+          const w = await storage.getWargaById(id);
+          if (w) wargaMap.set(id, w);
+        }),
+        ...kkIds.map(async (id) => {
+          const kk = await storage.getKkById(id);
+          if (kk) kkMap.set(id, kk);
+        }),
+      ]);
+
+      for (const w of wargaMap.values()) {
+        if (w && !kkMap.has(w.kkId)) {
+          const kk = await storage.getKkById(w.kkId);
+          if (kk) kkMap.set(w.kkId, kk);
+        }
+      }
+
+      const enriched = laporanList
+        .map((lap) => {
+          const w = lap.wargaId ? wargaMap.get(lap.wargaId) : undefined;
+          const kk = lap.kkId ? kkMap.get(lap.kkId) : w ? kkMap.get(w.kkId) : undefined;
+          const meta = parseLaporanPelaporMeta(lap.isi);
+          const rawNama = w?.namaLengkap ?? meta.nama ?? null;
+          const pelaporNama = rawNama ? sanitizeLaporanIsiInput(rawNama) || null : null;
+          return {
+            ...lap,
+            pelaporNama,
+            pelaporRt: kk?.rt ?? meta.nomorRt ?? null,
+            pelaporAlamat: kk?.alamat ?? null,
+            pelaporWa: w?.nomorWhatsapp ?? meta.nomorWa ?? null,
+          };
+        })
+        .sort((a, b) => {
+          const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return tb - ta;
+        });
+      res.json(enriched);
+    } catch (error: unknown) {
+      console.error("[Blusukan] Gagal memuat laporan:", error);
+      res.status(500).json({ message: "Gagal memuat laporan warga" });
+    }
+  });
+
+  app.patch(BLUSUKAN_API.laporanItem(":id"), requireBlusukan, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id as string, 10);
+      if (isNaN(id)) return res.status(400).json({ message: "ID tidak valid" });
+      const { status, tanggapan } = req.body as { status?: string; tanggapan?: string };
+      if (!status) return res.status(400).json({ message: "Status wajib diisi" });
+      if (!["diproses", "selesai", "ditolak"].includes(status)) {
+        return res.status(400).json({ message: "Status tidak valid" });
+      }
+      const data = await storage.updateLaporanStatus(id, status, tanggapan);
+      if (!data) return res.status(404).json({ message: "Laporan tidak ditemukan" });
+      notifyLaporanStatusForRecord(data, status);
+      res.json(data);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Gagal memperbarui laporan";
+      res.status(400).json({ message });
+    }
+  });
+
+  app.delete(BLUSUKAN_API.laporanItem(":id"), requireBlusukan, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id as string, 10);
+      if (isNaN(id)) return res.status(400).json({ message: "ID tidak valid" });
+      const ok = await storage.deleteLaporan(id);
+      if (!ok) return res.status(404).json({ message: "Laporan tidak ditemukan" });
+      res.json({ ok: true, message: "Laporan dihapus" });
+    } catch (error: unknown) {
+      console.error("[Blusukan] Gagal menghapus laporan:", error);
+      const message = error instanceof Error ? error.message : "Gagal menghapus laporan";
+      res.status(500).json({ message });
     }
   });
 }

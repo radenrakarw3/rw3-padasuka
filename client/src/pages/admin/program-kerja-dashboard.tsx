@@ -136,7 +136,7 @@ export default function AdminProgramKerjaDashboard() {
       )}
 
       <div className="text-sm text-muted-foreground">
-        <Link href="/blusukanrw/dashboard" className="underline">Buka Blusukan RW</Link>
+        <Link href="/blusukanrw/quest" className="underline">Buka Blusukan RW</Link>
         {" · "}
         <Link href="/admin/kependudukan" className="underline">Kependudukan</Link>
       </div>

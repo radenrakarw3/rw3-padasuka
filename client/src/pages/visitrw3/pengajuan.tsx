@@ -19,7 +19,19 @@ import {
   visitrw3JenisTempatUsahaOptions,
   visitrw3JenjangAnakOptions,
 } from "@/lib/constants";
-import { Loader2, ChevronRight, ChevronLeft, Building2, Plus, Trash2, Minus, BookOpen } from "lucide-react";
+import {
+  Loader2,
+  ChevronRight,
+  ChevronLeft,
+  Building2,
+  Plus,
+  Trash2,
+  Minus,
+  BookOpen,
+  Home,
+  Store,
+  Layers,
+} from "lucide-react";
 import {
   emptyKendaraanRow,
   serializeKendaraanForApi,
@@ -33,35 +45,66 @@ import {
   validateStepKeperluan,
   validateStepLokasiBisnis,
   validateSinglePenghuni,
-  validateSingleTetangga,
   validateLokasiSubTinggal,
   validateLokasiSubBisnis,
 } from "@/lib/visitrw3-validate-pengajuan";
-import {
-  emptyPersetujuanTetangga,
-  VISITRW3_TETANGGA_SLOTS,
-  type PersetujuanTetanggaRow,
-} from "@/lib/visitrw3-tetangga";
 import { PlatNomorInput } from "@/components/gov/plat-nomor-input";
 import { FormStepper } from "@/components/gov/form-stepper";
 import { EmptyState } from "@/components/gov/empty-state";
 import { SuccessPanel } from "@/components/gov/success-panel";
 import { Visitrw3SyaratPanel } from "@/components/gov/visitrw3-syarat-panel";
+import { FeatureExplain } from "@/components/gov/feature-explain";
 import { settingsRowsToMap } from "@/lib/visitrw3-kontribusi";
 
 type StepDef = { id: string; label: string };
+type KeperluanMode = "" | "tinggal" | "bisnis_dalam" | "bisnis_luar";
+
+const KEPERLUAN_OPTIONS: {
+  id: KeperluanMode;
+  title: string;
+  subtitle: string;
+  icon: typeof Home;
+  badge?: string;
+}[] = [
+  {
+    id: "tinggal",
+    title: "Tinggal saja",
+    subtitle: "Ngekost atau kontrak di RW 03, tanpa usaha di sini",
+    icon: Home,
+  },
+  {
+    id: "bisnis_dalam",
+    title: "Tinggal sekaligus usaha",
+    subtitle: "Ngekost dan punya lapak/kiosk/usaha — cukup isi sekali, tidak double",
+    icon: Layers,
+    badge: "Paling sering",
+  },
+  {
+    id: "bisnis_luar",
+    title: "Usaha saja",
+    subtitle: "Berjualan di RW 03, rumah tinggal di luar RW 03",
+    icon: Store,
+  },
+];
+
+function applyKeperluanMode(mode: KeperluanMode): {
+  keperluan: "tinggal" | "bisnis" | "";
+  tinggalDiWilayahRw3: boolean | null;
+} {
+  if (mode === "tinggal") return { keperluan: "tinggal", tinggalDiWilayahRw3: null };
+  if (mode === "bisnis_dalam") return { keperluan: "bisnis", tinggalDiWilayahRw3: true };
+  if (mode === "bisnis_luar") return { keperluan: "bisnis", tinggalDiWilayahRw3: false };
+  return { keperluan: "", tinggalDiWilayahRw3: null };
+}
 
 function buildPengajuanSteps(keperluan: string, tinggalDiWilayahRw3: boolean | null): StepDef[] {
   const steps: StepDef[] = [
-    { id: "keperluan", label: "Keperluan" },
+    { id: "keperluan", label: "Situasi" },
     { id: "lokasi", label: "Lokasi" },
   ];
   const formLengkap = keperluan === "tinggal" || (keperluan === "bisnis" && tinggalDiWilayahRw3 === true);
   if (formLengkap) {
     steps.push({ id: "jumlah", label: "Jumlah" }, { id: "penghuni", label: "Penghuni" });
-  }
-  if (keperluan === "bisnis") {
-    steps.push({ id: "tetangga", label: "Tetangga" });
   }
   steps.push({ id: "syarat", label: "Syarat" }, { id: "bayar", label: "Bayar" });
   return steps;
@@ -210,6 +253,7 @@ function umurFromDate(tgl: string) {
 export default function Visitrw3Pengajuan() {
   const { toast } = useToast();
   const [step, setStep] = useState(0);
+  const [keperluanMode, setKeperluanMode] = useState<KeperluanMode>("");
   const [keperluan, setKeperluan] = useState<"tinggal" | "bisnis" | "">("");
   const [rt, setRt] = useState("");
   const [pemilikKostId, setPemilikKostId] = useState("");
@@ -225,9 +269,6 @@ export default function Visitrw3Pengajuan() {
   const [pjNomorWhatsapp, setPjNomorWhatsapp] = useState("");
   const [pjTanggalLahir, setPjTanggalLahir] = useState("");
   const [pjFotoKtpPath, setPjFotoKtpPath] = useState("");
-  const [persetujuanTetangga, setPersetujuanTetangga] = useState<PersetujuanTetanggaRow[]>(
-    () => emptyPersetujuanTetangga(),
-  );
   const [jumlahDewasa, setJumlahDewasa] = useState(1);
   const [jumlahAnak, setJumlahAnak] = useState(0);
   const jumlah = jumlahDewasa + jumlahAnak;
@@ -241,7 +282,6 @@ export default function Visitrw3Pengajuan() {
   const [nomorHasil, setNomorHasil] = useState<string | null>(null);
   const [lokasiSub, setLokasiSub] = useState(0);
   const [penghuniIndex, setPenghuniIndex] = useState(0);
-  const [tetanggaIndex, setTetanggaIndex] = useState(0);
 
   const steps = useMemo(
     () => buildPengajuanSteps(keperluan, tinggalDiWilayahRw3),
@@ -296,12 +336,6 @@ export default function Visitrw3Pengajuan() {
 
   function goStep(delta: number) {
     setStep((s) => Math.min(Math.max(0, s + delta), steps.length - 1));
-  }
-
-  function updateTetangga(posisi: PersetujuanTetanggaRow["posisi"], slot: 1 | 2, patch: Partial<PersetujuanTetanggaRow>) {
-    setPersetujuanTetangga((prev) =>
-      prev.map((r) => (r.posisi === posisi && r.slot === slot ? { ...r, ...patch } : r)),
-    );
   }
 
   const { data: settingsRows = [], isLoading: settingsLoading } = useQuery({
@@ -450,7 +484,6 @@ export default function Visitrw3Pengajuan() {
         jamBuka: bisnisLuar ? jamBuka : null,
         jamTutup: bisnisLuar ? jamTutup : null,
         alamatUsaha: bisnisLuar ? alamatUsaha : null,
-        persetujuanTetangga: keperluan === "bisnis" ? persetujuanTetangga : null,
         penanggungJawab: keperluan === "bisnis" ? penanggungJawab : null,
         jumlahPenghuni: bisnisLuar ? 1 : jumlah,
         tanggalBayar,
@@ -566,52 +599,98 @@ export default function Visitrw3Pengajuan() {
 
   return (
     <Visitrw3Shell title="Pengajuan baru" backHref="/visitrw3/penyewa">
-      <p className="prose-gov mb-2 text-sm">
-        Isi satu per satu — tekan <strong>Lanjut</strong> setelah setiap bagian. Tidak perlu diisi sekaligus.
-      </p>
+      <FeatureExplain title="Sebelum mulai" className="mb-3">
+        <p>
+          Pastikan properti tempat Anda tinggal/berusaha sudah <strong>terdaftar pemilik</strong> dan
+          statusnya aktif. Isi form langkah demi langkah — tekan <strong>Lanjut</strong> setelah
+          setiap bagian.
+        </p>
+        <p>
+          Ngekost sekaligus berusaha? Pilih <strong>Tinggal sekaligus usaha</strong> di langkah
+          pertama — cukup satu kali isi, tidak double.
+        </p>
+      </FeatureExplain>
       <Link
         href="/visitrw3/panduan"
         className="inline-flex items-center gap-1.5 text-sm text-brand font-medium mb-4 hover:underline"
       >
         <BookOpen className="w-4 h-4" />
-        Bingung? Baca panduan
+        Bingung? Baca panduan lengkap
       </Link>
       <FormStepper steps={steps} currentStep={step} />
 
       {stepId === "keperluan" && (
         <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">Pilih keperluan pengajuan</p>
-          <div className="grid grid-cols-2 gap-3">
-            <Button
-              type="button"
-              variant={keperluan === "tinggal" ? "default" : "outline"}
-              className="h-auto py-4 flex-col"
-              onClick={() => {
-                setKeperluan("tinggal");
-                setTinggalDiWilayahRw3(null);
-              }}
-            >
-              Tinggal
-            </Button>
-            <Button
-              type="button"
-              variant={keperluan === "bisnis" ? "default" : "outline"}
-              className="h-auto py-4 flex-col"
-              onClick={() => {
-                setKeperluan("bisnis");
-                setTinggalDiWilayahRw3(null);
-                setPemilikKostId("");
-              }}
-            >
-              Bisnis
-            </Button>
+          <div className="rounded-lg bg-brand/5 border border-brand/20 p-3 space-y-1">
+            <p className="text-sm font-medium">Pilih yang paling sesuai situasi Anda</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Ngekost sekaligus berusaha? Pilih <strong className="text-foreground">Tinggal sekaligus usaha</strong> —
+              cukup <strong className="text-foreground">satu kali</strong> isi form, tidak perlu ajukan tinggal dan bisnis
+              terpisah.
+            </p>
+          </div>
+          <div className="space-y-2">
+            {KEPERLUAN_OPTIONS.map((opt) => {
+              const Icon = opt.icon;
+              const selected = keperluanMode === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => {
+                    const next = applyKeperluanMode(opt.id);
+                    setKeperluanMode(opt.id);
+                    setKeperluan(next.keperluan);
+                    setTinggalDiWilayahRw3(next.tinggalDiWilayahRw3);
+                    if (opt.id === "bisnis_luar") {
+                      setPemilikKostId("");
+                      setJamBuka("");
+                      setJamTutup("");
+                      setAlamatUsaha("");
+                    }
+                    if (opt.id === "bisnis_dalam") {
+                      setJamBuka("");
+                      setJamTutup("");
+                      setAlamatUsaha("");
+                    }
+                  }}
+                  className={`w-full text-left rounded-xl border p-4 transition-colors touch-target ${
+                    selected
+                      ? "border-brand bg-brand/10 ring-1 ring-brand/30"
+                      : "border-border bg-card hover:border-brand/40"
+                  }`}
+                >
+                  <div className="flex gap-3">
+                    <div
+                      className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${
+                        selected ? "bg-brand text-brand-foreground" : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      <Icon className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold text-sm">{opt.title}</span>
+                        {opt.badge && (
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-accent/20 text-accent-foreground">
+                            {opt.badge}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-relaxed">{opt.subtitle}</p>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
           <Button
             className="w-full touch-target"
-            disabled={!keperluan}
+            disabled={!keperluanMode}
             onClick={() => {
               const err = validateStepKeperluan(keperluan);
               if (err) return showErr(err);
+              setLokasiSub(0);
               setStep(1);
             }}
           >
@@ -630,47 +709,58 @@ export default function Visitrw3Pengajuan() {
               lokasiSubId === "wilayah"
                 ? "Pilih sesuai tempat tinggal Anda saat ini."
                 : lokasiSubId === "kost"
-                  ? "Pilih properti tempat Anda tinggal di RW 03."
-                  : undefined
+                  ? keperluanMode === "bisnis_dalam"
+                    ? "Pilih kost tempat Anda tinggal. Data usaha sudah diisi di langkah sebelumnya — tidak perlu pengajuan terpisah."
+                    : "Pilih properti tempat Anda tinggal di RW 03."
+                  : lokasiSubId === "usaha" && keperluanMode === "bisnis_dalam"
+                    ? "Isi data usaha Anda. Nanti lanjut isi data penghuni kost di langkah berikutnya."
+                    : undefined
             }
           />
 
           {lokasiSubId === "wilayah" && keperluan === "bisnis" && (
-            <div className="grid grid-cols-1 gap-3">
-              <Button
-                type="button"
-                variant={tinggalDiWilayahRw3 === true ? "default" : "outline"}
-                className="h-auto py-4 justify-start px-4"
-                onClick={() => {
-                  setTinggalDiWilayahRw3(true);
-                  setJamBuka("");
-                  setJamTutup("");
-                  setAlamatUsaha("");
-                }}
-              >
-                <span className="text-left">
-                  <span className="block font-medium">Ya, saya tinggal di RW 03</span>
-                  <span className="block text-xs font-normal opacity-80 mt-0.5">
-                    Nanti isi data penghuni seperti pengajuan tinggal
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Langkah ini muncul jika pilihan awal belum jelas. Umumnya sudah terisi dari langkah pertama.
+              </p>
+              <div className="grid grid-cols-1 gap-3">
+                <Button
+                  type="button"
+                  variant={tinggalDiWilayahRw3 === true ? "default" : "outline"}
+                  className="h-auto py-4 justify-start px-4"
+                  onClick={() => {
+                    setKeperluanMode("bisnis_dalam");
+                    setTinggalDiWilayahRw3(true);
+                    setJamBuka("");
+                    setJamTutup("");
+                    setAlamatUsaha("");
+                  }}
+                >
+                  <span className="text-left">
+                    <span className="block font-medium">Ya, saya tinggal di RW 03</span>
+                    <span className="block text-xs font-normal opacity-80 mt-0.5">
+                      Sekaligus isi data penghuni kost — satu pengajuan saja
+                    </span>
                   </span>
-                </span>
-              </Button>
-              <Button
-                type="button"
-                variant={tinggalDiWilayahRw3 === false ? "default" : "outline"}
-                className="h-auto py-4 justify-start px-4"
-                onClick={() => {
-                  setTinggalDiWilayahRw3(false);
-                  setPemilikKostId("");
-                }}
-              >
-                <span className="text-left">
-                  <span className="block font-medium">Tidak, tinggal di luar RW 03</span>
-                  <span className="block text-xs font-normal opacity-80 mt-0.5">
-                    Cukup isi data usaha dan penanggung jawab
+                </Button>
+                <Button
+                  type="button"
+                  variant={tinggalDiWilayahRw3 === false ? "default" : "outline"}
+                  className="h-auto py-4 justify-start px-4"
+                  onClick={() => {
+                    setKeperluanMode("bisnis_luar");
+                    setTinggalDiWilayahRw3(false);
+                    setPemilikKostId("");
+                  }}
+                >
+                  <span className="text-left">
+                    <span className="block font-medium">Tidak, tinggal di luar RW 03</span>
+                    <span className="block text-xs font-normal opacity-80 mt-0.5">
+                      Cukup isi data usaha dan penanggung jawab
+                    </span>
                   </span>
-                </span>
-              </Button>
+                </Button>
+              </div>
             </div>
           )}
 
@@ -869,7 +959,11 @@ export default function Visitrw3Pengajuan() {
             current={1}
             total={1}
             title="Berapa orang yang akan tinggal?"
-            hint="Tekan + atau − untuk menambah/mengurangi. Nanti diisi satu per satu."
+            hint={
+              keperluanMode === "bisnis_dalam"
+                ? "Data ini sekaligus untuk izin tinggal dan usaha — tidak perlu isi form kedua kalinya."
+                : "Tekan + atau − untuk menambah/mengurangi. Nanti diisi satu per satu."
+            }
           />
           <JumlahStepper
             label="Dewasa"
@@ -1127,71 +1221,6 @@ export default function Visitrw3Pengajuan() {
                   <>Penghuni berikutnya <ChevronRight className="w-4 h-4 ml-1" /></>
                 ) : (
                   <>Lanjut <ChevronRight className="w-4 h-4 ml-1" /></>
-                )}
-              </Button>
-            </div>
-          </div>
-        );
-      })()}
-
-      {stepId === "tetangga" && (() => {
-        const slot = VISITRW3_TETANGGA_SLOTS[tetanggaIndex];
-        const row = persetujuanTetangga.find((r) => r.posisi === slot.posisi && r.slot === slot.slot);
-        return (
-          <div className="space-y-4">
-            <MicroStepHeader
-              current={tetanggaIndex + 1}
-              total={VISITRW3_TETANGGA_SLOTS.length}
-              title={`Tetangga: ${slot.label}`}
-              hint="Isi nama dan WhatsApp warga tetangga yang menyetujui usaha Anda."
-            />
-            <div className="rounded-xl border p-4 space-y-4 bg-card">
-              <div className="space-y-2">
-                <Label>Nama warga</Label>
-                <Input
-                  className="h-12"
-                  placeholder="Nama lengkap tetangga"
-                  value={row?.namaWarga ?? ""}
-                  onChange={(e) => updateTetangga(slot.posisi, slot.slot, { namaWarga: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>WhatsApp tetangga</Label>
-                <Input
-                  className="h-12"
-                  placeholder="08xxxxxxxxxx"
-                  value={row?.nomorWhatsapp ?? ""}
-                  onChange={(e) => updateTetangga(slot.posisi, slot.slot, { nomorWhatsapp: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                className="touch-target"
-                onClick={() => {
-                  if (tetanggaIndex > 0) setTetanggaIndex((idx) => idx - 1);
-                  else goStep(-1);
-                }}
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-              <Button
-                className="flex-1 touch-target"
-                onClick={() => {
-                  const err = validateSingleTetangga(slot, row);
-                  if (err) return showErr(err);
-                  if (tetanggaIndex < VISITRW3_TETANGGA_SLOTS.length - 1) {
-                    setTetanggaIndex((idx) => idx + 1);
-                    return;
-                  }
-                  goStep(1);
-                }}
-              >
-                {tetanggaIndex < VISITRW3_TETANGGA_SLOTS.length - 1 ? (
-                  <>Tetangga berikutnya <ChevronRight className="w-4 h-4 ml-1" /></>
-                ) : (
-                  <>Lanjut syarat <ChevronRight className="w-4 h-4 ml-1" /></>
                 )}
               </Button>
             </div>

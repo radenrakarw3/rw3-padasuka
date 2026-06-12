@@ -55,7 +55,7 @@ export default function AdminVisitrw3Properti() {
   const [deleteTarget, setDeleteTarget] = useState<PemilikKost | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterRt, setFilterRt] = useState<string>("semua");
-  const [filterStatus, setFilterStatus] = useState<string>("semua");
+  const [filterStatus, setFilterStatus] = useState<string>("menunggu");
   const [approveTarget, setApproveTarget] = useState<PemilikKost | null>(null);
   const [surveyForm, setSurveyForm] = useState<Visitrw3SurveyKontribusiState>(defaultSurveyKontribusiState);
 
@@ -201,7 +201,7 @@ export default function AdminVisitrw3Properti() {
       p.namaKost.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.namaPemilik.toLowerCase().includes(searchTerm.toLowerCase());
     const matchRt = filterRt === "semua" || p.rt === parseInt(filterRt);
-    const st = p.statusProperti ?? "aktif";
+    const st = p.statusProperti ?? "menunggu_verifikasi";
     const matchStatus =
       filterStatus === "semua" ||
       (filterStatus === "menunggu" && st === "menunggu_verifikasi") ||
@@ -379,7 +379,7 @@ export default function AdminVisitrw3Properti() {
             <Visitrw3ListItem
               key={item.id}
               testId={`card-pemilik-${item.id}`}
-              accent={(item.statusProperti ?? "aktif") === "menunggu_verifikasi" ? "warning" : "default"}
+              accent={item.statusProperti === "menunggu_verifikasi" ? "warning" : "default"}
               actions={
                 <>
                   {item.statusProperti === "menunggu_verifikasi" && (
@@ -410,7 +410,7 @@ export default function AdminVisitrw3Properti() {
                 <Building2 className="w-4 h-4 text-[hsl(163,55%,22%)] shrink-0" />
                 <span className="font-semibold text-sm truncate" data-testid={`text-nama-kost-${item.id}`}>{item.namaKost}</span>
                 <Visitrw3RtBadge rt={item.rt} />
-                {(item.statusProperti ?? "aktif") === "menunggu_verifikasi" && (
+                {item.statusProperti === "menunggu_verifikasi" && (
                   <span className="text-[10px] font-semibold bg-amber-500 text-white px-2 py-0.5 rounded-full">Menunggu</span>
                 )}
               </div>

@@ -89,6 +89,31 @@ export default function Visitrw3Panduan() {
           </p>
         </div>
 
+        <section className="rounded-xl border bg-card p-4 space-y-3">
+          <h2 className="font-semibold text-sm">Pilih situasi — supaya tidak double</h2>
+          <div className="space-y-2 text-sm">
+            <div className="rounded-lg border p-3 bg-muted/30">
+              <p className="font-medium">Tinggal saja</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Ngekost/kontrak di RW 03, tidak punya usaha di sini → isi data penghuni kost.
+              </p>
+            </div>
+            <div className="rounded-lg border p-3 bg-brand/5 border-brand/20">
+              <p className="font-medium text-brand">Tinggal sekaligus usaha</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Ngekost dan punya lapak/kiosk/warung → <strong className="text-foreground">satu form</strong>,
+                isi usaha + penghuni. Jangan ajukan tinggal dan bisnis terpisah.
+              </p>
+            </div>
+            <div className="rounded-lg border p-3 bg-muted/30">
+              <p className="font-medium">Usaha saja</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Berjualan di RW 03, rumah tinggal di luar RW 03 → isi data usaha & penanggung jawab.
+              </p>
+            </div>
+          </div>
+        </section>
+
         <SectionCard icon={Building2} title="Pemilik kost, kontrakan, kiosk, atau lapak">
           <p className="text-xs text-muted-foreground">
             Daftarkan properti dulu agar bisa dipilih penyewa saat mengajukan Visit RW3.
@@ -128,20 +153,19 @@ export default function Visitrw3Panduan() {
               daftar dulu atau hubungi pengurus RW.
             </FlowStep>
             <FlowStep n={2}>
-              Buka <strong>Pengajuan baru</strong> → pilih <strong>Tinggal</strong> atau{" "}
-              <strong>Bisnis</strong>.
+              Buka <strong>Pengajuan baru</strong> → pilih situasi Anda:{" "}
+              <strong>Tinggal saja</strong>, <strong>Tinggal sekaligus usaha</strong>, atau{" "}
+              <strong>Usaha saja</strong>.
             </FlowStep>
             <FlowStep n={3}>
-              Pilih RT & properti → isi data penghuni satu per satu (dewasa wajib NIK & foto KTP).
+              Isi lokasi & data sesuai pilihan. Kalau ngekost + berbisnis, cukup{" "}
+              <strong>satu kali</strong> isi — pilih &quot;Tinggal sekaligus usaha&quot;.
             </FlowStep>
             <FlowStep n={4}>
-              Pengajuan <strong>bisnis</strong> perlu data tetangga yang menyetujui (8 orang).
-            </FlowStep>
-            <FlowStep n={5}>
               Setujui syarat → isi tanggal bayar & termin → kirim. Simpan nomor{" "}
               <strong>VRW3-…</strong>.
             </FlowStep>
-            <FlowStep n={6}>
+            <FlowStep n={5}>
               Admin RW akan survey. Lacak status di menu <strong>Cek status pengajuan</strong>.
             </FlowStep>
           </ol>
@@ -266,12 +290,20 @@ export default function Visitrw3Panduan() {
             </AccordionItem>
             <AccordionItem value="tinggal-bisnis">
               <AccordionTrigger className="text-sm text-left">
-                Bedanya pengajuan tinggal dan bisnis?
+                Ngekost sekaligus berbisnis — isi sekali atau dua kali?
               </AccordionTrigger>
-              <AccordionContent className="text-sm text-muted-foreground">
-                <strong>Tinggal</strong> untuk penyewa kamar kost/kontrakan. <strong>Bisnis</strong>{" "}
-                untuk lapak, kiosk, atau usaha — perlu data tetangga yang menyetujui. Kalau Anda
-                tinggal di RW 03 sekaligus berbisnis, pilih bisnis dan isi data penghuni lengkap.
+              <AccordionContent className="text-sm text-muted-foreground space-y-2">
+                <p>
+                  <strong className="text-foreground">Cukup sekali.</strong> Pilih{" "}
+                  <strong>Tinggal sekaligus usaha</strong> di langkah pertama, lalu isi data usaha
+                  dan data penghuni kost dalam formulir yang sama.
+                </p>
+                <p>
+                  Jangan ajukan <strong>Tinggal</strong> dan <strong>Bisnis</strong> terpisah —
+                  itu yang bikin double. Kalau hanya ngekost tanpa usaha, pilih{" "}
+                  <strong>Tinggal saja</strong>. Kalau hanya berjualan dan rumah di luar RW 03,
+                  pilih <strong>Usaha saja</strong>.
+                </p>
               </AccordionContent>
             </AccordionItem>
             <AccordionItem value="nomor">

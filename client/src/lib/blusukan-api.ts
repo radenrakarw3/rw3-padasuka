@@ -2,8 +2,8 @@
  * Client SSOT — panggilan API Blusukan RW (master data Ketua RW).
  */
 import { BLUSUKAN_API } from "@shared/blusukan-api";
-import type { KartuKeluarga, Warga } from "@shared/schema";
-import { readJsonSafely } from "./queryClient";
+import type { BlusukanQuest, KartuKeluarga, Laporan, Warga } from "@shared/schema";
+import { fetchWithTimeout, readJsonSafely } from "./queryClient";
 
 const jsonOpts = (method: string, body?: unknown): RequestInit => ({
   method,
@@ -12,13 +12,19 @@ const jsonOpts = (method: string, body?: unknown): RequestInit => ({
   body: body !== undefined ? JSON.stringify(body) : undefined,
 });
 
+const BLUSUKAN_FETCH_TIMEOUT_MS = 20_000;
+
 export async function blusukanFetch<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, { credentials: "include", ...init });
+  const res = await fetchWithTimeout(url, { credentials: "include", ...init }, BLUSUKAN_FETCH_TIMEOUT_MS);
   if (!res.ok) {
     const err = await readJsonSafely<{ message?: string }>(res);
     throw new Error(err?.message || `Permintaan gagal (${res.status})`);
   }
-  return readJsonSafely<T>(res) as Promise<T>;
+  const data = await readJsonSafely<T>(res);
+  if (data == null) {
+    return [] as T;
+  }
+  return data;
 }
 
 export type BlusukanAuthMe = {
@@ -128,4 +134,34 @@ export const blusukanApi = {
 
   kunjungan: (body: { kkId: number; hasil: string; catatan?: string | null; petugasLabel?: string | null }) =>
     blusukanFetch(BLUSUKAN_API.kunjungan, jsonOpts("POST", body)),
+
+  quest: {
+    list: (status?: "aktif" | "selesai") => {
+      const q = status ? `?status=${status}` : "";
+      return blusukanFetch<BlusukanQuest[]>(BLUSUKAN_API.quest + q);
+    },
+    create: (body: Record<string, unknown>) =>
+      blusukanFetch<BlusukanQuest>(BLUSUKAN_API.quest, jsonOpts("POST", body)),
+    patch: (id: number, body: Record<string, unknown>) =>
+      blusukanFetch<BlusukanQuest>(BLUSUKAN_API.questItem(id), jsonOpts("PATCH", body)),
+  },
+
+  laporan: {
+    list: () =>
+      blusukanFetch<
+        (Laporan & {
+          pelaporNama: string | null;
+          pelaporRt: number | null;
+          pelaporAlamat: string | null;
+          pelaporWa: string | null;
+        })[]
+      >(BLUSUKAN_API.laporan),
+    updateStatus: (id: number, body: { status: string; tanggapan?: string }) =>
+      blusukanFetch<Laporan>(BLUSUKAN_API.laporanItem(id), jsonOpts("PATCH", body)),
+    delete: (id: number) =>
+      blusukanFetch<{ ok: boolean; message: string }>(BLUSUKAN_API.laporanItem(id), {
+        method: "DELETE",
+        credentials: "include",
+      }),
+  },
 };

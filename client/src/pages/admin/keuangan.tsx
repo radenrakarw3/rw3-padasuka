@@ -9,8 +9,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import {
   Plus, TrendingUp, TrendingDown, Wallet, Pencil, Trash2, X, Check,
-  ChevronLeft, ChevronRight, BarChart2, Calendar, Heart
+  ChevronLeft, ChevronRight, BarChart2, Calendar, Heart, RotateCcw,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import type { KasRw, DonasiCampaign } from "@shared/schema";
 
@@ -121,6 +131,8 @@ export default function AdminKeuangan() {
   const [keterangan, setKeterangan] = useState("");
   const [tanggal, setTanggal] = useState(new Date().toISOString().split("T")[0]);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>("");
+  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [resetConfirm, setResetConfirm] = useState("");
 
   const { data: transaksiAll, isLoading } = useQuery<KasRw[]>({ queryKey: ["/api/kas-rw"] });
   const { data: summary } = useQuery<{ totalPemasukan: number; totalPengeluaran: number; saldo: number }>({ queryKey: ["/api/kas-rw/summary"] });
@@ -177,6 +189,23 @@ export default function AdminKeuangan() {
     onError: (err: any) => toast({ title: "Gagal menghapus", description: err.message, variant: "destructive" }),
   });
 
+  const resetMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", "/api/kas-rw/reset", { confirm: "RESET" });
+    },
+    onSuccess: () => {
+      toast({ title: "Kas RW direset", description: "Semua transaksi dihapus — saldo kembali Rp 0" });
+      setShowResetDialog(false);
+      setResetConfirm("");
+      queryClient.invalidateQueries({ queryKey: ["/api/kas-rw"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/kas-rw/summary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/kas-rw/campaign-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/kas-rw/laporan"] });
+    },
+    onError: (err: any) =>
+      toast({ title: "Gagal reset", description: err.message, variant: "destructive" }),
+  });
+
   const startEdit = (item: KasRw) => {
     setEditId(item.id); setTipe(item.tipe as "pemasukan" | "pengeluaran");
     setKategori(item.kategori); setJumlah(String(item.jumlah));
@@ -193,11 +222,57 @@ export default function AdminKeuangan() {
           <h2 className="text-xl font-bold" data-testid="text-keuangan-title">Keuangan Kas RW</h2>
           <p className="text-sm text-muted-foreground">Kelola pemasukan dan pengeluaran kas RW</p>
         </div>
-        <Button onClick={() => { resetForm(); setShowForm(true); }} className="bg-[hsl(163,55%,22%)] hover:bg-[hsl(163,55%,18%)]" data-testid="button-tambah-transaksi">
-          <Plus className="w-4 h-4 mr-1" />
-          Tambah
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setShowResetDialog(true)}
+            className="text-destructive border-destructive/30 hover:bg-destructive/5"
+            data-testid="button-reset-kas-rw"
+          >
+            <RotateCcw className="w-4 h-4 mr-1" />
+            Reset ke 0
+          </Button>
+          <Button onClick={() => { resetForm(); setShowForm(true); }} className="bg-[hsl(163,55%,22%)] hover:bg-[hsl(163,55%,18%)]" data-testid="button-tambah-transaksi">
+            <Plus className="w-4 h-4 mr-1" />
+            Tambah
+          </Button>
+        </div>
       </div>
+
+      <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset Kas RW ke nol?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>
+                Semua transaksi Kas RW akan dihapus permanen. Saldo kembali Rp 0. Status iuran KK
+                yang sudah lunas juga dikembalikan ke belum.
+              </p>
+              <p>Ketik <strong>RESET</strong> untuk melanjutkan.</p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={resetConfirm}
+            onChange={(e) => setResetConfirm(e.target.value)}
+            placeholder="RESET"
+            className="font-mono"
+            data-testid="input-reset-kas-confirm"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setResetConfirm("")}>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              disabled={resetConfirm !== "RESET" || resetMutation.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                resetMutation.mutate();
+              }}
+            >
+              {resetMutation.isPending ? "Mereset..." : "Reset Kas RW"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Form tambah/edit */}
       {showForm && (

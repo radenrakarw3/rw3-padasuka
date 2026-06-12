@@ -9,6 +9,7 @@ import { Loader2 } from "lucide-react";
 import { StatusBadge, visitrw3StatusVariant } from "@/components/gov/status-badge";
 import { StatusTimeline, buildVisitrw3Timeline } from "@/components/gov/status-timeline";
 import { EmptyState } from "@/components/gov/empty-state";
+import { FeatureExplain } from "@/components/gov/feature-explain";
 import { Search } from "lucide-react";
 
 export default function Visitrw3Status() {
@@ -46,7 +47,17 @@ export default function Visitrw3Status() {
   return (
     <Visitrw3Shell title="Cek status" backHref="/visitrw3/penyewa">
       <div className="space-y-4">
-        <p className="prose-gov">Masukkan nomor Visit RW3 yang Anda terima setelah mengajukan atau memperpanjang.</p>
+        <FeatureExplain title="Nomor apa yang dimasukkan?">
+          <p>
+            Nomor <strong>VRW3-…</strong> dari konfirmasi pengajuan baru atau perpanjang izin
+            (bukan nomor PROP properti).
+          </p>
+          <p>
+            Status umum: <strong>menunggu survey</strong> → admin memverifikasi data →{" "}
+            <strong>disetujui</strong> (izin aktif) atau <strong>ditolak</strong> (ada alasan
+            penolakan).
+          </p>
+        </FeatureExplain>
 
         <div className="space-y-2">
           <Label htmlFor="nomor">Nomor Visit RW3</Label>
