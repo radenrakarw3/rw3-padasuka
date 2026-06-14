@@ -13,6 +13,13 @@ import {
 import { storage } from "./storage";
 import { ACTIVE_RT_NUMBERS } from "@shared/rt";
 import { hitungTanggalBerlaku } from "@shared/visitrw3-kontribusi";
+import { stringifyKategoriUsaha } from "@shared/visitrw3-kategori-usaha";
+import {
+  getChecklistSurveyProperti,
+  getChecklistSurveyPengajuan,
+  validateSurveyChecklist,
+  type SurveyChecklistItem,
+} from "@shared/visitrw3-survey-checklist";
 import {
   type Visitrw3DashboardStats,
   emptyVisitrw3DashboardStats,
@@ -88,8 +95,9 @@ export const pengajuanBaruSchema = z.object({
   tinggalDiWilayahRw3: z.boolean().optional().nullable(),
   namaUsaha: z.string().optional().nullable(),
   jenisUsaha: z.string().optional().nullable(),
-  jenisTempatUsaha: z.enum(["lapak", "kiosk", "lainnya"]).optional().nullable(),
+  jenisTempatUsaha: z.enum(["lapak", "kiosk", "usaha_rumahan", "lainnya"]).optional().nullable(),
   jenisTempatUsahaLain: z.string().optional().nullable(),
+  kategoriUsaha: z.array(z.string().min(1).max(120)).max(12).optional().nullable(),
   jamBuka: z.string().optional().nullable(),
   jamTutup: z.string().optional().nullable(),
   alamatUsaha: z.string().optional().nullable(),
@@ -106,15 +114,20 @@ export const pengajuanBaruSchema = z.object({
 function validateBisnisFields(parsed: z.infer<typeof pengajuanBaruSchema>) {
   if (!parsed.namaUsaha?.trim()) throw new Error("Nama usaha wajib diisi");
   if (!parsed.penanggungJawab?.trim()) throw new Error("Penanggung jawab wajib diisi");
-  if (!parsed.jenisTempatUsaha) throw new Error("Jenis tempat usaha wajib dipilih (lapak, kiosk, atau lainnya)");
-  if (parsed.jenisTempatUsaha === "lainnya" && !parsed.jenisTempatUsahaLain?.trim()) {
-    throw new Error("Jelaskan jenis usaha lainnya");
+  const kategori = parsed.kategoriUsaha?.map((k) => k.trim()).filter(Boolean) ?? [];
+  if (kategori.length === 0) throw new Error("Pilih minimal 1 kategori usaha");
+  const usahaRumahan = parsed.jenisTempatUsaha === "usaha_rumahan";
+  if (!usahaRumahan) {
+    if (!parsed.jenisTempatUsaha) throw new Error("Jenis tempat usaha wajib dipilih");
+    if (parsed.jenisTempatUsaha === "lainnya" && !parsed.jenisTempatUsahaLain?.trim()) {
+      throw new Error("Jelaskan jenis usaha lainnya");
+    }
   }
   if (parsed.tinggalDiWilayahRw3 === undefined || parsed.tinggalDiWilayahRw3 === null) {
     throw new Error("Pilih apakah tinggal di wilayah RW 03 atau di luar wilayah");
   }
   if (parsed.tinggalDiWilayahRw3) {
-    if (!parsed.pemilikKostId) throw new Error("Pilih kost/kontrakan tempat tinggal");
+    if (!parsed.pemilikKostId) throw new Error("Pilih lokasi terdaftar (kost, kontrakan, atau usaha rumahan)");
   } else {
     if (!parsed.jamBuka?.trim() || !TIME_REGEX.test(parsed.jamBuka)) {
       throw new Error("Jam buka wajib diisi (format HH:MM)");
@@ -136,27 +149,26 @@ export const perpanjangSchema = z.object({
 
 export const approveVisitrw3SurveySchema = z.object({
   catatanSurvey: z.string().optional().nullable(),
-  kontribusiJumlah: z.number().int().min(0, "Kontribusi wajib diisi (boleh 0 jika gratis)"),
-  tanggalKas: z.string().regex(DATE_REGEX, "Tanggal masuk kas wajib"),
+  kontribusiJumlah: z.number().int().min(0, "Tarif kontribusi wajib diisi (boleh 0 jika gratis)"),
+  kontribusiSatuan: z.enum(["hari", "minggu", "bulan", "tahun"]),
+  tanggalKas: z.string().regex(DATE_REGEX, "Format tanggal tidak valid").optional().nullable(),
   keteranganKas: z.string().optional().nullable(),
+  checklistSurvey: z.record(z.string(), z.boolean()).optional(),
 });
 
-async function catatKontribusiKeKasRw(params: {
-  kontribusiJumlah: number;
-  tanggalKas: string;
-  keteranganKas: string;
-  adminUsername: string;
-}) {
-  if (params.kontribusiJumlah <= 0) return null;
-  const kas = await storage.createKasRw({
-    tipe: "pemasukan",
-    kategori: "Visit RW3",
-    jumlah: params.kontribusiJumlah,
-    keterangan: params.keteranganKas,
-    tanggal: params.tanggalKas,
-    createdBy: params.adminUsername,
+function assertChecklistSurvey(items: SurveyChecklistItem[], checked?: Record<string, boolean>) {
+  const err = validateSurveyChecklist(items, checked);
+  if (err) throw new Error(err);
+}
+
+function buildRincianKontribusiSurvey(parsed: z.infer<typeof approveVisitrw3SurveySchema>): string {
+  return JSON.stringify({
+    tarifNominal: parsed.kontribusiJumlah,
+    satuan: parsed.kontribusiSatuan,
+    tanggalMasukKas: parsed.tanggalKas?.trim() || null,
+    keteranganKas: parsed.keteranganKas?.trim() || null,
+    checklist: parsed.checklistSurvey ?? null,
   });
-  return kas.id;
 }
 
 function parseKendaraanFromPenghuni(jenisKendaraan?: string | null, platNomor?: string | null) {
@@ -238,7 +250,12 @@ async function assertKostAllowed(pemilikKostId: number, rt: number, keperluan: "
   if (kost.statusProperti !== "aktif") {
     throw new Error("Properti belum disetujui admin — tunggu verifikasi pendaftaran properti selesai");
   }
-  if (keperluan === "tinggal" && !kost.izinTinggal) throw new Error("Properti ini tidak menerima pengajuan tinggal");
+  if (keperluan === "tinggal") {
+    if (kost.jenisProperti === "usaha_rumahan") {
+      throw new Error("Usaha rumahan hanya untuk pengajuan bisnis di rumah milik sendiri, bukan untuk penyewa");
+    }
+    if (!kost.izinTinggal) throw new Error("Properti ini tidak menerima pengajuan tinggal");
+  }
   if (keperluan === "bisnis" && !kost.izinBisnis) throw new Error("Properti ini tidak menerima pengajuan bisnis");
   return kost;
 }
@@ -281,7 +298,7 @@ export const daftarPropertiSchema = z
     rt: z.number().int().refine((n) => (ACTIVE_RT_NUMBERS as readonly number[]).includes(n)),
     alamatLengkap: z.string().min(5, "Alamat lengkap wajib diisi"),
     jumlahPintu: z.number().int().min(1).max(50),
-    jenisProperti: z.enum(["kost", "kontrakan", "kiosk", "lapak"]),
+    jenisProperti: z.enum(["kost", "kontrakan", "kiosk", "lapak", "usaha_rumahan"]),
     izinTinggal: z.boolean(),
     izinBisnis: z.boolean(),
     catatanPemohon: z.string().optional().nullable(),
@@ -351,23 +368,17 @@ export async function approveProperti(
   if (!existing) throw new Error("Properti tidak ditemukan");
   if (existing.statusProperti === "aktif") throw new Error("Properti sudah aktif");
 
-  const keterangan =
-    parsed.keteranganKas?.trim() ||
-    `Pendaftaran properti Visit RW3 — ${existing.nomorPendaftaran ?? id} — ${existing.namaKost}`;
+  assertChecklistSurvey(getChecklistSurveyProperti(existing.jenisProperti), parsed.checklistSurvey);
 
-  const kasRwId = await catatKontribusiKeKasRw({
-    kontribusiJumlah: parsed.kontribusiJumlah,
-    tanggalKas: parsed.tanggalKas,
-    keteranganKas: keterangan,
-    adminUsername,
-  });
+  const rincianKontribusi = buildRincianKontribusiSurvey(parsed);
 
   const [updated] = await db
     .update(pemilikKost)
     .set({
       statusProperti: "aktif",
       estimasiKontribusi: parsed.kontribusiJumlah,
-      kasRwId,
+      rincianKontribusi,
+      kasRwId: null,
     })
     .where(eq(pemilikKost.id, id))
     .returning();
@@ -376,7 +387,17 @@ export async function approveProperti(
 }
 
 export async function createPengajuanBaru(input: z.infer<typeof pengajuanBaruSchema>) {
-  const parsed = pengajuanBaruSchema.parse(input);
+  let parsed = pengajuanBaruSchema.parse(input);
+  if (
+    parsed.keperluanPengajuan === "bisnis" &&
+    !parsed.jenisTempatUsaha &&
+    parsed.pemilikKostId
+  ) {
+    const kost = await storage.getPemilikKostById(parsed.pemilikKostId);
+    if (kost?.jenisProperti === "usaha_rumahan") {
+      parsed = { ...parsed, jenisTempatUsaha: "usaha_rumahan" };
+    }
+  }
   if (parsed.penghuni.length !== parsed.jumlahPenghuni) {
     throw new Error("Jumlah data penghuni tidak sesuai");
   }
@@ -414,6 +435,7 @@ export async function createPengajuanBaru(input: z.infer<typeof pengajuanBaruSch
             : parsed.jenisTempatUsaha || parsed.jenisUsaha || null,
         jenisTempatUsaha: parsed.jenisTempatUsaha || null,
         jenisTempatUsahaLain: parsed.jenisTempatUsahaLain || null,
+        kategoriUsaha: stringifyKategoriUsaha(parsed.kategoriUsaha ?? []),
         tinggalDiWilayahRw3: parsed.tinggalDiWilayahRw3 ?? null,
         jamBuka: parsed.jamBuka || null,
         jamTutup: parsed.jamTutup || null,
@@ -781,16 +803,15 @@ export async function approvePengajuan(
   const { pengajuan, penghuni } = detail;
   if (pengajuan.status !== "menunggu_survey") throw new Error("Pengajuan sudah diproses");
 
-  const keteranganKas =
-    parsedSurvey.keteranganKas?.trim() ||
-    `Kontribusi Visit RW3 — ${pengajuan.nomorVisitrw3} (${pengajuan.keperluanPengajuan})`;
+  assertChecklistSurvey(
+    getChecklistSurveyPengajuan(
+      pengajuan.keperluanPengajuan as "tinggal" | "bisnis",
+      pengajuan.tinggalDiWilayahRw3,
+    ),
+    parsedSurvey.checklistSurvey,
+  );
 
-  const kasRwId = await catatKontribusiKeKasRw({
-    kontribusiJumlah: parsedSurvey.kontribusiJumlah,
-    tanggalKas: parsedSurvey.tanggalKas,
-    keteranganKas,
-    adminUsername,
-  });
+  const rincianKontribusi = buildRincianKontribusiSurvey(parsedSurvey);
 
   const baseUpdate = {
     status: "disetujui" as const,
@@ -798,7 +819,8 @@ export async function approvePengajuan(
     reviewedAt: new Date(),
     reviewedBy: adminUsername,
     estimasiKontribusi: parsedSurvey.kontribusiJumlah,
-    kasRwId,
+    rincianKontribusi,
+    kasRwId: null as number | null,
   };
 
   if (pengajuan.tipe === "perpanjang") {
@@ -816,7 +838,7 @@ export async function approvePengajuan(
       .where(eq(visitrw3Pengajuan.id, id));
     const approvedPengajuan = { ...pengajuan, ...baseUpdate, wargaSinggahId: wsId };
     notifyVisitrw3Disetujui(approvedPengajuan, penghuni, detail.kost ?? null);
-    return { pengajuan: approvedPengajuan, wargaSinggah: updated, kasRwId };
+    return { pengajuan: approvedPengajuan, wargaSinggah: updated, kasRwId: null };
   }
 
   const bisnisLuar =
@@ -826,7 +848,7 @@ export async function approvePengajuan(
     await db.update(visitrw3Pengajuan).set(baseUpdate).where(eq(visitrw3Pengajuan.id, id));
     const approvedPengajuan = { ...pengajuan, ...baseUpdate };
     notifyVisitrw3Disetujui(approvedPengajuan, penghuni, detail.kost ?? null);
-    return { pengajuan: approvedPengajuan, wargaSinggah: null, kasRwId };
+    return { pengajuan: approvedPengajuan, wargaSinggah: null, kasRwId: null };
   }
 
   const dewasa = penghuni.filter((p) => !p.isAnak);
@@ -876,7 +898,7 @@ export async function approvePengajuan(
 
   const approvedPengajuan = { ...pengajuan, ...baseUpdate, wargaSinggahId: ws.id };
   notifyVisitrw3Disetujui(approvedPengajuan, penghuni, detail.kost ?? null);
-  return { pengajuan: approvedPengajuan, wargaSinggah: ws, kasRwId };
+  return { pengajuan: approvedPengajuan, wargaSinggah: ws, kasRwId: null };
 }
 
 function incCount(map: Record<string, number>, key: string) {
@@ -902,6 +924,7 @@ function labelJenisTempatUsaha(p: Visitrw3Pengajuan): string | null {
   if (p.jenisTempatUsaha === "lainnya") {
     return p.jenisTempatUsahaLain?.trim() || p.jenisUsaha?.trim() || "Lainnya";
   }
+  if (p.jenisTempatUsaha === "usaha_rumahan") return "Usaha rumahan";
   return p.jenisTempatUsaha?.trim() || p.jenisUsaha?.trim() || null;
 }
 
@@ -1270,6 +1293,7 @@ export async function ensureVisitrw3Schema() {
     ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS setuju_tata_tertib boolean NOT NULL DEFAULT false;
     ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS settings_versi text;
     ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS estimasi_kontribusi integer;
+    ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS rincian_kontribusi text;
     ALTER TABLE pemilik_kost ADD COLUMN IF NOT EXISTS kas_rw_id integer;
     ALTER TABLE warga_singgah ADD COLUMN IF NOT EXISTS nomor_visitrw3 text;
     ALTER TABLE warga_singgah ADD COLUMN IF NOT EXISTS pengajuan_id integer;
@@ -1277,6 +1301,7 @@ export async function ensureVisitrw3Schema() {
     ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS nomor_unit text;
     ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS jenis_tempat_usaha text;
     ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS jenis_tempat_usaha_lain text;
+    ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS kategori_usaha text;
     ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS tinggal_di_wilayah_rw3 boolean;
     ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS jam_buka text;
     ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS jam_tutup text;

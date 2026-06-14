@@ -32,8 +32,10 @@ const PublicPelayanan = lazy(() => import("@/pages/public/pelayanan"));
 const Rw3lawIndex = lazy(() => import("@/pages/public/rw3law/index"));
 const Rw3lawDokumen = lazy(() => import("@/pages/public/rw3law/dokumen"));
 
+import { VISITRW3_ROUTES } from "@/lib/visitrw3-routes";
 const Visitrw3Hub = lazy(() => import("@/pages/visitrw3/hub"));
 const Visitrw3HubPemilik = lazy(() => import("@/pages/visitrw3/hub-pemilik"));
+const Visitrw3HubUsahaRumahan = lazy(() => import("@/pages/visitrw3/hub-usaha-rumahan"));
 const Visitrw3HubPenyewa = lazy(() => import("@/pages/visitrw3/hub-penyewa"));
 const Visitrw3DaftarProperti = lazy(() => import("@/pages/visitrw3/daftar-properti"));
 const Visitrw3Pengajuan = lazy(() => import("@/pages/visitrw3/pengajuan"));
@@ -50,6 +52,7 @@ const AdminRw3law = lazy(() => import("@/pages/admin/rw3law"));
 
 const AdminSuratRw = lazy(() => import("@/pages/admin/surat-rw"));
 
+const AdminVisitrw3Landing = lazy(() => import("@/pages/admin/visitrw3-landing"));
 const AdminVisitrw3Dashboard = lazy(() => import("@/pages/admin/visitrw3-dashboard"));
 const AdminVisitrw3Kalender = lazy(() => import("@/pages/admin/visitrw3-kalender"));
 const AdminVisitrw3Antrian = lazy(() => import("@/pages/admin/visitrw3-antrian"));
@@ -62,7 +65,6 @@ const AdminKeuangan = lazy(() => import("@/pages/admin/keuangan"));
 const AdminKelolaLaporan = lazy(() => import("@/pages/admin/kelola-laporan"));
 const AdminKelolaKekeringan = lazy(() => import("@/pages/admin/kelola-kekeringan"));
 const AdminProgramKerjaDashboard = lazy(() => import("@/pages/admin/program-kerja-dashboard"));
-const AdminPropaganda = lazy(() => import("@/pages/admin/propaganda"));
 const AdminProgramKerjaKelola = lazy(() => import("@/pages/admin/program-kerja-kelola"));
 const AdminInfrastruktur = lazy(() => import("@/pages/admin/program-kerja-infrastruktur"));
 const AdminUmkmMakeover = lazy(() => import("@/pages/admin/program-kerja-umkm"));
@@ -75,8 +77,6 @@ import BlusukanrwKkDetail from "@/pages/blusukanrw/kk-detail";
 
 import goldLogo from "@assets/RW3-Cimahi-Logo-Gold.webp";
 import { BlusukanAuthProvider, useBlusukanAuth } from "@/lib/blusukan-auth";
-import { PropagandaAuthProvider } from "@/lib/propaganda-auth";
-import { PropagandaPinGate } from "@/components/admin/propaganda-pin-gate";
 import { BlusukanrwLayout } from "@/components/blusukanrw-layout";
 
 import emblemSvg from "@assets/rw03-emblem.svg";
@@ -338,7 +338,7 @@ function AdminRoutes() {
         <Route path="/admin/visitrw3/antrian" component={AdminVisitrw3Antrian} />
         <Route path="/admin/visitrw3/kalender" component={AdminVisitrw3Kalender} />
         <Route path="/admin/visitrw3/dashboard" component={AdminVisitrw3Dashboard} />
-        <Route path="/admin/visitrw3">{() => <Redirect to="/admin/visitrw3/antrian" />}</Route>
+        <Route path="/admin/visitrw3" component={AdminVisitrw3Landing} />
         <Route path="/admin/pemilik-kost">{() => <Redirect to="/admin/visitrw3/properti" />}</Route>
         <Route path="/admin/warga-singgah">{() => <Redirect to="/admin/visitrw3/penghuni" />}</Route>
 
@@ -348,16 +348,6 @@ function AdminRoutes() {
         <Route path="/admin/program-kerja/infrastruktur" component={AdminInfrastruktur} />
         <Route path="/admin/program-kerja/umkm" component={AdminUmkmMakeover} />
         <Route path="/admin/program-kerja" component={AdminProgramKerjaDashboard} />
-
-        <Route path="/admin/propaganda">
-          {() => (
-            <PropagandaAuthProvider>
-              <PropagandaPinGate>
-                <AdminPropaganda />
-              </PropagandaPinGate>
-            </PropagandaAuthProvider>
-          )}
-        </Route>
 
         <Route path="/admin">{() => <Redirect to="/admin/laporan" />}</Route>
 
@@ -461,6 +451,13 @@ function PublicRoutes() {
       <Route path="/rw3law">{() => <Redirect to="/rwlaw" />}</Route>
 
       {/* Visit RW3 */}
+      <Route path="/visitrw3/daftar-usaha-rumahan">
+        {() => <Redirect to={VISITRW3_ROUTES.usahaRumahan.daftarProperti} />}
+      </Route>
+      <Route path="/visitrw3/ajukan-usaha-rumahan">
+        {() => <Redirect to={VISITRW3_ROUTES.usahaRumahan.pengajuan} />}
+      </Route>
+      <Route path="/visitrw3/usaha-rumahan" component={Visitrw3HubUsahaRumahan} />
       <Route path="/visitrw3/pemilik" component={Visitrw3HubPemilik} />
       <Route path="/visitrw3/penyewa" component={Visitrw3HubPenyewa} />
       <Route path="/visitrw3/daftar-properti" component={Visitrw3DaftarProperti} />

@@ -26,15 +26,18 @@ const FEE_GROUPS: { title: string; description?: string; keys: string[] }[] = [
   },
   {
     title: "Bisnis — tarif per hari",
-    description: "Lapak, kiosk, usaha lain.",
+    description:
+      "Panduan saat survey: tarif × jumlah hari periode izin = total masuk Kas RW. Usaha rumahan memakai tarif kiosk.",
     keys: ["fee_bisnis_lapak_per_hari", "fee_bisnis_kiosk_per_hari", "fee_bisnis_lain_per_hari"],
   },
   {
     title: "Penyewa tinggal — kost (per unit/bulan)",
+    description: "Panduan: tarif × termin bulan pengajuan = total masuk Kas RW (bukan per bulan terpisah).",
     keys: ["fee_kost_kecil_per_unit_bulan", "fee_kost_sedang_per_unit_bulan", "fee_kost_besar_per_unit_bulan"],
   },
   {
     title: "Penyewa tinggal — kontrakan (per unit/bulan)",
+    description: "Sama seperti kost — dikalikan termin bulan, bukan dicatat per bulan.",
     keys: [
       "fee_kontrakan_kecil_per_unit_bulan",
       "fee_kontrakan_sedang_per_unit_bulan",
@@ -42,15 +45,18 @@ const FEE_GROUPS: { title: string; description?: string; keys: string[] }[] = [
     ],
   },
   {
-    title: "Pemilik — lapak & kiosk (per bulan)",
+    title: "Pemilik — lapak, kiosk & usaha rumahan (per bulan)",
+    description: "Kontribusi pendaftaran properti — total sekali masuk Kas RW (biasanya 1 bulan).",
     keys: ["fee_pemilik_lapak_per_bulan", "fee_pemilik_kiosk_per_bulan"],
   },
   {
     title: "Pemilik — kost (per bulan)",
+    description: "Tarif panduan kontribusi pemilik per bulan (total sekali saat verifikasi properti).",
     keys: ["fee_pemilik_kost_kecil_per_bulan", "fee_pemilik_kost_sedang_per_bulan", "fee_pemilik_kost_besar_per_bulan"],
   },
   {
     title: "Pemilik — kontrakan (per bulan)",
+    description: "Tarif panduan kontribusi pemilik per bulan (total sekali saat verifikasi properti).",
     keys: [
       "fee_pemilik_kontrakan_kecil_per_bulan",
       "fee_pemilik_kontrakan_sedang_per_bulan",
@@ -58,6 +64,13 @@ const FEE_GROUPS: { title: string; description?: string; keys: string[] }[] = [
     ],
   },
 ];
+
+function feeUnitSuffix(key: string): string {
+  if (key.includes("per_hari")) return "Rp / hari";
+  if (key.includes("per_bulan") || key.includes("per_unit_bulan")) return "Rp / bulan";
+  if (key.startsWith("tier_")) return "pintu";
+  return "Rp";
+}
 
 const TEXT_KEYS = ["tata_tertib_masyarakat", "tata_tertib_penyewa", "tata_tertib_pemilik"] as const;
 
@@ -162,8 +175,8 @@ export default function AdminVisitrw3Pengaturan() {
 
       <div className="max-w-3xl space-y-5">
       <p className="text-sm text-muted-foreground">
-        Tarif berjenjang sebagai panduan admin saat survey (lapak/kiosk/lain; kost/kontrakan menurut jumlah pintu).
-        Kontribusi aktual diisi saat menyetujui pengajuan di antrian.
+        Tarif berjenjang sebagai panduan saat survey. Nominal + satuan (per hari/minggu/bulan/tahun)
+        disimpan di pengajuan — pencatatan uang ke Kas RW dilakukan manual di menu Keuangan.
       </p>
 
       {FEE_GROUPS.map((group) => (
@@ -183,12 +196,18 @@ export default function AdminVisitrw3Pengaturan() {
                     </p>
                   )}
                   <div className="flex gap-2">
-                    <Input
-                      type="number"
-                      min={0}
-                      value={valueFor(key)}
-                      onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
-                    />
+                    <div className="relative flex-1">
+                      <Input
+                        type="number"
+                        min={0}
+                        className="pr-24"
+                        value={valueFor(key)}
+                        onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
+                      />
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                        {feeUnitSuffix(key)}
+                      </span>
+                    </div>
                     <Button type="button" onClick={() => save(key)} disabled={saveMutation.isPending}>
                       Simpan
                     </Button>

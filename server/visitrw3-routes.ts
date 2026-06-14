@@ -151,6 +151,7 @@ export function registerVisitrw3Routes(app: Express) {
       const row = await getPropertiByNomorPendaftaran(req.params.nomor as string);
       if (!row) return res.status(404).json({ message: "Nomor pendaftaran tidak ditemukan" });
       res.json({
+        id: row.id,
         nomorPendaftaran: row.nomorPendaftaran,
         namaKost: row.namaKost,
         namaPemilik: row.namaPemilik,

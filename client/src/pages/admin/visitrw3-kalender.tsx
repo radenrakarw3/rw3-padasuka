@@ -21,6 +21,7 @@ import { Visitrw3AdminShell, Visitrw3Panel, Visitrw3StatCard } from "@/component
 import { getApiErrorMessage, readJsonSafely } from "@/lib/queryClient";
 import { rtOptions } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { getStatusKontrak, getDaysRemaining, parseKontrakDate } from "@/lib/visitrw3-kontrak";
 
 type Visitrw3KalenderPenghuni = {
   id: number;
@@ -65,28 +66,8 @@ async function fetchKalender(rt: string): Promise<Visitrw3KalenderResponse> {
   return data;
 }
 
-function parseKontrakDate(ymd: string): Date {
-  return parseISO(`${ymd}T00:00:00`);
-}
-
 function toYmd(date: Date): string {
   return format(date, "yyyy-MM-dd");
-}
-
-function getDaysRemaining(tanggalHabis: string): number {
-  const today = startOfDay(new Date());
-  const habis = startOfDay(parseKontrakDate(tanggalHabis));
-  return Math.ceil((habis.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-}
-
-function getStatusKontrak(tanggalHabis: string): {
-  label: string;
-  variant: "default" | "secondary" | "destructive" | "outline";
-} {
-  const diff = getDaysRemaining(tanggalHabis);
-  if (diff < 0) return { label: "Habis", variant: "destructive" };
-  if (diff <= 7) return { label: diff === 0 ? "Hari ini" : `H-${diff}`, variant: "secondary" };
-  return { label: "Aktif", variant: "default" };
 }
 
 function formatTanggal(ymd: string): string {
@@ -451,13 +432,13 @@ export default function AdminVisitrw3Kalender() {
                           </div>
                         </div>
                         <div className="mt-2 flex gap-2">
-                          <Link href="/admin/visitrw3/penghuni">
+                          <Link href={`/admin/visitrw3/penghuni?perpanjang=${w.id}`}>
                             <Button size="sm" variant="outline" className="h-7 text-xs">
                               <RefreshCw className="w-3 h-3 mr-1" />
                               Perpanjang
                             </Button>
                           </Link>
-                          <Link href="/admin/visitrw3/antrian">
+                          <Link href="/admin/visitrw3/antrian?tab=pengajuan">
                             <Button size="sm" variant="ghost" className="h-7 text-xs">
                               Antrian
                               <ChevronRight className="w-3 h-3 ml-0.5" />
@@ -495,7 +476,7 @@ export default function AdminVisitrw3Kalender() {
                         RT {String(p.rt).padStart(2, "0")} · berlaku sampai {p.tanggalBerlakuSampai}
                       </p>
                     </div>
-                    <Link href="/admin/visitrw3/antrian">
+                    <Link href="/admin/visitrw3/antrian?tab=pengajuan">
                       <Button size="sm" variant="secondary" className="h-7 text-xs">
                         Proses
                       </Button>

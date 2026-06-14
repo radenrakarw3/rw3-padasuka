@@ -1,16 +1,22 @@
 import { Link } from "wouter";
+import { VISITRW3_ROUTES } from "@/lib/visitrw3-routes";
 import { Building2, Search, BookOpen } from "lucide-react";
 import { Visitrw3Shell } from "@/components/visitrw3-shell";
 import { FeatureMenuBlock } from "@/components/gov/feature-menu-block";
 
 export default function Visitrw3HubPemilik() {
   return (
-    <Visitrw3Shell title="Pemilik properti" backHref="/visitrw3">
+    <Visitrw3Shell title="Pemilik properti" backHref={VISITRW3_ROUTES.hub}>
       <p className="prose-gov mb-3 text-sm text-muted-foreground">
-        Untuk pemilik kost, kontrakan, kiosk, atau lapak di wilayah RW 03 Padasuka.
+        Untuk pemilik kost, kontrakan, kiosk, atau lapak yang <strong>disewakan ke orang lain</strong>.
+        Usaha di rumah sendiri? Pakai{" "}
+        <Link href={VISITRW3_ROUTES.usahaRumahan.hub} className="text-brand font-medium hover:underline">
+          menu usaha rumahan
+        </Link>
+        .
       </p>
       <Link
-        href="/visitrw3/panduan"
+        href={VISITRW3_ROUTES.panduan}
         className="inline-flex items-center gap-1.5 text-sm text-brand font-medium mb-4 hover:underline"
       >
         <BookOpen className="w-4 h-4" />
@@ -26,7 +32,7 @@ export default function Visitrw3HubPemilik() {
               <strong>PROP-…</strong> — simpan untuk cek status.
             </>
           }
-          href="/visitrw3/daftar-properti"
+          href={VISITRW3_ROUTES.pemilikDisewa.daftarProperti}
           icon={Building2}
           title="Daftar properti"
           description="Isi langkah demi langkah — tidak perlu sekaligus"
@@ -41,7 +47,7 @@ export default function Visitrw3HubPemilik() {
               pendaftaran.
             </>
           }
-          href="/visitrw3/status-properti"
+          href={VISITRW3_ROUTES.pemilikDisewa.statusProperti}
           icon={Search}
           title="Cek status pendaftaran"
           description="Lacak nomor PROP-… setelah admin memverifikasi"

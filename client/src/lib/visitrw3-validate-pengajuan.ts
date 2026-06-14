@@ -1,6 +1,8 @@
 import { visitrw3JenjangAnakOptions } from "./constants";
+import type { KeperluanPengajuanMode } from "./visitrw3-properti";
 import { joinPlatNomor, isPlatLengkap } from "./visitrw3-plat";
 import type { KendaraanRow } from "./visitrw3-kendaraan";
+import { buildKategoriUsahaPayload } from "@shared/visitrw3-kategori-usaha";
 
 export type PenghuniDraft = {
   namaLengkap: string;
@@ -18,6 +20,16 @@ export type PenghuniDraft = {
 };
 
 const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function validateKategoriUsaha(selected: string[], lainnya: string): string | null {
+  const payload = buildKategoriUsahaPayload(selected, lainnya);
+  if (payload.length === 0) return "Pilih minimal 1 kategori usaha";
+  if (payload.length > 12) return "Maksimal 12 kategori usaha";
+  if (selected.includes("Lainnya") && !lainnya.trim()) {
+    return "Jelaskan kategori usaha lainnya";
+  }
+  return null;
+}
 
 function umur(tgl: string) {
   if (!tgl) return 99;
@@ -41,6 +53,8 @@ export type BisnisLokasiInput = {
   namaUsaha: string;
   jenisTempatUsaha: string;
   jenisTempatUsahaLain: string;
+  kategoriUsaha: string[];
+  kategoriUsahaLain: string;
   penanggungJawab: string;
   jamBuka: string;
   jamTutup: string;
@@ -69,6 +83,8 @@ export function validateStepLokasi(
       namaUsaha,
       jenisTempatUsaha: jenisUsaha,
       jenisTempatUsahaLain: "",
+      kategoriUsaha: [],
+      kategoriUsahaLain: "",
       penanggungJawab,
       jamBuka: "",
       jamTutup: "",
@@ -82,19 +98,31 @@ export function validateStepLokasi(
   return null;
 }
 
-export function validateStepLokasiBisnis(input: BisnisLokasiInput): string | null {
+export function validateStepLokasiBisnis(
+  input: BisnisLokasiInput,
+  mode: KeperluanPengajuanMode = "",
+): string | null {
+  const usahaRumahan = mode === "usaha_rumahan";
   if (input.tinggalDiWilayahRw3 === null) {
     return "Pilih apakah Anda tinggal di wilayah RW 03 atau di luar wilayah RW 03";
   }
   if (!input.rt) return "Pilih RT lokasi usaha";
   if (!input.namaUsaha.trim()) return "Nama usaha wajib diisi";
   if (!input.penanggungJawab.trim()) return "Penanggung jawab wajib diisi";
-  if (!input.jenisTempatUsaha) return "Pilih jenis tempat usaha (lapak, kiosk, atau lainnya)";
-  if (input.jenisTempatUsaha === "lainnya" && !input.jenisTempatUsahaLain.trim()) {
-    return "Jelaskan jenis usaha lainnya";
+  const kategoriErr = validateKategoriUsaha(input.kategoriUsaha, input.kategoriUsahaLain);
+  if (kategoriErr) return kategoriErr;
+  if (!usahaRumahan) {
+    if (!input.jenisTempatUsaha) return "Pilih jenis tempat usaha (lapak, kiosk, atau lainnya)";
+    if (input.jenisTempatUsaha === "lainnya" && !input.jenisTempatUsahaLain.trim()) {
+      return "Jelaskan jenis usaha lainnya";
+    }
   }
   if (input.tinggalDiWilayahRw3) {
-    if (!input.pemilikKostId) return "Pilih kost/kontrakan tempat tinggal di wilayah RW 03";
+    if (!input.pemilikKostId) {
+      return usahaRumahan
+        ? "Pilih usaha rumahan yang sudah didaftarkan"
+        : "Pilih kost/kontrakan tempat tinggal di wilayah RW 03";
+    }
   } else {
     if (!input.jamBuka.trim() || !TIME_REGEX.test(input.jamBuka)) {
       return "Jam buka wajib diisi (format HH:MM, contoh 08:00)";
@@ -180,18 +208,24 @@ export function validateLokasiSubTinggal(sub: "rt" | "kost", rt: string, pemilik
 }
 
 export function validateLokasiSubBisnis(
-  sub: "wilayah" | "usaha" | "operasional" | "pj" | "rt" | "kost",
+  sub: "wilayah" | "usaha" | "operasional" | "pj" | "rt" | "kost" | "prop",
   input: BisnisLokasiInput,
+  mode: KeperluanPengajuanMode = "",
 ): string | null {
+  const usahaRumahan = mode === "usaha_rumahan";
   if (sub === "wilayah" && input.tinggalDiWilayahRw3 === null) {
     return "Pilih apakah Anda tinggal di wilayah RW 03";
   }
   if (sub === "usaha") {
     if (!input.namaUsaha.trim()) return "Isi nama usaha";
     if (!input.penanggungJawab.trim()) return "Isi nama penanggung jawab";
-    if (!input.jenisTempatUsaha) return "Pilih jenis tempat usaha";
-    if (input.jenisTempatUsaha === "lainnya" && !input.jenisTempatUsahaLain.trim()) {
-      return "Jelaskan jenis usaha Anda";
+    const kategoriErr = validateKategoriUsaha(input.kategoriUsaha, input.kategoriUsahaLain);
+    if (kategoriErr) return kategoriErr;
+    if (!usahaRumahan) {
+      if (!input.jenisTempatUsaha) return "Pilih jenis tempat usaha";
+      if (input.jenisTempatUsaha === "lainnya" && !input.jenisTempatUsahaLain.trim()) {
+        return "Jelaskan jenis usaha Anda";
+      }
     }
     return null;
   }
@@ -209,7 +243,14 @@ export function validateLokasiSubBisnis(
     return null;
   }
   if (sub === "rt" && !input.rt) return "Pilih RT lokasi usaha";
-  if (sub === "kost" && !input.pemilikKostId) return "Pilih kost/kontrakan tempat tinggal";
+  if (sub === "prop" && !input.pemilikKostId) {
+    return "Verifikasi nomor PROP usaha rumahan Anda terlebih dahulu";
+  }
+  if (sub === "kost" && !input.pemilikKostId) {
+    return usahaRumahan
+      ? "Pilih usaha rumahan yang sudah didaftarkan"
+      : "Pilih kost/kontrakan tempat tinggal";
+  }
   return null;
 }
 

@@ -18,6 +18,14 @@ export interface StarSenderSendResult {
   error?: string;
 }
 
+function isStarSenderDisabled(): boolean {
+  const flag = process.env.STARSENDER_DISABLED?.trim().toLowerCase();
+  if (flag === "1" || flag === "true" || flag === "yes") return true;
+  const enabled = process.env.STARSENDER_ENABLED?.trim().toLowerCase();
+  if (enabled === "0" || enabled === "false" || enabled === "no") return true;
+  return false;
+}
+
 function getStarSenderConfig() {
   const apiKey = process.env.STARSENDER_API_KEY?.trim();
   const deviceIdRaw = process.env.STARSENDER_DEVICE_ID?.trim();
@@ -26,8 +34,12 @@ function getStarSenderConfig() {
   return {
     apiKey,
     deviceId: Number.isFinite(deviceId) ? deviceId : undefined,
-    configured: Boolean(apiKey),
+    configured: Boolean(apiKey) && !isStarSenderDisabled(),
   };
+}
+
+export function isStarSenderDisabledFlag(): boolean {
+  return isStarSenderDisabled();
 }
 
 export function isStarSenderConfigured(): boolean {
@@ -54,6 +66,10 @@ export async function sendStarSenderMessage(
 
   if (!apiKey) {
     return { ok: false, error: "STARSENDER_API_KEY belum dikonfigurasi" };
+  }
+
+  if (isStarSenderDisabled()) {
+    return { ok: false, error: "StarSender dinonaktifkan (STARSENDER_DISABLED)" };
   }
 
   const payload: Record<string, unknown> = {

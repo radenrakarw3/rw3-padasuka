@@ -17,6 +17,7 @@ import {
   pekerjaanLegacyOptions,
   jenisKendaraanOptions,
   visitrw3JenisTempatUsahaOptions,
+  visitrw3KategoriUsahaOptions,
   visitrw3JenjangAnakOptions,
 } from "@/lib/constants";
 import {
@@ -55,9 +56,15 @@ import { SuccessPanel } from "@/components/gov/success-panel";
 import { Visitrw3SyaratPanel } from "@/components/gov/visitrw3-syarat-panel";
 import { FeatureExplain } from "@/components/gov/feature-explain";
 import { settingsRowsToMap } from "@/lib/visitrw3-kontribusi";
+import { buildKategoriUsahaPayload } from "@shared/visitrw3-kategori-usaha";
+import { isUsahaRumahan } from "@/lib/constants";
+import {
+  VISITRW3_ROUTES,
+  parsePengajuanMode,
+} from "@/lib/visitrw3-routes";
 
 type StepDef = { id: string; label: string };
-type KeperluanMode = "" | "tinggal" | "bisnis_dalam" | "bisnis_luar";
+type KeperluanMode = "" | "tinggal" | "bisnis_dalam" | "bisnis_luar" | "usaha_rumahan";
 
 const KEPERLUAN_OPTIONS: {
   id: KeperluanMode;
@@ -93,6 +100,7 @@ function applyKeperluanMode(mode: KeperluanMode): {
 } {
   if (mode === "tinggal") return { keperluan: "tinggal", tinggalDiWilayahRw3: null };
   if (mode === "bisnis_dalam") return { keperluan: "bisnis", tinggalDiWilayahRw3: true };
+  if (mode === "usaha_rumahan") return { keperluan: "bisnis", tinggalDiWilayahRw3: true };
   if (mode === "bisnis_luar") return { keperluan: "bisnis", tinggalDiWilayahRw3: false };
   return { keperluan: "", tinggalDiWilayahRw3: null };
 }
@@ -110,9 +118,14 @@ function buildPengajuanSteps(keperluan: string, tinggalDiWilayahRw3: boolean | n
   return steps;
 }
 
-type LokasiSubId = "rt" | "kost" | "wilayah" | "usaha" | "operasional" | "pj";
+type LokasiSubId = "rt" | "kost" | "wilayah" | "usaha" | "operasional" | "pj" | "prop";
 
-function getLokasiSubSteps(keperluan: string, tinggalDiWilayahRw3: boolean | null): LokasiSubId[] {
+function getLokasiSubSteps(
+  keperluan: string,
+  tinggalDiWilayahRw3: boolean | null,
+  keperluanMode: KeperluanMode = "",
+): LokasiSubId[] {
+  if (keperluanMode === "usaha_rumahan") return ["usaha", "prop"];
   if (keperluan === "tinggal") return ["rt", "kost"];
   if (tinggalDiWilayahRw3 === null) return ["wilayah"];
   const subs: LokasiSubId[] = ["wilayah", "usaha"];
@@ -129,7 +142,14 @@ const LOKASI_SUB_LABELS: Record<LokasiSubId, string> = {
   usaha: "Data usaha",
   operasional: "Jam & alamat usaha",
   pj: "Data penanggung jawab",
+  prop: "Nomor PROP usaha Anda",
 };
+
+function lokasiSubLabel(sub: LokasiSubId, mode: KeperluanMode): string {
+  if (sub === "prop") return "Nomor PROP usaha rumahan Anda";
+  if (sub === "kost" && mode === "bisnis_dalam") return "Pilih kost tempat tinggal";
+  return LOKASI_SUB_LABELS[sub];
+}
 
 function MicroStepHeader({
   current,
@@ -261,6 +281,8 @@ export default function Visitrw3Pengajuan() {
   const [namaUsaha, setNamaUsaha] = useState("");
   const [jenisTempatUsaha, setJenisTempatUsaha] = useState("");
   const [jenisTempatUsahaLain, setJenisTempatUsahaLain] = useState("");
+  const [kategoriUsaha, setKategoriUsaha] = useState<string[]>([]);
+  const [kategoriUsahaLain, setKategoriUsahaLain] = useState("");
   const [penanggungJawab, setPenanggungJawab] = useState("");
   const [jamBuka, setJamBuka] = useState("");
   const [jamTutup, setJamTutup] = useState("");
@@ -282,6 +304,17 @@ export default function Visitrw3Pengajuan() {
   const [nomorHasil, setNomorHasil] = useState<string | null>(null);
   const [lokasiSub, setLokasiSub] = useState(0);
   const [penghuniIndex, setPenghuniIndex] = useState(0);
+  const [nomorProp, setNomorProp] = useState("");
+  const [propVerifying, setPropVerifying] = useState(false);
+  const [propVerified, setPropVerified] = useState<{
+    id: number;
+    nomorPendaftaran: string;
+    namaKost: string;
+    rt: number;
+    statusProperti: string;
+  } | null>(null);
+
+  const urlMode = useMemo(() => parsePengajuanMode(window.location.search), []);
 
   const steps = useMemo(
     () => buildPengajuanSteps(keperluan, tinggalDiWilayahRw3),
@@ -289,10 +322,13 @@ export default function Visitrw3Pengajuan() {
   );
   const stepId = steps[step]?.id ?? "keperluan";
   const bisnisLuar = keperluan === "bisnis" && tinggalDiWilayahRw3 === false;
+  const usahaRumahanMode = keperluanMode === "usaha_rumahan" || urlMode === "usaha_rumahan";
   const formLengkap = keperluan === "tinggal" || (keperluan === "bisnis" && tinggalDiWilayahRw3 === true);
+  const pengajuanBackHref = usahaRumahanMode ? VISITRW3_ROUTES.usahaRumahan.hub : VISITRW3_ROUTES.penyewa.hub;
+  const pengajuanTitle = usahaRumahanMode ? "Ajukan usaha rumahan" : "Pengajuan baru";
   const lokasiSubSteps = useMemo(
-    () => getLokasiSubSteps(keperluan, tinggalDiWilayahRw3),
-    [keperluan, tinggalDiWilayahRw3],
+    () => getLokasiSubSteps(keperluan, tinggalDiWilayahRw3, keperluanMode),
+    [keperluan, tinggalDiWilayahRw3, keperluanMode],
   );
   const lokasiSubId = lokasiSubSteps[lokasiSub] ?? lokasiSubSteps[0];
   const bisnisLokasiInput = useMemo(
@@ -303,6 +339,8 @@ export default function Visitrw3Pengajuan() {
       namaUsaha,
       jenisTempatUsaha,
       jenisTempatUsahaLain,
+      kategoriUsaha,
+      kategoriUsahaLain,
       penanggungJawab,
       jamBuka,
       jamTutup,
@@ -319,6 +357,8 @@ export default function Visitrw3Pengajuan() {
       namaUsaha,
       jenisTempatUsaha,
       jenisTempatUsahaLain,
+      kategoriUsaha,
+      kategoriUsahaLain,
       penanggungJawab,
       jamBuka,
       jamTutup,
@@ -361,9 +401,74 @@ export default function Visitrw3Pengajuan() {
       >(res);
     },
     enabled: Boolean(
-      rt && keperluan && (keperluan === "tinggal" || tinggalDiWilayahRw3 === true),
+      !usahaRumahanMode &&
+        rt &&
+        keperluan &&
+        (keperluan === "tinggal" || tinggalDiWilayahRw3 === true),
     ),
   });
+
+  useEffect(() => {
+    const rawMode = new URLSearchParams(window.location.search).get("mode");
+    if (rawMode && rawMode !== "usaha_rumahan") {
+      window.location.replace(VISITRW3_ROUTES.penyewa.pengajuan);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (urlMode !== "usaha_rumahan") return;
+    const next = applyKeperluanMode("usaha_rumahan");
+    setKeperluanMode("usaha_rumahan");
+    setKeperluan(next.keperluan);
+    setTinggalDiWilayahRw3(next.tinggalDiWilayahRw3);
+    setJenisTempatUsaha("usaha_rumahan");
+    setJenisTempatUsahaLain("");
+    setStep(1);
+    const propFromUrl = new URLSearchParams(window.location.search).get("prop");
+    if (propFromUrl) setNomorProp(propFromUrl.trim().toUpperCase());
+  }, [urlMode]);
+
+  async function verifyNomorProp(raw?: string) {
+    const n = (raw ?? nomorProp).trim().toUpperCase();
+    if (!n) return showErr("Masukkan nomor PROP usaha rumahan Anda");
+    setPropVerifying(true);
+    setPropVerified(null);
+    setPemilikKostId("");
+    setRt("");
+    try {
+      const res = await fetch(`/api/public/visitrw3/properti/${encodeURIComponent(n)}`);
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.message || "Nomor PROP tidak ditemukan");
+      if (!isUsahaRumahan(body.jenisProperti)) {
+        throw new Error("Nomor ini bukan usaha rumahan — gunakan menu pemilik/penyewa biasa");
+      }
+      if (body.statusProperti !== "aktif") {
+        throw new Error("Properti belum aktif — tunggu verifikasi admin atau cek status PROP");
+      }
+      setPropVerified({
+        id: body.id,
+        nomorPendaftaran: body.nomorPendaftaran,
+        namaKost: body.namaKost,
+        rt: body.rt,
+        statusProperti: body.statusProperti,
+      });
+      setPemilikKostId(String(body.id));
+      setRt(String(body.rt));
+      if (!namaUsaha.trim()) setNamaUsaha(body.namaKost);
+      setNomorProp(n);
+    } catch (e: unknown) {
+      showErr(e instanceof Error ? e.message : "Gagal verifikasi PROP");
+    } finally {
+      setPropVerifying(false);
+    }
+  }
+
+  useEffect(() => {
+    if (urlMode !== "usaha_rumahan") return;
+    const propFromUrl = new URLSearchParams(window.location.search).get("prop");
+    if (propFromUrl && !propVerified) void verifyNomorProp(propFromUrl.trim().toUpperCase());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlMode]);
 
   useEffect(() => {
     if (step >= steps.length) setStep(Math.max(0, steps.length - 1));
@@ -481,6 +586,8 @@ export default function Visitrw3Pengajuan() {
         jenisTempatUsaha: keperluan === "bisnis" ? jenisTempatUsaha : null,
         jenisTempatUsahaLain:
           keperluan === "bisnis" && jenisTempatUsaha === "lainnya" ? jenisTempatUsahaLain : null,
+        kategoriUsaha:
+          keperluan === "bisnis" ? buildKategoriUsahaPayload(kategoriUsaha, kategoriUsahaLain) : null,
         jamBuka: bisnisLuar ? jamBuka : null,
         jamTutup: bisnisLuar ? jamTutup : null,
         alamatUsaha: bisnisLuar ? alamatUsaha : null,
@@ -500,6 +607,12 @@ export default function Visitrw3Pengajuan() {
       toast({ title: "Gagal mengirim", description: getApiErrorMessage(e), variant: "destructive" });
     },
   });
+
+  function toggleKategoriUsaha(kategori: string) {
+    setKategoriUsaha((prev) =>
+      prev.includes(kategori) ? prev.filter((k) => k !== kategori) : [...prev, kategori],
+    );
+  }
 
   async function uploadKtpPj(file: File) {
     const fd = new FormData();
@@ -580,7 +693,7 @@ export default function Visitrw3Pengajuan() {
 
   if (nomorHasil) {
     return (
-      <Visitrw3Shell title="Pengajuan" backHref="/visitrw3/penyewa">
+      <Visitrw3Shell title="Pengajuan" backHref={pengajuanBackHref}>
         <SuccessPanel
           title="Pengajuan terkirim"
           referenceLabel="Nomor Visit RW3"
@@ -591,25 +704,39 @@ export default function Visitrw3Pengajuan() {
             "Anda akan dihubungi jika diperlukan klarifikasi.",
           ]}
           primaryAction={{ label: "Cek status", href: "/visitrw3/status" }}
-          secondaryAction={{ label: "Menu penyewa", href: "/visitrw3/penyewa" }}
+          secondaryAction={{
+            label: usahaRumahanMode ? "Menu usaha rumahan" : "Menu penyewa",
+            href: pengajuanBackHref,
+          }}
         />
       </Visitrw3Shell>
     );
   }
 
   return (
-    <Visitrw3Shell title="Pengajuan baru" backHref="/visitrw3/penyewa">
-      <FeatureExplain title="Sebelum mulai" className="mb-3">
-        <p>
-          Pastikan properti tempat Anda tinggal/berusaha sudah <strong>terdaftar pemilik</strong> dan
-          statusnya aktif. Isi form langkah demi langkah — tekan <strong>Lanjut</strong> setelah
-          setiap bagian.
-        </p>
-        <p>
-          Ngekost sekaligus berusaha? Pilih <strong>Tinggal sekaligus usaha</strong> di langkah
-          pertama — cukup satu kali isi, tidak double.
-        </p>
-      </FeatureExplain>
+    <Visitrw3Shell title={pengajuanTitle} backHref={pengajuanBackHref}>
+      {usahaRumahanMode ? (
+        <FeatureExplain title="Tahap 2 — Ajukan Visit RW3" className="mb-3">
+          <p>
+            Anda <strong>pemilik sekaligus penghuni</strong> usaha rumahan. Masukkan nomor{" "}
+            <strong>PROP-…</strong> milik Anda sendiri — bukan memilih properti orang lain seperti
+            penyewa kost.
+          </p>
+          <p>Isi data usaha dan penghuni rumah, lalu kirim untuk mendapat nomor VRW3-…</p>
+        </FeatureExplain>
+      ) : (
+        <FeatureExplain title="Sebelum mulai" className="mb-3">
+          <p>
+            Pastikan properti tempat Anda tinggal/berusaha sudah <strong>terdaftar pemilik</strong>{" "}
+            dan statusnya aktif. Isi form langkah demi langkah — tekan <strong>Lanjut</strong>{" "}
+            setelah setiap bagian.
+          </p>
+          <p>
+            Ngekost sekaligus berusaha? Pilih <strong>Tinggal sekaligus usaha</strong> di langkah
+            pertama — cukup satu kali isi, tidak double.
+          </p>
+        </FeatureExplain>
+      )}
       <Link
         href="/visitrw3/panduan"
         className="inline-flex items-center gap-1.5 text-sm text-brand font-medium mb-4 hover:underline"
@@ -642,6 +769,14 @@ export default function Visitrw3Pengajuan() {
                     setKeperluanMode(opt.id);
                     setKeperluan(next.keperluan);
                     setTinggalDiWilayahRw3(next.tinggalDiWilayahRw3);
+                    if (opt.id === "tinggal") {
+                      setKategoriUsaha([]);
+                      setKategoriUsahaLain("");
+                      setNamaUsaha("");
+                      setJenisTempatUsaha("");
+                      setJenisTempatUsahaLain("");
+                      setPenanggungJawab("");
+                    }
                     if (opt.id === "bisnis_luar") {
                       setPemilikKostId("");
                       setJamBuka("");
@@ -704,17 +839,21 @@ export default function Visitrw3Pengajuan() {
           <MicroStepHeader
             current={lokasiSub + 1}
             total={lokasiSubSteps.length}
-            title={LOKASI_SUB_LABELS[lokasiSubId]}
+            title={lokasiSubLabel(lokasiSubId, keperluanMode)}
             hint={
               lokasiSubId === "wilayah"
                 ? "Pilih sesuai tempat tinggal Anda saat ini."
-                : lokasiSubId === "kost"
-                  ? keperluanMode === "bisnis_dalam"
-                    ? "Pilih kost tempat Anda tinggal. Data usaha sudah diisi di langkah sebelumnya — tidak perlu pengajuan terpisah."
-                    : "Pilih properti tempat Anda tinggal di RW 03."
-                  : lokasiSubId === "usaha" && keperluanMode === "bisnis_dalam"
-                    ? "Isi data usaha Anda. Nanti lanjut isi data penghuni kost di langkah berikutnya."
-                    : undefined
+                : lokasiSubId === "prop"
+                  ? "Nomor PROP dari tahap 1 pendaftaran usaha rumahan Anda — bukan daftar properti orang lain."
+                  : lokasiSubId === "kost"
+                    ? keperluanMode === "bisnis_dalam"
+                      ? "Pilih kost tempat Anda tinggal. Data usaha sudah diisi di langkah sebelumnya — tidak perlu pengajuan terpisah."
+                      : "Pilih properti tempat Anda tinggal di RW 03."
+                    : lokasiSubId === "usaha" && usahaRumahanMode
+                      ? "Isi data usaha Anda. Langkah berikutnya: verifikasi nomor PROP milik sendiri."
+                      : lokasiSubId === "usaha" && keperluanMode === "bisnis_dalam"
+                        ? "Isi data usaha Anda. Nanti lanjut isi data penghuni kost di langkah berikutnya."
+                        : undefined
             }
           />
 
@@ -766,14 +905,25 @@ export default function Visitrw3Pengajuan() {
 
           {lokasiSubId === "usaha" && (
             <div className="space-y-4">
+              {usahaRumahanMode && (
+                <div className="rounded-xl border bg-brand/5 border-brand/20 p-4 text-sm space-y-1">
+                  <p className="font-medium">Usaha di rumah milik sendiri</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Contoh: catering rumahan, jasa, atau toko kecil di rumah sendiri. Nomor PROP
+                    milik Anda sendiri akan diverifikasi di langkah berikutnya.
+                  </p>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label>Nama usaha</Label>
                 <Input
                   value={namaUsaha}
                   onChange={(e) => setNamaUsaha(e.target.value)}
-                  placeholder="Contoh: Warung Bu Siti"
+                  placeholder={usahaRumahanMode ? "Contoh: Dapur Bunda Yoels" : "Contoh: Warung Bu Siti"}
                 />
               </div>
+              {!usahaRumahanMode && (
+                <>
               <div className="space-y-2">
                 <Label>Jenis tempat usaha</Label>
                 <Select value={jenisTempatUsaha} onValueChange={setJenisTempatUsaha}>
@@ -795,6 +945,38 @@ export default function Visitrw3Pengajuan() {
                   />
                 </div>
               )}
+                </>
+              )}
+              <div className="space-y-2">
+                <Label>Kategori usaha</Label>
+                <p className="text-xs text-muted-foreground">
+                  Bisa pilih lebih dari satu — misalnya warung sekaligus pertamini.
+                  {kategoriUsaha.length > 0 && (
+                    <span className="text-brand font-medium"> · {kategoriUsaha.length} dipilih</span>
+                  )}
+                </p>
+                <div className="rounded-xl border bg-card p-3 max-h-52 overflow-y-auto space-y-2">
+                  {visitrw3KategoriUsahaOptions.map((kategori) => (
+                    <div key={kategori} className="flex items-start gap-2">
+                      <Checkbox
+                        id={`kategori-${kategori}`}
+                        checked={kategoriUsaha.includes(kategori)}
+                        onCheckedChange={() => toggleKategoriUsaha(kategori)}
+                      />
+                      <Label htmlFor={`kategori-${kategori}`} className="font-normal text-sm leading-snug">
+                        {kategori}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+                {kategoriUsaha.includes("Lainnya") && (
+                  <Input
+                    value={kategoriUsahaLain}
+                    onChange={(e) => setKategoriUsahaLain(e.target.value)}
+                    placeholder="Contoh: rental PS, jual es batu"
+                  />
+                )}
+              </div>
               <div className="space-y-2">
                 <Label>Nama penanggung jawab</Label>
                 <Input
@@ -883,14 +1065,65 @@ export default function Visitrw3Pengajuan() {
             </div>
           )}
 
-          {lokasiSubId === "kost" && (
+          {lokasiSubId === "prop" && (
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label>Nomor PROP usaha rumahan Anda</Label>
+                <Input
+                  className="h-12"
+                  value={nomorProp}
+                  onChange={(e) => {
+                    setNomorProp(e.target.value.toUpperCase());
+                    setPropVerified(null);
+                    setPemilikKostId("");
+                    setRt("");
+                  }}
+                  placeholder="PROP-2026…"
+                />
+              </div>
+              <Button
+                type="button"
+                className="w-full touch-target"
+                disabled={propVerifying || !nomorProp.trim()}
+                onClick={() => void verifyNomorProp()}
+              >
+                {propVerifying ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  "Verifikasi nomor PROP"
+                )}
+              </Button>
+              {propVerified && (
+                <div className="rounded-xl border bg-success/5 border-success/30 p-4 text-sm space-y-1">
+                  <p className="font-medium">{propVerified.namaKost}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {propVerified.nomorPendaftaran} · RT {String(propVerified.rt).padStart(2, "0")} ·
+                    Status aktif
+                  </p>
+                </div>
+              )}
+              {!propVerified && (
+                <p className="text-xs text-muted-foreground">
+                  Belum daftar?{" "}
+                  <Link href={VISITRW3_ROUTES.usahaRumahan.daftarProperti} className="text-brand underline">
+                    Daftar usaha rumahan dulu
+                  </Link>
+                  , tunggu verifikasi admin, baru lanjut ke sini.
+                </p>
+              )}
+            </div>
+          )}
+
+          {lokasiSubId === "kost" && !usahaRumahanMode && (
             kostLoading ? (
               <Loader2 className="w-6 h-6 animate-spin mx-auto" />
             ) : (
               <div className="space-y-2">
                 <Label>Kost / kontrakan</Label>
                 <Select value={pemilikKostId} onValueChange={setPemilikKostId}>
-                  <SelectTrigger className="h-12"><SelectValue placeholder="Pilih tempat tinggal" /></SelectTrigger>
+                  <SelectTrigger className="h-12">
+                    <SelectValue placeholder="Pilih tempat tinggal" />
+                  </SelectTrigger>
                   <SelectContent>
                     {kostList.map((k) => (
                       <SelectItem key={k.id} value={String(k.id)}>
@@ -934,14 +1167,14 @@ export default function Visitrw3Pengajuan() {
                 const err =
                   keperluan === "tinggal"
                     ? validateLokasiSubTinggal(lokasiSubId as "rt" | "kost", rt, pemilikKostId)
-                    : validateLokasiSubBisnis(lokasiSubId, bisnisLokasiInput);
+                    : validateLokasiSubBisnis(lokasiSubId, bisnisLokasiInput, keperluanMode);
                 if (err) return showErr(err);
                 if (lokasiSub < lokasiSubSteps.length - 1) {
                   setLokasiSub((s) => s + 1);
                   return;
                 }
                 if (keperluan === "bisnis") {
-                  const fullErr = validateStepLokasiBisnis(bisnisLokasiInput);
+                  const fullErr = validateStepLokasiBisnis(bisnisLokasiInput, keperluanMode);
                   if (fullErr) return showErr(fullErr);
                 }
                 goStep(1);
@@ -960,9 +1193,11 @@ export default function Visitrw3Pengajuan() {
             total={1}
             title="Berapa orang yang akan tinggal?"
             hint={
-              keperluanMode === "bisnis_dalam"
-                ? "Data ini sekaligus untuk izin tinggal dan usaha — tidak perlu isi form kedua kalinya."
-                : "Tekan + atau − untuk menambah/mengurangi. Nanti diisi satu per satu."
+              usahaRumahanMode
+                ? "Anda tinggal sekaligus berusaha di rumah sendiri — isi data penghuni rumah."
+                : keperluanMode === "bisnis_dalam"
+                  ? "Data ini sekaligus untuk izin tinggal dan usaha — tidak perlu isi form kedua kalinya."
+                  : "Tekan + atau − untuk menambah/mengurangi. Nanti diisi satu per satu."
             }
           />
           <JumlahStepper

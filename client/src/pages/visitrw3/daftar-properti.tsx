@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Visitrw3Shell } from "@/components/visitrw3-shell";
@@ -9,8 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, getApiErrorMessage, readJsonSafely } from "@/lib/queryClient";
-import { rtOptions, jenisPropertiOptions } from "@/lib/constants";
-import { Loader2, ChevronRight, ChevronLeft, Plus, Minus, Home, Store, BookOpen } from "lucide-react";
+import { rtOptions, jenisPropertiOptions, isUsahaRumahan } from "@/lib/constants";
+import { Loader2, ChevronRight, ChevronLeft, Plus, Minus, Home, Store, BookOpen, UtensilsCrossed } from "lucide-react";
 import { SuccessPanel } from "@/components/gov/success-panel";
 import { Visitrw3SyaratPanel } from "@/components/gov/visitrw3-syarat-panel";
 import { FeatureExplain } from "@/components/gov/feature-explain";
@@ -22,6 +22,10 @@ import {
   validatePropertiStep,
   type PropertiDraft,
 } from "@/lib/visitrw3-validate-properti";
+import {
+  VISITRW3_ROUTES,
+  parseDaftarJenis,
+} from "@/lib/visitrw3-routes";
 
 const STEPS = [
   { id: "jenis", label: "Jenis" },
@@ -35,10 +39,11 @@ const STEPS = [
 ] as const;
 
 const JENIS_HINTS: Record<string, string> = {
-  kost: "Tempat tinggal penyewa kamar",
-  kontrakan: "Rumah atau ruko disewakan",
-  kiosk: "Toko kecil / warung tetap",
-  lapak: "Jualan di lapak / gerobak",
+  kost: "Penyewa kamar",
+  kontrakan: "Rumah/ruko disewa",
+  kiosk: "Warung/toko tetap",
+  lapak: "Lapak / gerobak",
+  usaha_rumahan: "Usaha di rumah sendiri",
 };
 
 function MicroStepHeader({
@@ -81,6 +86,7 @@ export default function Visitrw3DaftarProperti() {
   const [catatan, setCatatan] = useState("");
   const [setujuTataTertib, setSetujuTataTertib] = useState(false);
   const [nomorHasil, setNomorHasil] = useState<string | null>(null);
+  const [fromUsahaRumahanHub, setFromUsahaRumahanHub] = useState(false);
 
   const stepId = STEPS[step]?.id ?? "jenis";
 
@@ -163,7 +169,23 @@ export default function Visitrw3DaftarProperti() {
     const izin = izinDefaultFromJenis(value);
     setIzinTinggal(izin.izinTinggal);
     setIzinBisnis(izin.izinBisnis);
+    if (isUsahaRumahan(value)) setJumlahPintu(1);
   }
+
+  useEffect(() => {
+    if (parseDaftarJenis(window.location.search) === "usaha_rumahan") {
+      setFromUsahaRumahanHub(true);
+      pickJenis("usaha_rumahan");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const jenisPickerOptions = useMemo(() => {
+    if (fromUsahaRumahanHub || isUsahaRumahan(jenisProperti)) {
+      return jenisPropertiOptions.filter((o) => o.value === "usaha_rumahan");
+    }
+    return jenisPropertiOptions.filter((o) => o.value !== "usaha_rumahan");
+  }, [fromUsahaRumahanHub, jenisProperti]);
 
   function goStep(delta: number) {
     setStep((s) => Math.min(Math.max(0, s + delta), STEPS.length - 1));
@@ -176,37 +198,82 @@ export default function Visitrw3DaftarProperti() {
   }
 
   const isHunian = jenisProperti === "kost" || jenisProperti === "kontrakan";
+  const isUsahaRumahanProperti = isUsahaRumahan(jenisProperti);
 
   if (nomorHasil) {
+    const usahaRumahanSelesai = isUsahaRumahan(jenisProperti) || fromUsahaRumahanHub;
     return (
-      <Visitrw3Shell title="Daftar properti" backHref="/visitrw3/pemilik">
+      <Visitrw3Shell
+        title="Daftar properti"
+        backHref={usahaRumahanSelesai ? VISITRW3_ROUTES.usahaRumahan.hub : VISITRW3_ROUTES.pemilikDisewa.hub}
+      >
         <SuccessPanel
           title="Pendaftaran terkirim"
           referenceLabel="Nomor pendaftaran properti"
           referenceValue={nomorHasil}
-          nextSteps={[
-            "Simpan nomor ini untuk mengecek status verifikasi.",
-            "Admin RW akan memverifikasi data properti Anda.",
-            "Setelah disetujui, properti muncul di formulir pengajuan Visit RW3.",
-          ]}
-          primaryAction={{ label: "Cek status properti", href: "/visitrw3/status-properti" }}
-          secondaryAction={{ label: "Menu pemilik properti", href: "/visitrw3/pemilik" }}
+          nextSteps={
+            usahaRumahanSelesai
+              ? [
+                  "Simpan nomor PROP — dipakai lagi saat tahap 2 (Ajukan Visit RW3).",
+                  "Tunggu admin verifikasi sampai status properti aktif.",
+                  "Setelah aktif, lanjut Ajukan Visit RW3 dari menu usaha rumahan.",
+                ]
+              : [
+                  "Simpan nomor ini untuk mengecek status verifikasi.",
+                  "Admin RW akan memverifikasi data properti Anda.",
+                  "Setelah disetujui, properti muncul di formulir pengajuan Visit RW3.",
+                ]
+          }
+          primaryAction={{
+            label: usahaRumahanSelesai ? "Cek status PROP" : "Cek status properti",
+            href: VISITRW3_ROUTES.usahaRumahan.statusProperti,
+          }}
+          secondaryAction={{
+            label: usahaRumahanSelesai ? "Menu usaha rumahan" : "Menu pemilik properti",
+            href: usahaRumahanSelesai ? VISITRW3_ROUTES.usahaRumahan.hub : VISITRW3_ROUTES.pemilikDisewa.hub,
+          }}
         />
       </Visitrw3Shell>
     );
   }
 
+  const backHrefDaftar = fromUsahaRumahanHub || isUsahaRumahanProperti
+    ? VISITRW3_ROUTES.usahaRumahan.hub
+    : VISITRW3_ROUTES.pemilikDisewa.hub;
+
   return (
-    <Visitrw3Shell title="Daftar properti" backHref="/visitrw3/pemilik">
-      <FeatureExplain title="Siapa yang harus isi form ini?" className="mb-3">
+    <Visitrw3Shell title="Daftar properti" backHref={backHrefDaftar}>
+      <FeatureExplain
+        title={isUsahaRumahanProperti ? "Tahap 1 — Daftar lokasi usaha" : "Siapa yang harus isi form ini?"}
+        className="mb-3"
+      >
+        {isUsahaRumahanProperti ? (
+          <>
+            <p>
+              <strong>Anda pemilik sekaligus pengaju</strong> — bukan penyewa. Form ini mendaftarkan
+              lokasi usaha di rumah milik sendiri ke sistem RW (nomor PROP-…).
+            </p>
+            <p>
+              Setelah admin verifikasi, lanjut <strong>tahap 2</strong>: Ajukan Visit RW3 dengan
+              nomor PROP yang sama.
+            </p>
+          </>
+        ) : (
+          <>
         <p>
-          <strong>Pemilik</strong> kost, kontrakan, kiosk, atau lapak — bukan penyewa. Setelah
-          disetujui admin, properti Anda muncul di daftar pilihan penyewa saat mengajukan Visit RW3.
+          <strong>Pemilik</strong> properti di RW 03 — kost, kontrakan, kiosk, atau lapak. Bukan
+          penyewa. Usaha di rumah sendiri? Pakai{" "}
+          <Link href={VISITRW3_ROUTES.usahaRumahan.hub} className="text-brand font-medium hover:underline">
+            menu usaha rumahan
+          </Link>
+          .
         </p>
         <p>
-          Anda akan mendapat nomor <strong>PROP-…</strong>. Penyewa tidak bisa mengajukan izin
-          sebelum properti ini aktif.
+          Setelah disetujui admin, properti muncul di formulir Visit RW3. Nomor pendaftaran{" "}
+          <strong>PROP-…</strong> — simpan untuk cek status.
         </p>
+          </>
+        )}
       </FeatureExplain>
       <p className="prose-gov mb-2 text-sm">
         Isi langkah demi langkah — tekan <strong>Lanjut</strong> setelah setiap bagian.
@@ -229,22 +296,30 @@ export default function Visitrw3DaftarProperti() {
               title="Properti Anda jenis apa?"
               hint="Pilih yang paling sesuai dengan properti Anda."
             />
-            <div className="grid grid-cols-2 gap-3">
-              {jenisPropertiOptions.map((o) => (
+            <div className="grid grid-cols-2 gap-2 sm:gap-3">
+              {jenisPickerOptions.map((o) => (
                 <Button
                   key={o.value}
                   type="button"
                   variant={jenisProperti === o.value ? "default" : "outline"}
-                  className="h-auto py-4 flex-col gap-1"
+                  className={`h-auto min-h-[4.5rem] py-3 px-2 flex-col gap-1 w-full min-w-0 whitespace-normal${
+                    o.value === "usaha_rumahan" ? " col-span-2" : ""
+                  }`}
                   onClick={() => pickJenis(o.value)}
                 >
-                  {o.value === "kiosk" || o.value === "lapak" ? (
-                    <Store className="w-5 h-5 mb-0.5" />
+                  {o.value === "usaha_rumahan" ? (
+                    <UtensilsCrossed className="w-5 h-5 mb-0.5 shrink-0" />
+                  ) : o.value === "kiosk" || o.value === "lapak" ? (
+                    <Store className="w-5 h-5 mb-0.5 shrink-0" />
                   ) : (
-                    <Home className="w-5 h-5 mb-0.5" />
+                    <Home className="w-5 h-5 mb-0.5 shrink-0" />
                   )}
-                  <span className="font-medium">{o.label}</span>
-                  <span className="text-[10px] font-normal opacity-80">{JENIS_HINTS[o.value]}</span>
+                  <span className="font-medium text-center leading-tight text-xs sm:text-sm w-full min-w-0 break-words">
+                    {o.label}
+                  </span>
+                  <span className="text-[10px] font-normal opacity-80 text-center leading-snug w-full min-w-0 break-words px-0.5">
+                    {JENIS_HINTS[o.value]}
+                  </span>
                 </Button>
               ))}
             </div>
@@ -261,16 +336,24 @@ export default function Visitrw3DaftarProperti() {
             <MicroStepHeader
               current={step + 1}
               total={STEPS.length}
-              title="Nama properti"
-              hint="Nama yang dikenal warga, misalnya nama kost atau warung."
+              title={isUsahaRumahanProperti ? "Nama usaha" : "Nama properti"}
+              hint={
+                isUsahaRumahanProperti
+                  ? "Nama usaha yang dikenal warga, misalnya Dapur Bunda Yoels."
+                  : "Nama yang dikenal warga, misalnya nama kost atau warung."
+              }
             />
             <div className="space-y-2">
-              <Label>Nama kost / kontrakan / usaha</Label>
+              <Label>{isUsahaRumahanProperti ? "Nama usaha" : "Nama kost / kontrakan / usaha"}</Label>
               <Input
                 className="h-12"
                 value={namaKost}
                 onChange={(e) => setNamaKost(e.target.value)}
-                placeholder="Contoh: Kost Melati, Warung Bu Siti"
+                placeholder={
+                  isUsahaRumahanProperti
+                    ? "Contoh: Dapur Bunda Yoels"
+                    : "Contoh: Kost Melati, Warung Bu Siti"
+                }
                 autoFocus
               />
             </div>
@@ -317,9 +400,24 @@ export default function Visitrw3DaftarProperti() {
             <MicroStepHeader
               current={step + 1}
               total={STEPS.length}
-              title="Berapa unit / kamar / pintu?"
-              hint="Tekan + atau −. Untuk lapak/kiosk biasanya 1."
+              title={isUsahaRumahanProperti ? "Lokasi usaha di rumah sendiri" : "Berapa unit / kamar / pintu?"}
+              hint={
+                isUsahaRumahanProperti
+                  ? "Usaha rumahan = 1 lokasi di rumah milik Anda sendiri (bukan disewa)."
+                  : "Tekan + atau −. Untuk lapak/kiosk biasanya 1."
+              }
             />
+            {isUsahaRumahanProperti ? (
+              <div className="rounded-xl border bg-card p-5 space-y-2 text-sm">
+                <p className="font-medium">Rumah / ruko milik sendiri</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Tidak perlu isi jumlah kamar seperti kost. Usaha dan tempat tinggal pemilik berada
+                  di alamat yang sama. Setelah properti aktif, ajukan Visit RW3 dengan pilihan{" "}
+                  <strong>Usaha di rumah sendiri</strong>.
+                </p>
+              </div>
+            ) : (
+              <>
             <div className="rounded-xl border bg-card p-6 text-center space-y-3">
               <Label>Jumlah unit</Label>
               <div className="flex items-center justify-center gap-4">
@@ -374,6 +472,8 @@ export default function Visitrw3DaftarProperti() {
                   </Button>
                 </div>
               </div>
+            )}
+              </>
             )}
           </>
         )}

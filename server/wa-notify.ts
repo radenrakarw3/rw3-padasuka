@@ -3,6 +3,8 @@ import { waNotifikasiLog } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import {
   isStarSenderConfigured,
+  isStarSenderDisabledFlag,
+  getStarSenderDeviceId,
   sendStarSenderMessage,
   normalizeStarSenderPhone,
 } from "./starsender";
@@ -18,12 +20,31 @@ import {
   stripLaporanMetaPrefix,
 } from "@shared/laporan-pelapor";
 import { jenisLaporanMasalahLabel } from "@shared/laporan-public-form";
-import type { Visitrw3Penghuni, Visitrw3Pengajuan, PemilikKost, Laporan, LaporanKekeringan } from "@shared/schema";
+import type { Visitrw3Penghuni, Visitrw3Pengajuan, PemilikKost, Laporan, LaporanKekeringan, Usaha } from "@shared/schema";
 
 const PUBLIC_SITE_URL =
   process.env.PUBLIC_SITE_URL?.trim() || "https://rw3padasukacimahi.org";
 
 const SENDER_LABEL = "KPP RW 03 Padasuka";
+
+const WA_SEND_GAP_MS = 1200;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function logWaStartupStatus(): void {
+  if (isStarSenderConfigured()) {
+    const device = getStarSenderDeviceId();
+    console.log(
+      `[wa-notify] StarSender aktif${device != null ? ` (device ${device})` : ""} — notifikasi otomatis ke warga enabled`,
+    );
+  } else if (isStarSenderDisabledFlag()) {
+    console.log("[wa-notify] StarSender DINONAKTIFKAN (STARSENDER_DISABLED) — tidak ada WA yang dikirim");
+  } else {
+    console.log("[wa-notify] STARSENDER_API_KEY belum diset — notifikasi WA dilewati");
+  }
+}
 
 function siteUrl(path: string): string {
   const base = PUBLIC_SITE_URL.replace(/\/$/, "");
@@ -90,7 +111,25 @@ async function claimEventKey(
     });
     return true;
   } catch (err: any) {
-    if (err?.code === "23505") return false;
+    if (err?.code === "23505") {
+      const [existing] = await db
+        .select({ status: waNotifikasiLog.status })
+        .from(waNotifikasiLog)
+        .where(
+          and(eq(waNotifikasiLog.eventKey, eventKey), eq(waNotifikasiLog.nomorWhatsapp, normalized)),
+        )
+        .limit(1);
+      if (existing?.status === "failed") {
+        await db
+          .update(waNotifikasiLog)
+          .set({ status: "pending", errorMessage: null, sentAt: new Date() })
+          .where(
+            and(eq(waNotifikasiLog.eventKey, eventKey), eq(waNotifikasiLog.nomorWhatsapp, normalized)),
+          );
+        return true;
+      }
+      return false;
+    }
     throw err;
   }
 }
@@ -119,39 +158,46 @@ export async function sendWaIfConfigured(
   },
 ): Promise<void> {
   const normalized = normalizeStarSenderPhone(to);
-  if (!normalized || normalized.replace(/\D/g, "").length < 9) return;
+  if (!normalized || normalized.replace(/\D/g, "").length < 9) {
+    if (opts?.eventKey) {
+      console.warn(`[wa-notify] nomor tidak valid, dilewati: ${opts.eventKey} → ${to}`);
+    }
+    return;
+  }
 
   if (!isStarSenderConfigured()) {
     if (opts?.eventKey) {
-      console.log(`[wa-notify] skipped (no API key): ${opts.eventKey} → ${normalized}`);
+      console.log(`[wa-notify] skipped (StarSender off): ${opts.eventKey} → ${normalized}`);
     }
     return;
   }
 
   const eventKey = opts?.eventKey ?? `adhoc:${Date.now()}:${normalized}`;
+  const useDedup = opts?.dedup ?? Boolean(opts?.eventKey && !eventKey.startsWith("adhoc:"));
 
-  if (opts?.dedup) {
-    const claimed = await claimEventKey(eventKey, normalized, opts.referenceType, opts.referenceId);
-    if (!claimed) return;
+  if (useDedup) {
+    const claimed = await claimEventKey(eventKey, normalized, opts?.referenceType, opts?.referenceId);
+    if (!claimed) {
+      console.log(`[wa-notify] sudah terkirim, dilewati: ${eventKey}`);
+      return;
+    }
   }
 
   const result = await sendStarSenderMessage({ to: normalized, body });
 
-  if (opts?.dedup) {
+  if (useDedup) {
     await finalizeLog(
       eventKey,
       normalized,
       result.ok ? "sent" : "failed",
       result.ok ? undefined : result.error || result.message,
     );
-    if (!result.ok) {
-      console.error(`[wa-notify] gagal kirim ${eventKey}:`, result.error || result.message);
-    }
-    return;
   }
 
-  if (!result.ok) {
-    console.error(`[wa-notify] gagal kirim ke ${normalized}:`, result.error || result.message);
+  if (result.ok) {
+    console.log(`[wa-notify] terkirim: ${eventKey} → ${normalized}`);
+  } else {
+    console.error(`[wa-notify] gagal kirim ${eventKey}:`, result.error || result.message);
   }
 }
 
@@ -166,11 +212,14 @@ async function sendToRecipients(
   },
 ): Promise<void> {
   const seen = new Set<string>();
+  let sentCount = 0;
   for (const r of recipients) {
     if (!r.to?.trim()) continue;
     const phone = normalizeStarSenderPhone(r.to);
     if (!phone || phone.replace(/\D/g, "").length < 9 || seen.has(phone)) continue;
+    if (sentCount > 0) await sleep(WA_SEND_GAP_MS);
     seen.add(phone);
+    sentCount++;
     await sendWaIfConfigured(phone, buildBody(r.nama), {
       eventKey: `${opts.eventKeyPrefix}:${phone}`,
       referenceType: opts.referenceType,
@@ -627,6 +676,99 @@ export function notifyKekeringanDitolak(row: LaporanKekeringan, alasan: string):
       {
         eventKey: `kekeringan:rejected:${row.id}:${normalizeStarSenderPhone(row.nomorWa)}`,
         referenceType: "laporan_kekeringan",
+        referenceId: row.id,
+      },
+    );
+  });
+}
+
+// --- Pendataan usaha ---
+
+export function notifyUsahaDidaftar(row: Usaha): void {
+  notifyWaSafe(async () => {
+    if (!row.nomorWaPemilik?.trim()) return;
+
+    await sendWaIfConfigured(
+      row.nomorWaPemilik,
+      `${salam(row.namaPemilik)}\n\n` +
+        `Pendaftaran usaha *${row.namaUsaha}* sudah kami terima.\n\n` +
+        `Status: *menunggu survey* lapangan pengurus RW\n` +
+        `RT ${String(row.rt).padStart(2, "0")} · ${row.jenisUsaha}\n\n` +
+        `Tim RW akan menghubungi Anda untuk survey. Simpan pesan ini sebagai bukti pendaftaran.\n\n` +
+        `— ${SENDER_LABEL}`,
+      {
+        eventKey: `usaha:submitted:${row.id}:${normalizeStarSenderPhone(row.nomorWaPemilik)}`,
+        referenceType: "usaha",
+        referenceId: row.id,
+      },
+    );
+  });
+}
+
+export function notifyUsahaDisetujui(
+  row: Usaha,
+  stiker: { nomorStiker: string; tanggalTerbit: string; tanggalExpired: string },
+): void {
+  notifyWaSafe(async () => {
+    if (!row.nomorWaPemilik?.trim()) return;
+    const berlaku = formatTanggalId(stiker.tanggalExpired);
+
+    await sendWaIfConfigured(
+      row.nomorWaPemilik,
+      `${salam(row.namaPemilik)}\n\n` +
+        `*Usaha disetujui!*\n\n` +
+        `Nama usaha: *${row.namaUsaha}*\n` +
+        `Nomor stiker: *${stiker.nomorStiker}*\n` +
+        `Berlaku sampai: *${berlaku}*\n\n` +
+        `Stiker wajib dipasang di lokasi usaha. Terima kasih atas kerja samanya.\n\n` +
+        `— ${SENDER_LABEL}`,
+      {
+        eventKey: `usaha:approved:${row.id}:${normalizeStarSenderPhone(row.nomorWaPemilik)}`,
+        referenceType: "usaha",
+        referenceId: row.id,
+      },
+    );
+  });
+}
+
+export function notifyUsahaDitolak(row: Usaha, alasan: string): void {
+  notifyWaSafe(async () => {
+    if (!row.nomorWaPemilik?.trim()) return;
+
+    await sendWaIfConfigured(
+      row.nomorWaPemilik,
+      `${salam(row.namaPemilik)}\n\n` +
+        `Mohon maaf, pendaftaran usaha *${row.namaUsaha}* belum dapat kami setujui.\n\n` +
+        `Alasan: ${alasan.trim()}\n\n` +
+        `Silakan hubungi pengurus RW jika ada pertanyaan.\n\n` +
+        `— ${SENDER_LABEL}`,
+      {
+        eventKey: `usaha:rejected:${row.id}:${normalizeStarSenderPhone(row.nomorWaPemilik)}`,
+        referenceType: "usaha",
+        referenceId: row.id,
+      },
+    );
+  });
+}
+
+export function notifyUsahaStikerPerpanjang(
+  row: Usaha,
+  stiker: { nomorStiker: string; tanggalExpired: string },
+): void {
+  notifyWaSafe(async () => {
+    if (!row.nomorWaPemilik?.trim()) return;
+    const berlaku = formatTanggalId(stiker.tanggalExpired);
+
+    await sendWaIfConfigured(
+      row.nomorWaPemilik,
+      `${salam(row.namaPemilik)}\n\n` +
+        `Stiker usaha *${row.namaUsaha}* berhasil *diperpanjang*.\n\n` +
+        `Nomor stiker baru: *${stiker.nomorStiker}*\n` +
+        `Berlaku sampai: *${berlaku}*\n\n` +
+        `— ${SENDER_LABEL}`,
+      {
+        eventKey: `usaha:stiker:${stiker.nomorStiker}:${normalizeStarSenderPhone(row.nomorWaPemilik)}`,
+        referenceType: "usaha",
         referenceId: row.id,
       },
     );

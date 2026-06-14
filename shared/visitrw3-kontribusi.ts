@@ -123,7 +123,9 @@ function feeBisnisPerHari(
   settings: KontribusiSettings,
 ): number {
   if (jenisTempatUsaha === "lapak") return settings.feeBisnisLapakPerHari;
-  if (jenisTempatUsaha === "kiosk") return settings.feeBisnisKioskPerHari;
+  if (jenisTempatUsaha === "kiosk" || jenisTempatUsaha === "usaha_rumahan") {
+    return settings.feeBisnisKioskPerHari;
+  }
   if (jenisTempatUsaha === "lainnya") return settings.feeBisnisLainPerHari;
   return settings.feeBisnisKioskPerHari;
 }
@@ -179,7 +181,13 @@ export function hitungEstimasiPenyewa(params: {
     const jumlahHari = diffDaysInclusive(tanggalBayar, tanggalBerlakuSampai);
     const tarifSatuan = feeBisnisPerHari(jenisTempatUsaha, settings);
     const jenisLabel =
-      jenisTempatUsaha === "lapak" ? "lapak" : jenisTempatUsaha === "kiosk" ? "kiosk" : "usaha lain";
+      jenisTempatUsaha === "lapak"
+        ? "lapak"
+        : jenisTempatUsaha === "kiosk"
+          ? "kiosk"
+          : jenisTempatUsaha === "usaha_rumahan"
+            ? "usaha rumahan"
+            : "usaha lain";
     return {
       jenis: "bisnis",
       label: `Kontribusi bisnis (${jenisLabel})`,
@@ -237,6 +245,17 @@ export function hitungEstimasiPemilik(params: {
       total: settings.feePemilikKioskPerBulan,
     };
   }
+  if (jenisProperti === "usaha_rumahan") {
+    return {
+      jenis: "pemilik",
+      label: "Kontribusi usaha rumahan",
+      kelompok: "Usaha di rumah milik sendiri",
+      terminBulan: 1,
+      tarifSatuan: settings.feePemilikKioskPerBulan,
+      satuanLabel: "bulan",
+      total: settings.feePemilikKioskPerBulan,
+    };
+  }
 
   const ukuran = getUkuranProperti(pintu, settings);
   const isKontrakan = jenisProperti === "kontrakan";
@@ -262,4 +281,44 @@ export function hitungEstimasiPemilik(params: {
     satuanLabel: "bulan",
     total: tarifSatuan,
   };
+}
+
+/** Satuan tarif kontribusi ditetapkan saat survey admin. */
+export const KONTRIBUSI_SATUAN_VALUES = ["hari", "minggu", "bulan", "tahun"] as const;
+export type KontribusiSatuan = (typeof KONTRIBUSI_SATUAN_VALUES)[number];
+
+export const KONTRIBUSI_SATUAN_LABEL: Record<KontribusiSatuan, string> = {
+  hari: "Per hari",
+  minggu: "Per minggu",
+  bulan: "Per bulan",
+  tahun: "Per tahun",
+};
+
+export type KontribusiSurveyRincian = {
+  tarifNominal: number;
+  satuan: KontribusiSatuan;
+  tanggalMasukKas?: string | null;
+  keteranganKas?: string | null;
+};
+
+export function suggestedSatuanFromRincian(r: KontribusiRincian): KontribusiSatuan {
+  if (r.jenis === "bisnis") return "hari";
+  return "bulan";
+}
+
+export function parseKontribusiSurveyRincian(raw: string | null | undefined): KontribusiSurveyRincian | null {
+  if (!raw?.trim()) return null;
+  try {
+    const o = JSON.parse(raw) as Partial<KontribusiSurveyRincian>;
+    if (
+      typeof o.tarifNominal === "number" &&
+      o.satuan &&
+      KONTRIBUSI_SATUAN_VALUES.includes(o.satuan as KontribusiSatuan)
+    ) {
+      return o as KontribusiSurveyRincian;
+    }
+  } catch {
+    /* format lama / estimasi publik */
+  }
+  return null;
 }

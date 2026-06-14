@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import { Link } from "wouter";
 import { Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -24,12 +25,14 @@ export function Visitrw3StatCard({
   description,
   icon: Icon,
   tone = "default",
+  href,
 }: {
   title: string;
   value: string;
   description?: string;
   icon: LucideIcon;
   tone?: "default" | "warning" | "success" | "gold";
+  href?: string;
 }) {
   const toneClass = {
     default: "from-[hsl(163,55%,22%)]/10 to-[hsl(163,55%,22%)]/5 text-[hsl(163,55%,22%)]",
@@ -38,8 +41,11 @@ export function Visitrw3StatCard({
     gold: "from-[hsl(40,45%,55%)]/20 to-[hsl(40,45%,55%)]/5 text-[hsl(40,35%,35%)]",
   }[tone];
 
-  return (
-    <div className="group relative overflow-hidden rounded-2xl border border-border/60 bg-card/90 shadow-sm transition-shadow hover:shadow-md">
+  const card = (
+    <div className={cn(
+      "group relative overflow-hidden rounded-2xl border border-border/60 bg-card/90 shadow-sm transition-shadow",
+      href && "hover:shadow-md cursor-pointer",
+    )}>
       <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent pointer-events-none" />
       <div className="relative flex items-start justify-between gap-3 p-4 sm:p-5">
         <div className="space-y-1 min-w-0">
@@ -53,6 +59,15 @@ export function Visitrw3StatCard({
       </div>
     </div>
   );
+
+  if (href) {
+    return (
+      <Link href={href} className="block no-underline text-inherit">
+        {card}
+      </Link>
+    );
+  }
+  return card;
 }
 
 export function Visitrw3Panel({

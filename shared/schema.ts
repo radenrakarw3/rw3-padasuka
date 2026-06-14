@@ -261,122 +261,6 @@ export const waBlastRecipient = pgTable("wa_blast_recipient", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const PROPAGANDA_PROFIL = [
-  "cepat_aman",
-  "standar",
-  "merata",
-  "hati_hati",
-  "sangat_hati_hati",
-] as const;
-
-export type PropagandaProfil = (typeof PROPAGANDA_PROFIL)[number];
-
-export const PROPAGANDA_CAMPAIGN_STATUS = [
-  "draft",
-  "berjalan",
-  "jeda",
-  "selesai",
-  "dibatalkan",
-  "gagal",
-] as const;
-
-export const PROPAGANDA_ANTrian_STATUS = [
-  "menunggu",
-  "mengirim",
-  "terkirim",
-  "gagal",
-  "dilewati",
-  "dibatalkan",
-] as const;
-
-export const propagandaCampaign = pgTable("propaganda_campaign", {
-  id: serial("id").primaryKey(),
-  judul: text("judul").notNull(),
-  pesanTemplate: text("pesan_template").notNull(),
-  filterJson: text("filter_json").notNull().default("{}"),
-  profilDistribusi: text("profil_distribusi").notNull().default("standar"),
-  formulaVersi: text("formula_versi").notNull().default("helix-v2"),
-  distribusiPlanJson: text("distribusi_plan_json"),
-  helixSeed: text("helix_seed"),
-  fairnessScore: integer("fairness_score"),
-  abaikanCooldown: boolean("abaikan_cooldown").notNull().default(false),
-  status: text("status").notNull().default("draft"),
-  jumlahTarget: integer("jumlah_target").notNull().default(0),
-  jumlahTerkirim: integer("jumlah_terkirim").notNull().default(0),
-  jumlahGagal: integer("jumlah_gagal").notNull().default(0),
-  jumlahDilewati: integer("jumlah_dilewati").notNull().default(0),
-  jumlahMenunggu: integer("jumlah_menunggu").notNull().default(0),
-  jumlahGelombang: integer("jumlah_gelombang").notNull().default(0),
-  mulaiKirim: timestamp("mulai_kirim"),
-  estimasiSelesai: timestamp("estimasi_selesai"),
-  selesaiKirim: timestamp("selesai_kirim"),
-  createdBy: text("created_by"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const propagandaGelombang = pgTable("propaganda_gelombang", {
-  id: serial("id").primaryKey(),
-  campaignId: integer("campaign_id").notNull().references(() => propagandaCampaign.id, { onDelete: "cascade" }),
-  nomorGelombang: integer("nomor_gelombang").notNull(),
-  jumlahSlot: integer("jumlah_slot").notNull().default(0),
-  jumlahTerkirim: integer("jumlah_terkirim").notNull().default(0),
-  jumlahGagal: integer("jumlah_gagal").notNull().default(0),
-  jadwalMulai: timestamp("jadwal_mulai").notNull(),
-  jadwalSelesai: timestamp("jadwal_selesai").notNull(),
-  istirahatSesudahMs: integer("istirahat_sesudah_ms").notNull().default(0),
-  perRtJson: text("per_rt_json").notNull().default("{}"),
-  status: text("status").notNull().default("menunggu"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const propagandaAntrian = pgTable(
-  "propaganda_antrian",
-  {
-    id: serial("id").primaryKey(),
-    campaignId: integer("campaign_id").notNull().references(() => propagandaCampaign.id, { onDelete: "cascade" }),
-    gelombangId: integer("gelombang_id").references(() => propagandaGelombang.id, { onDelete: "set null" }),
-    wargaId: integer("warga_id"),
-    kkId: integer("kk_id"),
-    nama: text("nama").notNull(),
-    nomorWhatsapp: text("nomor_whatsapp").notNull(),
-    rt: integer("rt"),
-    pesan: text("pesan").notNull(),
-    jadwalKirim: timestamp("jadwal_kirim").notNull(),
-    urutanGlobal: integer("urutan_global").notNull().default(0),
-    urutanDalamGelombang: integer("urutan_dalam_gelombang").notNull().default(0),
-    status: text("status").notNull().default("menunggu"),
-    attemptCount: integer("attempt_count").notNull().default(0),
-    lastError: text("last_error"),
-    claimedAt: timestamp("claimed_at"),
-    sentAt: timestamp("sent_at"),
-    createdAt: timestamp("created_at").defaultNow(),
-  },
-  (table) => ({
-    campaignPhoneUniq: uniqueIndex("propaganda_antrian_campaign_phone_idx").on(
-      table.campaignId,
-      table.nomorWhatsapp,
-    ),
-  }),
-);
-
-export const propagandaLogKirim = pgTable("propaganda_log_kirim", {
-  id: serial("id").primaryKey(),
-  antrianId: integer("antrian_id").references(() => propagandaAntrian.id, { onDelete: "set null" }),
-  campaignId: integer("campaign_id").notNull().references(() => propagandaCampaign.id, { onDelete: "cascade" }),
-  gelombangId: integer("gelombang_id").references(() => propagandaGelombang.id, { onDelete: "set null" }),
-  nomorWhatsapp: text("nomor_whatsapp").notNull(),
-  status: text("status").notNull(),
-  responseJson: text("response_json"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const propagandaCooldown = pgTable("propaganda_cooldown", {
-  nomorWhatsapp: text("nomor_whatsapp").primaryKey(),
-  lastCampaignId: integer("last_campaign_id").references(() => propagandaCampaign.id, { onDelete: "set null" }),
-  lastSentAt: timestamp("last_sent_at").notNull().defaultNow(),
-  totalTerkirim: integer("total_terkirim").notNull().default(1),
-});
-
 export const waNotifikasiLog = pgTable(
   "wa_notifikasi_log",
   {
@@ -454,6 +338,7 @@ export const pemilikKost = pgTable("pemilik_kost", {
   setujuTataTertib: boolean("setuju_tata_tertib").notNull().default(false),
   settingsVersi: text("settings_versi"),
   estimasiKontribusi: integer("estimasi_kontribusi"),
+  rincianKontribusi: text("rincian_kontribusi"),
   kasRwId: integer("kas_rw_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -488,6 +373,8 @@ export const visitrw3Pengajuan = pgTable("visitrw3_pengajuan", {
   jenisUsaha: text("jenis_usaha"),
   jenisTempatUsaha: text("jenis_tempat_usaha"),
   jenisTempatUsahaLain: text("jenis_tempat_usaha_lain"),
+  /** JSON array — kategori/jenis usaha (bisa lebih dari satu, mis. warung + pertamini). */
+  kategoriUsaha: text("kategori_usaha"),
   tinggalDiWilayahRw3: boolean("tinggal_di_wilayah_rw3"),
   jamBuka: text("jam_buka"),
   jamTutup: text("jam_tutup"),
@@ -853,11 +740,6 @@ export type WaBlastRecipient = typeof waBlastRecipient.$inferSelect;
 export type InsertWaBlastRecipient = typeof waBlastRecipient.$inferInsert;
 export type WaNotifikasiLog = typeof waNotifikasiLog.$inferSelect;
 export type InsertWaNotifikasiLog = typeof waNotifikasiLog.$inferInsert;
-export type PropagandaCampaign = typeof propagandaCampaign.$inferSelect;
-export type PropagandaGelombang = typeof propagandaGelombang.$inferSelect;
-export type PropagandaAntrian = typeof propagandaAntrian.$inferSelect;
-export type PropagandaLogKirim = typeof propagandaLogKirim.$inferSelect;
-export type PropagandaCooldown = typeof propagandaCooldown.$inferSelect;
 export type PengajuanBansos = typeof pengajuanBansos.$inferSelect;
 export type InsertPengajuanBansos = z.infer<typeof insertPengajuanBansosSchema>;
 export type DonasiCampaign = typeof donasiCampaign.$inferSelect;

@@ -13,7 +13,7 @@ type NavItem = { path: string; icon: typeof Megaphone; label: string };
 const navFormWarga: NavItem[] = [
   { path: "/admin/laporan", icon: Megaphone, label: "Laporan" },
   { path: "/admin/kekeringan", icon: Droplets, label: "Kekeringan" },
-  { path: "/admin/visitrw3/antrian", icon: Building2, label: "Visit RW3" },
+  { path: "/admin/visitrw3", icon: Building2, label: "Visit RW3" },
 ];
 
 const navProgramKerja: NavItem[] = [
@@ -30,7 +30,7 @@ const navPengelolaan: NavItem[] = [
 function isNavActive(location: string, path: string): boolean {
   if (path === "/admin/laporan") return location === path || location.startsWith("/admin/laporan/");
   if (path === "/admin/kekeringan") return location === path || location.startsWith("/admin/kekeringan/");
-  if (path === "/admin/visitrw3/antrian") {
+  if (path === "/admin/visitrw3") {
     return location === path || location.startsWith("/admin/visitrw3/");
   }
   if (path === "/admin/kependudukan") {

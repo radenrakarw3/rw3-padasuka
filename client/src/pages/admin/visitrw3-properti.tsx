@@ -9,16 +9,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import {
-  Visitrw3SurveyKontribusiFields,
-  defaultSurveyKontribusiState,
-  surveyKontribusiToBody,
-  type Visitrw3SurveyKontribusiState,
-} from "@/components/gov/visitrw3-survey-kontribusi-fields";
-import { rtOptions, jumlahPintuOptions, jenisPropertiOptions } from "@/lib/constants";
+import { rtOptions, jumlahPintuOptions, jenisPropertiOptions, labelJenisProperti } from "@/lib/constants";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Visitrw3AdminNav } from "@/components/admin/visitrw3-admin-nav";
+import {
+  adminPropertiFormMeta,
+  labelPeranPropertiAdmin,
+  labelPropertiStatus,
+} from "@/lib/visitrw3-admin-labels";
+import { izinDefaultFromJenis, kegunaanPropertiLabel, type PropertiDraft } from "@/lib/visitrw3-validate-properti";
+import { isUsahaRumahan } from "@/lib/constants";
 import {
   Visitrw3AdminShell,
   Visitrw3EmptyState,
@@ -27,7 +27,8 @@ import {
   Visitrw3RtBadge,
   Visitrw3Toolbar,
 } from "@/components/admin/visitrw3-admin-ui";
-import { Plus, Pencil, Trash2, Building2, Phone, MapPin, DoorOpen, Check } from "lucide-react";
+import { Plus, Pencil, Trash2, Building2, Phone, MapPin, DoorOpen, ArrowRight } from "lucide-react";
+import { Link } from "wouter";
 
 interface PemilikKost {
   id: number;
@@ -55,9 +56,8 @@ export default function AdminVisitrw3Properti() {
   const [deleteTarget, setDeleteTarget] = useState<PemilikKost | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterRt, setFilterRt] = useState<string>("semua");
-  const [filterStatus, setFilterStatus] = useState<string>("menunggu");
-  const [approveTarget, setApproveTarget] = useState<PemilikKost | null>(null);
-  const [surveyForm, setSurveyForm] = useState<Visitrw3SurveyKontribusiState>(defaultSurveyKontribusiState);
+  const [filterStatus, setFilterStatus] = useState<string>("semua");
+  const [filterJenis, setFilterJenis] = useState<string>("semua");
 
   const [formData, setFormData] = useState({
     namaKost: "",
@@ -101,24 +101,6 @@ export default function AdminVisitrw3Properti() {
       invalidateVisitrw3Queries(queryClient, { includeKas: false });
       toast({ title: "Berhasil", description: "Data properti berhasil diperbarui" });
       resetForm();
-    },
-    onError: (e: unknown) =>
-      toast({ title: "Gagal", description: getApiErrorMessage(e), variant: "destructive" }),
-  });
-
-  const approveMutation = useMutation({
-    mutationFn: async ({ id, body }: { id: number; body: ReturnType<typeof surveyKontribusiToBody> }) => {
-      const res = await apiRequest("PATCH", `/api/admin/visitrw3/properti/${id}/approve`, body);
-      return readJsonSafely(res);
-    },
-    onSuccess: () => {
-      invalidateVisitrw3Queries(queryClient);
-      setApproveTarget(null);
-      setSurveyForm(defaultSurveyKontribusiState());
-      toast({
-        title: "Properti disetujui",
-        description: "Properti aktif; kontribusi (jika ada) dicatat ke Kas RW",
-      });
     },
     onError: (e: unknown) =>
       toast({ title: "Gagal", description: getApiErrorMessage(e), variant: "destructive" }),
@@ -174,6 +156,19 @@ export default function AdminVisitrw3Properti() {
     setShowForm(true);
   }
 
+  const formMeta = adminPropertiFormMeta(formData.jenisProperti, editData ? "edit" : "add");
+
+  function onJenisChange(v: string) {
+    const izin = izinDefaultFromJenis(v as (typeof jenisPropertiOptions)[number]["value"]);
+    setFormData({
+      ...formData,
+      jenisProperti: v,
+      izinTinggal: izin.izinTinggal,
+      izinBisnis: izin.izinBisnis,
+      jumlahPintu: isUsahaRumahan(v) ? "1" : formData.jumlahPintu,
+    });
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const payload = {
@@ -184,7 +179,7 @@ export default function AdminVisitrw3Properti() {
       nomorWaPenanggungJawab: formData.nomorWaPenanggungJawab.trim() || null,
       rt: parseInt(formData.rt),
       alamatLengkap: formData.alamatLengkap,
-      jumlahPintu: parseInt(formData.jumlahPintu),
+      jumlahPintu: isUsahaRumahan(formData.jenisProperti) ? 1 : parseInt(formData.jumlahPintu),
       izinTinggal: formData.izinTinggal,
       izinBisnis: formData.izinBisnis,
       jenisProperti: formData.jenisProperti,
@@ -206,7 +201,8 @@ export default function AdminVisitrw3Properti() {
       filterStatus === "semua" ||
       (filterStatus === "menunggu" && st === "menunggu_verifikasi") ||
       (filterStatus === "aktif" && st === "aktif");
-    return matchSearch && matchRt && matchStatus;
+    const matchJenis = filterJenis === "semua" || p.jenisProperti === filterJenis;
+    return matchSearch && matchRt && matchStatus && matchJenis;
   });
 
   const menungguCount = (pemilikList || []).filter((p) => p.statusProperti === "menunggu_verifikasi").length;
@@ -214,11 +210,11 @@ export default function AdminVisitrw3Properti() {
   return (
     <Visitrw3AdminShell>
       <Visitrw3AdminNav
-        title="Properti (kost & kontrakan)"
+        title="Data properti"
         description={
           menungguCount > 0
-            ? `${pemilikList?.length || 0} properti · ${menungguCount} menunggu verifikasi`
-            : `${pemilikList?.length || 0} properti terdaftar`
+            ? `${pemilikList?.length || 0} properti · ${menungguCount} menunggu verifikasi — proses di tab Survey`
+            : "Master data kost, kontrakan, kiosk, lapak, dan usaha rumahan. Verifikasi pendaftaran publik dilakukan di tab Survey."
         }
         actions={
           <Button size="sm" onClick={() => { resetForm(); setShowForm(true); }} data-testid="button-tambah-pemilik">
@@ -249,18 +245,55 @@ export default function AdminVisitrw3Properti() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="semua">Semua status</SelectItem>
-            <SelectItem value="menunggu">Menunggu</SelectItem>
+            <SelectItem value="menunggu">Menunggu verifikasi</SelectItem>
             <SelectItem value="aktif">Aktif</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={filterJenis} onValueChange={setFilterJenis}>
+          <SelectTrigger className="w-40 h-9">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="semua">Semua jenis</SelectItem>
+            {jenisPropertiOptions.map((o) => (
+              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </Visitrw3Toolbar>
 
       {showForm && (
-        <Visitrw3FormCard title={editData ? "Edit properti" : "Tambah properti"} onClose={resetForm}>
+        <Visitrw3FormCard title={formMeta.title} onClose={resetForm}>
             <form onSubmit={handleSubmit} className="space-y-3">
               <div>
-                <Label className="text-xs">Nama Kost/Kontrakan</Label>
-                <Input value={formData.namaKost} onChange={(e) => setFormData({ ...formData, namaKost: e.target.value })} required data-testid="input-nama-kost" />
+                <Label className="text-xs">Jenis properti</Label>
+                <Select value={formData.jenisProperti} onValueChange={onJenisChange}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {jenisPropertiOptions.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                  {kegunaanPropertiLabel(
+                    formData.jenisProperti as PropertiDraft["jenisProperti"],
+                    formData.izinTinggal,
+                    formData.izinBisnis,
+                  )}
+                </p>
+              </div>
+              <div>
+                <Label className="text-xs">{formMeta.namaLabel}</Label>
+                <Input
+                  value={formData.namaKost}
+                  onChange={(e) => setFormData({ ...formData, namaKost: e.target.value })}
+                  placeholder={formMeta.namaPlaceholder}
+                  required
+                  data-testid="input-nama-kost"
+                />
               </div>
               <div>
                 <Label className="text-xs">Nama Pemilik</Label>
@@ -286,7 +319,7 @@ export default function AdminVisitrw3Properti() {
                   placeholder="08xxxxxxxxxx"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className={formMeta.showJumlahPintu ? "grid grid-cols-2 gap-3" : ""}>
                 <div>
                   <Label className="text-xs">RT</Label>
                   <Select value={formData.rt} onValueChange={(v) => setFormData({ ...formData, rt: v })}>
@@ -298,53 +331,50 @@ export default function AdminVisitrw3Properti() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
-                  <Label className="text-xs">Jumlah Pintu</Label>
-                  <Select value={formData.jumlahPintu} onValueChange={(v) => setFormData({ ...formData, jumlahPintu: v })}>
-                    <SelectTrigger data-testid="select-jumlah-pintu"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {jumlahPintuOptions.map((n) => (
-                        <SelectItem key={n} value={String(n)}>{n} Pintu</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {formMeta.showJumlahPintu && (
+                  <div>
+                    <Label className="text-xs">{formMeta.jumlahPintuLabel}</Label>
+                    <Select value={formData.jumlahPintu} onValueChange={(v) => setFormData({ ...formData, jumlahPintu: v })}>
+                      <SelectTrigger data-testid="select-jumlah-pintu"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {jumlahPintuOptions.map((n) => (
+                          <SelectItem key={n} value={String(n)}>{n} unit</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {formMeta.jumlahPintuHint && (
+                      <p className="text-[11px] text-muted-foreground mt-1">{formMeta.jumlahPintuHint}</p>
+                    )}
+                  </div>
+                )}
               </div>
               <div>
-                <Label className="text-xs">Alamat Lengkap</Label>
+                <Label className="text-xs">{formMeta.alamatLabel}</Label>
                 <Input value={formData.alamatLengkap} onChange={(e) => setFormData({ ...formData, alamatLengkap: e.target.value })} required data-testid="input-alamat-pemilik" />
               </div>
-              <div>
-                <Label className="text-xs">Jenis properti</Label>
-                <Select value={formData.jenisProperti} onValueChange={(v) => setFormData({ ...formData, jenisProperti: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {jenisPropertiOptions.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="izin-tinggal"
-                    checked={formData.izinTinggal}
-                    onCheckedChange={(c) => setFormData({ ...formData, izinTinggal: Boolean(c) })}
-                  />
-                  <Label htmlFor="izin-tinggal" className="text-xs font-normal">Izinkan pengajuan tinggal (Visit RW3)</Label>
+              {formMeta.showIzinCheckboxes && (
+                <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3">
+                  <p className="text-xs font-medium">Pengajuan Visit RW3 yang diizinkan</p>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="izin-tinggal"
+                      checked={formData.izinTinggal}
+                      onCheckedChange={(c) => setFormData({ ...formData, izinTinggal: Boolean(c) })}
+                    />
+                    <Label htmlFor="izin-tinggal" className="text-xs font-normal">Penyewa bisa ajukan tinggal</Label>
+                  </div>
+                  {formMeta.showKontrakanBisnis && (
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="izin-bisnis"
+                        checked={formData.izinBisnis}
+                        onCheckedChange={(c) => setFormData({ ...formData, izinBisnis: Boolean(c) })}
+                      />
+                      <Label htmlFor="izin-bisnis" className="text-xs font-normal">Penyewa juga bisa ajukan usaha (mis. warung depan rumah)</Label>
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="izin-bisnis"
-                    checked={formData.izinBisnis}
-                    onCheckedChange={(c) => setFormData({ ...formData, izinBisnis: Boolean(c) })}
-                  />
-                  <Label htmlFor="izin-bisnis" className="text-xs font-normal">Izinkan pengajuan bisnis (Visit RW3)</Label>
-                </div>
-              </div>
+              )}
               <Button type="submit" className="w-full" disabled={createMutation.isPending || updateMutation.isPending} data-testid="button-submit-pemilik">
                 {(createMutation.isPending || updateMutation.isPending) ? "Menyimpan..." : editData ? "Perbarui" : "Simpan"}
               </Button>
@@ -383,19 +413,12 @@ export default function AdminVisitrw3Properti() {
               actions={
                 <>
                   {item.statusProperti === "menunggu_verifikasi" && (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 text-green-600"
-                      title="Setujui properti"
-                      onClick={() => {
-                        setSurveyForm(defaultSurveyKontribusiState());
-                        setApproveTarget(item);
-                      }}
-                      disabled={approveMutation.isPending}
-                    >
-                      <Check className="w-4 h-4" />
-                    </Button>
+                    <Link href="/admin/visitrw3/antrian?tab=properti&view=belum">
+                      <Button size="sm" variant="secondary" className="h-8 gap-1 text-xs">
+                        Verifikasi
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </Button>
+                    </Link>
                   )}
                   <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleEdit(item)} data-testid={`button-edit-pemilik-${item.id}`}>
                     <Pencil className="w-4 h-4" />
@@ -411,13 +434,23 @@ export default function AdminVisitrw3Properti() {
                 <span className="font-semibold text-sm truncate" data-testid={`text-nama-kost-${item.id}`}>{item.namaKost}</span>
                 <Visitrw3RtBadge rt={item.rt} />
                 {item.statusProperti === "menunggu_verifikasi" && (
-                  <span className="text-[10px] font-semibold bg-amber-500 text-white px-2 py-0.5 rounded-full">Menunggu</span>
+                  <span className="text-[10px] font-semibold bg-amber-500 text-white px-2 py-0.5 rounded-full">
+                    {labelPropertiStatus(item.statusProperti)}
+                  </span>
+                )}
+                {item.statusProperti === "aktif" && (
+                  <span className="text-[10px] font-semibold bg-[hsl(163,55%,22%)] text-white px-2 py-0.5 rounded-full">
+                    {labelPropertiStatus(item.statusProperti)}
+                  </span>
                 )}
               </div>
               {item.nomorPendaftaran && (
                 <p className="text-[10px] font-mono text-muted-foreground mb-1">{item.nomorPendaftaran}</p>
               )}
               <p className="text-xs text-muted-foreground">Pemilik: {item.namaPemilik}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {labelJenisProperti(item.jenisProperti)} · {labelPeranPropertiAdmin(item.jenisProperti)}
+              </p>
               {item.namaPenanggungJawab && (
                 <p className="text-xs text-muted-foreground">
                   PJ: {item.namaPenanggungJawab}
@@ -433,43 +466,6 @@ export default function AdminVisitrw3Properti() {
           ))}
         </div>
       )}
-
-      <Dialog open={!!approveTarget} onOpenChange={(o) => !o && setApproveTarget(null)}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Setujui properti</DialogTitle>
-          </DialogHeader>
-          {approveTarget && (
-            <p className="text-sm text-muted-foreground">
-              {approveTarget.namaKost} · {approveTarget.nomorPendaftaran || `ID ${approveTarget.id}`}
-            </p>
-          )}
-          <Visitrw3SurveyKontribusiFields
-            {...surveyForm}
-            onChange={(patch) => setSurveyForm((s) => ({ ...s, ...patch }))}
-          />
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setApproveTarget(null)}>
-              Batal
-            </Button>
-            <Button
-              className="gap-1"
-              disabled={approveMutation.isPending || !approveTarget}
-              onClick={() => {
-                if (!approveTarget) return;
-                try {
-                  const body = surveyKontribusiToBody(surveyForm);
-                  approveMutation.mutate({ id: approveTarget.id, body });
-                } catch (e: unknown) {
-                  toast({ title: "Lengkapi kontribusi", description: getApiErrorMessage(e), variant: "destructive" });
-                }
-              }}
-            >
-              <Check className="w-4 h-4" /> Setujui
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
         <AlertDialogContent>

@@ -9,15 +9,24 @@ import {
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useVisitrw3AdminCounts } from "@/hooks/use-visitrw3-admin-counts";
+import { Visitrw3WorkflowSteps } from "@/components/admin/visitrw3-workflow-steps";
 
-type TabDef = { href: string; label: string; icon: typeof ClipboardList; exact?: boolean };
+type TabDef = {
+  href: string;
+  label: string;
+  icon: typeof ClipboardList;
+  exact?: boolean;
+  badgeKey?: "properti" | "survey";
+};
 
+/** Urutan mengikuti alur operasional harian admin. */
 const NAV_TABS: TabDef[] = [
-  { href: "/admin/visitrw3/antrian", label: "Antrian", icon: ClipboardList, exact: true },
+  { href: "/admin/visitrw3/properti", label: "Properti", icon: Building2, exact: true },
+  { href: "/admin/visitrw3/antrian", label: "Survey", icon: ClipboardList, exact: true, badgeKey: "survey" },
+  { href: "/admin/visitrw3/penghuni", label: "Kontrak", icon: Users },
   { href: "/admin/visitrw3/kalender", label: "Kalender", icon: CalendarDays },
   { href: "/admin/visitrw3/dashboard", label: "Statistik", icon: BarChart3 },
-  { href: "/admin/visitrw3/properti", label: "Properti", icon: Building2 },
-  { href: "/admin/visitrw3/penghuni", label: "Penghuni", icon: Users },
   { href: "/admin/visitrw3/pengaturan", label: "Pengaturan", icon: Settings },
 ];
 
@@ -25,7 +34,10 @@ function isActive(location: string, href: string, exact?: boolean) {
   if (href === "/admin/visitrw3/dashboard") return location === href;
   if (href === "/admin/visitrw3/kalender") return location === href;
   if (href === "/admin/visitrw3/antrian") {
-    return location === href || location === "/admin/visitrw3";
+    return location === href || location.startsWith("/admin/visitrw3/antrian?");
+  }
+  if (href === "/admin/visitrw3/properti") {
+    return location === href || location === "/admin/visitrw3" || location === "/admin/pemilik-kost";
   }
   if (exact) return location === href;
   return location === href || location.startsWith(`${href}/`);
@@ -39,6 +51,13 @@ type Props = {
 
 export function Visitrw3AdminNav({ title, description, actions }: Props) {
   const [location] = useLocation();
+  const { propertiMenunggu, surveyMenunggu } = useVisitrw3AdminCounts();
+
+  function badgeCount(key?: TabDef["badgeKey"]) {
+    if (key === "properti") return propertiMenunggu;
+    if (key === "survey") return propertiMenunggu + surveyMenunggu;
+    return 0;
+  }
 
   return (
     <div className="space-y-4">
@@ -66,11 +85,18 @@ export function Visitrw3AdminNav({ title, description, actions }: Props) {
         </div>
       </div>
 
+      <Visitrw3WorkflowSteps />
+
       <nav className="flex gap-1 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
         <div className="flex gap-1 p-1 rounded-xl bg-muted/50 border border-border/50 min-w-max">
           {NAV_TABS.map((tab) => {
             const active = isActive(location, tab.href, tab.exact);
             const Icon = tab.icon;
+            const count = badgeCount(tab.badgeKey);
+            const propertiBadge = tab.href === "/admin/visitrw3/properti" ? propertiMenunggu : 0;
+            const showBadge = count > 0 || propertiBadge > 0;
+            const badge = tab.href === "/admin/visitrw3/properti" ? propertiBadge : count;
+
             return (
               <Link key={tab.href} href={tab.href}>
                 <span
@@ -83,6 +109,16 @@ export function Visitrw3AdminNav({ title, description, actions }: Props) {
                 >
                   <Icon className="w-4 h-4 shrink-0" />
                   {tab.label}
+                  {showBadge && badge > 0 && (
+                    <span
+                      className={cn(
+                        "min-w-[1.25rem] rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none text-center",
+                        active ? "bg-white/25 text-white" : "bg-amber-500 text-white",
+                      )}
+                    >
+                      {badge}
+                    </span>
+                  )}
                 </span>
               </Link>
             );

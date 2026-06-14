@@ -221,8 +221,8 @@ export default function AdminVisitrw3Dashboard() {
   return (
     <Visitrw3AdminShell className="space-y-6">
       <Visitrw3AdminNav
-        title="Dashboard Visit RW3"
-        description={`Ringkasan semua isian form pengajuan, properti, dan penghuni — ${selectedRtLabel}`}
+        title="Statistik Visit RW3"
+        description={`Analytics form pengajuan, properti, dan kontrak aktif — ${selectedRtLabel}`}
         actions={
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-muted-foreground" />
@@ -287,10 +287,10 @@ export default function AdminVisitrw3Dashboard() {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <Visitrw3StatCard title="Menunggu survey" value={formatNumber(data.ringkasan.menungguSurvey)} description="Belum diproses admin" icon={Clock} tone="warning" />
-            <Visitrw3StatCard title="Disetujui" value={formatNumber(data.ringkasan.disetujui)} description={`Dari ${formatNumber(data.ringkasan.totalPengajuan)} pengajuan`} icon={CheckCircle2} tone="success" />
-            <Visitrw3StatCard title="Properti" value={formatNumber(data.ringkasan.totalProperti)} description={data.ringkasan.propertiMenunggu > 0 ? `${data.ringkasan.propertiMenunggu} menunggu verifikasi` : "Terdaftar"} icon={Building2} />
-            <Visitrw3StatCard title="Penghuni aktif" value={formatNumber(data.ringkasan.penghuniAktif)} description="Kontrak aktif (warga_singgah)" icon={Users} />
+            <Visitrw3StatCard title="Menunggu survey" value={formatNumber(data.ringkasan.menungguSurvey)} description="Belum diproses admin" icon={Clock} tone="warning" href="/admin/visitrw3/antrian?tab=pengajuan&view=belum" />
+            <Visitrw3StatCard title="Disetujui" value={formatNumber(data.ringkasan.disetujui)} description={`Dari ${formatNumber(data.ringkasan.totalPengajuan)} pengajuan`} icon={CheckCircle2} tone="success" href="/admin/visitrw3/antrian?tab=pengajuan&view=sudah" />
+            <Visitrw3StatCard title="Properti" value={formatNumber(data.ringkasan.totalProperti)} description={data.ringkasan.propertiMenunggu > 0 ? `${data.ringkasan.propertiMenunggu} menunggu verifikasi` : "Terdaftar"} icon={Building2} href={data.ringkasan.propertiMenunggu > 0 ? "/admin/visitrw3/antrian?tab=properti&view=belum" : "/admin/visitrw3/properti"} />
+            <Visitrw3StatCard title="Penghuni aktif" value={formatNumber(data.ringkasan.penghuniAktif)} description="Kontrak aktif" icon={Users} href="/admin/visitrw3/penghuni" />
             <Visitrw3StatCard title="Kontribusi Kas RW" value={formatRupiah(data.ringkasan.totalKontribusiKasRw)} description="Setelah survey & persetujuan" icon={Wallet} tone="gold" />
             <Visitrw3StatCard title="Baris form penghuni" value={formatNumber(data.penghuni.totalBaris)} description="Isian penghuni pada pengajuan" icon={ClipboardList} />
           </div>

@@ -106,6 +106,14 @@ export const visitrw3JenisPropertiLabels: Record<string, string> = {
   kontrakan: "Kontrakan",
   kiosk: "Kiosk",
   lapak: "Lapak",
+  usaha_rumahan: "Usaha rumahan",
+};
+
+export const visitrw3JenisTempatUsahaLabels: Record<string, string> = {
+  lapak: "Lapak",
+  kiosk: "Kiosk",
+  usaha_rumahan: "Usaha rumahan",
+  lainnya: "Lainnya",
 };
 
 export function labelJumlahPenghuniPengajuan(n: number): string {

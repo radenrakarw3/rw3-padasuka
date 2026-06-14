@@ -1,17 +1,22 @@
 import { Link } from "wouter";
+import { VISITRW3_ROUTES } from "@/lib/visitrw3-routes";
 import { FilePlus, RefreshCw, Search, BookOpen } from "lucide-react";
 import { Visitrw3Shell } from "@/components/visitrw3-shell";
 import { FeatureMenuBlock } from "@/components/gov/feature-menu-block";
 
 export default function Visitrw3HubPenyewa() {
   return (
-    <Visitrw3Shell title="Penyewa / penghuni" backHref="/visitrw3">
+    <Visitrw3Shell title="Penyewa / penghuni" backHref={VISITRW3_ROUTES.hub}>
       <p className="prose-gov mb-3 text-sm text-muted-foreground">
-        Untuk penyewa kost, penghuni kontrakan, atau pengusaha di RW 03. Pastikan properti tempat
-        Anda tinggal/berusaha sudah didaftarkan pemiliknya dan statusnya aktif.
+        Untuk penyewa kost, penghuni kontrakan, atau pengusaha di tempat <strong>milik orang lain</strong>.
+        Usaha di rumah sendiri? Bukan menu ini — buka{" "}
+        <Link href={VISITRW3_ROUTES.usahaRumahan.hub} className="text-brand font-medium hover:underline">
+          Usaha di rumah sendiri
+        </Link>
+        .
       </p>
       <Link
-        href="/visitrw3/panduan"
+        href={VISITRW3_ROUTES.panduan}
         className="inline-flex items-center gap-1.5 text-sm text-brand font-medium mb-4 hover:underline"
       >
         <BookOpen className="w-4 h-4" />
@@ -27,7 +32,7 @@ export default function Visitrw3HubPenyewa() {
               usaha saja). Siapkan foto KTP dan NIK setiap penghuni dewasa.
             </>
           }
-          href="/visitrw3/pengajuan"
+          href={VISITRW3_ROUTES.penyewa.pengajuan}
           icon={FilePlus}
           title="Pengajuan baru"
           description="Isi langkah demi langkah — tidak perlu sekaligus"
@@ -42,7 +47,7 @@ export default function Visitrw3HubPenyewa() {
               baru. Bukan untuk pengajuan pertama kali.
             </>
           }
-          href="/visitrw3/perpanjang"
+          href={VISITRW3_ROUTES.penyewa.perpanjang}
           icon={RefreshCw}
           title="Perpanjang izin"
           description="Perpanjang dengan nomor Visit RW3 yang sudah aktif"
@@ -57,7 +62,7 @@ export default function Visitrw3HubPenyewa() {
               atau sudah aktif. Masukkan nomor <strong>VRW3-…</strong> dari konfirmasi pengajuan.
             </>
           }
-          href="/visitrw3/status"
+          href={VISITRW3_ROUTES.penyewa.status}
           icon={Search}
           title="Cek status pengajuan"
           description="Lacak nomor Visit RW3 (VRW3-…)"

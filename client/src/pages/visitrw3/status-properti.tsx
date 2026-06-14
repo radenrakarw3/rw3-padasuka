@@ -66,7 +66,7 @@ export default function Visitrw3StatusProperti() {
       <FeatureExplain title="Nomor PROP — untuk pemilik properti" className="mb-4">
         <p>
           Masukkan nomor <strong>PROP-…</strong> yang Anda terima setelah mendaftarkan properti
-          (kost, kontrakan, kiosk, lapak).
+          (kost, kontrakan, kiosk, lapak, usaha rumahan).
         </p>
         <p>
           <strong>Aktif</strong> = penyewa sudah bisa memilih properti ini saat pengajuan Visit RW3.{" "}

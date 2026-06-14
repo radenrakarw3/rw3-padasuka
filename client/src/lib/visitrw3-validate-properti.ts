@@ -1,4 +1,4 @@
-import { jenisPropertiOptions } from "./constants";
+import { jenisPropertiOptions, isUsahaRumahan } from "./constants";
 
 type JenisPropertiValue = (typeof jenisPropertiOptions)[number]["value"];
 
@@ -19,7 +19,7 @@ export type PropertiDraft = {
 };
 
 export function izinDefaultFromJenis(jenis: JenisPropertiValue): { izinTinggal: boolean; izinBisnis: boolean } {
-  if (jenis === "kiosk" || jenis === "lapak") {
+  if (isUsahaRumahan(jenis) || jenis === "kiosk" || jenis === "lapak") {
     return { izinTinggal: false, izinBisnis: true };
   }
   return { izinTinggal: true, izinBisnis: false };
@@ -31,6 +31,9 @@ export function kegunaanPropertiLabel(
   izinTinggal: boolean,
   izinBisnis: boolean,
 ): string {
+  if (isUsahaRumahan(jenis)) {
+    return "Usaha di rumah milik sendiri — bukan sewa/kost. Setelah aktif, Anda ajukan Visit RW3 lewat menu pengajuan (Usaha di rumah sendiri).";
+  }
   if (jenis === "kiosk" || jenis === "lapak") {
     return "Nanti pengusaha bisa daftar Visit RW3 untuk usaha di sini.";
   }
@@ -46,11 +49,13 @@ export function validatePropertiStep(stepId: string, d: PropertiDraft): string |
       if (!d.jenisProperti) return "Pilih jenis properti";
       return null;
     case "nama":
-      if (!d.namaKost.trim()) return "Isi nama properti";
+      if (!d.namaKost.trim()) return isUsahaRumahan(d.jenisProperti) ? "Isi nama usaha" : "Isi nama properti";
       return null;
     case "lokasi":
       if (!d.rt) return "Pilih RT";
-      if (!d.alamatLengkap.trim()) return "Isi alamat properti";
+      if (!d.alamatLengkap.trim()) {
+        return isUsahaRumahan(d.jenisProperti) ? "Isi alamat rumah/tempat usaha" : "Isi alamat properti";
+      }
       return null;
     case "unit":
       if (d.jumlahPintu < 1) return "Minimal 1 unit";

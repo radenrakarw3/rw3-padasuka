@@ -105,6 +105,14 @@ export default function Visitrw3Panduan() {
                 isi usaha + penghuni. Jangan ajukan tinggal dan bisnis terpisah.
               </p>
             </div>
+            <div className="rounded-lg border p-3 bg-brand/5 border-brand/20">
+              <p className="font-medium text-brand">Usaha di rumah sendiri</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Usaha di rumah/rumah milik sendiri (bukan sewa/kost) — daftar properti sebagai{" "}
+                <strong className="text-foreground">Usaha rumahan</strong>, lalu ajukan dengan pilihan
+                yang sama. Contoh: catering rumahan.
+              </p>
+            </div>
             <div className="rounded-lg border p-3 bg-muted/30">
               <p className="font-medium">Usaha saja</p>
               <p className="text-xs text-muted-foreground mt-0.5">
@@ -114,13 +122,14 @@ export default function Visitrw3Panduan() {
           </div>
         </section>
 
-        <SectionCard icon={Building2} title="Pemilik kost, kontrakan, kiosk, atau lapak">
+        <SectionCard icon={Building2} title="Pemilik kost, kontrakan, kiosk, lapak, atau usaha rumahan">
           <p className="text-xs text-muted-foreground">
-            Daftarkan properti dulu agar bisa dipilih penyewa saat mengajukan Visit RW3.
+            Daftarkan properti dulu agar bisa dipilih penyewa atau pemilik usaha rumahan saat mengajukan Visit RW3.
           </p>
           <ol className="space-y-2.5">
             <FlowStep n={1}>
-              Buka <strong>Daftar properti</strong> → pilih jenis (kost, kontrakan, kiosk, lapak).
+              Buka <strong>Daftar properti</strong> → pilih jenis (kost, kontrakan, kiosk, lapak,{" "}
+              <strong>usaha rumahan</strong>).
             </FlowStep>
             <FlowStep n={2}>
               Isi nama, RT, alamat, jumlah kamar/unit, data pemilik & pengelola.
@@ -149,13 +158,13 @@ export default function Visitrw3Panduan() {
           </p>
           <ol className="space-y-2.5">
             <FlowStep n={1}>
-              Pastikan kost/kontrakan/kiosk sudah didaftarkan pemiliknya. Kalau belum, minta pemilik
-              daftar dulu atau hubungi pengurus RW.
+              Pastikan properti sudah didaftarkan pemiliknya (kost, kontrakan, kiosk, atau usaha rumahan).
+              Kalau belum, minta pemilik daftar dulu atau hubungi pengurus RW.
             </FlowStep>
             <FlowStep n={2}>
               Buka <strong>Pengajuan baru</strong> → pilih situasi Anda:{" "}
-              <strong>Tinggal saja</strong>, <strong>Tinggal sekaligus usaha</strong>, atau{" "}
-              <strong>Usaha saja</strong>.
+              <strong>Tinggal saja</strong>, <strong>Tinggal sekaligus usaha</strong>,{" "}
+              <strong>Usaha di rumah sendiri</strong>, atau <strong>Usaha saja</strong>.
             </FlowStep>
             <FlowStep n={3}>
               Isi lokasi & data sesuai pilihan. Kalau ngekost + berbisnis, cukup{" "}
@@ -286,6 +295,27 @@ export default function Visitrw3Panduan() {
                 </Link>
                 . Setelah admin menyetujui, baru Anda bisa lanjut pengajuan. Kalau Anda sendiri
                 pemiliknya, daftarkan dulu properti Anda.
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="usaha-rumahan" id="usaha-rumahan">
+              <AccordionTrigger className="text-sm text-left">
+                Usaha di rumah sendiri (catering, jasa, dll) — daftar sebagai apa?
+              </AccordionTrigger>
+              <AccordionContent className="text-sm text-muted-foreground space-y-2">
+                <p>
+                  Jangan pilih <strong>kiosk</strong> atau <strong>lapak</strong> kalau usahanya di
+                  rumah milik sendiri, bukan di tempat sewa/kost orang lain.
+                </p>
+                <p>
+                  Langkahnya: (1) daftar properti dengan jenis{" "}
+                  <strong>Usaha rumahan</strong> lewat menu Daftar properti; (2) tunggu verifikasi
+                  admin; (3) ajukan Visit RW3 dengan pilihan{" "}
+                  <strong>Usaha di rumah sendiri</strong> — isi data usaha dan penghuni rumah.
+                </p>
+                <p>
+                  Modul <strong>Pendataan Usaha</strong> terpisah (stiker usaha RW). Visit RW3 tetap
+                  wajib untuk izin administrasi tinggal/berusaha di wilayah RW 03.
+                </p>
               </AccordionContent>
             </AccordionItem>
             <AccordionItem value="tinggal-bisnis">

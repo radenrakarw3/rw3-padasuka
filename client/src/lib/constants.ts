@@ -176,7 +176,36 @@ export const posisiTetanggaOptions = [
 export const visitrw3JenisTempatUsahaOptions = [
   { value: "lapak", label: "Lapak" },
   { value: "kiosk", label: "Kiosk" },
+  { value: "usaha_rumahan", label: "Usaha rumahan" },
   { value: "lainnya", label: "Lainnya" },
+] as const;
+
+/** Kategori/jenis usaha — multi-pilihan di form pengajuan bisnis Visit RW3. */
+export const visitrw3KategoriUsahaOptions = [
+  "Warung/Toko Kelontong",
+  "Rumah Makan/Restoran",
+  "Cafe/Kedai Kopi",
+  "Pertamini/Bensin ecer",
+  "Bengkel",
+  "Laundry",
+  "Salon/Barbershop",
+  "Konveksi/Jahit",
+  "Percetakan",
+  "Fotokopi",
+  "Apotek/Toko Obat",
+  "Toko Bangunan",
+  "Toko Elektronik",
+  "Toko Pakaian",
+  "Kios/Gerobak",
+  "Catering",
+  "Jasa Servis",
+  "Usaha Online/E-Commerce",
+  "Peternakan",
+  "Pertanian",
+  "Industri Rumahan",
+  "Pendidikan/Kursus",
+  "Kesehatan/Klinik",
+  "Lainnya",
 ] as const;
 
 export const jenisPropertiOptions = [
@@ -184,7 +213,18 @@ export const jenisPropertiOptions = [
   { value: "kontrakan", label: "Kontrakan" },
   { value: "kiosk", label: "Kiosk" },
   { value: "lapak", label: "Lapak" },
+  { value: "usaha_rumahan", label: "Usaha rumahan" },
 ] as const;
+
+export const JENIS_USAHA_RUMAHAN = "usaha_rumahan" as const;
+
+export function isUsahaRumahan(jenis?: string | null): boolean {
+  return jenis === JENIS_USAHA_RUMAHAN;
+}
+
+export function labelJenisProperti(value?: string | null): string {
+  return jenisPropertiOptions.find((o) => o.value === value)?.label ?? value ?? "—";
+}
 
 export const rw3lawKategoriOptions = [
   { value: "ketertiban", label: "Ketertiban" },

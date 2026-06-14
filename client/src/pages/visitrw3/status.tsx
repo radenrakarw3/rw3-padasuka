@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { readJsonSafely } from "@/lib/queryClient";
+import { formatKategoriUsahaLabel } from "@shared/visitrw3-kategori-usaha";
 import { Loader2 } from "lucide-react";
 import { StatusBadge, visitrw3StatusVariant } from "@/components/gov/status-badge";
 import { StatusTimeline, buildVisitrw3Timeline } from "@/components/gov/status-timeline";
@@ -34,6 +35,7 @@ export default function Visitrw3Status() {
           nomorUnit?: string | null;
           alasanTolak?: string | null;
           namaUsaha?: string | null;
+          kategoriUsaha?: string | null;
           jamBuka?: string | null;
           jamTutup?: string | null;
         };
@@ -134,6 +136,14 @@ export default function Visitrw3Status() {
                     <dt className="text-muted-foreground">Usaha</dt>
                     <dd className="font-medium text-right">{data.pengajuan.namaUsaha}</dd>
                   </div>
+                  {data.pengajuan.kategoriUsaha && (
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-muted-foreground">Kategori usaha</dt>
+                      <dd className="font-medium text-right max-w-[60%]">
+                        {formatKategoriUsahaLabel(data.pengajuan.kategoriUsaha)}
+                      </dd>
+                    </div>
+                  )}
                   {data.pengajuan.jamBuka && data.pengajuan.jamTutup && (
                     <div className="flex justify-between gap-2">
                       <dt className="text-muted-foreground">Jam operasional</dt>

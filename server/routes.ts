@@ -36,7 +36,12 @@ import {
   notifyKekeringanTiketKeluar,
   notifyKekeringanSelesai,
   notifyKekeringanDitolak,
+  notifyUsahaDidaftar,
+  notifyUsahaDisetujui,
+  notifyUsahaDitolak,
+  notifyUsahaStikerPerpanjang,
   ensureWaNotifikasiSchema,
+  logWaStartupStatus,
   startVisitrw3ReminderScheduler,
 } from "./wa-notify";
 import { generateWithGemini } from "./gemini";
@@ -66,8 +71,6 @@ declare module "express-session" {
     adminNama?: string;
     blusukanAuth?: boolean;
     blusukanLoginAt?: number;
-    propagandaAuth?: boolean;
-    propagandaLoginAt?: number;
   }
 }
 
@@ -164,6 +167,7 @@ export async function registerRoutes(
   await ensureWaNotifikasiSchema().catch((error) => {
     console.error("WA notifikasi schema init error:", error);
   });
+  logWaStartupStatus();
   startVisitrw3ReminderScheduler();
   await pool
     .query(`
@@ -228,11 +232,6 @@ export async function registerRoutes(
 
   const { registerBlusukanRoutes } = await import("./blusukan-routes");
   await registerBlusukanRoutes(app);
-
-  const { registerPropagandaRoutes } = await import("./propaganda-routes");
-  await registerPropagandaRoutes(app);
-  const { startPropagandaDispatcher } = await import("./propaganda-dispatcher");
-  startPropagandaDispatcher();
 
   const { registerRw3lawRoutes } = await import("./rw3law-routes");
   registerRw3lawRoutes(app);
@@ -1894,6 +1893,7 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
         }
       }
       const created = await storage.createUsahaWithRelations(parsed, karyawan || [], izinList);
+      notifyUsahaDidaftar(created);
       res.json(created);
     } catch (error: any) {
       if (error.name === "ZodError") {
@@ -1989,12 +1989,16 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
       }
       if (keputusan === "disetujui") {
         const result = await storage.approveUsahaWithStiker(usahaId);
+        const updated = await storage.getUsahaById(usahaId);
+        if (updated) notifyUsahaDisetujui(updated, result);
         res.json({ message: "Usaha disetujui dan stiker diterbitkan", nomorStiker: result.nomorStiker });
       } else {
         if (!alasanPenolakan || !alasanPenolakan.trim()) {
           return res.status(400).json({ message: "Alasan penolakan harus diisi" });
         }
         await storage.updateUsahaStatus(usahaId, "ditolak", { alasanPenolakan });
+        const updated = await storage.getUsahaById(usahaId);
+        if (updated) notifyUsahaDitolak(updated, alasanPenolakan.trim());
         res.json({ message: "Usaha ditolak" });
       }
     } catch (error: any) {
@@ -2011,6 +2015,13 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
         return res.status(400).json({ message: "Hanya usaha yang sudah disetujui yang bisa diperpanjang stikernya" });
       }
       const result = await storage.perpanjangStiker(usahaId, existing.tanggalStikerExpired);
+      const updated = await storage.getUsahaById(usahaId);
+      if (updated) {
+        notifyUsahaStikerPerpanjang(updated, {
+          nomorStiker: result.nomorStiker,
+          tanggalExpired: result.tanggalExpired,
+        });
+      }
       res.json({ message: "Stiker berhasil diperpanjang", nomorStiker: result.nomorStiker, tanggalExpired: result.tanggalExpired });
     } catch (error: any) {
       res.status(500).json({ message: error.message });

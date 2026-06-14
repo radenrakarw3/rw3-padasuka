@@ -3,7 +3,12 @@ export type {
   KontribusiRincian,
   KontribusiSettings,
   UkuranProperti,
+  KontribusiSatuan,
+  KontribusiSurveyRincian,
 } from "@shared/visitrw3-kontribusi";
+
+import type { KontribusiSatuan } from "@shared/visitrw3-kontribusi";
+import { KONTRIBUSI_SATUAN_LABEL } from "@shared/visitrw3-kontribusi";
 
 export {
   parseTarifFromSettings,
@@ -13,6 +18,10 @@ export {
   diffDaysInclusive,
   hitungEstimasiPenyewa,
   hitungEstimasiPemilik,
+  KONTRIBUSI_SATUAN_VALUES,
+  KONTRIBUSI_SATUAN_LABEL,
+  suggestedSatuanFromRincian,
+  parseKontribusiSurveyRincian,
 } from "@shared/visitrw3-kontribusi";
 
 export function formatRupiah(n: number) {
@@ -22,6 +31,23 @@ export function formatRupiah(n: number) {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(n);
+}
+
+/** Tampilan input nominal — pemisah ribuan titik (65.000). */
+export function formatNominalInput(digits: string): string {
+  const n = digits.replace(/\D/g, "");
+  if (!n) return "";
+  return new Intl.NumberFormat("id-ID").format(parseInt(n, 10));
+}
+
+export function parseNominalInput(value: string): number {
+  const n = parseInt(value.replace(/\D/g, ""), 10);
+  return Number.isNaN(n) ? 0 : n;
+}
+
+export function formatTarifKontribusi(nominal: number, satuan: KontribusiSatuan): string {
+  const label = KONTRIBUSI_SATUAN_LABEL[satuan].toLowerCase();
+  return `${formatRupiah(nominal)} ${label}`;
 }
 
 export type Visitrw3SettingsMap = Record<string, string>;

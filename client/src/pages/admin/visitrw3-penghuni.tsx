@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, getApiErrorMessage, getQueryFn, readJsonSafely } from "@/lib/queryClient";
 import { invalidateVisitrw3Queries } from "@/lib/visitrw3-invalidate";
@@ -15,6 +15,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { pekerjaanLegacyOptions, keperluanTinggalOptions, rtOptions } from "@/lib/constants";
 import { Visitrw3AdminNav } from "@/components/admin/visitrw3-admin-nav";
+import { isPropertiUntukPenghuniTinggal } from "@/lib/visitrw3-admin-labels";
 import {
   Visitrw3AdminShell,
   Visitrw3EmptyState,
@@ -30,6 +31,9 @@ interface PemilikKost {
   namaKost: string;
   namaPemilik: string;
   rt: number;
+  jenisProperti?: string;
+  izinTinggal?: boolean;
+  statusProperti?: string;
 }
 
 interface WargaSinggahItem {
@@ -59,22 +63,7 @@ interface RiwayatKontrak {
   createdAt: string;
 }
 
-function getStatusKontrak(tanggalHabis: string): { label: string; variant: "default" | "secondary" | "destructive" | "outline" } {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const habis = new Date(tanggalHabis);
-  const diffDays = Math.ceil((habis.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-  if (diffDays < 0) return { label: "Habis", variant: "destructive" };
-  if (diffDays <= 7) return { label: `H-${diffDays}`, variant: "secondary" };
-  return { label: "Aktif", variant: "default" };
-}
-
-function getDaysRemaining(tanggalHabis: string): number {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const habis = new Date(tanggalHabis);
-  return Math.ceil((habis.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-}
+import { getStatusKontrak, getDaysRemaining } from "@/lib/visitrw3-kontrak";
 
 export default function AdminVisitrw3Penghuni() {
   const { toast } = useToast();
@@ -108,6 +97,14 @@ export default function AdminVisitrw3Penghuni() {
     queryKey: ["/api/warga-singgah"],
     queryFn: getQueryFn({ on401: "throw" }),
   });
+
+  useEffect(() => {
+    const idRaw = new URLSearchParams(window.location.search).get("perpanjang");
+    if (!idRaw || !wargaList?.length) return;
+    const id = parseInt(idRaw, 10);
+    const target = wargaList.find((w) => w.id === id);
+    if (target) setPerpanjangTarget(target);
+  }, [wargaList]);
 
   const { data: pemilikList } = useQuery<PemilikKost[]>({
     queryKey: ["/api/pemilik-kost"],
@@ -219,6 +216,17 @@ export default function AdminVisitrw3Penghuni() {
     }
   }
 
+  const propertiTinggal = (pemilikList || []).filter(isPropertiUntukPenghuniTinggal);
+
+  const propertiUntukForm = (() => {
+    const ids = new Set(propertiTinggal.map((p) => p.id));
+    if (editData && !ids.has(editData.pemilikKostId)) {
+      const current = (pemilikList || []).find((p) => p.id === editData.pemilikKostId);
+      if (current) return [current, ...propertiTinggal];
+    }
+    return propertiTinggal;
+  })();
+
   const filtered = (wargaList || []).filter((w) => {
     const matchSearch = searchTerm === "" ||
       w.namaLengkap.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -236,8 +244,8 @@ export default function AdminVisitrw3Penghuni() {
   return (
     <Visitrw3AdminShell>
       <Visitrw3AdminNav
-        title="Penghuni & kontrak"
-        description={`${wargaList?.length || 0} penghuni aktif · edit, perpanjang, atau hapus manual`}
+        title="Kontrak aktif"
+        description={`Penghuni dengan izin Visit RW3 yang sudah disetujui · ${wargaList?.length || 0} kontrak aktif`}
         actions={
           <Button size="sm" onClick={() => { resetForm(); setShowForm(true); }} data-testid="button-tambah-warga-singgah">
             <Plus className="w-4 h-4 mr-1" /> Tambah penghuni
@@ -275,18 +283,24 @@ export default function AdminVisitrw3Penghuni() {
       </Visitrw3Toolbar>
 
       {showForm && (
-        <Visitrw3FormCard title={editData ? "Edit penghuni" : "Tambah penghuni"} onClose={resetForm}>
+        <Visitrw3FormCard title={editData ? "Edit kontrak penghuni" : "Tambah kontrak penghuni"} onClose={resetForm}>
             <form onSubmit={handleSubmit} className="space-y-3">
               <div>
-                <Label className="text-xs">Kost/Kontrakan</Label>
+                <Label className="text-xs">Kost / kontrakan</Label>
                 <Select value={formData.pemilikKostId} onValueChange={(v) => setFormData({ ...formData, pemilikKostId: v })}>
-                  <SelectTrigger data-testid="select-pemilik-kost"><SelectValue placeholder="Pilih Kost/Kontrakan" /></SelectTrigger>
+                  <SelectTrigger data-testid="select-pemilik-kost"><SelectValue placeholder="Pilih kost/kontrakan" /></SelectTrigger>
                   <SelectContent>
-                    {(pemilikList || []).map((p) => (
-                      <SelectItem key={p.id} value={String(p.id)}>{p.namaKost} (RT {String(p.rt).padStart(2, "0")})</SelectItem>
+                    {propertiUntukForm.map((p) => (
+                      <SelectItem key={p.id} value={String(p.id)}>
+                        {p.namaKost} (RT {String(p.rt).padStart(2, "0")})
+                        {!isPropertiUntukPenghuniTinggal(p) ? " — tidak aktif untuk tinggal" : ""}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Hanya kost/kontrakan dengan izin tinggal. Usaha rumahan & kiosk dikelola lewat menu properti terpisah.
+                </p>
               </div>
               <div>
                 <Label className="text-xs">Nama Lengkap</Label>
@@ -421,7 +435,7 @@ export default function AdminVisitrw3Penghuni() {
       <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Hapus Warga Singgah?</AlertDialogTitle>
+            <AlertDialogTitle>Hapus penghuni?</AlertDialogTitle>
             <AlertDialogDescription>
               Menghapus data "{deleteTarget?.namaLengkap}" beserta riwayat kontraknya. Tindakan ini tidak dapat dibatalkan.
             </AlertDialogDescription>
