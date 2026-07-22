@@ -10,11 +10,14 @@ import logoGold from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
 
 type NavItem = { path: string; icon: typeof Megaphone; label: string };
 
+/** Path kanonik admin Karang Taruna (langsung ke anggota, hindari redirect ganda). */
+export const ADMIN_KARANGTARUNA_PATH = "/admin/karangtaruna/anggota";
+
 const navFormWarga: NavItem[] = [
   { path: "/admin/laporan", icon: Megaphone, label: "Laporan" },
   { path: "/admin/visitrw3", icon: Building2, label: "Visit RW3" },
   { path: "/admin/rw3biz", icon: Store, label: "RW3BIZ" },
-  { path: "/admin/karangtaruna", icon: Sparkles, label: "Karang Taruna" },
+  { path: ADMIN_KARANGTARUNA_PATH, icon: Sparkles, label: "Karang Taruna" },
 ];
 
 const navPengelolaan: NavItem[] = [
@@ -32,8 +35,8 @@ function isNavActive(location: string, path: string): boolean {
   if (path === "/admin/rw3biz") {
     return location === path || location.startsWith("/admin/rw3biz/");
   }
-  if (path === "/admin/karangtaruna") {
-    return location === path || location.startsWith("/admin/karangtaruna/");
+  if (path === ADMIN_KARANGTARUNA_PATH || path === "/admin/karangtaruna") {
+    return location === "/admin/karangtaruna" || location.startsWith("/admin/karangtaruna/");
   }
   if (path === "/admin/kependudukan") {
     return location === path;

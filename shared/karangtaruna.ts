@@ -3,6 +3,16 @@
  * Dipakai bersama oleh form publik (client) dan validasi/label (server + admin).
  */
 
+/** RT yang boleh mendaftar Karang Taruna — seluruh RW 03 (01–07). */
+export const KARANGTARUNA_RT_NUMBERS = [1, 2, 3, 4, 5, 6, 7] as const;
+
+export type KarangtarunaRtNumber = (typeof KARANGTARUNA_RT_NUMBERS)[number];
+
+export function isKarangtarunaRt(rt: unknown): rt is KarangtarunaRtNumber {
+  const n = typeof rt === "number" ? rt : parseInt(String(rt ?? ""), 10);
+  return Number.isFinite(n) && (KARANGTARUNA_RT_NUMBERS as readonly number[]).includes(n);
+}
+
 /** Pilihan bidang keahlian / skill yang bisa diceritakan anggota. */
 export const KARANGTARUNA_BIDANG_KEAHLIAN = [
   "Teknologi & IT",

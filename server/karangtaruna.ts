@@ -3,8 +3,7 @@ import crypto from "crypto";
 import { db, pool } from "./db";
 import { eq, and, desc, ilike, or, type SQL } from "drizzle-orm";
 import { karangtarunaAnggota, type KarangtarunaAnggota } from "@shared/schema";
-import { ACTIVE_RT_NUMBERS } from "@shared/rt";
-import { parseKarangtarunaTags, stringifyKarangtarunaTags } from "@shared/karangtaruna";
+import { parseKarangtarunaTags, stringifyKarangtarunaTags, isKarangtarunaRt } from "@shared/karangtaruna";
 import { notifyKarangtarunaDaftarBaru } from "./wa-notify-karangtaruna";
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
@@ -33,7 +32,7 @@ export async function generateNomorAnggota(): Promise<string> {
 export const daftarAnggotaSchema = z.object({
   namaLengkap: z.string().min(2, "Nama lengkap wajib diisi"),
   nik: z.string().optional().nullable(),
-  rt: z.number().int().refine((n) => (ACTIVE_RT_NUMBERS as readonly number[]).includes(n), "RT tidak valid"),
+  rt: z.coerce.number().int().refine((n) => isKarangtarunaRt(n), "RT tidak valid (01–07)"),
   alamat: z.string().min(5, "Alamat lengkap wajib diisi"),
   nomorWhatsapp: z.string().min(8, "Nomor WhatsApp aktif wajib diisi"),
   jenisKelamin: z.string().optional().nullable(),

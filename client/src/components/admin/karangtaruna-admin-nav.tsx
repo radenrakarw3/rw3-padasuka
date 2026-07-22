@@ -16,9 +16,9 @@ const tabs: TabDef[] = [
   { href: KARANGTARUNA_ROUTES.admin.dashboard, label: "Statistik", icon: BarChart3 },
 ];
 
-function isActive(location: string, href: string) {
+function isActive(pathname: string, href: string) {
   const path = href.split("?")[0];
-  return location === path || location.startsWith(`${path}?`) || location.startsWith(`${path}/`);
+  return pathname === path || pathname.startsWith(`${path}/`);
 }
 
 type Props = {

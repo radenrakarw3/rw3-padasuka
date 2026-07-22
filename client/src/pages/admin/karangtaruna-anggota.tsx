@@ -24,6 +24,8 @@ import {
   karangtarunaStatusLabel,
   karangtarunaStatusAktivitasLabel,
   karangtarunaKetersediaanLabel,
+  KARANGTARUNA_RT_NUMBERS,
+  isKarangtarunaRt,
 } from "@shared/karangtaruna";
 
 type StatusFilter = "baru" | "aktif" | "arsip" | "semua";
@@ -65,6 +67,21 @@ function getStatusFromSearch(search: string): StatusFilter {
   return "baru";
 }
 
+function getRtFromSearch(search: string): number | null {
+  const v = new URLSearchParams(search).get("rt");
+  if (!v) return null;
+  const n = parseInt(v, 10);
+  return isKarangtarunaRt(n) ? n : null;
+}
+
+function buildAnggotaUrl(status: StatusFilter, rt: number | null): string {
+  const params = new URLSearchParams();
+  if (status !== "baru") params.set("status", status);
+  if (rt != null) params.set("rt", String(rt));
+  const qs = params.toString();
+  return qs ? `/admin/karangtaruna/anggota?${qs}` : "/admin/karangtaruna/anggota";
+}
+
 function accentFor(status: string): "warning" | "success" | "default" {
   if (status === "baru") return "warning";
   if (status === "aktif") return "success";
@@ -76,6 +93,7 @@ export default function AdminKarangtarunaAnggota() {
   const [, setLocation] = useLocation();
   const search = useSearch();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => getStatusFromSearch(search));
+  const [rtFilter, setRtFilter] = useState<number | null>(() => getRtFromSearch(search));
   const [query, setQuery] = useState("");
   const [detailId, setDetailId] = useState<number | null>(null);
 
@@ -85,20 +103,25 @@ export default function AdminKarangtarunaAnggota() {
 
   useEffect(() => {
     setStatusFilter(getStatusFromSearch(search));
+    setRtFilter(getRtFromSearch(search));
   }, [search]);
 
   const { data: list = [], isLoading, isFetching } = useQuery<AnggotaRow[]>({
-    queryKey: ["/api/admin/karangtaruna/anggota", statusFilter, query],
+    queryKey: ["/api/admin/karangtaruna/anggota", statusFilter, rtFilter, query],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (statusFilter !== "semua") params.set("status", statusFilter);
+      if (rtFilter != null) params.set("rt", String(rtFilter));
       if (query.trim()) params.set("search", query.trim());
       const res = await fetch(`/api/admin/karangtaruna/anggota?${params.toString()}`, {
         credentials: "include",
       });
+      if (res.status === 401) throw new Error("Sesi admin habis — silakan login ulang");
       if (!res.ok) throw new Error("Gagal memuat");
       return res.json();
     },
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
   });
 
   const counts = useQuery<AnggotaRow[]>({
@@ -163,7 +186,12 @@ export default function AdminKarangtarunaAnggota() {
 
   const setStatus = (v: StatusFilter) => {
     setStatusFilter(v);
-    setLocation(v === "baru" ? "/admin/karangtaruna/anggota" : `/admin/karangtaruna/anggota?status=${v}`);
+    setLocation(buildAnggotaUrl(v, rtFilter));
+  };
+
+  const setRt = (rt: number | null) => {
+    setRtFilter(rt);
+    setLocation(buildAnggotaUrl(statusFilter, rt));
   };
 
   const d = detail;
@@ -192,7 +220,19 @@ export default function AdminKarangtarunaAnggota() {
         onSearchChange={setQuery}
         searchPlaceholder="Cari nama / nomor / WhatsApp…"
         className="mb-3"
-      />
+      >
+        <Visitrw3ChipFilters
+          options={[
+            { value: "all" as const, label: "Semua RT" },
+            ...KARANGTARUNA_RT_NUMBERS.map((rt) => ({
+              value: String(rt) as `${number}`,
+              label: `RT ${String(rt).padStart(2, "0")}`,
+            })),
+          ]}
+          value={rtFilter == null ? "all" : String(rtFilter)}
+          onChange={(v) => setRt(v === "all" ? null : parseInt(v, 10))}
+        />
+      </Visitrw3Toolbar>
 
       {isLoading && list.length === 0 ? (
         <Skeleton className="h-40 w-full rounded-2xl" />

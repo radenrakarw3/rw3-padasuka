@@ -10,7 +10,7 @@ import {
   getStats,
 } from "./karangtaruna";
 import { visitrw3ApiErrorMessage } from "./visitrw3-api-error";
-import { ACTIVE_RT_NUMBERS } from "@shared/rt";
+import { isKarangtarunaRt } from "@shared/karangtaruna";
 
 function requireAdmin(req: Request, res: Response, next: () => void) {
   if (!req.session?.isAdmin) return res.status(401).json({ message: "Akses admin diperlukan" });
@@ -20,7 +20,7 @@ function requireAdmin(req: Request, res: Response, next: () => void) {
 function parseRtQuery(raw: unknown): number | null {
   if (raw == null || raw === "") return null;
   const n = Number(raw);
-  return Number.isFinite(n) && (ACTIVE_RT_NUMBERS as readonly number[]).includes(n) ? n : null;
+  return Number.isFinite(n) && isKarangtarunaRt(n) ? n : null;
 }
 
 export function registerKarangtarunaRoutes(app: Express) {

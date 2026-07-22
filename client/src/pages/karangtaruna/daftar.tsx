@@ -12,13 +12,15 @@ import { SuccessPanel } from "@/components/gov/success-panel";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Loader2, User, Sparkles, HeartHandshake } from "lucide-react";
-import { ACTIVE_RT_NUMBERS } from "@shared/rt";
+
 import {
   KARANGTARUNA_BIDANG_KEAHLIAN,
   KARANGTARUNA_BIDANG_MINAT,
   KARANGTARUNA_PENDIDIKAN,
+  KARANGTARUNA_RT_NUMBERS,
   KARANGTARUNA_STATUS_AKTIVITAS,
   KARANGTARUNA_KETERSEDIAAN,
+  isKarangtarunaRt,
 } from "@shared/karangtaruna";
 import { KARANGTARUNA_ROUTES } from "@/lib/karangtaruna-routes";
 
@@ -105,10 +107,14 @@ export default function KarangtarunaDaftar() {
 
   const mutation = useMutation({
     mutationFn: async () => {
+      const rtNum = parseInt(rt, 10);
+      if (!isKarangtarunaRt(rtNum)) {
+        throw new Error("Pilih RT 01–07");
+      }
       const res = await apiRequest("POST", "/api/public/karangtaruna/daftar", {
         namaLengkap: namaLengkap.trim(),
         nik: nik.trim() || null,
-        rt: parseInt(rt, 10),
+        rt: rtNum,
         alamat: alamat.trim(),
         nomorWhatsapp: nomorWhatsapp.trim(),
         jenisKelamin: jenisKelamin || null,
@@ -127,16 +133,21 @@ export default function KarangtarunaDaftar() {
         bersediaAktif,
         setuju: true as const,
       });
-      return readJsonSafely<{ nomorAnggota: string }>(res);
+      const data = await readJsonSafely<{ nomorAnggota?: string; status?: string }>(res);
+      if (!data?.nomorAnggota?.trim()) {
+        throw new Error("Server tidak mengembalikan nomor anggota");
+      }
+      return data;
     },
-    onSuccess: (data) => setNomorHasil(data?.nomorAnggota ?? "-"),
+    onSuccess: (data) => setNomorHasil(data.nomorAnggota!),
     onError: (e: unknown) =>
       toast({ title: "Gagal", description: getApiErrorMessage(e), variant: "destructive" }),
   });
 
   const missing: string[] = [];
+  const rtNum = parseInt(rt, 10);
   if (namaLengkap.trim().length < 2) missing.push("nama lengkap");
-  if (!rt) missing.push("RT");
+  if (!isKarangtarunaRt(rtNum)) missing.push("RT (01–07)");
   if (alamat.trim().length < 5) missing.push("alamat");
   if (nomorWhatsapp.trim().length < 8) missing.push("nomor WhatsApp");
   if (!tanggalLahir) missing.push("tanggal lahir");
@@ -188,7 +199,7 @@ export default function KarangtarunaDaftar() {
               <Label htmlFor="rt">RT <span className="text-destructive">*</span></Label>
               <select id="rt" value={rt} onChange={(e) => setRt(e.target.value)} className={selectClass}>
                 <option value="">Pilih RT</option>
-                {ACTIVE_RT_NUMBERS.map((n) => (
+                {KARANGTARUNA_RT_NUMBERS.map((n) => (
                   <option key={n} value={n}>RT {String(n).padStart(2, "0")}</option>
                 ))}
               </select>
