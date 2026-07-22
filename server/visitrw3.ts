@@ -1,5 +1,7 @@
 import { z } from "zod";
 import crypto from "crypto";
+import fs from "fs";
+import path from "path";
 import { db, pool } from "./db";
 import { eq, and, desc, asc, inArray, sql } from "drizzle-orm";
 import {
@@ -15,7 +17,6 @@ import { ACTIVE_RT_NUMBERS } from "@shared/rt";
 import { hitungTanggalBerlaku } from "@shared/visitrw3-kontribusi";
 import { stringifyKategoriUsaha } from "@shared/visitrw3-kategori-usaha";
 import {
-  getChecklistSurveyProperti,
   getChecklistSurveyPengajuan,
   validateSurveyChecklist,
   type SurveyChecklistItem,
@@ -24,12 +25,17 @@ import {
   type Visitrw3DashboardStats,
   emptyVisitrw3DashboardStats,
   kelompokUsiaLabel,
-  labelIzinProperti,
   labelJumlahPenghuniPengajuan,
-  labelJumlahPintuTier,
-  filterVisitrw3PropertiProduksi,
   isVisitrw3DemoProperti,
 } from "@shared/visitrw3-analytics";
+import {
+  JENIS_WARGA_VALUES,
+  keperluanFromJenisWarga,
+  labelJenisWarga,
+  type JenisWarga,
+} from "@shared/visitrw3-jenis-warga";
+import { getVisitrw3FormProfile } from "@shared/visitrw3-form-by-jenis";
+import { isPengajuanRw3biz, isPengajuanVisitRw3 } from "@shared/visitrw3-produk";
 
 export { emptyVisitrw3DashboardStats } from "@shared/visitrw3-analytics";
 import { seedVisitrw3Settings } from "./visitrw3-settings";
@@ -38,16 +44,65 @@ import {
   notifyVisitrw3Perpanjang,
   notifyVisitrw3Disetujui,
   notifyVisitrw3Ditolak,
-  notifyVisitrw3PropertiDidaftar,
-  notifyVisitrw3PropertiDisetujui,
 } from "./wa-notify";
 
 export type { Visitrw3DashboardStats } from "@shared/visitrw3-analytics";
 
-const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
-const TERMIN_VALUES = [1, 3, 6, 12] as const;
+const KTP_UPLOAD_DIR = path.join(process.cwd(), "uploads", "visitrw3-ktp");
 
-export { hitungTanggalBerlaku } from "@shared/visitrw3-kontribusi";
+/** Baca file KTP lokal → data URL, atau teruskan jika sudah data:/base64. */
+export function resolveFotoKtpData(fotoKtpPath?: string | null): string | null {
+  const raw = fotoKtpPath?.trim();
+  if (!raw) return null;
+  if (raw.startsWith("data:image/")) return raw;
+  // path publik /uploads/visitrw3-ktp/xxx
+  let fileName = raw;
+  if (raw.includes("/")) fileName = path.basename(raw);
+  const safe = fileName.replace(/[^a-zA-Z0-9._-]/g, "");
+  if (!safe) return null;
+  const filePath = path.join(KTP_UPLOAD_DIR, safe);
+  try {
+    if (!fs.existsSync(filePath)) return null;
+    const buf = fs.readFileSync(filePath);
+    const ext = path.extname(safe).toLowerCase();
+    const mime =
+      ext === ".png" ? "image/png" : ext === ".webp" ? "image/webp" : ext === ".gif" ? "image/gif" : "image/jpeg";
+    return `data:${mime};base64,${buf.toString("base64")}`;
+  } catch {
+    return null;
+  }
+}
+
+export async function getPenghuniKtpPayload(penghuniId: number): Promise<{
+  dataUrl: string;
+  mime: string;
+  buffer: Buffer;
+} | null> {
+  const [row] = await db
+    .select({
+      fotoKtpPath: visitrw3Penghuni.fotoKtpPath,
+      fotoKtpData: visitrw3Penghuni.fotoKtpData,
+    })
+    .from(visitrw3Penghuni)
+    .where(eq(visitrw3Penghuni.id, penghuniId))
+    .limit(1);
+  if (!row) return null;
+
+  const dataUrl = row.fotoKtpData?.trim() || resolveFotoKtpData(row.fotoKtpPath);
+  if (!dataUrl?.startsWith("data:")) return null;
+
+  const comma = dataUrl.indexOf(",");
+  if (comma < 0) return null;
+  const header = dataUrl.slice(0, comma);
+  const b64 = dataUrl.slice(comma + 1);
+  const mimeMatch = /^data:([^;]+)/.exec(header);
+  const mime = mimeMatch?.[1] || "image/jpeg";
+  try {
+    return { dataUrl, mime, buffer: Buffer.from(b64, "base64") };
+  } catch {
+    return null;
+  }
+}
 
 function hitungUmur(tanggalLahir: string): number {
   const birth = new Date(`${tanggalLahir}T00:00:00`);
@@ -69,6 +124,11 @@ async function generateNomorVisitrw3(): Promise<string> {
   throw new Error("Gagal membuat nomor Visit RW3");
 }
 
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const TERMIN_VALUES = [1, 3, 6, 12] as const;
+
+export { hitungTanggalBerlaku } from "@shared/visitrw3-kontribusi";
+
 const penghuniInputSchema = z.object({
   namaLengkap: z.string().min(2),
   tanggalLahir: z.string().regex(DATE_REGEX),
@@ -89,10 +149,9 @@ const penghuniInputSchema = z.object({
 const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export const pengajuanBaruSchema = z.object({
-  keperluanPengajuan: z.enum(["tinggal", "bisnis"]),
+  jenisWarga: z.enum(JENIS_WARGA_VALUES),
   rt: z.number().int().refine((n) => (ACTIVE_RT_NUMBERS as readonly number[]).includes(n)),
-  pemilikKostId: z.number().int().optional().nullable(),
-  tinggalDiWilayahRw3: z.boolean().optional().nullable(),
+  alamat: z.string().min(5, "Alamat lengkap wajib diisi"),
   namaUsaha: z.string().optional().nullable(),
   jenisUsaha: z.string().optional().nullable(),
   jenisTempatUsaha: z.enum(["lapak", "kiosk", "usaha_rumahan", "lainnya"]).optional().nullable(),
@@ -102,7 +161,7 @@ export const pengajuanBaruSchema = z.object({
   jamTutup: z.string().optional().nullable(),
   alamatUsaha: z.string().optional().nullable(),
   penanggungJawab: z.string().optional().nullable(),
-  nomorUnit: z.string().min(1, "Nomor unit/kamar wajib diisi"),
+  nomorUnit: z.string().optional().nullable(),
   jumlahPenghuni: z.number().int().min(1).max(20),
   tanggalBayar: z.string().regex(DATE_REGEX),
   terminBulan: z.number().refine((n): n is (typeof TERMIN_VALUES)[number] => TERMIN_VALUES.includes(n as (typeof TERMIN_VALUES)[number])),
@@ -111,31 +170,42 @@ export const pengajuanBaruSchema = z.object({
   setujuTataTertib: z.literal(true, { errorMap: () => ({ message: "Persetujuan syarat wajib" }) }),
 });
 
-function validateBisnisFields(parsed: z.infer<typeof pengajuanBaruSchema>) {
+function validateJualanFields(parsed: z.infer<typeof pengajuanBaruSchema>) {
   if (!parsed.namaUsaha?.trim()) throw new Error("Nama usaha wajib diisi");
   if (!parsed.penanggungJawab?.trim()) throw new Error("Penanggung jawab wajib diisi");
   const kategori = parsed.kategoriUsaha?.map((k) => k.trim()).filter(Boolean) ?? [];
   if (kategori.length === 0) throw new Error("Pilih minimal 1 kategori usaha");
-  const usahaRumahan = parsed.jenisTempatUsaha === "usaha_rumahan";
-  if (!usahaRumahan) {
-    if (!parsed.jenisTempatUsaha) throw new Error("Jenis tempat usaha wajib dipilih");
-    if (parsed.jenisTempatUsaha === "lainnya" && !parsed.jenisTempatUsahaLain?.trim()) {
-      throw new Error("Jelaskan jenis usaha lainnya");
-    }
+  if (!parsed.jenisTempatUsaha) throw new Error("Jenis tempat usaha wajib dipilih");
+  if (parsed.jenisTempatUsaha === "lainnya" && !parsed.jenisTempatUsahaLain?.trim()) {
+    throw new Error("Jelaskan jenis usaha lainnya");
   }
-  if (parsed.tinggalDiWilayahRw3 === undefined || parsed.tinggalDiWilayahRw3 === null) {
-    throw new Error("Pilih apakah tinggal di wilayah RW 03 atau di luar wilayah");
+  if (!parsed.jamBuka?.trim() || !TIME_REGEX.test(parsed.jamBuka)) {
+    throw new Error("Jam buka wajib diisi (format HH:MM)");
   }
-  if (parsed.tinggalDiWilayahRw3) {
-    if (!parsed.pemilikKostId) throw new Error("Pilih lokasi terdaftar (kost, kontrakan, atau usaha rumahan)");
-  } else {
-    if (!parsed.jamBuka?.trim() || !TIME_REGEX.test(parsed.jamBuka)) {
-      throw new Error("Jam buka wajib diisi (format HH:MM)");
-    }
-    if (!parsed.jamTutup?.trim() || !TIME_REGEX.test(parsed.jamTutup)) {
-      throw new Error("Jam tutup wajib diisi (format HH:MM)");
-    }
-    if (!parsed.alamatUsaha?.trim()) throw new Error("Alamat usaha wajib diisi");
+  if (!parsed.jamTutup?.trim() || !TIME_REGEX.test(parsed.jamTutup)) {
+    throw new Error("Jam tutup wajib diisi (format HH:MM)");
+  }
+}
+
+function validateJumlahByJenisForm(
+  jenisWarga: JenisWarga,
+  penghuni: z.infer<typeof penghuniInputSchema>[],
+) {
+  const profile = getVisitrw3FormProfile(jenisWarga);
+  const dewasa = penghuni.filter((p) => !p.isAnak).length;
+  const anak = penghuni.filter((p) => p.isAnak).length;
+  if (dewasa < 1) throw new Error("Minimal 1 orang dewasa");
+  if (dewasa > profile.maxDewasa) {
+    throw new Error(`Maksimal ${profile.maxDewasa} orang dewasa untuk jenis ${jenisWarga}`);
+  }
+  if (!profile.showAnak && anak > 0) {
+    throw new Error("Jenis ngekost tidak mencatat anak — pilih ngontrak jika keluarga");
+  }
+  if (anak > profile.maxAnak) {
+    throw new Error(`Maksimal ${profile.maxAnak} anak untuk jenis ini`);
+  }
+  if (dewasa + anak > profile.maxTotal) {
+    throw new Error(`Total maksimal ${profile.maxTotal} orang untuk jenis ini`);
   }
 }
 
@@ -149,26 +219,12 @@ export const perpanjangSchema = z.object({
 
 export const approveVisitrw3SurveySchema = z.object({
   catatanSurvey: z.string().optional().nullable(),
-  kontribusiJumlah: z.number().int().min(0, "Tarif kontribusi wajib diisi (boleh 0 jika gratis)"),
-  kontribusiSatuan: z.enum(["hari", "minggu", "bulan", "tahun"]),
-  tanggalKas: z.string().regex(DATE_REGEX, "Format tanggal tidak valid").optional().nullable(),
-  keteranganKas: z.string().optional().nullable(),
   checklistSurvey: z.record(z.string(), z.boolean()).optional(),
 });
 
 function assertChecklistSurvey(items: SurveyChecklistItem[], checked?: Record<string, boolean>) {
   const err = validateSurveyChecklist(items, checked);
   if (err) throw new Error(err);
-}
-
-function buildRincianKontribusiSurvey(parsed: z.infer<typeof approveVisitrw3SurveySchema>): string {
-  return JSON.stringify({
-    tarifNominal: parsed.kontribusiJumlah,
-    satuan: parsed.kontribusiSatuan,
-    tanggalMasukKas: parsed.tanggalKas?.trim() || null,
-    keteranganKas: parsed.keteranganKas?.trim() || null,
-    checklist: parsed.checklistSurvey ?? null,
-  });
 }
 
 function parseKendaraanFromPenghuni(jenisKendaraan?: string | null, platNomor?: string | null) {
@@ -186,18 +242,9 @@ function parseKendaraanFromPenghuni(jenisKendaraan?: string | null, platNomor?: 
 
 function validatePenghuni(
   penghuni: z.infer<typeof penghuniInputSchema>[],
-  keperluan: "tinggal" | "bisnis",
-  bisnisLuarWilayah = false,
+  jenisWarga: JenisWarga,
 ) {
-  if (bisnisLuarWilayah) {
-    const dewasa = penghuni.filter((p) => !p.isAnak);
-    if (!dewasa.length) throw new Error("Data penanggung jawab wajib diisi");
-    const p = dewasa[0];
-    if (!p.nik || p.nik.length !== 16) throw new Error("NIK penanggung jawab 16 digit wajib");
-    if (!p.nomorWhatsapp?.trim()) throw new Error("Nomor WhatsApp penanggung jawab wajib");
-    if (!p.fotoKtpPath?.trim()) throw new Error("Foto KTP penanggung jawab wajib diunggah");
-    return;
-  }
+  const profile = getVisitrw3FormProfile(jenisWarga);
   if (penghuni.some((p) => !p.isAnak && (!p.nik || p.nik.length !== 16))) {
     throw new Error("NIK 16 digit wajib untuk penghuni dewasa");
   }
@@ -211,11 +258,11 @@ function validatePenghuni(
     if (!p.nomorWhatsapp?.trim()) throw new Error(`Penghuni ${p.namaLengkap}: nomor WhatsApp wajib`);
     if (!p.jenisKelamin?.trim()) throw new Error(`Penghuni ${p.namaLengkap}: jenis kelamin wajib`);
     if (!p.pekerjaan?.trim()) throw new Error(`Penghuni ${p.namaLengkap}: pekerjaan wajib`);
-    if (keperluan === "tinggal" && !p.keperluanTinggal?.trim()) {
+    if (profile.requireKeperluanTinggal && !p.keperluanTinggal?.trim()) {
       throw new Error(`Penghuni ${p.namaLengkap}: keperluan tinggal wajib`);
     }
-    if (!p.namaTempatKerja?.trim()) {
-      throw new Error(`Penghuni ${p.namaLengkap}: tempat kerja wajib diisi`);
+    if (profile.requireTempatKerja && !p.namaTempatKerja?.trim()) {
+      throw new Error(`Penghuni ${p.namaLengkap}: ${profile.tempatKerjaLabel.toLowerCase()} wajib diisi`);
     }
     const umur = hitungUmur(p.tanggalLahir);
     if (umur < 21 && !p.namaSekolah?.trim()) {
@@ -244,30 +291,6 @@ function validatePenghuni(
   }
 }
 
-async function assertKostAllowed(pemilikKostId: number, rt: number, keperluan: "tinggal" | "bisnis") {
-  const kost = await storage.getPemilikKostById(pemilikKostId);
-  if (!kost || kost.rt !== rt) throw new Error("Kost/kontrakan tidak ditemukan untuk RT ini");
-  if (kost.statusProperti !== "aktif") {
-    throw new Error("Properti belum disetujui admin — tunggu verifikasi pendaftaran properti selesai");
-  }
-  if (keperluan === "tinggal") {
-    if (kost.jenisProperti === "usaha_rumahan") {
-      throw new Error("Usaha rumahan hanya untuk pengajuan bisnis di rumah milik sendiri, bukan untuk penyewa");
-    }
-    if (!kost.izinTinggal) throw new Error("Properti ini tidak menerima pengajuan tinggal");
-  }
-  if (keperluan === "bisnis" && !kost.izinBisnis) throw new Error("Properti ini tidak menerima pengajuan bisnis");
-  return kost;
-}
-
-async function assertNoPendingForNomor(nomor: string) {
-  const [pending] = await db
-    .select()
-    .from(visitrw3Pengajuan)
-    .where(and(eq(visitrw3Pengajuan.nomorVisitrw3, nomor), eq(visitrw3Pengajuan.status, "menunggu_survey")));
-  if (pending) throw new Error("Masih ada pengajuan menunggu survey untuk nomor ini");
-}
-
 async function assertNikAvailable(nik: string) {
   const [ws] = await db.select({ id: wargaSinggah.id }).from(wargaSinggah).where(eq(wargaSinggah.nik, nik));
   if (ws) throw new Error(`NIK ${nik} sudah terdaftar sebagai warga singgah`);
@@ -279,144 +302,86 @@ async function assertNikAvailable(nik: string) {
   if (pending) throw new Error(`NIK ${nik} sedang dalam pengajuan lain`);
 }
 
-export async function getPemilikKostPublic(rt: number, keperluan: "tinggal" | "bisnis") {
-  if (!(ACTIVE_RT_NUMBERS as readonly number[]).includes(rt)) return [];
-  const all = await db.select().from(pemilikKost).where(eq(pemilikKost.rt, rt)).orderBy(pemilikKost.namaKost);
-  return filterVisitrw3PropertiProduksi(all).filter((k) => {
-    const izin = keperluan === "tinggal" ? k.izinTinggal : k.izinBisnis;
-    return k.statusProperti === "aktif" && izin;
-  });
+/** @deprecated Alur pemilik properti dihapus — selalu kosong. */
+export async function getPemilikKostPublic(_rt: number, _keperluan: "tinggal" | "bisnis") {
+  return [];
 }
 
-export const daftarPropertiSchema = z
-  .object({
-    namaKost: z.string().min(2, "Nama properti wajib diisi"),
-    namaPemilik: z.string().min(2, "Nama pemilik wajib diisi"),
-    nomorWaPemilik: z.string().min(10, "Nomor WhatsApp wajib diisi"),
-    namaPenanggungJawab: z.string().min(2, "Nama penanggung jawab pengelola wajib diisi"),
-    nomorWaPenanggungJawab: z.string().min(10, "WhatsApp penanggung jawab wajib diisi"),
-    rt: z.number().int().refine((n) => (ACTIVE_RT_NUMBERS as readonly number[]).includes(n)),
-    alamatLengkap: z.string().min(5, "Alamat lengkap wajib diisi"),
-    jumlahPintu: z.number().int().min(1).max(50),
-    jenisProperti: z.enum(["kost", "kontrakan", "kiosk", "lapak", "usaha_rumahan"]),
-    izinTinggal: z.boolean(),
-    izinBisnis: z.boolean(),
-    catatanPemohon: z.string().optional().nullable(),
-    setujuTataTertib: z.literal(true, { errorMap: () => ({ message: "Persetujuan syarat wajib" }) }),
-  })
-  .refine((d) => d.izinTinggal || d.izinBisnis, {
-    message: "Centang minimal satu: izin pengajuan tinggal atau bisnis",
-  });
+export const daftarPropertiSchema = z.object({
+  namaKost: z.string().min(2),
+}).passthrough();
 
-async function generateNomorPendaftaranProperti(): Promise<string> {
-  for (let i = 0; i < 20; i++) {
-    const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    const rand = crypto.randomBytes(2).toString("hex").toUpperCase();
-    const nomor = `PROP-${date}-${rand}`;
-    const [existing] = await db
-      .select({ id: pemilikKost.id })
-      .from(pemilikKost)
-      .where(eq(pemilikKost.nomorPendaftaran, nomor));
-    if (!existing) return nomor;
-  }
-  throw new Error("Gagal membuat nomor pendaftaran properti");
+/** @deprecated */
+export async function createPendaftaranProperti(_input: unknown): Promise<never> {
+  throw new Error("Pendaftaran properti sudah tidak tersedia. Warga luar daftar langsung lewat pengajuan Visit RW3.");
 }
 
-export async function createPendaftaranProperti(input: z.infer<typeof daftarPropertiSchema>) {
-  const parsed = daftarPropertiSchema.parse(input);
-  const nomorPendaftaran = await generateNomorPendaftaranProperti();
-  const [row] = await db
-    .insert(pemilikKost)
-    .values({
-      nomorPendaftaran,
-      namaKost: parsed.namaKost.trim(),
-      namaPemilik: parsed.namaPemilik.trim(),
-      nomorWaPemilik: parsed.nomorWaPemilik.trim(),
-      namaPenanggungJawab: parsed.namaPenanggungJawab.trim(),
-      nomorWaPenanggungJawab: parsed.nomorWaPenanggungJawab.trim(),
-      rt: parsed.rt,
-      alamatLengkap: parsed.alamatLengkap.trim(),
-      jumlahPintu: parsed.jumlahPintu,
-      jenisProperti: parsed.jenisProperti,
-      izinTinggal: parsed.izinTinggal,
-      izinBisnis: parsed.izinBisnis,
-      statusProperti: "menunggu_verifikasi",
-      catatanPemohon: parsed.catatanPemohon?.trim() || null,
-      setujuTataTertib: true,
-    })
-    .returning();
-  notifyVisitrw3PropertiDidaftar(row);
-  return row;
+/** @deprecated */
+export async function getPropertiByNomorPendaftaran(_nomorRaw: string) {
+  return null;
 }
 
-export async function getPropertiByNomorPendaftaran(nomorRaw: string) {
-  const nomor = nomorRaw.trim().toUpperCase();
-  const [row] = await db
-    .select()
-    .from(pemilikKost)
-    .where(eq(pemilikKost.nomorPendaftaran, nomor));
-  return row ?? null;
-}
-
+/** @deprecated */
 export async function approveProperti(
-  id: number,
-  adminUsername: string,
-  survey: z.infer<typeof approveVisitrw3SurveySchema>,
-) {
-  const parsed = approveVisitrw3SurveySchema.parse(survey);
-  const existing = await storage.getPemilikKostById(id);
-  if (!existing) throw new Error("Properti tidak ditemukan");
-  if (existing.statusProperti === "aktif") throw new Error("Properti sudah aktif");
-
-  assertChecklistSurvey(getChecklistSurveyProperti(existing.jenisProperti), parsed.checklistSurvey);
-
-  const rincianKontribusi = buildRincianKontribusiSurvey(parsed);
-
-  const [updated] = await db
-    .update(pemilikKost)
-    .set({
-      statusProperti: "aktif",
-      estimasiKontribusi: parsed.kontribusiJumlah,
-      rincianKontribusi,
-      kasRwId: null,
-    })
-    .where(eq(pemilikKost.id, id))
-    .returning();
-  if (updated) notifyVisitrw3PropertiDisetujui(updated);
-  return updated;
+  _id: number,
+  _adminUsername: string,
+  _survey: z.infer<typeof approveVisitrw3SurveySchema>,
+): Promise<never> {
+  throw new Error("Verifikasi properti sudah tidak tersedia");
 }
 
 export async function createPengajuanBaru(input: z.infer<typeof pengajuanBaruSchema>) {
-  let parsed = pengajuanBaruSchema.parse(input);
-  if (
-    parsed.keperluanPengajuan === "bisnis" &&
-    !parsed.jenisTempatUsaha &&
-    parsed.pemilikKostId
-  ) {
-    const kost = await storage.getPemilikKostById(parsed.pemilikKostId);
-    if (kost?.jenisProperti === "usaha_rumahan") {
-      parsed = { ...parsed, jenisTempatUsaha: "usaha_rumahan" };
-    }
+  const parsed = pengajuanBaruSchema.parse(input);
+  // Pengajuan usaha/jualan sudah pindah ke basis data terpisah RW3BIZ.
+  if ((parsed.jenisWarga as string) === "jualan") {
+    throw new Error(
+      "Pengajuan jualan sudah dipindah ke RW3BIZ — gunakan /api/public/rw3biz/pengajuan",
+    );
   }
+  const jenisWarga = parsed.jenisWarga as JenisWarga;
+  const keperluanPengajuan = keperluanFromJenisWarga(jenisWarga);
+
   if (parsed.penghuni.length !== parsed.jumlahPenghuni) {
     throw new Error("Jumlah data penghuni tidak sesuai");
   }
-  const bisnisLuar = parsed.keperluanPengajuan === "bisnis" && parsed.tinggalDiWilayahRw3 === false;
-  if (parsed.keperluanPengajuan === "bisnis") {
-    validateBisnisFields(parsed);
-  } else if (!parsed.pemilikKostId) {
-    throw new Error("Pilih kost/kontrakan");
+  validateJumlahByJenisForm(jenisWarga, parsed.penghuni);
+  if (jenisWarga === "jualan") {
+    validateJualanFields(parsed);
+  } else if (jenisWarga === "kost" && !parsed.nomorUnit?.trim()) {
+    throw new Error("Nomor kamar / unit kost wajib diisi");
   }
-  validatePenghuni(parsed.penghuni, parsed.keperluanPengajuan, bisnisLuar);
-  if (parsed.pemilikKostId) {
-    await assertKostAllowed(parsed.pemilikKostId, parsed.rt, parsed.keperluanPengajuan);
-  }
-  for (const p of parsed.penghuni) {
+
+  // Normalisasi payload sesuai jenis (hindari data usaha menempel di kontrak/kost).
+  const namaUsaha = jenisWarga === "jualan" ? parsed.namaUsaha?.trim() || null : null;
+  const penghuniNorm = parsed.penghuni.map((p) => {
+    if (p.isAnak) return p;
+    if (jenisWarga === "jualan") {
+      return {
+        ...p,
+        keperluanTinggal: null,
+        namaTempatKerja: p.namaTempatKerja?.trim() || namaUsaha,
+      };
+    }
+    return p;
+  });
+
+  validatePenghuni(penghuniNorm, jenisWarga);
+  for (const p of penghuniNorm) {
     if (!p.isAnak && p.nik) await assertNikAvailable(p.nik);
+    if (!p.isAnak && p.fotoKtpPath?.trim()) {
+      const data = resolveFotoKtpData(p.fotoKtpPath);
+      if (!data) {
+        throw new Error(
+          `Foto KTP ${p.namaLengkap} tidak ditemukan di server — unggah ulang foto KTP`,
+        );
+      }
+    }
   }
 
   const tanggalBerlakuSampai = hitungTanggalBerlaku(parsed.tanggalBayar, parsed.terminBulan);
   const nomorVisitrw3 = await generateNomorVisitrw3();
+  const alamat = parsed.alamat.trim();
+  const isJualan = jenisWarga === "jualan";
 
   return db.transaction(async (tx) => {
     const [pengajuan] = await tx
@@ -425,24 +390,27 @@ export async function createPengajuanBaru(input: z.infer<typeof pengajuanBaruSch
         nomorVisitrw3,
         tipe: "pengajuan_baru",
         status: "menunggu_survey",
-        keperluanPengajuan: parsed.keperluanPengajuan,
-        pemilikKostId: parsed.pemilikKostId ?? null,
+        keperluanPengajuan,
+        jenisWarga,
+        pemilikKostId: null,
         rt: parsed.rt,
-        namaUsaha: parsed.namaUsaha || null,
-        jenisUsaha:
-          parsed.jenisTempatUsaha === "lainnya"
+        alamat,
+        namaUsaha,
+        jenisUsaha: isJualan
+          ? parsed.jenisTempatUsaha === "lainnya"
             ? parsed.jenisTempatUsahaLain || null
-            : parsed.jenisTempatUsaha || parsed.jenisUsaha || null,
-        jenisTempatUsaha: parsed.jenisTempatUsaha || null,
-        jenisTempatUsahaLain: parsed.jenisTempatUsahaLain || null,
-        kategoriUsaha: stringifyKategoriUsaha(parsed.kategoriUsaha ?? []),
-        tinggalDiWilayahRw3: parsed.tinggalDiWilayahRw3 ?? null,
-        jamBuka: parsed.jamBuka || null,
-        jamTutup: parsed.jamTutup || null,
-        alamatUsaha: parsed.alamatUsaha || null,
+            : parsed.jenisTempatUsaha || parsed.jenisUsaha || null
+          : null,
+        jenisTempatUsaha: isJualan ? parsed.jenisTempatUsaha || null : null,
+        jenisTempatUsahaLain: isJualan ? parsed.jenisTempatUsahaLain || null : null,
+        kategoriUsaha: isJualan ? stringifyKategoriUsaha(parsed.kategoriUsaha ?? []) : null,
+        tinggalDiWilayahRw3: true,
+        jamBuka: isJualan ? parsed.jamBuka || null : null,
+        jamTutup: isJualan ? parsed.jamTutup || null : null,
+        alamatUsaha: isJualan ? (parsed.alamatUsaha?.trim() || alamat) : null,
         persetujuanTetangga: null,
-        penanggungJawab: parsed.penanggungJawab || null,
-        nomorUnit: parsed.nomorUnit.trim(),
+        penanggungJawab: isJualan ? parsed.penanggungJawab || null : null,
+        nomorUnit: parsed.nomorUnit?.trim() || null,
         jumlahPenghuni: parsed.jumlahPenghuni,
         tanggalBayar: parsed.tanggalBayar,
         terminBulan: parsed.terminBulan,
@@ -452,8 +420,10 @@ export async function createPengajuanBaru(input: z.infer<typeof pengajuanBaruSch
       })
       .returning();
 
-    for (let i = 0; i < parsed.penghuni.length; i++) {
-      const p = parsed.penghuni[i];
+    for (let i = 0; i < penghuniNorm.length; i++) {
+      const p = penghuniNorm[i];
+      const fotoKtpPath = p.isAnak ? null : p.fotoKtpPath || null;
+      const fotoKtpData = p.isAnak ? null : resolveFotoKtpData(fotoKtpPath);
       await tx.insert(visitrw3Penghuni).values({
         pengajuanId: pengajuan.id,
         namaLengkap: p.namaLengkap,
@@ -463,13 +433,14 @@ export async function createPengajuanBaru(input: z.infer<typeof pengajuanBaruSch
         nomorWhatsapp: p.nomorWhatsapp || null,
         jenisKelamin: p.jenisKelamin || null,
         pekerjaan: p.pekerjaan || null,
-        keperluanTinggal: p.keperluanTinggal || null,
-        namaTempatKerja: p.namaTempatKerja || null,
+        keperluanTinggal: p.isAnak || isJualan ? null : p.keperluanTinggal || null,
+        namaTempatKerja: p.isAnak ? null : p.namaTempatKerja || null,
         namaSekolah: p.namaSekolah || null,
         punyaKendaraan: p.punyaKendaraan,
         jenisKendaraan: p.jenisKendaraan || null,
         platNomor: p.platNomor || null,
-        fotoKtpPath: p.fotoKtpPath || null,
+        fotoKtpPath,
+        fotoKtpData,
         urutan: i,
       });
     }
@@ -489,7 +460,12 @@ export async function createPengajuanBaru(input: z.infer<typeof pengajuanBaruSch
 export async function createPerpanjang(input: z.infer<typeof perpanjangSchema>) {
   const parsed = perpanjangSchema.parse(input);
   const nomor = parsed.nomorVisitrw3.trim().toUpperCase();
-  await assertNoPendingForNomor(nomor);
+
+  const [pending] = await db
+    .select()
+    .from(visitrw3Pengajuan)
+    .where(and(eq(visitrw3Pengajuan.nomorVisitrw3, nomor), eq(visitrw3Pengajuan.status, "menunggu_survey")));
+  if (pending) throw new Error("Masih ada pengajuan menunggu survey untuk nomor ini");
 
   let approved = (
     await db
@@ -523,8 +499,10 @@ export async function createPerpanjang(input: z.infer<typeof perpanjangSchema>) 
       tipe: "perpanjang",
       status: "menunggu_survey",
       keperluanPengajuan: approved.keperluanPengajuan,
-      pemilikKostId: approved.pemilikKostId,
+      jenisWarga: approved.jenisWarga,
+      pemilikKostId: null,
       rt: approved.rt,
+      alamat: approved.alamat,
       namaUsaha: approved.namaUsaha,
       jenisUsaha: approved.jenisUsaha,
       penanggungJawab: approved.penanggungJawab,
@@ -587,11 +565,20 @@ export async function listPengajuanAdmin(status?: string) {
   return db.select().from(visitrw3Pengajuan).orderBy(desc(visitrw3Pengajuan.createdAt));
 }
 
-export async function listPengajuanAdminEnriched(status?: string) {
+export async function listPengajuanAdminEnriched(
+  status?: string,
+  produk: "visit" | "rw3biz" | "semua" = "semua",
+) {
   const list = await listPengajuanAdmin(status);
-  if (!list.length) return [];
+  const scoped =
+    produk === "rw3biz"
+      ? list.filter((p) => isPengajuanRw3biz(p))
+      : produk === "visit"
+        ? list.filter((p) => isPengajuanVisitRw3(p))
+        : list;
+  if (!scoped.length) return [];
 
-  const ids = list.map((p) => p.id);
+  const ids = scoped.map((p) => p.id);
   const penghuniRows = await db
     .select()
     .from(visitrw3Penghuni)
@@ -609,7 +596,7 @@ export async function listPengajuanAdminEnriched(status?: string) {
     }
   }
 
-  return list.map((p) => {
+  return scoped.map((p) => {
     const kontak = kontakMap.get(p.id);
     return {
       ...p,
@@ -629,6 +616,8 @@ export type Visitrw3KalenderPenghuni = {
   status: string;
   nomorVisitrw3: string | null;
   pengajuanId: number | null;
+  jenisWarga: string | null;
+  alamat: string | null;
   namaKost: string;
   namaPemilik: string;
   rtKost: number;
@@ -645,6 +634,7 @@ export type Visitrw3KalenderAntrianPerpanjang = {
   wargaSinggahId: number | null;
   namaPenghuni: string | null;
   namaKost: string | null;
+  jenisWarga: string | null;
   createdAt: string | null;
 };
 
@@ -705,6 +695,8 @@ export async function getVisitrw3Kalender(rtFilter?: number): Promise<Visitrw3Ka
     status: w.status,
     nomorVisitrw3: w.nomorVisitrw3 ?? null,
     pengajuanId: w.pengajuanId ?? null,
+    jenisWarga: w.jenisWarga ?? null,
+    alamat: w.alamat ?? null,
     namaKost: w.namaKost,
     namaPemilik: w.namaPemilik,
     rtKost: w.rtKost,
@@ -731,26 +723,27 @@ export async function getVisitrw3Kalender(rtFilter?: number): Promise<Visitrw3Ka
         tanggalBayar: visitrw3Pengajuan.tanggalBayar,
         wargaSinggahId: visitrw3Pengajuan.wargaSinggahId,
         namaPenghuni: wargaSinggah.namaLengkap,
-        namaKost: pemilikKost.namaKost,
+        namaKost: sql<string | null>`COALESCE(${visitrw3Pengajuan.alamat}, ${wargaSinggah.alamat})`,
+        jenisWarga: visitrw3Pengajuan.jenisWarga,
         createdAt: visitrw3Pengajuan.createdAt,
       })
       .from(visitrw3Pengajuan)
       .leftJoin(wargaSinggah, eq(visitrw3Pengajuan.wargaSinggahId, wargaSinggah.id))
-      .leftJoin(pemilikKost, eq(visitrw3Pengajuan.pemilikKostId, pemilikKost.id))
       .where(and(...antrianConditions))
       .orderBy(visitrw3Pengajuan.tanggalBerlakuSampai);
 
     antrianPerpanjang = antrianRows.map((r) => ({
-    id: r.id,
-    nomorVisitrw3: r.nomorVisitrw3,
-    tipe: r.tipe,
-    status: r.status,
-    rt: r.rt,
-    tanggalBerlakuSampai: r.tanggalBerlakuSampai,
-    tanggalBayar: r.tanggalBayar,
-    wargaSinggahId: r.wargaSinggahId,
-    namaPenghuni: r.namaPenghuni,
-    namaKost: r.namaKost,
+      id: r.id,
+      nomorVisitrw3: r.nomorVisitrw3,
+      tipe: r.tipe,
+      status: r.status,
+      rt: r.rt,
+      tanggalBerlakuSampai: r.tanggalBerlakuSampai,
+      tanggalBayar: r.tanggalBayar,
+      wargaSinggahId: r.wargaSinggahId,
+      namaPenghuni: r.namaPenghuni,
+      namaKost: r.namaKost,
+      jenisWarga: r.jenisWarga,
       createdAt: r.createdAt ? r.createdAt.toISOString() : null,
     }));
   } catch (antrianErr: unknown) {
@@ -787,7 +780,17 @@ export async function getVisitrw3Kalender(rtFilter?: number): Promise<Visitrw3Ka
 export async function getPengajuanDetailAdmin(id: number) {
   const [p] = await db.select().from(visitrw3Pengajuan).where(eq(visitrw3Pengajuan.id, id));
   if (!p) return null;
-  const penghuni = await db.select().from(visitrw3Penghuni).where(eq(visitrw3Penghuni.pengajuanId, id)).orderBy(visitrw3Penghuni.urutan);
+  const penghuniRows = await db
+    .select()
+    .from(visitrw3Penghuni)
+    .where(eq(visitrw3Penghuni.pengajuanId, id))
+    .orderBy(visitrw3Penghuni.urutan);
+  // Jangan kirim base64 besar ke client detail — pakai endpoint /penghuni/:id/ktp
+  const penghuni = penghuniRows.map(({ fotoKtpData, ...rest }) => ({
+    ...rest,
+    fotoKtpData: null as string | null,
+    hasFotoKtp: Boolean(rest.fotoKtpPath || fotoKtpData),
+  }));
   const kost = p.pemilikKostId ? await storage.getPemilikKostById(p.pemilikKostId) : null;
   return { pengajuan: p, penghuni, kost };
 }
@@ -806,21 +809,16 @@ export async function approvePengajuan(
   assertChecklistSurvey(
     getChecklistSurveyPengajuan(
       pengajuan.keperluanPengajuan as "tinggal" | "bisnis",
-      pengajuan.tinggalDiWilayahRw3,
+      true,
     ),
     parsedSurvey.checklistSurvey,
   );
-
-  const rincianKontribusi = buildRincianKontribusiSurvey(parsedSurvey);
 
   const baseUpdate = {
     status: "disetujui" as const,
     catatanSurvey: parsedSurvey.catatanSurvey || null,
     reviewedAt: new Date(),
     reviewedBy: adminUsername,
-    estimasiKontribusi: parsedSurvey.kontribusiJumlah,
-    rincianKontribusi,
-    kasRwId: null as number | null,
   };
 
   if (pengajuan.tipe === "perpanjang") {
@@ -837,57 +835,56 @@ export async function approvePengajuan(
       .set({ ...baseUpdate, wargaSinggahId: wsId })
       .where(eq(visitrw3Pengajuan.id, id));
     const approvedPengajuan = { ...pengajuan, ...baseUpdate, wargaSinggahId: wsId };
-    notifyVisitrw3Disetujui(approvedPengajuan, penghuni, detail.kost ?? null);
+    notifyVisitrw3Disetujui(approvedPengajuan, penghuni, null);
     return { pengajuan: approvedPengajuan, wargaSinggah: updated, kasRwId: null };
-  }
-
-  const bisnisLuar =
-    pengajuan.keperluanPengajuan === "bisnis" && pengajuan.tinggalDiWilayahRw3 === false;
-
-  if (bisnisLuar) {
-    await db.update(visitrw3Pengajuan).set(baseUpdate).where(eq(visitrw3Pengajuan.id, id));
-    const approvedPengajuan = { ...pengajuan, ...baseUpdate };
-    notifyVisitrw3Disetujui(approvedPengajuan, penghuni, detail.kost ?? null);
-    return { pengajuan: approvedPengajuan, wargaSinggah: null, kasRwId: null };
   }
 
   const dewasa = penghuni.filter((p) => !p.isAnak);
   if (!dewasa.length) throw new Error("Minimal satu penghuni dewasa");
-  if (!pengajuan.pemilikKostId) throw new Error("Data kost/kontrakan tidak ditemukan");
 
   const utama = dewasa[0];
-  const keperluanLabel = pengajuan.keperluanPengajuan === "bisnis" ? "Usaha" : utama.keperluanTinggal || "Tinggal";
+  const jenisWarga = pengajuan.jenisWarga || (pengajuan.keperluanPengajuan === "bisnis" ? "jualan" : "kontrak");
+  const keperluanLabel =
+    jenisWarga === "jualan" ? "Usaha" : utama.keperluanTinggal || (jenisWarga === "kost" ? "Kost" : "Kontrak");
+  const alamat =
+    pengajuan.alamat?.trim() ||
+    pengajuan.alamatUsaha?.trim() ||
+    detail.kost?.alamatLengkap ||
+    "-";
 
-  const ws = await storage.createWargaSinggah({
-    pemilikKostId: pengajuan.pemilikKostId,
-    namaLengkap: utama.namaLengkap,
-    nik: utama.nik!,
-    nomorWhatsapp: utama.nomorWhatsapp || "",
-    pekerjaan: utama.pekerjaan || (pengajuan.keperluanPengajuan === "bisnis" ? pengajuan.jenisUsaha || "Usaha" : "-"),
+  const wsPayloadBase = {
+    pemilikKostId: null as number | null,
+    jenisWarga,
+    rt: pengajuan.rt,
+    alamat,
     tanggalMulaiKontrak: pengajuan.tanggalBayar,
     tanggalHabisKontrak: pengajuan.tanggalBerlakuSampai,
-    jumlahPenghuni: pengajuan.jumlahPenghuni,
     keperluanTinggal: keperluanLabel,
     nomorVisitrw3: pengajuan.nomorVisitrw3,
     pengajuanId: pengajuan.id,
     terminBulan: pengajuan.terminBulan,
+  };
+
+  const ws = await storage.createWargaSinggah({
+    ...wsPayloadBase,
+    namaLengkap: utama.namaLengkap,
+    nik: utama.nik!,
+    nomorWhatsapp: utama.nomorWhatsapp || "",
+    pekerjaan:
+      utama.pekerjaan ||
+      (jenisWarga === "jualan" ? pengajuan.jenisUsaha || pengajuan.namaUsaha || "Usaha" : "-"),
+    jumlahPenghuni: pengajuan.jumlahPenghuni,
   });
 
   for (let i = 1; i < dewasa.length; i++) {
     const p = dewasa[i];
     await storage.createWargaSinggah({
-      pemilikKostId: pengajuan.pemilikKostId,
+      ...wsPayloadBase,
       namaLengkap: p.namaLengkap,
       nik: p.nik!,
       nomorWhatsapp: p.nomorWhatsapp || utama.nomorWhatsapp || "",
       pekerjaan: p.pekerjaan || "-",
-      tanggalMulaiKontrak: pengajuan.tanggalBayar,
-      tanggalHabisKontrak: pengajuan.tanggalBerlakuSampai,
       jumlahPenghuni: 1,
-      keperluanTinggal: keperluanLabel,
-      nomorVisitrw3: pengajuan.nomorVisitrw3,
-      pengajuanId: pengajuan.id,
-      terminBulan: pengajuan.terminBulan,
     });
   }
 
@@ -897,7 +894,7 @@ export async function approvePengajuan(
     .where(eq(visitrw3Pengajuan.id, id));
 
   const approvedPengajuan = { ...pengajuan, ...baseUpdate, wargaSinggahId: ws.id };
-  notifyVisitrw3Disetujui(approvedPengajuan, penghuni, detail.kost ?? null);
+  notifyVisitrw3Disetujui(approvedPengajuan, penghuni, null);
   return { pengajuan: approvedPengajuan, wargaSinggah: ws, kasRwId: null };
 }
 
@@ -947,7 +944,6 @@ export async function getVisitrw3DashboardStats(rtFilter?: number): Promise<Visi
   const demoKostIds = new Set(
     allProperti.filter((pk) => isVisitrw3DemoProperti(pk)).map((pk) => pk.id),
   );
-  const propertiList = filterVisitrw3PropertiProduksi(allProperti);
 
   const pengajuanList = (
     await db
@@ -969,21 +965,14 @@ export async function getVisitrw3DashboardStats(rtFilter?: number): Promise<Visi
   const wargaAktifRows = await db
     .select({ id: wargaSinggah.id })
     .from(wargaSinggah)
-    .innerJoin(pemilikKost, eq(wargaSinggah.pemilikKostId, pemilikKost.id))
     .where(
       rtFilter != null
-        ? and(
-            eq(wargaSinggah.status, "aktif"),
-            eq(pemilikKost.rt, rtFilter),
-            sql`${pemilikKost.nomorPendaftaran} IS NULL OR ${pemilikKost.nomorPendaftaran} NOT LIKE 'PROP-DEV-%'`,
-          )
-        : and(
-            eq(wargaSinggah.status, "aktif"),
-            sql`${pemilikKost.nomorPendaftaran} IS NULL OR ${pemilikKost.nomorPendaftaran} NOT LIKE 'PROP-DEV-%'`,
-          ),
+        ? and(eq(wargaSinggah.status, "aktif"), eq(wargaSinggah.rt, rtFilter))
+        : eq(wargaSinggah.status, "aktif"),
     );
 
   const byKeperluan: Record<string, number> = {};
+  const byJenisWarga: Record<string, number> = {};
   const byTipe: Record<string, number> = {};
   const byStatus: Record<string, number> = {};
   const byRtPengajuan: Record<number, number> = {};
@@ -992,7 +981,6 @@ export async function getVisitrw3DashboardStats(rtFilter?: number): Promise<Visi
   const byJumlahPenghuni: Record<string, number> = {};
   let bisnisDiRw3 = 0;
   let bisnisLuar = 0;
-  let totalKontribusiKasRw = 0;
   let menungguSurvey = 0;
   let disetujui = 0;
   let ditolak = 0;
@@ -1001,12 +989,15 @@ export async function getVisitrw3DashboardStats(rtFilter?: number): Promise<Visi
   let denganNomorUnit = 0;
   let tanpaNomorUnit = 0;
   let denganCatatanPemohon = 0;
-  let denganProperti = 0;
-  let tanpaProperti = 0;
   const trenMap: Record<string, number> = {};
 
   for (const p of pengajuanList) {
     incCount(byKeperluan, p.keperluanPengajuan);
+    const jenisLabel =
+      p.jenisWarga == null || !String(p.jenisWarga).trim()
+        ? "Lainnya"
+        : labelJenisWarga(p.jenisWarga);
+    incCount(byJenisWarga, jenisLabel === "—" ? "Lainnya" : jenisLabel);
     incCount(byTipe, p.tipe);
     incCount(byStatus, p.status);
     byRtPengajuan[p.rt] = (byRtPengajuan[p.rt] ?? 0) + 1;
@@ -1025,20 +1016,13 @@ export async function getVisitrw3DashboardStats(rtFilter?: number): Promise<Visi
 
     if (p.catatanPemohon?.trim()) denganCatatanPemohon++;
 
-    if (p.pemilikKostId != null) denganProperti++;
-    else tanpaProperti++;
-
-    if (p.kasRwId != null && p.estimasiKontribusi != null) {
-      totalKontribusiKasRw += p.estimasiKontribusi;
-    }
-
     if (p.keperluanPengajuan === "bisnis") {
       if (p.tinggalDiWilayahRw3 === true) bisnisDiRw3++;
       else if (p.tinggalDiWilayahRw3 === false) bisnisLuar++;
     }
 
-    const jenisLabel = labelJenisTempatUsaha(p);
-    if (jenisLabel) incCount(byJenisTempat, jenisLabel);
+    const jenisTempatLabel = labelJenisTempatUsaha(p);
+    if (jenisTempatLabel) incCount(byJenisTempat, jenisTempatLabel);
 
     if (p.createdAt) {
       const mk = monthKey(new Date(p.createdAt));
@@ -1095,39 +1079,10 @@ export async function getVisitrw3DashboardStats(rtFilter?: number): Promise<Visi
     }
   }
 
-  const byJenisProperti: Record<string, number> = {};
-  const byStatusProperti: Record<string, number> = {};
-  const byRtProperti: Record<number, number> = {};
-  const byJumlahPintu: Record<string, number> = {};
-  const byIzinKombinasi: Record<string, number> = {};
-  let izinTinggal = 0;
-  let izinBisnis = 0;
-  let propertiMenunggu = 0;
-  let denganPenanggungJawab = 0;
-  let tanpaPenanggungJawab = 0;
-  let propertiSetujuTataTertibYa = 0;
-  let propertiSetujuTataTertibTidak = 0;
-  let propertiDenganCatatan = 0;
-
-  for (const pk of propertiList) {
-    incCount(byJenisProperti, pk.jenisProperti || "kost");
-    incCount(byStatusProperti, pk.statusProperti || "aktif");
-    byRtProperti[pk.rt] = (byRtProperti[pk.rt] ?? 0) + 1;
-    incCount(byJumlahPintu, labelJumlahPintuTier(pk.jumlahPintu ?? 1));
-    incCount(byIzinKombinasi, labelIzinProperti(Boolean(pk.izinTinggal), Boolean(pk.izinBisnis)));
-    if (pk.izinTinggal) izinTinggal++;
-    if (pk.izinBisnis) izinBisnis++;
-    if (pk.statusProperti === "menunggu_verifikasi") propertiMenunggu++;
-    if (pk.namaPenanggungJawab?.trim()) denganPenanggungJawab++;
-    else tanpaPenanggungJawab++;
-    if (pk.setujuTataTertib) propertiSetujuTataTertibYa++;
-    else propertiSetujuTataTertibTidak++;
-    if (pk.catatanPemohon?.trim()) propertiDenganCatatan++;
-  }
-
   const rtSet = new Set<number>([...ACTIVE_RT_NUMBERS]);
   for (const p of pengajuanList) rtSet.add(p.rt);
-  for (const pk of propertiList) rtSet.add(pk.rt);
+
+  const emptyProperti = emptyVisitrw3DashboardStats().properti;
 
   return {
     ringkasan: {
@@ -1135,13 +1090,14 @@ export async function getVisitrw3DashboardStats(rtFilter?: number): Promise<Visi
       menungguSurvey,
       disetujui,
       ditolak,
-      totalProperti: propertiList.length,
-      propertiMenunggu,
+      totalProperti: 0,
+      propertiMenunggu: 0,
       penghuniAktif: wargaAktifRows.length,
-      totalKontribusiKasRw,
+      totalKontribusiKasRw: 0,
     },
     pengajuan: {
       byKeperluan,
+      byJenisWarga: mapToSortedRows(byJenisWarga),
       byTipe,
       byStatus,
       byRt: rtRows(byRtPengajuan),
@@ -1156,8 +1112,8 @@ export async function getVisitrw3DashboardStats(rtFilter?: number): Promise<Visi
       denganNomorUnit,
       tanpaNomorUnit,
       denganCatatanPemohon,
-      denganProperti,
-      tanpaProperti,
+      denganProperti: 0,
+      tanpaProperti: pengajuanList.length,
     },
     penghuni: {
       totalBaris: penghuniList.length,
@@ -1174,19 +1130,7 @@ export async function getVisitrw3DashboardStats(rtFilter?: number): Promise<Visi
       withoutFotoKtp,
       topTempatKerja: mapToSortedRows(byTempatKerja, 8),
     },
-    properti: {
-      byJenisProperti: mapToSortedRows(byJenisProperti),
-      byStatusProperti: mapToSortedRows(byStatusProperti),
-      byRt: rtRows(byRtProperti),
-      izinTinggal,
-      izinBisnis,
-      byIzinKombinasi: mapToSortedRows(byIzinKombinasi),
-      byJumlahPintu: mapToSortedRows(byJumlahPintu),
-      denganPenanggungJawab,
-      tanpaPenanggungJawab,
-      setujuTataTertib: { ya: propertiSetujuTataTertibYa, tidak: propertiSetujuTataTertibTidak },
-      denganCatatanPemohon: propertiDenganCatatan,
-    },
+    properti: emptyProperti,
     trenBulan,
     pengajuanTerbaru: pengajuanList.slice(0, 5).map((p) => ({
       id: p.id,
@@ -1298,7 +1242,14 @@ export async function ensureVisitrw3Schema() {
     ALTER TABLE warga_singgah ADD COLUMN IF NOT EXISTS nomor_visitrw3 text;
     ALTER TABLE warga_singgah ADD COLUMN IF NOT EXISTS pengajuan_id integer;
     ALTER TABLE warga_singgah ADD COLUMN IF NOT EXISTS termin_bulan integer;
+    ALTER TABLE warga_singgah ALTER COLUMN pemilik_kost_id DROP NOT NULL;
+    ALTER TABLE warga_singgah ADD COLUMN IF NOT EXISTS jenis_warga text;
+    ALTER TABLE warga_singgah ADD COLUMN IF NOT EXISTS rt integer;
+    ALTER TABLE warga_singgah ADD COLUMN IF NOT EXISTS alamat text;
+    ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS jenis_warga text;
+    ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS alamat text;
     ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS nomor_unit text;
+    ALTER TABLE visitrw3_penghuni ADD COLUMN IF NOT EXISTS foto_ktp_data text;
     ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS jenis_tempat_usaha text;
     ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS jenis_tempat_usaha_lain text;
     ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS kategori_usaha text;

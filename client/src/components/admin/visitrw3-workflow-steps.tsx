@@ -3,11 +3,9 @@ import { cn } from "@/lib/utils";
 import { ChevronRight } from "lucide-react";
 
 const STEPS = [
-  { href: "/admin/visitrw3/properti", label: "1 · Properti", match: "/admin/visitrw3/properti" },
-  { href: "/admin/visitrw3/antrian?tab=properti&view=belum", label: "2 · Verifikasi", match: "/admin/visitrw3/antrian" },
-  { href: "/admin/visitrw3/antrian?tab=pengajuan&view=belum", label: "3 · Survey", match: "/admin/visitrw3/antrian" },
-  { href: "/admin/visitrw3/penghuni", label: "4 · Kontrak aktif", match: "/admin/visitrw3/penghuni" },
-  { href: "/admin/visitrw3/kalender", label: "5 · Kalender", match: "/admin/visitrw3/kalender" },
+  { href: "/admin/visitrw3/antrian?view=belum", label: "1 · Survey", match: "/admin/visitrw3/antrian" },
+  { href: "/admin/visitrw3/penghuni", label: "2 · Warga aktif", match: "/admin/visitrw3/penghuni" },
+  { href: "/admin/visitrw3/kalender", label: "3 · Kalender", match: "/admin/visitrw3/kalender" },
 ] as const;
 
 function isStepActive(location: string, match: string): boolean {

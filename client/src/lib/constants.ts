@@ -180,33 +180,78 @@ export const visitrw3JenisTempatUsahaOptions = [
   { value: "lainnya", label: "Lainnya" },
 ] as const;
 
-/** Kategori/jenis usaha — multi-pilihan di form pengajuan bisnis Visit RW3. */
+/** Kategori/jenis usaha — multi-pilihan form RW3BIZ / usaha. */
 export const visitrw3KategoriUsahaOptions = [
+  // Makanan & minuman
   "Warung/Toko Kelontong",
+  "Warung nasi/masakan rumahan",
   "Rumah Makan/Restoran",
   "Cafe/Kedai Kopi",
-  "Pertamini/Bensin ecer",
-  "Bengkel",
+  "Kedai minuman/es/juice",
+  "Bakso/Mie/Sate",
+  "Gorengan/jajanan pasar",
+  "Roti/kue/bakery",
+  "Catering",
+  "Pecel lele/ayam goreng",
+  // Jasa harian
   "Laundry",
   "Salon/Barbershop",
-  "Konveksi/Jahit",
+  "Jasa cuci/motor kendaraan",
+  "Jasa servis HP/elektronik",
+  "Jasa servis AC/kulkas",
+  "Jasa servis umum",
+  "Jahit/Konveksi",
+  "Fotokopi/print",
   "Percetakan",
-  "Fotokopi",
-  "Apotek/Toko Obat",
-  "Toko Bangunan",
-  "Toko Elektronik",
-  "Toko Pakaian",
+  "Fotografi/studio",
+  // Dagang & toko
   "Kios/Gerobak",
-  "Catering",
-  "Jasa Servis",
+  "Toko Pakaian",
+  "Toko Sepatu/Tas",
+  "Toko Elektronik",
+  "Toko Bangunan",
+  "Toko Sembako/grosir kecil",
+  "Toko buah/sayur",
+  "Toko pulsa/kuota/token",
+  "Apotek/Toko Obat",
+  "Toko kosmetik",
+  // Transport & energi
+  "Pertamini/Bensin ecer",
+  "Bengkel motor",
+  "Bengkel mobil",
+  "Tambal ban",
+  "Ojek/antar barang (pangkalan)",
+  // Produksi & online
   "Usaha Online/E-Commerce",
-  "Peternakan",
-  "Pertanian",
   "Industri Rumahan",
-  "Pendidikan/Kursus",
-  "Kesehatan/Klinik",
+  "Kerajinan/handmade",
+  "Frozen food/olahan",
+  // Pertanian & hewan
+  "Pertanian",
+  "Peternakan",
+  "Penjualan ikan/ayam hidup",
+  // Sosial & jasa lain
+  "Pendidikan/Kursus/les",
+  "Kesehatan/Klinik/praktek",
+  "Penjahit/bordir",
+  "Rental PS/game",
+  "Rental alat/barang",
+  "Titip jual/agen",
   "Lainnya",
 ] as const;
+
+/** Opsi jam 24 jam (tanpa AM/PM) — interval 30 menit + 23:59. */
+export const JAM_24H_OPTIONS: string[] = (() => {
+  const out: string[] = [];
+  for (let h = 0; h < 24; h++) {
+    for (const m of [0, 30]) {
+      out.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+    }
+  }
+  out.push("23:59");
+  return out;
+})();
+
 
 export const jenisPropertiOptions = [
   { value: "kost", label: "Kost" },

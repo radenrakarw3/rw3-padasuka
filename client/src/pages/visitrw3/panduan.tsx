@@ -1,16 +1,15 @@
-import { useMemo } from "react";
 import { Link } from "wouter";
-import { useQuery } from "@tanstack/react-query";
 import {
   BookOpen,
-  Building2,
-  Users,
+  Home,
+  BedDouble,
+  Store,
   ChevronRight,
   FileText,
   Camera,
   Clock,
-  Wallet,
-  Loader2,
+  MessageCircle,
+  Users,
 } from "lucide-react";
 import { Visitrw3Shell } from "@/components/visitrw3-shell";
 import { Button } from "@/components/ui/button";
@@ -20,12 +19,8 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { readJsonSafely } from "@/lib/queryClient";
-import {
-  formatRupiah,
-  parseKontribusiSettings,
-  labelUkuranProperti,
-} from "@/lib/visitrw3-kontribusi";
+import { VISITRW3_ROUTES } from "@/lib/visitrw3-routes";
+import { JENIS_WARGA_DESKRIPSI, JENIS_WARGA_LABEL } from "@shared/visitrw3-jenis-warga";
 
 function FlowStep({ n, children }: { n: number; children: React.ReactNode }) {
   return (
@@ -43,7 +38,7 @@ function SectionCard({
   title,
   children,
 }: {
-  icon: typeof Building2;
+  icon: typeof BookOpen;
   title: string;
   children: React.ReactNode;
 }) {
@@ -61,20 +56,8 @@ function SectionCard({
 }
 
 export default function Visitrw3Panduan() {
-  const { data: settingsRows = [], isLoading: tarifLoading } = useQuery({
-    queryKey: ["/api/public/visitrw3/settings"],
-    queryFn: async () => {
-      const res = await fetch("/api/public/visitrw3/settings");
-      if (!res.ok) throw new Error("Gagal memuat pengaturan");
-      return readJsonSafely<{ key: string; value: string }[]>(res);
-    },
-    staleTime: 60_000,
-  });
-
-  const tarif = useMemo(() => parseKontribusiSettings(settingsRows), [settingsRows]);
-
   return (
-    <Visitrw3Shell title="Panduan Visit RW3" backHref="/visitrw3">
+    <Visitrw3Shell title="Panduan Visit RW3" backHref={VISITRW3_ROUTES.hub}>
       <div className="space-y-5">
         <div className="rounded-lg bg-brand/5 border border-brand/20 p-4 space-y-2">
           <div className="flex items-center gap-2 text-brand">
@@ -82,103 +65,71 @@ export default function Visitrw3Panduan() {
             <p className="font-semibold text-sm">Baca ini dulu — 3 menit</p>
           </div>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            <strong className="text-foreground">Visit RW3</strong> adalah izin administrasi bagi
-            penyewa atau pengusaha yang tinggal/berusaha di wilayah RW 03 Padasuka. Formulir diisi{" "}
-            <strong className="text-foreground">langkah demi langkah</strong> lewat HP; tidak perlu
-            datang ke sekretariat dulu untuk mengisi data awal.
+            <strong className="text-foreground">Visit RW3</strong> adalah pendaftaran warga yang{" "}
+            <strong className="text-foreground">tinggal</strong> (ngontrak atau ngekost) di wilayah
+            RW 03 Padasuka. Formulir diisi langsung oleh Anda — tanpa perantara pemilik properti.
+            Setelah disetujui, Anda mendapat nomor VRW3. Untuk jualan/usaha, gunakan{" "}
+            <Link href="/rw3biz" className="text-brand font-medium underline">
+              RW3BIZ
+            </Link>
+            .
           </p>
         </div>
 
         <section className="rounded-xl border bg-card p-4 space-y-3">
-          <h2 className="font-semibold text-sm">Pilih situasi — supaya tidak double</h2>
+          <h2 className="font-semibold text-sm">Dua jenis tinggal</h2>
           <div className="space-y-2 text-sm">
-            <div className="rounded-lg border p-3 bg-muted/30">
-              <p className="font-medium">Tinggal saja</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Ngekost/kontrak di RW 03, tidak punya usaha di sini → isi data penghuni kost.
-              </p>
+            <div className="rounded-lg border p-3 bg-muted/30 flex gap-3">
+              <Home className="w-4 h-4 text-brand flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium">{JENIS_WARGA_LABEL.kontrak}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{JENIS_WARGA_DESKRIPSI.kontrak}</p>
+              </div>
             </div>
-            <div className="rounded-lg border p-3 bg-brand/5 border-brand/20">
-              <p className="font-medium text-brand">Tinggal sekaligus usaha</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Ngekost dan punya lapak/kiosk/warung → <strong className="text-foreground">satu form</strong>,
-                isi usaha + penghuni. Jangan ajukan tinggal dan bisnis terpisah.
-              </p>
+            <div className="rounded-lg border p-3 bg-muted/30 flex gap-3">
+              <BedDouble className="w-4 h-4 text-brand flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium">{JENIS_WARGA_LABEL.kost}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{JENIS_WARGA_DESKRIPSI.kost}</p>
+              </div>
             </div>
-            <div className="rounded-lg border p-3 bg-brand/5 border-brand/20">
-              <p className="font-medium text-brand">Usaha di rumah sendiri</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Usaha di rumah/rumah milik sendiri (bukan sewa/kost) — daftar properti sebagai{" "}
-                <strong className="text-foreground">Usaha rumahan</strong>, lalu ajukan dengan pilihan
-                yang sama. Contoh: catering rumahan.
-              </p>
-            </div>
-            <div className="rounded-lg border p-3 bg-muted/30">
-              <p className="font-medium">Usaha saja</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Berjualan di RW 03, rumah tinggal di luar RW 03 → isi data usaha & penanggung jawab.
-              </p>
+            <div className="rounded-lg border border-dashed p-3 bg-muted/10 flex gap-3">
+              <Store className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-muted-foreground">Jualan → RW3BIZ</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Izin usaha ditangani layanan terpisah{" "}
+                  <Link href="/rw3biz" className="text-brand underline">
+                    /rw3biz
+                  </Link>
+                </p>
+              </div>
             </div>
           </div>
         </section>
 
-        <SectionCard icon={Building2} title="Pemilik kost, kontrakan, kiosk, lapak, atau usaha rumahan">
+        <SectionCard icon={Users} title="Alur daftar tinggal">
           <p className="text-xs text-muted-foreground">
-            Daftarkan properti dulu agar bisa dipilih penyewa atau pemilik usaha rumahan saat mengajukan Visit RW3.
+            Tidak perlu menunggu pemilik kost/kontrakan mendaftarkan properti terlebih dahulu.
           </p>
           <ol className="space-y-2.5">
             <FlowStep n={1}>
-              Buka <strong>Daftar properti</strong> → pilih jenis (kost, kontrakan, kiosk, lapak,{" "}
-              <strong>usaha rumahan</strong>).
+              Buka hub Visit RW3 → pilih <strong>Ngontrak</strong> atau <strong>Ngekost</strong>.
             </FlowStep>
             <FlowStep n={2}>
-              Isi nama, RT, alamat, jumlah kamar/unit, data pemilik & pengelola.
+              Isi lokasi (RT + alamat). Untuk ngekost, sertakan nomor kamar/unit.
             </FlowStep>
-            <FlowStep n={3}>
-              Setujui tata tertib → kirim. Simpan nomor <strong>PROP-…</strong>.
-            </FlowStep>
+            <FlowStep n={3}>Isi jumlah dan data diri penghuni (KTP & WhatsApp).</FlowStep>
             <FlowStep n={4}>
-              Tunggu verifikasi admin RW. Cek status lewat menu{" "}
-              <strong>Cek status pendaftaran</strong>.
-            </FlowStep>
-            <FlowStep n={5}>
-              Setelah <strong>aktif</strong>, properti muncul di formulir pengajuan penyewa.
-            </FlowStep>
-          </ol>
-          <Link href="/visitrw3/daftar-properti">
-            <Button className="w-full touch-target mt-1" size="sm">
-              Mulai daftar properti <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </Link>
-        </SectionCard>
-
-        <SectionCard icon={Users} title="Penyewa / penghuni / pengusaha">
-          <p className="text-xs text-muted-foreground">
-            Properti tempat Anda tinggal atau berusaha harus sudah terdaftar dan disetujui admin.
-          </p>
-          <ol className="space-y-2.5">
-            <FlowStep n={1}>
-              Pastikan properti sudah didaftarkan pemiliknya (kost, kontrakan, kiosk, atau usaha rumahan).
-              Kalau belum, minta pemilik daftar dulu atau hubungi pengurus RW.
-            </FlowStep>
-            <FlowStep n={2}>
-              Buka <strong>Pengajuan baru</strong> → pilih situasi Anda:{" "}
-              <strong>Tinggal saja</strong>, <strong>Tinggal sekaligus usaha</strong>,{" "}
-              <strong>Usaha di rumah sendiri</strong>, atau <strong>Usaha saja</strong>.
-            </FlowStep>
-            <FlowStep n={3}>
-              Isi lokasi & data sesuai pilihan. Kalau ngekost + berbisnis, cukup{" "}
-              <strong>satu kali</strong> isi — pilih &quot;Tinggal sekaligus usaha&quot;.
-            </FlowStep>
-            <FlowStep n={4}>
-              Setujui syarat → isi tanggal bayar & termin → kirim. Simpan nomor{" "}
+              Setujui tata tertib → isi tanggal bayar & termin → kirim. Simpan nomor{" "}
               <strong>VRW3-…</strong>.
             </FlowStep>
             <FlowStep n={5}>
-              Admin RW akan survey. Lacak status di menu <strong>Cek status pengajuan</strong>.
+              Admin RW akan survey. Lacak status di menu <strong>Cek status</strong>, atau tunggu
+              pesan WhatsApp dari pengurus.
             </FlowStep>
           </ol>
-          <Link href="/visitrw3/pengajuan">
+          <Link href={VISITRW3_ROUTES.pengajuan}>
             <Button className="w-full touch-target mt-1" size="sm">
               Mulai pengajuan <ChevronRight className="w-4 h-4 ml-1" />
             </Button>
@@ -210,15 +161,15 @@ export default function Visitrw3Panduan() {
             <li className="flex gap-2">
               <Clock className="w-4 h-4 flex-shrink-0 mt-0.5 text-brand" />
               <span>
-                <strong className="text-foreground">Nomor kamar/unit</strong> — contoh: &quot;Kamar
-                3B&quot;, &quot;Unit depan&quot;, &quot;Ruko blok B&quot;.
+                <strong className="text-foreground">Alamat lengkap</strong> di RT yang dipilih —
+                untuk ngekost juga siapkan nomor kamar/unit.
               </span>
             </li>
             <li className="flex gap-2">
-              <Wallet className="w-4 h-4 flex-shrink-0 mt-0.5 text-brand" />
+              <MessageCircle className="w-4 h-4 flex-shrink-0 mt-0.5 text-brand" />
               <span>
-                <strong className="text-foreground">Tanggal bayar kontribusi</strong> & pilih termin
-                (1, 3, 6, atau 12 bulan).
+                Pastikan WhatsApp bisa dihubungi — pengurus RW akan mengabari lewat WA setelah
+                pengajuan masuk.
               </span>
             </li>
           </ul>
@@ -227,123 +178,51 @@ export default function Visitrw3Panduan() {
           </p>
         </section>
 
-        <section className="rounded-xl border bg-card p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-brand/10 flex items-center justify-center">
-              <Wallet className="w-4 h-4 text-brand" />
-            </div>
-            <h2 className="font-semibold text-sm">Perkiraan kontribusi</h2>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Angka resmi ditetapkan pengurus RW. Estimasi di bawah mengikuti pengaturan terbaru;
-            nominal final ditentukan saat survey admin.
-          </p>
-          {tarifLoading ? (
-            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground mx-auto" />
-          ) : (
-            <div className="space-y-3 text-xs">
-              <div className="rounded-lg bg-muted/40 p-3 space-y-1">
-                <p className="font-medium text-foreground">Penyewa tinggal — kost (per unit/bulan)</p>
-                <p>
-                  {labelUkuranProperti("kecil", tarif)}: {formatRupiah(tarif.feeKostKecilPerUnitBulan)}
-                </p>
-                <p>
-                  {labelUkuranProperti("sedang", tarif)}: {formatRupiah(tarif.feeKostSedangPerUnitBulan)}
-                </p>
-                <p>
-                  {labelUkuranProperti("besar", tarif)}: {formatRupiah(tarif.feeKostBesarPerUnitBulan)}
-                </p>
-              </div>
-              <div className="rounded-lg bg-muted/40 p-3 space-y-1">
-                <p className="font-medium text-foreground">Penyewa tinggal — kontrakan (per unit/bulan)</p>
-                <p>
-                  {labelUkuranProperti("kecil", tarif)}:{" "}
-                  {formatRupiah(tarif.feeKontrakanKecilPerUnitBulan)}
-                </p>
-                <p>
-                  {labelUkuranProperti("sedang", tarif)}:{" "}
-                  {formatRupiah(tarif.feeKontrakanSedangPerUnitBulan)}
-                </p>
-                <p>
-                  {labelUkuranProperti("besar", tarif)}:{" "}
-                  {formatRupiah(tarif.feeKontrakanBesarPerUnitBulan)}
-                </p>
-              </div>
-              <div className="rounded-lg bg-muted/40 p-3 space-y-1">
-                <p className="font-medium text-foreground">Bisnis (per hari)</p>
-                <p>Lapak: {formatRupiah(tarif.feeBisnisLapakPerHari)}</p>
-                <p>Kiosk: {formatRupiah(tarif.feeBisnisKioskPerHari)}</p>
-                <p>Usaha lain: {formatRupiah(tarif.feeBisnisLainPerHari)}</p>
-              </div>
-            </div>
-          )}
-        </section>
-
         <section className="rounded-xl border bg-card overflow-hidden">
           <div className="p-4 border-b">
             <h2 className="font-semibold text-sm">Pertanyaan sering ditanya</h2>
           </div>
           <Accordion type="single" collapsible className="px-2">
-            <AccordionItem value="belum-properti">
+            <AccordionItem value="langsung">
               <AccordionTrigger className="text-sm text-left">
-                Properti saya belum ada di daftar — apa yang harus dilakukan?
+                Harus minta izin pemilik kost dulu?
               </AccordionTrigger>
               <AccordionContent className="text-sm text-muted-foreground">
-                Minta pemilik kost/kontrakan mendaftar lewat menu{" "}
-                <Link href="/visitrw3/daftar-properti" className="text-brand underline">
-                  Daftar properti
-                </Link>
-                . Setelah admin menyetujui, baru Anda bisa lanjut pengajuan. Kalau Anda sendiri
-                pemiliknya, daftarkan dulu properti Anda.
+                Tidak. Visit RW3 sekarang diisi langsung oleh warga singgah. Pemilik tidak perlu
+                mendaftarkan properti di situs. Anda cukup isi data sendiri dan tunggu survey
+                pengurus RW.
               </AccordionContent>
             </AccordionItem>
-            <AccordionItem value="usaha-rumahan" id="usaha-rumahan">
+            <AccordionItem value="jenis">
               <AccordionTrigger className="text-sm text-left">
-                Usaha di rumah sendiri (catering, jasa, dll) — daftar sebagai apa?
+                Ngontrak, ngekost, atau jualan — bedanya apa?
               </AccordionTrigger>
               <AccordionContent className="text-sm text-muted-foreground space-y-2">
                 <p>
-                  Jangan pilih <strong>kiosk</strong> atau <strong>lapak</strong> kalau usahanya di
-                  rumah milik sendiri, bukan di tempat sewa/kost orang lain.
+                  <strong>Ngontrak</strong>: tinggal di kontrakan / sewa rumah.{" "}
+                  <strong>Ngekost</strong>: tinggal di kamar kost (wajib nomor kamar/unit).{" "}
+                  <strong>Jualan</strong>: berjualan atau punya usaha di RW 03 — isi data usaha
+                  tambahan.
                 </p>
-                <p>
-                  Langkahnya: (1) daftar properti dengan jenis{" "}
-                  <strong>Usaha rumahan</strong> lewat menu Daftar properti; (2) tunggu verifikasi
-                  admin; (3) ajukan Visit RW3 dengan pilihan{" "}
-                  <strong>Usaha di rumah sendiri</strong> — isi data usaha dan penghuni rumah.
-                </p>
-                <p>
-                  Modul <strong>Pendataan Usaha</strong> terpisah (stiker usaha RW). Visit RW3 tetap
-                  wajib untuk izin administrasi tinggal/berusaha di wilayah RW 03.
-                </p>
-              </AccordionContent>
-            </AccordionItem>
-            <AccordionItem value="tinggal-bisnis">
-              <AccordionTrigger className="text-sm text-left">
-                Ngekost sekaligus berbisnis — isi sekali atau dua kali?
-              </AccordionTrigger>
-              <AccordionContent className="text-sm text-muted-foreground space-y-2">
-                <p>
-                  <strong className="text-foreground">Cukup sekali.</strong> Pilih{" "}
-                  <strong>Tinggal sekaligus usaha</strong> di langkah pertama, lalu isi data usaha
-                  dan data penghuni kost dalam formulir yang sama.
-                </p>
-                <p>
-                  Jangan ajukan <strong>Tinggal</strong> dan <strong>Bisnis</strong> terpisah —
-                  itu yang bikin double. Kalau hanya ngekost tanpa usaha, pilih{" "}
-                  <strong>Tinggal saja</strong>. Kalau hanya berjualan dan rumah di luar RW 03,
-                  pilih <strong>Usaha saja</strong>.
-                </p>
+                <p>Pilih satu jenis yang paling sesuai. Tidak perlu mengisi dua kali.</p>
               </AccordionContent>
             </AccordionItem>
             <AccordionItem value="nomor">
               <AccordionTrigger className="text-sm text-left">
-                Apa beda nomor PROP dan VRW3?
+                Apa itu nomor VRW3?
               </AccordionTrigger>
               <AccordionContent className="text-sm text-muted-foreground">
-                <strong>PROP-…</strong> = nomor pendaftaran properti (pemilik).{" "}
-                <strong>VRW3-…</strong> = nomor pengajuan izin penyewa/penghuni. Simpan keduanya
-                untuk cek status.
+                <strong>VRW3-…</strong> adalah nomor pengajuan izin warga singgah Anda. Simpan untuk
+                cek status dan perpanjang masa berlaku nanti.
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="wa">
+              <AccordionTrigger className="text-sm text-left">
+                Bagaimana saya dihubungi setelah daftar?
+              </AccordionTrigger>
+              <AccordionContent className="text-sm text-muted-foreground">
+                Pengurus RW akan menghubungi nomor WhatsApp yang Anda isi (misalnya saat pengajuan
+                masuk, disetujui, atau ditolak). Pastikan nomor aktif dan bisa menerima chat.
               </AccordionContent>
             </AccordionItem>
             <AccordionItem value="perpanjang">
@@ -352,11 +231,11 @@ export default function Visitrw3Panduan() {
               </AccordionTrigger>
               <AccordionContent className="text-sm text-muted-foreground">
                 Buka menu{" "}
-                <Link href="/visitrw3/perpanjang" className="text-brand underline">
+                <Link href={VISITRW3_ROUTES.perpanjang} className="text-brand underline">
                   Perpanjang izin
                 </Link>
-                , masukkan nomor VRW3 lama yang masih aktif, pilih tanggal bayar & termin baru.
-                Ajukan sebelum masa berlaku habis.
+                , masukkan nomor VRW3 yang masih aktif, pilih tanggal bayar & termin baru. Ajukan
+                sebelum masa berlaku habis.
               </AccordionContent>
             </AccordionItem>
             <AccordionItem value="lama">
@@ -365,7 +244,7 @@ export default function Visitrw3Panduan() {
               </AccordionTrigger>
               <AccordionContent className="text-sm text-muted-foreground">
                 Setelah formulir terkirim, pengajuan masuk antrian survey admin RW. Waktu
-                penyelesaian tergantung kelengkapan data — Anda bisa dicek status kapan saja. Admin
+                penyelesaian tergantung kelengkapan data — Anda bisa cek status kapan saja. Admin
                 akan menghubungi lewat WhatsApp jika ada yang perlu dilengkapi.
               </AccordionContent>
             </AccordionItem>
@@ -384,15 +263,10 @@ export default function Visitrw3Panduan() {
           </Accordion>
         </section>
 
-        <div className="grid grid-cols-2 gap-2 pb-2">
-          <Link href="/visitrw3/pemilik">
-            <Button variant="outline" className="w-full h-auto py-3 text-xs">
-              Menu pemilik
-            </Button>
-          </Link>
-          <Link href="/visitrw3/penyewa">
-            <Button variant="outline" className="w-full h-auto py-3 text-xs">
-              Menu penyewa
+        <div className="grid grid-cols-1 gap-2 pb-2">
+          <Link href={VISITRW3_ROUTES.hub}>
+            <Button variant="outline" className="w-full h-auto py-3 text-sm">
+              Kembali ke Visit RW3
             </Button>
           </Link>
         </div>

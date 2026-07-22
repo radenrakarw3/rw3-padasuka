@@ -29,6 +29,8 @@ export default function Visitrw3Status() {
           status: string;
           tipe: string;
           keperluanPengajuan: string;
+          jenisWarga?: string | null;
+          alamat?: string | null;
           rt: number;
           tanggalBerlakuSampai: string;
           terminBulan: number;
@@ -39,7 +41,7 @@ export default function Visitrw3Status() {
           jamBuka?: string | null;
           jamTutup?: string | null;
         };
-        kost?: { namaKost: string };
+        kost?: { namaKost: string } | null;
         kontrakAktif?: boolean;
       }>(res);
     },
@@ -47,12 +49,11 @@ export default function Visitrw3Status() {
   });
 
   return (
-    <Visitrw3Shell title="Cek status" backHref="/visitrw3/penyewa">
+    <Visitrw3Shell title="Cek status" backHref="/visitrw3">
       <div className="space-y-4">
         <FeatureExplain title="Nomor apa yang dimasukkan?">
           <p>
-            Nomor <strong>VRW3-…</strong> dari konfirmasi pengajuan baru atau perpanjang izin
-            (bukan nomor PROP properti).
+            Nomor <strong>VRW3-…</strong> dari konfirmasi pengajuan baru atau perpanjang izin.
           </p>
           <p>
             Status umum: <strong>menunggu survey</strong> → admin memverifikasi data →{" "}
@@ -110,14 +111,16 @@ export default function Visitrw3Status() {
               <div className="flex justify-between gap-2">
                 <dt className="text-muted-foreground">Jenis</dt>
                 <dd className="font-medium text-right">
-                  {data.pengajuan.tipe === "perpanjang" ? "Perpanjang" : "Pengajuan baru"} ·{" "}
-                  {data.pengajuan.keperluanPengajuan === "bisnis" ? "Bisnis" : "Tinggal"}
+                  {data.pengajuan.tipe === "perpanjang" ? "Perpanjang" : "Pengajuan baru"}
+                  {data.pengajuan.jenisWarga
+                    ? ` · ${data.pengajuan.jenisWarga === "jualan" ? "Jualan" : data.pengajuan.jenisWarga === "kost" ? "Ngekost" : "Ngontrak"}`
+                    : ` · ${data.pengajuan.keperluanPengajuan === "bisnis" ? "Bisnis" : "Tinggal"}`}
                 </dd>
               </div>
-              {data.kost && (
+              {data.pengajuan.alamat && (
                 <div className="flex justify-between gap-2">
-                  <dt className="text-muted-foreground">Properti</dt>
-                  <dd className="font-medium text-right">{data.kost.namaKost}</dd>
+                  <dt className="text-muted-foreground">Alamat</dt>
+                  <dd className="font-medium text-right max-w-[65%]">{data.pengajuan.alamat}</dd>
                 </div>
               )}
               <div className="flex justify-between gap-2">

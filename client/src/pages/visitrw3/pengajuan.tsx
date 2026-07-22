@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
-import { Link } from "wouter";
+import { Link, useSearch, Redirect } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Visitrw3Shell } from "@/components/visitrw3-shell";
+import { Rw3bizShell } from "@/components/rw3biz-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,19 +20,19 @@ import {
   visitrw3JenisTempatUsahaOptions,
   visitrw3KategoriUsahaOptions,
   visitrw3JenjangAnakOptions,
+  JAM_24H_OPTIONS,
 } from "@/lib/constants";
 import {
   Loader2,
   ChevronRight,
   ChevronLeft,
-  Building2,
   Plus,
   Trash2,
   Minus,
   BookOpen,
   Home,
+  BedDouble,
   Store,
-  Layers,
 } from "lucide-react";
 import {
   emptyKendaraanRow,
@@ -42,113 +43,77 @@ import { joinPlatNomor } from "@/lib/visitrw3-plat";
 import {
   validateStepBayar,
   validateStepSyarat,
-  validateStepJumlah,
-  validateStepKeperluan,
-  validateStepLokasiBisnis,
+  validateJumlahByJenis,
   validateSinglePenghuni,
-  validateLokasiSubTinggal,
-  validateLokasiSubBisnis,
+  validateLokasiWargaSinggah,
+  validateJualanFields,
 } from "@/lib/visitrw3-validate-pengajuan";
 import { PlatNomorInput } from "@/components/gov/plat-nomor-input";
 import { FormStepper } from "@/components/gov/form-stepper";
-import { EmptyState } from "@/components/gov/empty-state";
 import { SuccessPanel } from "@/components/gov/success-panel";
 import { Visitrw3SyaratPanel } from "@/components/gov/visitrw3-syarat-panel";
 import { FeatureExplain } from "@/components/gov/feature-explain";
 import { settingsRowsToMap } from "@/lib/visitrw3-kontribusi";
 import { buildKategoriUsahaPayload } from "@shared/visitrw3-kategori-usaha";
-import { isUsahaRumahan } from "@/lib/constants";
 import {
   VISITRW3_ROUTES,
-  parsePengajuanMode,
+  parseJenisWargaFromSearch,
 } from "@/lib/visitrw3-routes";
+import { RW3BIZ_ROUTES } from "@/lib/rw3biz-routes";
+import {
+  JENIS_WARGA_DESKRIPSI,
+  JENIS_WARGA_LABEL,
+  keperluanFromJenisWarga,
+  type JenisWarga,
+} from "@shared/visitrw3-jenis-warga";
+import { isVisitRw3Jenis } from "@shared/visitrw3-produk";
+import { getVisitrw3FormProfile } from "@shared/visitrw3-form-by-jenis";
+import type { PengajuanProduct } from "@/lib/visitrw3-produk-ui";
 
 type StepDef = { id: string; label: string };
-type KeperluanMode = "" | "tinggal" | "bisnis_dalam" | "bisnis_luar" | "usaha_rumahan";
+export type { PengajuanProduct };
 
-const KEPERLUAN_OPTIONS: {
-  id: KeperluanMode;
+const JENIS_CHOICES_VISIT: {
+  id: "kontrak" | "kost";
   title: string;
   subtitle: string;
   icon: typeof Home;
-  badge?: string;
+  href: string;
 }[] = [
   {
-    id: "tinggal",
-    title: "Tinggal saja",
-    subtitle: "Ngekost atau kontrak di RW 03, tanpa usaha di sini",
+    id: "kontrak",
+    title: JENIS_WARGA_LABEL.kontrak,
+    subtitle: JENIS_WARGA_DESKRIPSI.kontrak,
     icon: Home,
+    href: VISITRW3_ROUTES.kontrak.pengajuan,
   },
   {
-    id: "bisnis_dalam",
-    title: "Tinggal sekaligus usaha",
-    subtitle: "Ngekost dan punya lapak/kiosk/usaha — cukup isi sekali, tidak double",
-    icon: Layers,
-    badge: "Paling sering",
-  },
-  {
-    id: "bisnis_luar",
-    title: "Usaha saja",
-    subtitle: "Berjualan di RW 03, rumah tinggal di luar RW 03",
-    icon: Store,
+    id: "kost",
+    title: JENIS_WARGA_LABEL.kost,
+    subtitle: JENIS_WARGA_DESKRIPSI.kost,
+    icon: BedDouble,
+    href: VISITRW3_ROUTES.kost.pengajuan,
   },
 ];
 
-function applyKeperluanMode(mode: KeperluanMode): {
-  keperluan: "tinggal" | "bisnis" | "";
-  tinggalDiWilayahRw3: boolean | null;
-} {
-  if (mode === "tinggal") return { keperluan: "tinggal", tinggalDiWilayahRw3: null };
-  if (mode === "bisnis_dalam") return { keperluan: "bisnis", tinggalDiWilayahRw3: true };
-  if (mode === "usaha_rumahan") return { keperluan: "bisnis", tinggalDiWilayahRw3: true };
-  if (mode === "bisnis_luar") return { keperluan: "bisnis", tinggalDiWilayahRw3: false };
-  return { keperluan: "", tinggalDiWilayahRw3: null };
-}
+const JENIS_TEMPAT_USAHA = visitrw3JenisTempatUsahaOptions.filter((o) => o.value !== "usaha_rumahan");
 
-function buildPengajuanSteps(keperluan: string, tinggalDiWilayahRw3: boolean | null): StepDef[] {
-  const steps: StepDef[] = [
-    { id: "keperluan", label: "Situasi" },
-    { id: "lokasi", label: "Lokasi" },
-  ];
-  const formLengkap = keperluan === "tinggal" || (keperluan === "bisnis" && tinggalDiWilayahRw3 === true);
-  if (formLengkap) {
-    steps.push({ id: "jumlah", label: "Jumlah" }, { id: "penghuni", label: "Penghuni" });
-  }
-  steps.push({ id: "syarat", label: "Syarat" }, { id: "bayar", label: "Bayar" });
+function buildPengajuanSteps(jenis: JenisWarga): StepDef[] {
+  const steps: StepDef[] = [{ id: "lokasi", label: "Lokasi" }];
+  if (jenis === "jualan") steps.push({ id: "usaha", label: "Usaha" });
+  steps.push(
+    {
+      id: "jumlah",
+      label: jenis === "jualan" ? "Orang" : jenis === "kost" ? "Isi kamar" : "Keluarga",
+    },
+    {
+      id: "penghuni",
+      label: jenis === "jualan" ? "Data orang" : "Data diri",
+    },
+    { id: "syarat", label: "Syarat" },
+    { id: "bayar", label: "Berlaku" },
+  );
   return steps;
-}
-
-type LokasiSubId = "rt" | "kost" | "wilayah" | "usaha" | "operasional" | "pj" | "prop";
-
-function getLokasiSubSteps(
-  keperluan: string,
-  tinggalDiWilayahRw3: boolean | null,
-  keperluanMode: KeperluanMode = "",
-): LokasiSubId[] {
-  if (keperluanMode === "usaha_rumahan") return ["usaha", "prop"];
-  if (keperluan === "tinggal") return ["rt", "kost"];
-  if (tinggalDiWilayahRw3 === null) return ["wilayah"];
-  const subs: LokasiSubId[] = ["wilayah", "usaha"];
-  if (!tinggalDiWilayahRw3) subs.push("operasional", "pj");
-  subs.push("rt");
-  if (tinggalDiWilayahRw3) subs.push("kost");
-  return subs;
-}
-
-const LOKASI_SUB_LABELS: Record<LokasiSubId, string> = {
-  rt: "Pilih RT",
-  kost: "Pilih tempat tinggal",
-  wilayah: "Apakah Anda tinggal di RW 03?",
-  usaha: "Data usaha",
-  operasional: "Jam & alamat usaha",
-  pj: "Data penanggung jawab",
-  prop: "Nomor PROP usaha Anda",
-};
-
-function lokasiSubLabel(sub: LokasiSubId, mode: KeperluanMode): string {
-  if (sub === "prop") return "Nomor PROP usaha rumahan Anda";
-  if (sub === "kost" && mode === "bisnis_dalam") return "Pilih kost tempat tinggal";
-  return LOKASI_SUB_LABELS[sub];
 }
 
 function MicroStepHeader({
@@ -271,13 +236,28 @@ function umurFromDate(tgl: string) {
 }
 
 export default function Visitrw3Pengajuan() {
+  return <PengajuanForm product="visit" />;
+}
+
+export function PengajuanForm({ product }: { product: PengajuanProduct }) {
   const { toast } = useToast();
+  const search = useSearch();
+  const rawJenis = useMemo(() => parseJenisWargaFromSearch(search), [search]);
+  const redirectToRw3biz = product === "visit" && rawJenis === "jualan";
+
+  const jenisWarga: JenisWarga | "" =
+    product === "rw3biz" ? "jualan" : isVisitRw3Jenis(rawJenis) ? rawJenis : "";
+
+  const Shell = product === "rw3biz" ? Rw3bizShell : Visitrw3Shell;
+  const hubHref = product === "rw3biz" ? RW3BIZ_ROUTES.hub : VISITRW3_ROUTES.hub;
+  const panduanHref = product === "rw3biz" ? RW3BIZ_ROUTES.panduan : VISITRW3_ROUTES.panduan;
+  const statusHref = product === "rw3biz" ? RW3BIZ_ROUTES.status : VISITRW3_ROUTES.status;
+  const productTitle = product === "rw3biz" ? "RW3BIZ" : "Visit RW3";
+
   const [step, setStep] = useState(0);
-  const [keperluanMode, setKeperluanMode] = useState<KeperluanMode>("");
-  const [keperluan, setKeperluan] = useState<"tinggal" | "bisnis" | "">("");
   const [rt, setRt] = useState("");
-  const [pemilikKostId, setPemilikKostId] = useState("");
-  const [tinggalDiWilayahRw3, setTinggalDiWilayahRw3] = useState<boolean | null>(null);
+  const [alamat, setAlamat] = useState("");
+  const [nomorUnit, setNomorUnit] = useState("");
   const [namaUsaha, setNamaUsaha] = useState("");
   const [jenisTempatUsaha, setJenisTempatUsaha] = useState("");
   const [jenisTempatUsahaLain, setJenisTempatUsahaLain] = useState("");
@@ -287,10 +267,6 @@ export default function Visitrw3Pengajuan() {
   const [jamBuka, setJamBuka] = useState("");
   const [jamTutup, setJamTutup] = useState("");
   const [alamatUsaha, setAlamatUsaha] = useState("");
-  const [pjNik, setPjNik] = useState("");
-  const [pjNomorWhatsapp, setPjNomorWhatsapp] = useState("");
-  const [pjTanggalLahir, setPjTanggalLahir] = useState("");
-  const [pjFotoKtpPath, setPjFotoKtpPath] = useState("");
   const [jumlahDewasa, setJumlahDewasa] = useState(1);
   const [jumlahAnak, setJumlahAnak] = useState(0);
   const jumlah = jumlahDewasa + jumlahAnak;
@@ -298,77 +274,28 @@ export default function Visitrw3Pengajuan() {
   const [tanggalBayar, setTanggalBayar] = useState("");
   const [terminBulan, setTerminBulan] = useState("3");
   const [previewSampai, setPreviewSampai] = useState("");
-  const [nomorUnit, setNomorUnit] = useState("");
   const [catatan, setCatatan] = useState("");
   const [setujuTataTertib, setSetujuTataTertib] = useState(false);
   const [nomorHasil, setNomorHasil] = useState<string | null>(null);
-  const [lokasiSub, setLokasiSub] = useState(0);
   const [penghuniIndex, setPenghuniIndex] = useState(0);
-  const [nomorProp, setNomorProp] = useState("");
-  const [propVerifying, setPropVerifying] = useState(false);
-  const [propVerified, setPropVerified] = useState<{
-    id: number;
-    nomorPendaftaran: string;
-    namaKost: string;
-    rt: number;
-    statusProperti: string;
-  } | null>(null);
 
-  const urlMode = useMemo(() => parsePengajuanMode(window.location.search), []);
-
+  const keperluan = jenisWarga ? keperluanFromJenisWarga(jenisWarga) : "tinggal";
+  const formProfile = useMemo(
+    () => (jenisWarga ? getVisitrw3FormProfile(jenisWarga) : null),
+    [jenisWarga],
+  );
   const steps = useMemo(
-    () => buildPengajuanSteps(keperluan, tinggalDiWilayahRw3),
-    [keperluan, tinggalDiWilayahRw3],
+    () => (jenisWarga ? buildPengajuanSteps(jenisWarga) : []),
+    [jenisWarga],
   );
-  const stepId = steps[step]?.id ?? "keperluan";
-  const bisnisLuar = keperluan === "bisnis" && tinggalDiWilayahRw3 === false;
-  const usahaRumahanMode = keperluanMode === "usaha_rumahan" || urlMode === "usaha_rumahan";
-  const formLengkap = keperluan === "tinggal" || (keperluan === "bisnis" && tinggalDiWilayahRw3 === true);
-  const pengajuanBackHref = usahaRumahanMode ? VISITRW3_ROUTES.usahaRumahan.hub : VISITRW3_ROUTES.penyewa.hub;
-  const pengajuanTitle = usahaRumahanMode ? "Ajukan usaha rumahan" : "Pengajuan baru";
-  const lokasiSubSteps = useMemo(
-    () => getLokasiSubSteps(keperluan, tinggalDiWilayahRw3, keperluanMode),
-    [keperluan, tinggalDiWilayahRw3, keperluanMode],
-  );
-  const lokasiSubId = lokasiSubSteps[lokasiSub] ?? lokasiSubSteps[0];
-  const bisnisLokasiInput = useMemo(
-    () => ({
-      tinggalDiWilayahRw3,
-      rt,
-      pemilikKostId,
-      namaUsaha,
-      jenisTempatUsaha,
-      jenisTempatUsahaLain,
-      kategoriUsaha,
-      kategoriUsahaLain,
-      penanggungJawab,
-      jamBuka,
-      jamTutup,
-      alamatUsaha,
-      pjNik,
-      pjNomorWhatsapp,
-      pjTanggalLahir,
-      pjFotoKtpPath,
-    }),
-    [
-      tinggalDiWilayahRw3,
-      rt,
-      pemilikKostId,
-      namaUsaha,
-      jenisTempatUsaha,
-      jenisTempatUsahaLain,
-      kategoriUsaha,
-      kategoriUsahaLain,
-      penanggungJawab,
-      jamBuka,
-      jamTutup,
-      alamatUsaha,
-      pjNik,
-      pjNomorWhatsapp,
-      pjTanggalLahir,
-      pjFotoKtpPath,
-    ],
-  );
+  const stepId = steps[step]?.id ?? "lokasi";
+
+  useEffect(() => {
+    if (!formProfile) return;
+    setTerminBulan(formProfile.defaultTerminBulan);
+    if (!formProfile.showAnak) setJumlahAnak(0);
+    setJumlahDewasa((d) => Math.min(Math.max(1, d), formProfile.maxDewasa));
+  }, [formProfile]);
 
   const showErr = (msg: string) => {
     toast({ title: "Lengkapi data", description: msg, variant: "destructive" });
@@ -378,109 +305,32 @@ export default function Visitrw3Pengajuan() {
     setStep((s) => Math.min(Math.max(0, s + delta), steps.length - 1));
   }
 
+  const settingsApi =
+    product === "rw3biz" ? "/api/public/rw3biz/settings" : "/api/public/visitrw3/settings";
+  const previewApi =
+    product === "rw3biz"
+      ? "/api/public/rw3biz/preview-berlaku"
+      : "/api/public/visitrw3/preview-berlaku";
+  const uploadKtpApi =
+    product === "rw3biz" ? "/api/public/rw3biz/upload-ktp" : "/api/public/visitrw3/upload-ktp";
+  const pengajuanApi =
+    product === "rw3biz" ? "/api/public/rw3biz/pengajuan" : "/api/public/visitrw3/pengajuan";
+
   const { data: settingsRows = [], isLoading: settingsLoading } = useQuery({
-    queryKey: ["/api/public/visitrw3/settings"],
+    queryKey: [settingsApi],
     queryFn: async () => {
-      const res = await fetch("/api/public/visitrw3/settings");
+      const res = await fetch(settingsApi);
       if (!res.ok) throw new Error("Gagal memuat pengaturan");
       return readJsonSafely<{ key: string; value: string; updatedAt?: string }[]>(res);
     },
+    enabled: Boolean(jenisWarga) || product === "rw3biz",
   });
 
   const settingsMap = useMemo(() => settingsRowsToMap(settingsRows), [settingsRows]);
 
-  const { data: kostList = [], isLoading: kostLoading } = useQuery({
-    queryKey: ["/api/public/pemilik-kost", rt, keperluan],
-    queryFn: async () => {
-      const res = await fetch(
-        `/api/public/pemilik-kost?rt=${rt}&keperluan=${keperluan}`,
-      );
-      if (!res.ok) throw new Error("Gagal memuat kost");
-      return readJsonSafely<
-        { id: number; namaKost: string; namaPemilik: string; jenisProperti: string; jumlahPintu: number }[]
-      >(res);
-    },
-    enabled: Boolean(
-      !usahaRumahanMode &&
-        rt &&
-        keperluan &&
-        (keperluan === "tinggal" || tinggalDiWilayahRw3 === true),
-    ),
-  });
-
   useEffect(() => {
-    const rawMode = new URLSearchParams(window.location.search).get("mode");
-    if (rawMode && rawMode !== "usaha_rumahan") {
-      window.location.replace(VISITRW3_ROUTES.penyewa.pengajuan);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (urlMode !== "usaha_rumahan") return;
-    const next = applyKeperluanMode("usaha_rumahan");
-    setKeperluanMode("usaha_rumahan");
-    setKeperluan(next.keperluan);
-    setTinggalDiWilayahRw3(next.tinggalDiWilayahRw3);
-    setJenisTempatUsaha("usaha_rumahan");
-    setJenisTempatUsahaLain("");
-    setStep(1);
-    const propFromUrl = new URLSearchParams(window.location.search).get("prop");
-    if (propFromUrl) setNomorProp(propFromUrl.trim().toUpperCase());
-  }, [urlMode]);
-
-  async function verifyNomorProp(raw?: string) {
-    const n = (raw ?? nomorProp).trim().toUpperCase();
-    if (!n) return showErr("Masukkan nomor PROP usaha rumahan Anda");
-    setPropVerifying(true);
-    setPropVerified(null);
-    setPemilikKostId("");
-    setRt("");
-    try {
-      const res = await fetch(`/api/public/visitrw3/properti/${encodeURIComponent(n)}`);
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.message || "Nomor PROP tidak ditemukan");
-      if (!isUsahaRumahan(body.jenisProperti)) {
-        throw new Error("Nomor ini bukan usaha rumahan — gunakan menu pemilik/penyewa biasa");
-      }
-      if (body.statusProperti !== "aktif") {
-        throw new Error("Properti belum aktif — tunggu verifikasi admin atau cek status PROP");
-      }
-      setPropVerified({
-        id: body.id,
-        nomorPendaftaran: body.nomorPendaftaran,
-        namaKost: body.namaKost,
-        rt: body.rt,
-        statusProperti: body.statusProperti,
-      });
-      setPemilikKostId(String(body.id));
-      setRt(String(body.rt));
-      if (!namaUsaha.trim()) setNamaUsaha(body.namaKost);
-      setNomorProp(n);
-    } catch (e: unknown) {
-      showErr(e instanceof Error ? e.message : "Gagal verifikasi PROP");
-    } finally {
-      setPropVerifying(false);
-    }
-  }
-
-  useEffect(() => {
-    if (urlMode !== "usaha_rumahan") return;
-    const propFromUrl = new URLSearchParams(window.location.search).get("prop");
-    if (propFromUrl && !propVerified) void verifyNomorProp(propFromUrl.trim().toUpperCase());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlMode]);
-
-  useEffect(() => {
-    if (step >= steps.length) setStep(Math.max(0, steps.length - 1));
+    if (step >= steps.length && steps.length > 0) setStep(Math.max(0, steps.length - 1));
   }, [steps.length, step]);
-
-  useEffect(() => {
-    setLokasiSub(0);
-  }, [keperluan]);
-
-  useEffect(() => {
-    if (lokasiSub >= lokasiSubSteps.length) setLokasiSub(Math.max(0, lokasiSubSteps.length - 1));
-  }, [lokasiSubSteps.length, lokasiSub]);
 
   useEffect(() => {
     setPenghuniIndex(0);
@@ -513,96 +363,139 @@ export default function Visitrw3Pengajuan() {
   }
 
   function clampJumlahDewasa(n: number) {
-    const maxDewasa = Math.max(1, 20 - jumlahAnak);
+    const maxDewasa = formProfile
+      ? Math.min(formProfile.maxDewasa, Math.max(1, formProfile.maxTotal - jumlahAnak))
+      : Math.max(1, 20 - jumlahAnak);
     return Math.min(maxDewasa, Math.max(1, n));
   }
 
   function clampJumlahAnak(n: number) {
-    const maxAnak = Math.max(0, 20 - jumlahDewasa);
+    if (!formProfile?.showAnak) return 0;
+    const maxAnak = Math.min(
+      formProfile.maxAnak,
+      Math.max(0, formProfile.maxTotal - jumlahDewasa),
+    );
     return Math.min(maxAnak, Math.max(0, n));
   }
 
   useEffect(() => {
     if (!tanggalBayar || !terminBulan) return;
-    apiRequest("POST", "/api/public/visitrw3/preview-berlaku", {
+    apiRequest("POST", previewApi, {
       tanggalBayar,
       terminBulan: parseInt(terminBulan, 10),
     })
       .then((r) => r.json())
       .then((d) => setPreviewSampai(d.tanggalBerlakuSampai))
       .catch(() => setPreviewSampai(""));
-  }, [tanggalBayar, terminBulan]);
+  }, [tanggalBayar, terminBulan, previewApi]);
 
-  const penghuniPayload = useMemo(() => {
-    if (bisnisLuar) {
-      return [
-        {
-          namaLengkap: penanggungJawab,
-          tanggalLahir: pjTanggalLahir,
-          isAnak: false,
-          nik: pjNik,
-          nomorWhatsapp: pjNomorWhatsapp,
-          jenisKelamin: null,
-          pekerjaan: "Usaha",
-          keperluanTinggal: null,
-          namaTempatKerja: null,
-          namaSekolah: null,
-          fotoKtpPath: pjFotoKtpPath,
-          punyaKendaraan: false,
-          jenisKendaraan: null,
-          platNomor: null,
-        },
-      ];
-    }
-    return penghuni.map((p) => {
-      const kendaraan = p.isAnak
-        ? { punyaKendaraan: false, jenisKendaraan: null, platNomor: null }
-        : serializeKendaraanForApi(p.kendaraanList);
-      return {
-        namaLengkap: p.namaLengkap,
-        tanggalLahir: p.tanggalLahir,
-        isAnak: p.isAnak,
-        nik: p.isAnak ? null : p.nik,
-        nomorWhatsapp: p.isAnak ? null : p.nomorWhatsapp || null,
-        jenisKelamin: p.isAnak ? null : p.jenisKelamin || null,
-        pekerjaan: p.isAnak ? null : p.pekerjaan || null,
-        keperluanTinggal: p.isAnak ? null : p.keperluanTinggal || null,
-        namaTempatKerja: p.isAnak ? null : p.namaTempatKerja || null,
-        namaSekolah: p.namaSekolah?.trim() || null,
-        fotoKtpPath: p.isAnak ? null : p.fotoKtpPath || null,
-        ...kendaraan,
-      };
-    });
-  }, [bisnisLuar, penghuni, penanggungJawab, pjTanggalLahir, pjNik, pjNomorWhatsapp, pjFotoKtpPath]);
+  const penghuniPayload = useMemo(
+    () =>
+      penghuni.map((p) => {
+        const kendaraan = p.isAnak
+          ? { punyaKendaraan: false, jenisKendaraan: null, platNomor: null }
+          : serializeKendaraanForApi(p.kendaraanList);
+        return {
+          namaLengkap: p.namaLengkap,
+          tanggalLahir: p.tanggalLahir,
+          isAnak: p.isAnak,
+          nik: p.isAnak ? null : p.nik,
+          nomorWhatsapp: p.isAnak ? null : p.nomorWhatsapp || null,
+          jenisKelamin: p.isAnak ? null : p.jenisKelamin || null,
+          pekerjaan: p.isAnak ? null : p.pekerjaan || null,
+          keperluanTinggal: p.isAnak ? null : p.keperluanTinggal || null,
+          namaTempatKerja: p.isAnak ? null : p.namaTempatKerja || null,
+          namaSekolah: p.namaSekolah?.trim() || null,
+          fotoKtpPath: p.isAnak ? null : p.fotoKtpPath || null,
+          ...kendaraan,
+        };
+      }),
+    [penghuni],
+  );
 
   const mutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/public/visitrw3/pengajuan", {
-        keperluanPengajuan: keperluan,
+      if (!jenisWarga || !formProfile) throw new Error("Pilih jenis warga dulu");
+
+      if (product === "rw3biz") {
+        const orang = penghuniPayload.map((p, idx) => {
+          const isPj =
+            !p.isAnak &&
+            (penanggungJawab.trim()
+              ? p.namaLengkap.trim().toLowerCase() === penanggungJawab.trim().toLowerCase()
+              : idx === 0);
+          return {
+            namaLengkap: p.namaLengkap,
+            tanggalLahir: p.tanggalLahir,
+            isAnak: p.isAnak,
+            isPenanggungJawab: Boolean(isPj),
+            nik: p.nik,
+            nomorWhatsapp: p.nomorWhatsapp,
+            jenisKelamin: p.jenisKelamin,
+            pekerjaan: null,
+            namaTempatKerja: p.namaTempatKerja?.trim() || namaUsaha.trim() || null,
+            namaSekolah: p.namaSekolah,
+            fotoKtpPath: p.fotoKtpPath,
+            punyaKendaraan: p.punyaKendaraan,
+            jenisKendaraan: p.jenisKendaraan,
+            platNomor: p.platNomor,
+          };
+        });
+        if (!orang.some((o) => o.isPenanggungJawab && !o.isAnak)) {
+          const firstDewasa = orang.find((o) => !o.isAnak);
+          if (firstDewasa) firstDewasa.isPenanggungJawab = true;
+        }
+        const res = await apiRequest("POST", pengajuanApi, {
+          rt: parseInt(rt, 10),
+          alamat: alamat.trim(),
+          nomorLokasi: nomorUnit.trim() || null,
+          namaUsaha: namaUsaha.trim(),
+          jenisTempatUsaha,
+          jenisTempatUsahaLain:
+            jenisTempatUsaha === "lainnya" ? jenisTempatUsahaLain.trim() : null,
+          kategoriUsaha: buildKategoriUsahaPayload(kategoriUsaha, kategoriUsahaLain),
+          jamBuka: jamBuka.trim(),
+          jamTutup: jamTutup.trim(),
+          alamatUsaha: alamatUsaha.trim() || null,
+          pjSetujuNotifikasi: true,
+          jumlahOrang: jumlah,
+          tanggalBayar,
+          terminBulan: parseInt(terminBulan, 10),
+          catatanPemohon: catatan.trim() || null,
+          orang,
+          setujuTataTertib: true as const,
+        });
+        return readJsonSafely<{ nomorBiz: string; nomorVisitrw3?: string }>(res);
+      }
+
+      const payloadPenghuni = penghuniPayload.map((p) => {
+        if (p.isAnak) return p;
+        return p;
+      });
+      const res = await apiRequest("POST", pengajuanApi, {
+        jenisWarga,
         rt: parseInt(rt, 10),
-        pemilikKostId: pemilikKostId ? parseInt(pemilikKostId, 10) : null,
-        tinggalDiWilayahRw3: keperluan === "bisnis" ? tinggalDiWilayahRw3 : null,
-        namaUsaha: keperluan === "bisnis" ? namaUsaha : null,
-        jenisTempatUsaha: keperluan === "bisnis" ? jenisTempatUsaha : null,
-        jenisTempatUsahaLain:
-          keperluan === "bisnis" && jenisTempatUsaha === "lainnya" ? jenisTempatUsahaLain : null,
-        kategoriUsaha:
-          keperluan === "bisnis" ? buildKategoriUsahaPayload(kategoriUsaha, kategoriUsahaLain) : null,
-        jamBuka: bisnisLuar ? jamBuka : null,
-        jamTutup: bisnisLuar ? jamTutup : null,
-        alamatUsaha: bisnisLuar ? alamatUsaha : null,
-        penanggungJawab: keperluan === "bisnis" ? penanggungJawab : null,
-        jumlahPenghuni: bisnisLuar ? 1 : jumlah,
+        alamat: alamat.trim(),
+        nomorUnit:
+          formProfile.nomorUnitMode === "hidden" ? null : nomorUnit.trim() || null,
+        namaUsaha: null,
+        jenisTempatUsaha: null,
+        jenisTempatUsahaLain: null,
+        kategoriUsaha: null,
+        jamBuka: null,
+        jamTutup: null,
+        alamatUsaha: null,
+        penanggungJawab: null,
+        jumlahPenghuni: jumlah,
         tanggalBayar,
         terminBulan: parseInt(terminBulan, 10),
-        nomorUnit: nomorUnit.trim(),
         catatanPemohon: catatan.trim() || null,
-        penghuni: penghuniPayload,
+        penghuni: payloadPenghuni,
         setujuTataTertib: true as const,
       });
-      return readJsonSafely<{ nomorVisitrw3: string }>(res);
+      return readJsonSafely<{ nomorVisitrw3: string; nomorBiz?: string }>(res);
     },
-    onSuccess: (data) => setNomorHasil(data.nomorVisitrw3),
+    onSuccess: (data) => setNomorHasil(data.nomorBiz || data.nomorVisitrw3 || null),
     onError: (e: unknown) => {
       toast({ title: "Gagal mengirim", description: getApiErrorMessage(e), variant: "destructive" });
     },
@@ -614,26 +507,46 @@ export default function Visitrw3Pengajuan() {
     );
   }
 
-  async function uploadKtpPj(file: File) {
-    const fd = new FormData();
-    fd.append("file", file);
-    const res = await fetch("/api/public/visitrw3/upload-ktp", { method: "POST", body: fd });
-    if (!res.ok) throw new Error("Upload gagal");
-    const data = await res.json();
-    setPjFotoKtpPath(data.path);
-  }
-
   async function uploadKtp(file: File, index: number) {
-    const fd = new FormData();
-    fd.append("file", file);
-    const res = await fetch("/api/public/visitrw3/upload-ktp", { method: "POST", body: fd });
-    if (!res.ok) throw new Error("Upload gagal");
-    const data = await res.json();
-    setPenghuni((prev) => {
-      const next = [...prev];
-      next[index] = { ...next[index], fotoKtpPath: data.path };
-      return next;
+    if (!file.type.startsWith("image/")) {
+      throw new Error("File harus berupa gambar");
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      throw new Error("Ukuran foto maksimal 5 MB");
+    }
+
+    const applyPath = (pathOrData: string) => {
+      setPenghuni((prev) => {
+        const next = [...prev];
+        next[index] = { ...next[index], fotoKtpPath: pathOrData };
+        return next;
+      });
+    };
+
+    // Coba unggah ke server; jika gagal (404/dll), simpan data URL lokal
+    // — server sudah mendukung path yang diawali data:image/
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(uploadKtpApi, { method: "POST", body: fd });
+      const body = await res.json().catch(() => ({} as { message?: string; path?: string }));
+      if (res.ok && body.path) {
+        applyPath(body.path);
+        return;
+      }
+      // Endpoint belum deploy / error — lanjut fallback
+      console.warn("Upload KTP server gagal, pakai data URL:", body.message || res.status);
+    } catch (err) {
+      console.warn("Upload KTP network error, pakai data URL:", err);
+    }
+
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error("Gagal membaca foto KTP"));
+      reader.readAsDataURL(file);
     });
+    applyPath(dataUrl);
   }
 
   function updatePenghuni(i: number, patch: Partial<PenghuniForm>) {
@@ -691,492 +604,179 @@ export default function Visitrw3Pengajuan() {
     });
   }
 
+  if (redirectToRw3biz) {
+    return <Redirect to={RW3BIZ_ROUTES.pengajuan} />;
+  }
+
   if (nomorHasil) {
     return (
-      <Visitrw3Shell title="Pengajuan" backHref={pengajuanBackHref}>
+      <Shell title="Pengajuan" backHref={hubHref}>
         <SuccessPanel
           title="Pengajuan terkirim"
-          referenceLabel="Nomor Visit RW3"
+          referenceLabel={product === "rw3biz" ? "Nomor RW3BIZ" : "Nomor Visit RW3"}
           referenceValue={nomorHasil}
           nextSteps={[
             "Simpan nomor ini untuk cek status dan perpanjang nanti.",
             "Admin RW akan melakukan survey kelengkapan data.",
-            "Anda akan dihubungi jika diperlukan klarifikasi.",
+            "Anda akan dihubungi lewat WhatsApp jika diperlukan klarifikasi.",
           ]}
-          primaryAction={{ label: "Cek status", href: "/visitrw3/status" }}
-          secondaryAction={{
-            label: usahaRumahanMode ? "Menu usaha rumahan" : "Menu penyewa",
-            href: pengajuanBackHref,
-          }}
+          primaryAction={{ label: "Cek status", href: statusHref }}
+          secondaryAction={{ label: `Kembali ke ${productTitle}`, href: hubHref }}
         />
-      </Visitrw3Shell>
+      </Shell>
+    );
+  }
+
+  if (!jenisWarga) {
+    return (
+      <Shell title="Pengajuan baru" backHref={hubHref}>
+        <FeatureExplain title="Pilih jenis tinggal" className="mb-4">
+          <p>
+            Visit RW3 hanya untuk <strong>ngontrak</strong> dan <strong>ngekost</strong>. Untuk
+            jualan/usaha, gunakan{" "}
+            <Link href={RW3BIZ_ROUTES.hub} className="text-brand font-medium underline">
+              RW3BIZ
+            </Link>
+            .
+          </p>
+        </FeatureExplain>
+        <div className="space-y-2">
+          {JENIS_CHOICES_VISIT.map((opt) => {
+            const Icon = opt.icon;
+            return (
+              <Link
+                key={opt.id}
+                href={opt.href}
+                className="block w-full text-left rounded-xl border border-border bg-card p-4 transition-colors hover:border-brand/40 touch-target"
+              >
+                <div className="flex gap-3">
+                  <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-muted text-muted-foreground flex items-center justify-center">
+                    <Icon className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <span className="font-semibold text-sm">{opt.title}</span>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{opt.subtitle}</p>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0 self-center" />
+                </div>
+              </Link>
+            );
+          })}
+          <Link
+            href={RW3BIZ_ROUTES.pengajuan}
+            className="block w-full text-left rounded-xl border border-dashed border-border bg-muted/20 p-4 transition-colors hover:border-brand/40 touch-target"
+          >
+            <div className="flex gap-3">
+              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-accent/20 text-muted-foreground flex items-center justify-center">
+                <Store className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <span className="font-semibold text-sm">Jualan / usaha → RW3BIZ</span>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Layanan terpisah untuk izin berjualan di RW 03
+                </p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0 self-center" />
+            </div>
+          </Link>
+        </div>
+        <Link
+          href={panduanHref}
+          className="inline-flex items-center gap-1.5 text-sm text-brand font-medium mt-4 hover:underline"
+        >
+          <BookOpen className="w-4 h-4" />
+          Baca panduan dulu
+        </Link>
+      </Shell>
     );
   }
 
   return (
-    <Visitrw3Shell title={pengajuanTitle} backHref={pengajuanBackHref}>
-      {usahaRumahanMode ? (
-        <FeatureExplain title="Tahap 2 — Ajukan Visit RW3" className="mb-3">
-          <p>
-            Anda <strong>pemilik sekaligus penghuni</strong> usaha rumahan. Masukkan nomor{" "}
-            <strong>PROP-…</strong> milik Anda sendiri — bukan memilih properti orang lain seperti
-            penyewa kost.
-          </p>
-          <p>Isi data usaha dan penghuni rumah, lalu kirim untuk mendapat nomor VRW3-…</p>
-        </FeatureExplain>
-      ) : (
-        <FeatureExplain title="Sebelum mulai" className="mb-3">
-          <p>
-            Pastikan properti tempat Anda tinggal/berusaha sudah <strong>terdaftar pemilik</strong>{" "}
-            dan statusnya aktif. Isi form langkah demi langkah — tekan <strong>Lanjut</strong>{" "}
-            setelah setiap bagian.
-          </p>
-          <p>
-            Ngekost sekaligus berusaha? Pilih <strong>Tinggal sekaligus usaha</strong> di langkah
-            pertama — cukup satu kali isi, tidak double.
-          </p>
-        </FeatureExplain>
-      )}
+    <Shell
+      title={
+        product === "rw3biz"
+          ? "Pengajuan izin usaha"
+          : `Pengajuan — ${JENIS_WARGA_LABEL[jenisWarga]}`
+      }
+      backHref={hubHref}
+    >
+      <FeatureExplain title="Sebelum mulai" className="mb-3">
+        <p>{formProfile?.explainSebelum}</p>
+        <p>
+          Isi form langkah demi langkah — tekan <strong>Lanjut</strong> setelah setiap bagian.
+          Setelah kirim, simpan nomor VRW3-… dan pantau status atau tunggu WhatsApp dari pengurus.
+        </p>
+      </FeatureExplain>
       <Link
-        href="/visitrw3/panduan"
+        href={panduanHref}
         className="inline-flex items-center gap-1.5 text-sm text-brand font-medium mb-4 hover:underline"
       >
         <BookOpen className="w-4 h-4" />
-        Bingung? Baca panduan lengkap
+        Bingung? Baca panduan
       </Link>
       <FormStepper steps={steps} currentStep={step} />
 
-      {stepId === "keperluan" && (
-        <div className="space-y-4">
-          <div className="rounded-lg bg-brand/5 border border-brand/20 p-3 space-y-1">
-            <p className="text-sm font-medium">Pilih yang paling sesuai situasi Anda</p>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Ngekost sekaligus berusaha? Pilih <strong className="text-foreground">Tinggal sekaligus usaha</strong> —
-              cukup <strong className="text-foreground">satu kali</strong> isi form, tidak perlu ajukan tinggal dan bisnis
-              terpisah.
-            </p>
-          </div>
-          <div className="space-y-2">
-            {KEPERLUAN_OPTIONS.map((opt) => {
-              const Icon = opt.icon;
-              const selected = keperluanMode === opt.id;
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => {
-                    const next = applyKeperluanMode(opt.id);
-                    setKeperluanMode(opt.id);
-                    setKeperluan(next.keperluan);
-                    setTinggalDiWilayahRw3(next.tinggalDiWilayahRw3);
-                    if (opt.id === "tinggal") {
-                      setKategoriUsaha([]);
-                      setKategoriUsahaLain("");
-                      setNamaUsaha("");
-                      setJenisTempatUsaha("");
-                      setJenisTempatUsahaLain("");
-                      setPenanggungJawab("");
-                    }
-                    if (opt.id === "bisnis_luar") {
-                      setPemilikKostId("");
-                      setJamBuka("");
-                      setJamTutup("");
-                      setAlamatUsaha("");
-                    }
-                    if (opt.id === "bisnis_dalam") {
-                      setJamBuka("");
-                      setJamTutup("");
-                      setAlamatUsaha("");
-                    }
-                  }}
-                  className={`w-full text-left rounded-xl border p-4 transition-colors touch-target ${
-                    selected
-                      ? "border-brand bg-brand/10 ring-1 ring-brand/30"
-                      : "border-border bg-card hover:border-brand/40"
-                  }`}
-                >
-                  <div className="flex gap-3">
-                    <div
-                      className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${
-                        selected ? "bg-brand text-brand-foreground" : "bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      <Icon className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0 flex-1 space-y-0.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-semibold text-sm">{opt.title}</span>
-                        {opt.badge && (
-                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-accent/20 text-accent-foreground">
-                            {opt.badge}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground leading-relaxed">{opt.subtitle}</p>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-          <Button
-            className="w-full touch-target"
-            disabled={!keperluanMode}
-            onClick={() => {
-              const err = validateStepKeperluan(keperluan);
-              if (err) return showErr(err);
-              setLokasiSub(0);
-              setStep(1);
-            }}
-          >
-            Lanjut <ChevronRight className="w-4 h-4 ml-1" />
-          </Button>
-        </div>
-      )}
-
-      {stepId === "lokasi" && (
+      {stepId === "lokasi" && formProfile && (
         <div className="space-y-4">
           <MicroStepHeader
-            current={lokasiSub + 1}
-            total={lokasiSubSteps.length}
-            title={lokasiSubLabel(lokasiSubId, keperluanMode)}
-            hint={
-              lokasiSubId === "wilayah"
-                ? "Pilih sesuai tempat tinggal Anda saat ini."
-                : lokasiSubId === "prop"
-                  ? "Nomor PROP dari tahap 1 pendaftaran usaha rumahan Anda — bukan daftar properti orang lain."
-                  : lokasiSubId === "kost"
-                    ? keperluanMode === "bisnis_dalam"
-                      ? "Pilih kost tempat Anda tinggal. Data usaha sudah diisi di langkah sebelumnya — tidak perlu pengajuan terpisah."
-                      : "Pilih properti tempat Anda tinggal di RW 03."
-                    : lokasiSubId === "usaha" && usahaRumahanMode
-                      ? "Isi data usaha Anda. Langkah berikutnya: verifikasi nomor PROP milik sendiri."
-                      : lokasiSubId === "usaha" && keperluanMode === "bisnis_dalam"
-                        ? "Isi data usaha Anda. Nanti lanjut isi data penghuni kost di langkah berikutnya."
-                        : undefined
-            }
+            current={1}
+            total={1}
+            title={formProfile.lokasiTitle}
+            hint={formProfile.lokasiHint}
           />
-
-          {lokasiSubId === "wilayah" && keperluan === "bisnis" && (
-            <div className="space-y-3">
-              <p className="text-xs text-muted-foreground">
-                Langkah ini muncul jika pilihan awal belum jelas. Umumnya sudah terisi dari langkah pertama.
-              </p>
-              <div className="grid grid-cols-1 gap-3">
-                <Button
-                  type="button"
-                  variant={tinggalDiWilayahRw3 === true ? "default" : "outline"}
-                  className="h-auto py-4 justify-start px-4"
-                  onClick={() => {
-                    setKeperluanMode("bisnis_dalam");
-                    setTinggalDiWilayahRw3(true);
-                    setJamBuka("");
-                    setJamTutup("");
-                    setAlamatUsaha("");
-                  }}
-                >
-                  <span className="text-left">
-                    <span className="block font-medium">Ya, saya tinggal di RW 03</span>
-                    <span className="block text-xs font-normal opacity-80 mt-0.5">
-                      Sekaligus isi data penghuni kost — satu pengajuan saja
-                    </span>
-                  </span>
-                </Button>
-                <Button
-                  type="button"
-                  variant={tinggalDiWilayahRw3 === false ? "default" : "outline"}
-                  className="h-auto py-4 justify-start px-4"
-                  onClick={() => {
-                    setKeperluanMode("bisnis_luar");
-                    setTinggalDiWilayahRw3(false);
-                    setPemilikKostId("");
-                  }}
-                >
-                  <span className="text-left">
-                    <span className="block font-medium">Tidak, tinggal di luar RW 03</span>
-                    <span className="block text-xs font-normal opacity-80 mt-0.5">
-                      Cukup isi data usaha dan penanggung jawab
-                    </span>
-                  </span>
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {lokasiSubId === "usaha" && (
-            <div className="space-y-4">
-              {usahaRumahanMode && (
-                <div className="rounded-xl border bg-brand/5 border-brand/20 p-4 text-sm space-y-1">
-                  <p className="font-medium">Usaha di rumah milik sendiri</p>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    Contoh: catering rumahan, jasa, atau toko kecil di rumah sendiri. Nomor PROP
-                    milik Anda sendiri akan diverifikasi di langkah berikutnya.
-                  </p>
-                </div>
-              )}
-              <div className="space-y-2">
-                <Label>Nama usaha</Label>
-                <Input
-                  value={namaUsaha}
-                  onChange={(e) => setNamaUsaha(e.target.value)}
-                  placeholder={usahaRumahanMode ? "Contoh: Dapur Bunda Yoels" : "Contoh: Warung Bu Siti"}
-                />
-              </div>
-              {!usahaRumahanMode && (
-                <>
-              <div className="space-y-2">
-                <Label>Jenis tempat usaha</Label>
-                <Select value={jenisTempatUsaha} onValueChange={setJenisTempatUsaha}>
-                  <SelectTrigger><SelectValue placeholder="Pilih jenis" /></SelectTrigger>
-                  <SelectContent>
-                    {visitrw3JenisTempatUsahaOptions.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {jenisTempatUsaha === "lainnya" && (
-                <div className="space-y-2">
-                  <Label>Jenis usaha lainnya</Label>
-                  <Input
-                    value={jenisTempatUsahaLain}
-                    onChange={(e) => setJenisTempatUsahaLain(e.target.value)}
-                    placeholder="Contoh: bengkel keliling"
-                  />
-                </div>
-              )}
-                </>
-              )}
-              <div className="space-y-2">
-                <Label>Kategori usaha</Label>
-                <p className="text-xs text-muted-foreground">
-                  Bisa pilih lebih dari satu — misalnya warung sekaligus pertamini.
-                  {kategoriUsaha.length > 0 && (
-                    <span className="text-brand font-medium"> · {kategoriUsaha.length} dipilih</span>
-                  )}
-                </p>
-                <div className="rounded-xl border bg-card p-3 max-h-52 overflow-y-auto space-y-2">
-                  {visitrw3KategoriUsahaOptions.map((kategori) => (
-                    <div key={kategori} className="flex items-start gap-2">
-                      <Checkbox
-                        id={`kategori-${kategori}`}
-                        checked={kategoriUsaha.includes(kategori)}
-                        onCheckedChange={() => toggleKategoriUsaha(kategori)}
-                      />
-                      <Label htmlFor={`kategori-${kategori}`} className="font-normal text-sm leading-snug">
-                        {kategori}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-                {kategoriUsaha.includes("Lainnya") && (
-                  <Input
-                    value={kategoriUsahaLain}
-                    onChange={(e) => setKategoriUsahaLain(e.target.value)}
-                    placeholder="Contoh: rental PS, jual es batu"
-                  />
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label>Nama penanggung jawab</Label>
-                <Input
-                  value={penanggungJawab}
-                  onChange={(e) => setPenanggungJawab(e.target.value)}
-                  placeholder="Nama lengkap pemilik / PJ"
-                />
-              </div>
-            </div>
-          )}
-
-          {lokasiSubId === "operasional" && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label>Jam buka</Label>
-                  <Input type="time" value={jamBuka} onChange={(e) => setJamBuka(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Jam tutup</Label>
-                  <Input type="time" value={jamTutup} onChange={(e) => setJamTutup(e.target.value)} />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Alamat usaha di RW 03</Label>
-                <Textarea
-                  value={alamatUsaha}
-                  onChange={(e) => setAlamatUsaha(e.target.value)}
-                  rows={3}
-                  placeholder="Jl., gang, nomor, patokan lokasi usaha"
-                />
-              </div>
-            </div>
-          )}
-
-          {lokasiSubId === "pj" && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>NIK penanggung jawab (16 digit)</Label>
-                <Input
-                  maxLength={16}
-                  inputMode="numeric"
-                  value={pjNik}
-                  onChange={(e) => setPjNik(e.target.value.replace(/\D/g, ""))}
-                  placeholder="327xxxxxxxxxxxxx"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>WhatsApp penanggung jawab</Label>
-                <Input
-                  value={pjNomorWhatsapp}
-                  onChange={(e) => setPjNomorWhatsapp(e.target.value)}
-                  placeholder="08xxxxxxxxxx"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Tanggal lahir</Label>
-                <Input type="date" value={pjTanggalLahir} onChange={(e) => setPjTanggalLahir(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label>Foto KTP</Label>
-                <Input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) void uploadKtpPj(f).catch(() => toast({ title: "Upload gagal", variant: "destructive" }));
-                  }}
-                />
-                {pjFotoKtpPath && <p className="text-xs text-success">KTP sudah terunggah</p>}
-              </div>
-            </div>
-          )}
-
-          {lokasiSubId === "rt" && (
+          <div className="space-y-2">
+            <Label>RT</Label>
+            <Select value={rt} onValueChange={setRt}>
+              <SelectTrigger className="h-12">
+                <SelectValue placeholder="Pilih RT" />
+              </SelectTrigger>
+              <SelectContent>
+                {rtOptions.map((n) => (
+                  <SelectItem key={n} value={String(n)}>
+                    RT {String(n).padStart(2, "0")}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>{formProfile.alamatLabel}</Label>
+            <Textarea
+              value={alamat}
+              onChange={(e) => setAlamat(e.target.value)}
+              rows={3}
+              placeholder={formProfile.alamatPlaceholder}
+              className="min-h-[88px]"
+            />
+          </div>
+          {formProfile.nomorUnitMode !== "hidden" && (
             <div className="space-y-2">
-              <Label>RT {keperluan === "bisnis" ? "lokasi usaha" : "tempat tinggal"}</Label>
-              <Select value={rt} onValueChange={(v) => { setRt(v); setPemilikKostId(""); }}>
-                <SelectTrigger className="h-12"><SelectValue placeholder="Pilih RT" /></SelectTrigger>
-                <SelectContent>
-                  {rtOptions.map((n) => (
-                    <SelectItem key={n} value={String(n)}>RT {String(n).padStart(2, "0")}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>{formProfile.nomorUnitLabel}</Label>
+              <Input
+                className="h-12"
+                placeholder={formProfile.nomorUnitPlaceholder}
+                value={nomorUnit}
+                onChange={(e) => setNomorUnit(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">{formProfile.nomorUnitHint}</p>
             </div>
           )}
-
-          {lokasiSubId === "prop" && (
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <Label>Nomor PROP usaha rumahan Anda</Label>
-                <Input
-                  className="h-12"
-                  value={nomorProp}
-                  onChange={(e) => {
-                    setNomorProp(e.target.value.toUpperCase());
-                    setPropVerified(null);
-                    setPemilikKostId("");
-                    setRt("");
-                  }}
-                  placeholder="PROP-2026…"
-                />
-              </div>
-              <Button
-                type="button"
-                className="w-full touch-target"
-                disabled={propVerifying || !nomorProp.trim()}
-                onClick={() => void verifyNomorProp()}
-              >
-                {propVerifying ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  "Verifikasi nomor PROP"
-                )}
-              </Button>
-              {propVerified && (
-                <div className="rounded-xl border bg-success/5 border-success/30 p-4 text-sm space-y-1">
-                  <p className="font-medium">{propVerified.namaKost}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {propVerified.nomorPendaftaran} · RT {String(propVerified.rt).padStart(2, "0")} ·
-                    Status aktif
-                  </p>
-                </div>
-              )}
-              {!propVerified && (
-                <p className="text-xs text-muted-foreground">
-                  Belum daftar?{" "}
-                  <Link href={VISITRW3_ROUTES.usahaRumahan.daftarProperti} className="text-brand underline">
-                    Daftar usaha rumahan dulu
-                  </Link>
-                  , tunggu verifikasi admin, baru lanjut ke sini.
-                </p>
-              )}
-            </div>
-          )}
-
-          {lokasiSubId === "kost" && !usahaRumahanMode && (
-            kostLoading ? (
-              <Loader2 className="w-6 h-6 animate-spin mx-auto" />
-            ) : (
-              <div className="space-y-2">
-                <Label>Kost / kontrakan</Label>
-                <Select value={pemilikKostId} onValueChange={setPemilikKostId}>
-                  <SelectTrigger className="h-12">
-                    <SelectValue placeholder="Pilih tempat tinggal" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {kostList.map((k) => (
-                      <SelectItem key={k.id} value={String(k.id)}>
-                        {k.namaKost} — {k.namaPemilik}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {rt && !kostLoading && kostList.length === 0 && (
-                  <EmptyState
-                    icon={Building2}
-                    title="Belum ada properti di RT ini"
-                    description="Minta pemilik properti mendaftar dulu, atau hubungi pengurus RW."
-                    action={
-                      <Link href="/visitrw3/daftar-properti">
-                        <Button type="button" variant="outline" size="sm">
-                          Daftar properti
-                        </Button>
-                      </Link>
-                    }
-                  />
-                )}
-              </div>
-            )
-          )}
-
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              className="touch-target"
-              onClick={() => {
-                if (lokasiSub > 0) setLokasiSub((s) => s - 1);
-                else goStep(-1);
-              }}
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
+            <Link href={hubHref}>
+              <Button variant="outline" className="touch-target">
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+            </Link>
             <Button
               className="flex-1 touch-target"
               onClick={() => {
-                const err =
-                  keperluan === "tinggal"
-                    ? validateLokasiSubTinggal(lokasiSubId as "rt" | "kost", rt, pemilikKostId)
-                    : validateLokasiSubBisnis(lokasiSubId, bisnisLokasiInput, keperluanMode);
+                const err = validateLokasiWargaSinggah({
+                  rt,
+                  alamat,
+                  jenisWarga,
+                  nomorUnit,
+                });
                 if (err) return showErr(err);
-                if (lokasiSub < lokasiSubSteps.length - 1) {
-                  setLokasiSub((s) => s + 1);
-                  return;
-                }
-                if (keperluan === "bisnis") {
-                  const fullErr = validateStepLokasiBisnis(bisnisLokasiInput, keperluanMode);
-                  if (fullErr) return showErr(fullErr);
-                }
                 goStep(1);
               }}
             >
@@ -1186,38 +786,189 @@ export default function Visitrw3Pengajuan() {
         </div>
       )}
 
-      {stepId === "jumlah" && (
+      {stepId === "usaha" && (
         <div className="space-y-4">
           <MicroStepHeader
             current={1}
             total={1}
-            title="Berapa orang yang akan tinggal?"
-            hint={
-              usahaRumahanMode
-                ? "Anda tinggal sekaligus berusaha di rumah sendiri — isi data penghuni rumah."
-                : keperluanMode === "bisnis_dalam"
-                  ? "Data ini sekaligus untuk izin tinggal dan usaha — tidak perlu isi form kedua kalinya."
-                  : "Tekan + atau − untuk menambah/mengurangi. Nanti diisi satu per satu."
-            }
+            title="Data usaha"
+            hint="Isi identitas usaha dan penanggung jawab di RW 03."
+          />
+          <div className="space-y-2">
+            <Label>Nama usaha *</Label>
+            <Input
+              value={namaUsaha}
+              onChange={(e) => setNamaUsaha(e.target.value)}
+              placeholder="Contoh: Warung Bu Siti"
+              className="h-12"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Jenis tempat usaha *</Label>
+            <Select value={jenisTempatUsaha} onValueChange={setJenisTempatUsaha}>
+              <SelectTrigger className="h-12">
+                <SelectValue placeholder="Pilih jenis" />
+              </SelectTrigger>
+              <SelectContent>
+                {JENIS_TEMPAT_USAHA.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {jenisTempatUsaha === "lainnya" && (
+            <div className="space-y-2">
+              <Label>Jenis usaha lainnya *</Label>
+              <Input
+                value={jenisTempatUsahaLain}
+                onChange={(e) => setJenisTempatUsahaLain(e.target.value)}
+                placeholder="Contoh: bengkel keliling"
+                className="h-12"
+              />
+            </div>
+          )}
+          <div className="space-y-2">
+            <Label>Kategori usaha *</Label>
+            <p className="text-xs text-muted-foreground">
+              Bisa pilih lebih dari satu
+              {kategoriUsaha.length > 0 && (
+                <span className="text-brand font-medium"> · {kategoriUsaha.length} dipilih</span>
+              )}
+            </p>
+            <div className="rounded-xl border bg-card p-3 max-h-64 overflow-y-auto space-y-2">
+              {visitrw3KategoriUsahaOptions.map((kategori) => (
+                <div key={kategori} className="flex items-start gap-2">
+                  <Checkbox
+                    id={`kategori-${kategori}`}
+                    checked={kategoriUsaha.includes(kategori)}
+                    onCheckedChange={() => toggleKategoriUsaha(kategori)}
+                  />
+                  <Label htmlFor={`kategori-${kategori}`} className="font-normal text-sm leading-snug">
+                    {kategori}
+                  </Label>
+                </div>
+              ))}
+            </div>
+            {kategoriUsaha.includes("Lainnya") && (
+              <Input
+                value={kategoriUsahaLain}
+                onChange={(e) => setKategoriUsahaLain(e.target.value)}
+                placeholder="Contoh: rental PS, jual es batu"
+              />
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Jam buka *</Label>
+              <Select value={jamBuka || undefined} onValueChange={setJamBuka}>
+                <SelectTrigger className="h-12">
+                  <SelectValue placeholder="00:00" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  {JAM_24H_OPTIONS.map((jam) => (
+                    <SelectItem key={`buka-${jam}`} value={jam}>
+                      {jam}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Jam tutup *</Label>
+              <Select value={jamTutup || undefined} onValueChange={setJamTutup}>
+                <SelectTrigger className="h-12">
+                  <SelectValue placeholder="23:59" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  {JAM_24H_OPTIONS.map((jam) => (
+                    <SelectItem key={`tutup-${jam}`} value={jam}>
+                      {jam}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground -mt-2">
+            Format 24 jam (00:00–23:59), tanpa AM/PM. Petugas survey menyesuaikan kunjungan dengan jam buka.
+          </p>
+          <div className="space-y-2">
+            <Label>Alamat usaha (jika berbeda dari lokasi sebelumnya)</Label>
+            <Textarea
+              value={alamatUsaha}
+              onChange={(e) => setAlamatUsaha(e.target.value)}
+              rows={2}
+              placeholder="Kosongkan jika sama dengan alamat lokasi usaha"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Nama penanggung jawab *</Label>
+            <Input
+              value={penanggungJawab}
+              onChange={(e) => setPenanggungJawab(e.target.value)}
+              placeholder="Nama lengkap pemilik / PJ usaha"
+              className="h-12"
+            />
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" className="touch-target" onClick={() => goStep(-1)}>
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <Button
+              className="flex-1 touch-target"
+              onClick={() => {
+                const err = validateJualanFields({
+                  namaUsaha,
+                  jenisTempatUsaha,
+                  jenisTempatUsahaLain,
+                  kategoriUsaha,
+                  kategoriUsahaLain,
+                  penanggungJawab,
+                  jamBuka,
+                  jamTutup,
+                  alamatUsaha,
+                  requireJamOperasional: true,
+                });
+                if (err) return showErr(err);
+                goStep(1);
+              }}
+            >
+              Lanjut <ChevronRight className="w-4 h-4 ml-1" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {stepId === "jumlah" && formProfile && (
+        <div className="space-y-4">
+          <MicroStepHeader
+            current={1}
+            total={1}
+            title={formProfile.jumlahTitle}
+            hint={formProfile.jumlahHint}
           />
           <JumlahStepper
-            label="Dewasa"
+            label={formProfile.dewasaLabel}
             value={jumlahDewasa}
             min={1}
-            max={20}
+            max={formProfile.maxDewasa}
             onChange={(n) => setJumlahDewasa(clampJumlahDewasa(n))}
-            hint="Minimal 1 orang dewasa"
+            hint={formProfile.dewasaHint}
           />
-          <JumlahStepper
-            label="Anak"
-            value={jumlahAnak}
-            min={0}
-            max={19}
-            onChange={(n) => setJumlahAnak(clampJumlahAnak(n))}
-            hint="Anak tidak perlu NIK"
-          />
+          {formProfile.showAnak && (
+            <JumlahStepper
+              label="Anak"
+              value={jumlahAnak}
+              min={0}
+              max={formProfile.maxAnak}
+              onChange={(n) => setJumlahAnak(clampJumlahAnak(n))}
+              hint={formProfile.anakHint}
+            />
+          )}
           <p className="text-sm font-medium text-center text-brand">
-            Total {jumlah} orang
+            Total {jumlah} {formProfile.orangLabel}
           </p>
           <div className="flex gap-2">
             <Button variant="outline" className="touch-target" onClick={() => goStep(-1)}>
@@ -1226,7 +977,7 @@ export default function Visitrw3Pengajuan() {
             <Button
               className="flex-1 touch-target"
               onClick={() => {
-                const err = validateStepJumlah(jumlahDewasa);
+                const err = validateJumlahByJenis(jumlahDewasa, jumlahAnak, formProfile);
                 if (err) return showErr(err);
                 setPenghuniIndex(0);
                 goStep(1);
@@ -1238,230 +989,329 @@ export default function Visitrw3Pengajuan() {
         </div>
       )}
 
-      {stepId === "penghuni" && (() => {
-        const i = penghuniIndex;
-        const p = penghuni[i];
-        if (!p) return null;
-        return (
-          <div className="space-y-4">
-            <MicroStepHeader
-              current={penghuniIndex + 1}
-              total={penghuni.length}
-              title={penghuniHeading(p, i)}
-              hint={p.isAnak ? "Anak cukup nama, tanggal lahir, dan jenjang sekolah." : "Isi data diri penghuni ini dulu, lalu lanjut ke berikutnya."}
-            />
-            <div className={`rounded-xl border p-4 space-y-4 ${p.isAnak ? "border-dashed bg-muted/20" : "bg-card"}`}>
-              <div className="space-y-2">
-                <Label>Nama lengkap</Label>
-                <Input
-                  className="h-12"
-                  placeholder="Sesuai KTP"
-                  value={p.namaLengkap}
-                  onChange={(e) => updatePenghuni(i, { namaLengkap: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Tanggal lahir</Label>
-                <Input
-                  className="h-12"
-                  type="date"
-                  value={p.tanggalLahir}
-                  onChange={(e) => updatePenghuni(i, { tanggalLahir: e.target.value })}
-                />
-              </div>
-              {p.isAnak ? (
+      {stepId === "penghuni" &&
+        (() => {
+          const i = penghuniIndex;
+          const p = penghuni[i];
+          if (!p) return null;
+          return (
+            <div className="space-y-4">
+              <MicroStepHeader
+                current={penghuniIndex + 1}
+                total={penghuni.length}
+                title={penghuniHeading(p, i)}
+                hint={
+                  p.isAnak
+                    ? "Anak cukup nama, tanggal lahir, dan jenjang sekolah."
+                    : jenisWarga === "jualan"
+                      ? "Data diri pekerja / penanggung jawab di lokasi usaha."
+                      : jenisWarga === "kost"
+                        ? "Data diri penghuni kamar (KTP & WhatsApp wajib)."
+                        : "Data diri penghuni kontrakan — isi satu per satu."
+                }
+              />
+              <div
+                className={`rounded-xl border p-4 space-y-4 ${
+                  p.isAnak ? "border-dashed bg-muted/20" : "bg-card"
+                }`}
+              >
                 <div className="space-y-2">
-                  <Label>Jenjang pendidikan</Label>
-                  <Select value={p.namaSekolah} onValueChange={(v) => updatePenghuni(i, { namaSekolah: v })}>
-                    <SelectTrigger className="h-12">
-                      <SelectValue placeholder="Pilih jenjang" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {visitrw3JenjangAnakOptions.map((o) => (
-                        <SelectItem key={o} value={o}>{o}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label>Nama lengkap</Label>
+                  <Input
+                    className="h-12"
+                    placeholder="Sesuai KTP"
+                    value={p.namaLengkap}
+                    onChange={(e) => updatePenghuni(i, { namaLengkap: e.target.value })}
+                  />
                 </div>
-              ) : (
-                <>
+                <div className="space-y-2">
+                  <Label>Tanggal lahir</Label>
+                  <Input
+                    className="h-12"
+                    type="date"
+                    value={p.tanggalLahir}
+                    onChange={(e) => updatePenghuni(i, { tanggalLahir: e.target.value })}
+                  />
+                </div>
+                {p.isAnak ? (
                   <div className="space-y-2">
-                    <Label>NIK (16 digit)</Label>
-                    <Input
-                      className="h-12"
-                      inputMode="numeric"
-                      placeholder="327xxxxxxxxxxxxx"
-                      maxLength={16}
-                      value={p.nik}
-                      onChange={(e) => updatePenghuni(i, { nik: e.target.value.replace(/\D/g, "") })}
-                    />
+                    <Label>Jenjang pendidikan</Label>
+                    <Select
+                      value={p.namaSekolah}
+                      onValueChange={(v) => updatePenghuni(i, { namaSekolah: v })}
+                    >
+                      <SelectTrigger className="h-12">
+                        <SelectValue placeholder="Pilih jenjang" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {visitrw3JenjangAnakOptions.map((o) => (
+                          <SelectItem key={o} value={o}>
+                            {o}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <div className="space-y-2">
-                    <Label>WhatsApp</Label>
-                    <Input
-                      className="h-12"
-                      placeholder="08xxxxxxxxxx"
-                      value={p.nomorWhatsapp}
-                      onChange={(e) => updatePenghuni(i, { nomorWhatsapp: e.target.value })}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
+                ) : (
+                  <>
                     <div className="space-y-2">
-                      <Label>Jenis kelamin</Label>
-                      <Select value={p.jenisKelamin} onValueChange={(v) => updatePenghuni(i, { jenisKelamin: v })}>
-                        <SelectTrigger className="h-12"><SelectValue placeholder="Pilih" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Laki-laki">Laki-laki</SelectItem>
-                          <SelectItem value="Perempuan">Perempuan</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Pekerjaan</Label>
-                      <SearchableSelect
-                        value={p.pekerjaan}
-                        onValueChange={(v) => updatePenghuni(i, { pekerjaan: v })}
-                        options={pekerjaanLegacyOptions}
-                        placeholder="Pilih pekerjaan"
-                        searchPlaceholder="Cari pekerjaan…"
-                        triggerClassName="h-12"
-                      />
-                    </div>
-                  </div>
-                  {keperluan === "tinggal" && (
-                    <div className="space-y-2">
-                      <Label>Keperluan tinggal</Label>
-                      <Select value={p.keperluanTinggal} onValueChange={(v) => updatePenghuni(i, { keperluanTinggal: v })}>
-                        <SelectTrigger className="h-12"><SelectValue placeholder="Pilih keperluan" /></SelectTrigger>
-                        <SelectContent>
-                          {keperluanTinggalOptions.map((o) => (
-                            <SelectItem key={o} value={o}>{o}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                  <div className="space-y-2">
-                    <Label>Tempat kerja</Label>
-                    <Input
-                      className="h-12"
-                      placeholder="Nama perusahaan / usaha"
-                      value={p.namaTempatKerja}
-                      onChange={(e) => updatePenghuni(i, { namaTempatKerja: e.target.value })}
-                    />
-                  </div>
-                  {umurFromDate(p.tanggalLahir) < 21 && (
-                    <div className="space-y-2">
-                      <Label>Nama sekolah (usia di bawah 21)</Label>
+                      <Label>NIK (16 digit)</Label>
                       <Input
                         className="h-12"
-                        placeholder="Nama sekolah / kampus"
-                        value={p.namaSekolah}
-                        onChange={(e) => updatePenghuni(i, { namaSekolah: e.target.value })}
+                        inputMode="numeric"
+                        placeholder="327xxxxxxxxxxxxx"
+                        maxLength={16}
+                        value={p.nik}
+                        onChange={(e) =>
+                          updatePenghuni(i, { nik: e.target.value.replace(/\D/g, "") })
+                        }
                       />
                     </div>
-                  )}
-                  <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        checked={p.kendaraanList.length > 0}
-                        onCheckedChange={(c) => setPunyaKendaraan(i, Boolean(c))}
-                        id={`kendaraan-${i}`}
+                    <div className="space-y-2">
+                      <Label>WhatsApp</Label>
+                      <Input
+                        className="h-12"
+                        placeholder="08xxxxxxxxxx"
+                        value={p.nomorWhatsapp}
+                        onChange={(e) => updatePenghuni(i, { nomorWhatsapp: e.target.value })}
                       />
-                      <Label htmlFor={`kendaraan-${i}`} className="font-normal text-sm">
-                        Punya kendaraan (opsional)
-                      </Label>
                     </div>
-                    {p.kendaraanList.length > 0 && (
-                      <div className="space-y-3">
-                        {p.kendaraanList.map((k, ki) => (
-                          <div key={ki} className="space-y-2 rounded-md border bg-background p-2">
-                            <div className="flex items-center justify-between">
-                              <p className="text-xs font-medium text-muted-foreground">Kendaraan {ki + 1}</p>
-                              {p.kendaraanList.length > 1 && (
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-destructive"
-                                  onClick={() => removeKendaraan(i, ki)}
-                                  aria-label={`Hapus kendaraan ${ki + 1}`}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              )}
-                            </div>
-                            <Select value={k.jenis} onValueChange={(v) => updateKendaraan(i, ki, { jenis: v })}>
-                              <SelectTrigger><SelectValue placeholder="Jenis kendaraan" /></SelectTrigger>
-                              <SelectContent>
-                                {jenisKendaraanOptions.map((o) => (
-                                  <SelectItem key={o} value={o}>{o}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <PlatNomorInput
-                              required
-                              idPrefix={`plat-${i}-${ki}`}
-                              value={k.platParts}
-                              onChange={(platParts) => updateKendaraan(i, ki, { platParts })}
-                            />
-                          </div>
-                        ))}
-                        <Button type="button" variant="outline" size="sm" className="w-full gap-1" onClick={() => addKendaraan(i)}>
-                          <Plus className="w-4 h-4" /> Tambah kendaraan
-                        </Button>
+                    <div
+                      className={
+                        formProfile?.requirePekerjaan !== false
+                          ? "grid grid-cols-2 gap-3"
+                          : "space-y-2"
+                      }
+                    >
+                      <div className="space-y-2">
+                        <Label>Jenis kelamin</Label>
+                        <Select
+                          value={p.jenisKelamin}
+                          onValueChange={(v) => updatePenghuni(i, { jenisKelamin: v })}
+                        >
+                          <SelectTrigger className="h-12">
+                            <SelectValue placeholder="Pilih" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Laki-laki">Laki-laki</SelectItem>
+                            <SelectItem value="Perempuan">Perempuan</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {formProfile?.requirePekerjaan !== false && (
+                        <div className="space-y-2">
+                          <Label>Pekerjaan</Label>
+                          <SearchableSelect
+                            value={p.pekerjaan}
+                            onValueChange={(v) => updatePenghuni(i, { pekerjaan: v })}
+                            options={pekerjaanLegacyOptions}
+                            placeholder="Pilih pekerjaan"
+                            searchPlaceholder="Cari pekerjaan…"
+                            triggerClassName="h-12"
+                          />
+                        </div>
+                      )}
+                    </div>
+                    {formProfile?.requireKeperluanTinggal && (
+                      <div className="space-y-2">
+                        <Label>Keperluan tinggal *</Label>
+                        <Select
+                          value={p.keperluanTinggal}
+                          onValueChange={(v) => updatePenghuni(i, { keperluanTinggal: v })}
+                        >
+                          <SelectTrigger className="h-12">
+                            <SelectValue placeholder="Pilih keperluan" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(formProfile.keperluanTinggalOptions.length
+                              ? formProfile.keperluanTinggalOptions
+                              : keperluanTinggalOptions
+                            ).map((o) => (
+                              <SelectItem key={o} value={o}>
+                                {o}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Foto KTP</Label>
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) void uploadKtp(f, i).catch(() => toast({ title: "Upload gagal", variant: "destructive" }));
-                      }}
-                    />
-                    {p.fotoKtpPath && <p className="text-xs text-success">KTP sudah terunggah</p>}
-                  </div>
-                </>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                className="touch-target"
-                onClick={() => {
-                  if (penghuniIndex > 0) setPenghuniIndex((idx) => idx - 1);
-                  else goStep(-1);
-                }}
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-              <Button
-                className="flex-1 touch-target"
-                onClick={() => {
-                  if (!keperluan) return showErr("Keperluan belum dipilih");
-                  const err = validateSinglePenghuni(p, keperluan);
-                  if (err) return showErr(err);
-                  if (penghuniIndex < penghuni.length - 1) {
-                    setPenghuniIndex((idx) => idx + 1);
-                    return;
-                  }
-                  goStep(1);
-                }}
-              >
-                {penghuniIndex < penghuni.length - 1 ? (
-                  <>Penghuni berikutnya <ChevronRight className="w-4 h-4 ml-1" /></>
-                ) : (
-                  <>Lanjut <ChevronRight className="w-4 h-4 ml-1" /></>
+                    <div className="space-y-2">
+                      <Label>{formProfile?.tempatKerjaLabel ?? "Tempat kerja"} *</Label>
+                      <Input
+                        className="h-12"
+                        placeholder={
+                          formProfile?.tempatKerjaPlaceholder ?? "Nama perusahaan / usaha"
+                        }
+                        value={p.namaTempatKerja}
+                        onChange={(e) => updatePenghuni(i, { namaTempatKerja: e.target.value })}
+                        onFocus={() => {
+                          if (
+                            jenisWarga === "jualan" &&
+                            !p.namaTempatKerja.trim() &&
+                            namaUsaha.trim()
+                          ) {
+                            updatePenghuni(i, { namaTempatKerja: namaUsaha.trim() });
+                          }
+                        }}
+                      />
+                      {jenisWarga === "jualan" && namaUsaha.trim() && !p.namaTempatKerja.trim() && (
+                        <button
+                          type="button"
+                          className="text-xs text-brand font-medium hover:underline"
+                          onClick={() =>
+                            updatePenghuni(i, { namaTempatKerja: namaUsaha.trim() })
+                          }
+                        >
+                          Pakai nama usaha: {namaUsaha.trim()}
+                        </button>
+                      )}
+                    </div>
+                    {umurFromDate(p.tanggalLahir) < 21 && (
+                      <div className="space-y-2">
+                        <Label>Nama sekolah (usia di bawah 21)</Label>
+                        <Input
+                          className="h-12"
+                          placeholder="Nama sekolah / kampus"
+                          value={p.namaSekolah}
+                          onChange={(e) => updatePenghuni(i, { namaSekolah: e.target.value })}
+                        />
+                      </div>
+                    )}
+                    <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          checked={p.kendaraanList.length > 0}
+                          onCheckedChange={(c) => setPunyaKendaraan(i, Boolean(c))}
+                          id={`kendaraan-${i}`}
+                        />
+                        <Label htmlFor={`kendaraan-${i}`} className="font-normal text-sm">
+                          Punya kendaraan (opsional)
+                        </Label>
+                      </div>
+                      {p.kendaraanList.length > 0 && (
+                        <div className="space-y-3">
+                          {p.kendaraanList.map((k, ki) => (
+                            <div key={ki} className="space-y-2 rounded-md border bg-background p-2">
+                              <div className="flex items-center justify-between">
+                                <p className="text-xs font-medium text-muted-foreground">
+                                  Kendaraan {ki + 1}
+                                </p>
+                                {p.kendaraanList.length > 1 && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-destructive"
+                                    onClick={() => removeKendaraan(i, ki)}
+                                    aria-label={`Hapus kendaraan ${ki + 1}`}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                )}
+                              </div>
+                              <Select
+                                value={k.jenis}
+                                onValueChange={(v) => updateKendaraan(i, ki, { jenis: v })}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Jenis kendaraan" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {jenisKendaraanOptions.map((o) => (
+                                    <SelectItem key={o} value={o}>
+                                      {o}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <PlatNomorInput
+                                required
+                                idPrefix={`plat-${i}-${ki}`}
+                                value={k.platParts}
+                                onChange={(platParts) => updateKendaraan(i, ki, { platParts })}
+                              />
+                            </div>
+                          ))}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="w-full gap-1"
+                            onClick={() => addKendaraan(i)}
+                          >
+                            <Plus className="w-4 h-4" /> Tambah kendaraan
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Foto KTP</Label>
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f)
+                            void uploadKtp(f, i).catch((err: unknown) =>
+                              toast({
+                                title: "Upload gagal",
+                                description: err instanceof Error ? err.message : "Coba lagi",
+                                variant: "destructive",
+                              }),
+                            );
+                        }}
+                      />
+                      {p.fotoKtpPath && (
+                        <p className="text-xs text-success">KTP sudah terunggah ✓</p>
+                      )}
+                    </div>
+                  </>
                 )}
-              </Button>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="touch-target"
+                  onClick={() => {
+                    if (penghuniIndex > 0) setPenghuniIndex((idx) => idx - 1);
+                    else goStep(-1);
+                  }}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <Button
+                  className="flex-1 touch-target"
+                  onClick={() => {
+                    const err = validateSinglePenghuni(p, {
+                      keperluan,
+                      requireKeperluanTinggal: formProfile?.requireKeperluanTinggal ?? false,
+                      requirePekerjaan: formProfile?.requirePekerjaan ?? true,
+                      requireTempatKerja: formProfile?.requireTempatKerja ?? true,
+                      tempatKerjaLabel: formProfile?.tempatKerjaLabel,
+                    });
+                    if (err) return showErr(err);
+                    if (penghuniIndex < penghuni.length - 1) {
+                      setPenghuniIndex((idx) => idx + 1);
+                      return;
+                    }
+                    goStep(1);
+                  }}
+                >
+                  {penghuniIndex < penghuni.length - 1 ? (
+                    <>
+                      {jenisWarga === "jualan" ? "Orang berikutnya" : "Penghuni berikutnya"}{" "}
+                      <ChevronRight className="w-4 h-4 ml-1" />
+                    </>
+                  ) : (
+                    <>
+                      Lanjut <ChevronRight className="w-4 h-4 ml-1" />
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
-          </div>
-        );
-      })()}
+          );
+        })()}
 
       {stepId === "syarat" && (
         <div className="space-y-4">
@@ -1473,7 +1323,9 @@ export default function Visitrw3Pengajuan() {
             loading={settingsLoading}
           />
           <div className="flex gap-2 sticky bottom-0 bg-background pt-2">
-            <Button variant="outline" onClick={() => goStep(-1)}><ChevronLeft className="w-4 h-4" /></Button>
+            <Button variant="outline" onClick={() => goStep(-1)}>
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
             <Button
               className="flex-1 touch-target"
               onClick={() => {
@@ -1482,7 +1334,7 @@ export default function Visitrw3Pengajuan() {
                 goStep(1);
               }}
             >
-              Lanjut ke bayar <ChevronRight className="w-4 h-4 ml-1" />
+              Lanjut ke masa berlaku <ChevronRight className="w-4 h-4 ml-1" />
             </Button>
           </div>
         </div>
@@ -1490,17 +1342,33 @@ export default function Visitrw3Pengajuan() {
 
       {stepId === "bayar" && (
         <div className="space-y-4">
+          <MicroStepHeader
+            current={1}
+            total={1}
+            title="Masa berlaku"
+            hint={formProfile?.bayarHint ?? "Tanggal bayar dan termin menentukan sampai kapan izin berlaku."}
+          />
           <div className="space-y-2">
             <Label>Tanggal bayar *</Label>
-            <Input type="date" value={tanggalBayar} onChange={(e) => setTanggalBayar(e.target.value)} required />
+            <Input
+              type="date"
+              value={tanggalBayar}
+              onChange={(e) => setTanggalBayar(e.target.value)}
+              required
+              className="h-12"
+            />
           </div>
           <div className="space-y-2">
             <Label>Termin *</Label>
             <Select value={terminBulan} onValueChange={setTerminBulan}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-12">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 {TERMIN_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -1511,16 +1379,6 @@ export default function Visitrw3Pengajuan() {
             </p>
           )}
           <div className="space-y-2">
-            <Label>{keperluan === "bisnis" ? "Nomor unit / lokasi usaha *" : "Nomor unit / kamar / rumah *"}</Label>
-            <Input
-              placeholder="Contoh: Kamar 3B, Unit 12, Rumah depan"
-              value={nomorUnit}
-              onChange={(e) => setNomorUnit(e.target.value)}
-              required
-            />
-            <p className="text-xs text-muted-foreground">Nomor kamar kost, unit kontrakan, atau rumah yang ditempati.</p>
-          </div>
-          <div className="space-y-2">
             <Label>Catatan (opsional)</Label>
             <Textarea
               value={catatan}
@@ -1530,7 +1388,9 @@ export default function Visitrw3Pengajuan() {
             />
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => goStep(-1)}><ChevronLeft className="w-4 h-4" /></Button>
+            <Button variant="outline" onClick={() => goStep(-1)}>
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
             <Button
               className="flex-1 touch-target"
               disabled={mutation.isPending || !setujuTataTertib}
@@ -1547,11 +1407,15 @@ export default function Visitrw3Pengajuan() {
                 mutation.mutate();
               }}
             >
-              {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Kirim pengajuan"}
+              {mutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                "Kirim pengajuan"
+              )}
             </Button>
           </div>
         </div>
       )}
-    </Visitrw3Shell>
+    </Shell>
   );
 }

@@ -5,12 +5,8 @@ import fs from "fs";
 import {
   ensureVisitrw3Schema,
   createPengajuanBaru,
-  createPendaftaranProperti,
   createPerpanjang,
   getStatusByNomor,
-  getPropertiByNomorPendaftaran,
-  getPemilikKostPublic,
-  approveProperti,
   listPengajuanAdminEnriched,
   getPengajuanDetailAdmin,
   approvePengajuan,
@@ -20,11 +16,16 @@ import {
   getVisitrw3Kalender,
   isMissingVisitrw3TableError,
   hitungTanggalBerlaku,
+  getPenghuniKtpPayload,
+  resolveFotoKtpData,
 } from "./visitrw3";
 import { loadVisitrw3SettingsRows, upsertVisitrw3Setting } from "./visitrw3-settings";
 import { visitrw3ApiErrorMessage } from "./visitrw3-api-error";
 import { invalidateVisitrw3Dashboard } from "./cache";
 import { ACTIVE_RT_NUMBERS } from "@shared/rt";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
+import { visitrw3Penghuni } from "@shared/schema";
 
 const ktpDir = path.join(process.cwd(), "uploads", "visitrw3-ktp");
 fs.mkdirSync(ktpDir, { recursive: true });
@@ -32,7 +33,8 @@ fs.mkdirSync(ktpDir, { recursive: true });
 const ktpUpload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, ktpDir),
-    filename: (_req, file, cb) => cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${path.extname(file.originalname) || ".jpg"}`),
+    filename: (_req, file, cb) =>
+      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${path.extname(file.originalname) || ".jpg"}`),
   }),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
@@ -47,44 +49,23 @@ function requireAdmin(req: Request, res: Response, next: () => void) {
 }
 
 export function registerVisitrw3Routes(app: Express) {
-  app.get("/api/public/pemilik-kost", async (req, res) => {
-    try {
-      const rt = parseInt(String(req.query.rt || ""), 10);
-      const keperluan = String(req.query.keperluan || "tinggal");
-      if (!rt || !(ACTIVE_RT_NUMBERS as readonly number[]).includes(rt)) {
-        return res.status(400).json({ message: "RT tidak valid" });
-      }
-      if (keperluan !== "tinggal" && keperluan !== "bisnis") {
-        return res.status(400).json({ message: "Keperluan tidak valid" });
-      }
-      const data = await getPemilikKostPublic(rt, keperluan);
-      res.json(
-        data.map((k) => ({
-          id: k.id,
-          namaKost: k.namaKost,
-          namaPemilik: k.namaPemilik,
-          rt: k.rt,
-          alamatLengkap: k.alamatLengkap,
-          jenisProperti: k.jenisProperti,
-          jumlahPintu: k.jumlahPintu,
-        })),
-      );
-    } catch (error: unknown) {
-      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat daftar kost") });
-    }
+  app.get("/api/public/pemilik-kost", async (_req, res) => {
+    res.status(410).json({ message: "Daftar properti sudah tidak tersedia. Ajukan langsung lewat Visit RW3." });
   });
 
   app.get("/api/public/visitrw3/settings", async (_req, res) => {
     try {
       const rows = await loadVisitrw3SettingsRows();
       res.json(
-        rows.map((r) => ({
-          key: r.key,
-          value: r.value,
-          label: r.label,
-          keterangan: r.keterangan,
-          updatedAt: r.updatedAt,
-        })),
+        rows
+          .filter((r) => !r.key.startsWith("fee_") && !r.key.startsWith("tier_pintu_"))
+          .map((r) => ({
+            key: r.key,
+            value: r.value,
+            label: r.label,
+            keterangan: r.keterangan,
+            updatedAt: r.updatedAt,
+          })),
       );
     } catch (error: unknown) {
       res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat pengaturan") });
@@ -94,7 +75,7 @@ export function registerVisitrw3Routes(app: Express) {
   app.get("/api/admin/visitrw3/settings", requireAdmin, async (_req, res) => {
     try {
       const rows = await loadVisitrw3SettingsRows();
-      res.json(rows);
+      res.json(rows.filter((r) => !r.key.startsWith("fee_") && !r.key.startsWith("tier_pintu_")));
     } catch (error: unknown) {
       res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat pengaturan") });
     }
@@ -103,6 +84,9 @@ export function registerVisitrw3Routes(app: Express) {
   app.patch("/api/admin/visitrw3/settings/:key", requireAdmin, async (req, res) => {
     try {
       const key = String(req.params.key);
+      if (key.startsWith("fee_") || key.startsWith("tier_pintu_")) {
+        return res.status(410).json({ message: "Pengaturan tarif kontribusi sudah dihapus" });
+      }
       const value = String(req.body?.value ?? "");
       const row = await upsertVisitrw3Setting(key, value);
       res.json(row);
@@ -121,65 +105,93 @@ export function registerVisitrw3Routes(app: Express) {
     }
   });
 
-  app.post("/api/public/visitrw3/upload-ktp", ktpUpload.single("file"), (req, res) => {
-    if (!req.file) return res.status(400).json({ message: "File tidak ada" });
-    res.json({ path: `/uploads/visitrw3-ktp/${req.file.filename}` });
+  app.post("/api/public/visitrw3/upload-ktp", (req, res) => {
+    ktpUpload.single("file")(req, res, (err: unknown) => {
+      if (err) {
+        const msg = err instanceof Error ? err.message : "Upload gagal";
+        return res.status(400).json({ message: msg });
+      }
+      if (!req.file) return res.status(400).json({ message: "File tidak ada" });
+      // Path relatif — saat submit pengajuan akan disalin ke foto_ktp_data (PostgreSQL)
+      res.json({ path: `/uploads/visitrw3-ktp/${req.file.filename}` });
+    });
   });
 
-  app.get("/api/admin/visitrw3/ktp/:filename", requireAdmin, (req, res) => {
-    const safe = path.basename(req.params.filename as string).replace(/[^a-zA-Z0-9._-]/g, "");
-    const filePath = path.join(ktpDir, safe);
-    if (!fs.existsSync(filePath)) return res.status(404).json({ message: "File tidak ditemukan" });
-    res.sendFile(filePath);
-  });
-
-  app.post("/api/public/visitrw3/daftar-properti", async (req, res) => {
+  /** Lihat KTP dari DB (utama) atau disk (legacy) — by id penghuni. */
+  app.get("/api/admin/visitrw3/penghuni/:id/ktp", requireAdmin, async (req, res) => {
     try {
-      const properti = await createPendaftaranProperti(req.body);
-      invalidateVisitrw3Dashboard();
-      res.json({
-        nomorPendaftaran: properti.nomorPendaftaran,
-        statusProperti: properti.statusProperti,
-      });
-    } catch (error: any) {
-      res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal mendaftarkan properti") });
-    }
-  });
-
-  app.get("/api/public/visitrw3/properti/:nomor", async (req, res) => {
-    try {
-      const row = await getPropertiByNomorPendaftaran(req.params.nomor as string);
-      if (!row) return res.status(404).json({ message: "Nomor pendaftaran tidak ditemukan" });
-      res.json({
-        id: row.id,
-        nomorPendaftaran: row.nomorPendaftaran,
-        namaKost: row.namaKost,
-        namaPemilik: row.namaPemilik,
-        namaPenanggungJawab: row.namaPenanggungJawab,
-        nomorWaPenanggungJawab: row.nomorWaPenanggungJawab,
-        rt: row.rt,
-        statusProperti: row.statusProperti,
-        izinTinggal: row.izinTinggal,
-        izinBisnis: row.izinBisnis,
-        jenisProperti: row.jenisProperti,
-        createdAt: row.createdAt,
-      });
+      const id = parseInt(String(req.params.id), 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ message: "ID tidak valid" });
+      const payload = await getPenghuniKtpPayload(id);
+      if (!payload) return res.status(404).json({ message: "Foto KTP tidak ditemukan" });
+      res.setHeader("Content-Type", payload.mime);
+      res.setHeader("Cache-Control", "private, max-age=3600");
+      res.send(payload.buffer);
     } catch (error: unknown) {
-      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat status properti") });
+      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat KTP") });
     }
   });
 
-  app.patch("/api/admin/visitrw3/properti/:id/approve", requireAdmin, async (req, res) => {
+  /** Legacy + fallback by filename (path /uploads/... atau nama file). */
+  app.get("/api/admin/visitrw3/ktp/:filename", requireAdmin, async (req, res) => {
     try {
-      const id = parseInt(req.params.id as string, 10);
-      const updated = await approveProperti(id, req.session.adminUsername || "admin", req.body ?? {});
-      invalidateVisitrw3Dashboard();
-      res.json(updated);
-    } catch (error: any) {
-      res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Permintaan tidak valid") });
+      const safe = path.basename(req.params.filename as string).replace(/[^a-zA-Z0-9._-]/g, "");
+      if (!safe) return res.status(400).json({ message: "Nama file tidak valid" });
+
+      const filePath = path.join(ktpDir, safe);
+      if (fs.existsSync(filePath)) {
+        return res.sendFile(filePath);
+      }
+
+      // Cari di DB: path berakhiran nama file
+      const rows = await db
+        .select({
+          id: visitrw3Penghuni.id,
+          fotoKtpPath: visitrw3Penghuni.fotoKtpPath,
+          fotoKtpData: visitrw3Penghuni.fotoKtpData,
+        })
+        .from(visitrw3Penghuni)
+        .where(eq(visitrw3Penghuni.fotoKtpPath, `/uploads/visitrw3-ktp/${safe}`))
+        .limit(1);
+
+      let dataUrl = rows[0]?.fotoKtpData?.trim() || null;
+      if (!dataUrl && rows[0]) {
+        dataUrl = resolveFotoKtpData(rows[0].fotoKtpPath);
+        if (dataUrl && rows[0].id) {
+          // backfill DB jika file masih ada di lain request (optional no-op)
+          await db
+            .update(visitrw3Penghuni)
+            .set({ fotoKtpData: dataUrl })
+            .where(eq(visitrw3Penghuni.id, rows[0].id));
+        }
+      }
+
+      if (!dataUrl?.startsWith("data:")) {
+        return res.status(404).json({ message: "File tidak ditemukan" });
+      }
+      const comma = dataUrl.indexOf(",");
+      const header = dataUrl.slice(0, comma);
+      const mime = /^data:([^;]+)/.exec(header)?.[1] || "image/jpeg";
+      res.setHeader("Content-Type", mime);
+      res.send(Buffer.from(dataUrl.slice(comma + 1), "base64"));
+    } catch (error: unknown) {
+      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat KTP") });
     }
   });
 
+  app.post("/api/public/visitrw3/daftar-properti", async (_req, res) => {
+    res.status(410).json({
+      message: "Pendaftaran properti sudah tidak tersedia. Warga luar daftar langsung lewat pengajuan Visit RW3.",
+    });
+  });
+
+  app.get("/api/public/visitrw3/properti/:nomor", async (_req, res) => {
+    res.status(410).json({ message: "Status properti sudah tidak tersedia" });
+  });
+
+  app.patch("/api/admin/visitrw3/properti/:id/approve", requireAdmin, async (_req, res) => {
+    res.status(410).json({ message: "Verifikasi properti sudah tidak tersedia" });
+  });
   app.post("/api/public/visitrw3/pengajuan", async (req, res) => {
     try {
       const pengajuan = await createPengajuanBaru(req.body);
@@ -248,7 +260,12 @@ export function registerVisitrw3Routes(app: Express) {
   app.get("/api/admin/visitrw3/pengajuan", requireAdmin, async (req, res) => {
     try {
       const status = String(req.query.status || "menunggu_survey");
-      const list = await listPengajuanAdminEnriched(status);
+      const produkRaw = String(req.query.produk || "visit");
+      const produk =
+        produkRaw === "rw3biz" || produkRaw === "semua" || produkRaw === "visit"
+          ? produkRaw
+          : "visit";
+      const list = await listPengajuanAdminEnriched(status, produk);
       res.json(list);
     } catch (error: unknown) {
       res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat antrian pengajuan") });

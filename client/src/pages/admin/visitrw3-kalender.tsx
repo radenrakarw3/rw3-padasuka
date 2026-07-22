@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { format, parseISO, startOfDay } from "date-fns";
+import { format } from "date-fns";
 import {
   AlertTriangle,
   CalendarDays,
@@ -17,11 +17,12 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Visitrw3AdminNav } from "@/components/admin/visitrw3-admin-nav";
-import { Visitrw3AdminShell, Visitrw3Panel, Visitrw3StatCard } from "@/components/admin/visitrw3-admin-ui";
+import { Visitrw3AdminShell, Visitrw3StatCard } from "@/components/admin/visitrw3-admin-ui";
 import { getApiErrorMessage, readJsonSafely } from "@/lib/queryClient";
 import { rtOptions } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { getStatusKontrak, getDaysRemaining, parseKontrakDate } from "@/lib/visitrw3-kontrak";
+import { labelJenisWarga } from "@shared/visitrw3-jenis-warga";
 
 type Visitrw3KalenderPenghuni = {
   id: number;
@@ -33,6 +34,8 @@ type Visitrw3KalenderPenghuni = {
   nomorVisitrw3: string | null;
   namaKost: string;
   rtKost: number;
+  jenisWarga?: string | null;
+  alamat?: string | null;
 };
 
 type Visitrw3KalenderResponse = {
@@ -44,6 +47,8 @@ type Visitrw3KalenderResponse = {
     tanggalBerlakuSampai: string;
     namaPenghuni: string | null;
     namaKost: string | null;
+    jenisWarga?: string | null;
+    alamat?: string | null;
   }[];
   ringkasan: {
     sudahHabis: number;
@@ -53,6 +58,10 @@ type Visitrw3KalenderResponse = {
     antrianPerpanjang: number;
   };
 };
+
+function displayLokasi(row: { alamat?: string | null; namaKost?: string | null }): string {
+  return row.alamat?.trim() || row.namaKost?.trim() || "—";
+}
 
 async function fetchKalender(rt: string): Promise<Visitrw3KalenderResponse> {
   const qs = rt !== "semua" ? `?rt=${encodeURIComponent(rt)}` : "";
@@ -269,7 +278,7 @@ export default function AdminVisitrw3Kalender() {
     <Visitrw3AdminShell>
       <Visitrw3AdminNav
         title="Kalender kontrak"
-        description="Lihat jatuh tempo izin tinggal dan siapa yang perlu diingatkan untuk perpanjang"
+        description="Lihat jatuh tempo izin warga singgah dan siapa yang perlu diingatkan untuk perpanjang"
         actions={
           <Select value={filterRt} onValueChange={setFilterRt}>
             <SelectTrigger className="w-32 h-8 text-xs" data-testid="select-filter-rt-kalender">
@@ -295,7 +304,7 @@ export default function AdminVisitrw3Kalender() {
 
       {!isLoading && !isError && (
         <p className="text-xs text-muted-foreground" data-testid="kalender-db-status">
-          Terhubung ke database · {aktifFiltered.length} penghuni dengan jadwal kontrak
+          Terhubung ke database · {aktifFiltered.length} warga singgah dengan jadwal kontrak
           {Object.keys(countByDate).length > 0
             ? ` · ${Object.keys(countByDate).length} tanggal jatuh tempo`
             : ""}
@@ -347,9 +356,9 @@ export default function AdminVisitrw3Kalender() {
               <Skeleton className="h-[280px] w-full max-w-[300px]" />
             ) : aktifFiltered.length === 0 ? (
               <div className="py-8 px-4 text-center text-sm text-muted-foreground max-w-[280px]">
-                <p>Belum ada data penghuni di database.</p>
+                <p>Belum ada data warga singgah di database.</p>
                 <p className="mt-2 text-xs">
-                  Setujui pengajuan Visit RW3 atau tambah penghuni di tab Penghuni.
+                  Setujui pengajuan Visit RW3 atau tambah warga di tab Penghuni.
                 </p>
                 <Link href="/admin/visitrw3/penghuni">
                   <Button size="sm" variant="outline" className="mt-3">
@@ -380,7 +389,7 @@ export default function AdminVisitrw3Kalender() {
             </CardHeader>
             <CardContent className="px-4 pb-4">
               {!selected ? (
-                <p className="text-sm text-muted-foreground">Klik tanggal untuk melihat penghuni.</p>
+                <p className="text-sm text-muted-foreground">Klik tanggal untuk melihat warga singgah.</p>
               ) : selectedPenghuni.length === 0 ? (
                 <p className="text-sm text-muted-foreground" data-testid="text-kosong-tanggal">
                   Tidak ada kontrak yang habis pada tanggal ini.
@@ -411,9 +420,12 @@ export default function AdminVisitrw3Kalender() {
                               <Badge variant={st.variant} className="text-[10px]">
                                 {st.label}
                               </Badge>
+                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[hsl(163,55%,22%)]/10 text-[hsl(163,55%,22%)]">
+                                {labelJenisWarga(w.jenisWarga)}
+                              </span>
                             </div>
                             <p className="text-[11px] text-muted-foreground mt-0.5">
-                              {w.namaKost} · RT {String(w.rtKost).padStart(2, "0")}
+                              {displayLokasi(w)} · RT {String(w.rtKost).padStart(2, "0")}
                             </p>
                             {w.nomorVisitrw3 && (
                               <p className="text-[10px] text-muted-foreground">{w.nomorVisitrw3}</p>
@@ -438,7 +450,7 @@ export default function AdminVisitrw3Kalender() {
                               Perpanjang
                             </Button>
                           </Link>
-                          <Link href="/admin/visitrw3/antrian?tab=pengajuan">
+                          <Link href="/admin/visitrw3/antrian?view=belum">
                             <Button size="sm" variant="ghost" className="h-7 text-xs">
                               Antrian
                               <ChevronRight className="w-3 h-3 ml-0.5" />
@@ -472,11 +484,12 @@ export default function AdminVisitrw3Kalender() {
                       <p className="font-medium">{p.nomorVisitrw3}</p>
                       <p className="text-[11px] text-muted-foreground">
                         {p.namaPenghuni ? `${p.namaPenghuni} · ` : ""}
-                        {p.namaKost ? `${p.namaKost} · ` : ""}
+                        {displayLokasi(p)} ·{" "}
+                        {p.jenisWarga ? `${labelJenisWarga(p.jenisWarga)} · ` : ""}
                         RT {String(p.rt).padStart(2, "0")} · berlaku sampai {p.tanggalBerlakuSampai}
                       </p>
                     </div>
-                    <Link href="/admin/visitrw3/antrian?tab=pengajuan">
+                    <Link href="/admin/visitrw3/antrian?view=belum">
                       <Button size="sm" variant="secondary" className="h-7 text-xs">
                         Proses
                       </Button>
@@ -505,7 +518,7 @@ export default function AdminVisitrw3Kalender() {
             </div>
           ) : aktifFiltered.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">
-              Belum ada penghuni — data kontrak akan muncul setelah pendaftaran disetujui.
+              Belum ada warga singgah — data kontrak akan muncul setelah pendaftaran disetujui.
             </p>
           ) : mendekatiList.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4" data-testid="text-mendekati-kosong">
@@ -529,9 +542,14 @@ export default function AdminVisitrw3Kalender() {
                     data-testid={`mendekati-row-${w.id}`}
                   >
                     <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{w.namaLengkap}</p>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className="text-sm font-medium truncate">{w.namaLengkap}</p>
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[hsl(163,55%,22%)]/10 text-[hsl(163,55%,22%)]">
+                          {labelJenisWarga(w.jenisWarga)}
+                        </span>
+                      </div>
                       <p className="text-[11px] text-muted-foreground truncate">
-                        {w.namaKost} · {formatTanggal(w.tanggalHabisKontrak)}
+                        {displayLokasi(w)} · {formatTanggal(w.tanggalHabisKontrak)}
                       </p>
                     </div>
                     <Badge variant={st.variant} className="text-[10px] shrink-0 ml-2">

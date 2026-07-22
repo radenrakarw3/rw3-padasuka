@@ -22,7 +22,7 @@ export const SDG_SINGKAT: Record<number, string> = {
 };
 
 export const KATEGORI_CHECKLIST_LABEL: Record<SurveyChecklistKategori, string> = {
-  administrasi: "Verifikasi data & properti",
+  administrasi: "Verifikasi data & lokasi",
   lingkungan: "Lingkungan, limbah & SDGs — wajib ditanyakan",
   ketertiban: "Ketertiban, tetangga & kewajiban RW",
   usaha: "Khusus usaha / bisnis",
@@ -135,11 +135,6 @@ const PROPERTI_KETERTIBAN: SurveyChecklistItem[] = [
     kategori: "ketertiban",
     sdg: 16,
     label: "Bersedia ikut program RW (kerja bakti, blusukan, sosialisasi bila perlu)",
-  }),
-  item({
-    id: "kontribusi_dipahami",
-    kategori: "ketertiban",
-    label: "Skema kontribusi Visit RW3 sudah dijelaskan ke pemilik",
   }),
 ];
 
@@ -293,18 +288,6 @@ export function getChecklistSurveyPengajuan(
   tinggalDiWilayah?: boolean | null,
 ): SurveyChecklistItem[] {
   const items = [...PENGAJUAN_ADMIN, ...PENGAJUAN_LINGKUNGAN, ...PENGAJUAN_KETERTIBAN];
-
-  if (keperluan === "tinggal" || tinggalDiWilayah === true) {
-    items.push(
-      item({
-        id: "koordinasi_pemilik",
-        kategori: "administrasi",
-        sdg: 16,
-        label: "Sudah koordinasi / konfirmasi ke pemilik properti",
-        hint: "Pemilik kost/kontrakan setuju penghuni & jumlah penghuni yang diajukan.",
-      }),
-    );
-  }
 
   if (keperluan === "bisnis") {
     items.push(

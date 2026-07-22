@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { getQueryFn } from "@/lib/queryClient";
+import type { PengajuanProduct } from "@/lib/visitrw3-produk-ui";
 
-type PemilikKostRow = { statusProperti?: string | null };
 type PengajuanRow = { status: string };
 
 export type Visitrw3AdminCounts = {
@@ -10,19 +9,18 @@ export type Visitrw3AdminCounts = {
   isLoading: boolean;
 };
 
-export function useVisitrw3AdminCounts(): Visitrw3AdminCounts {
-  const { data: properti = [], isLoading: lp } = useQuery<PemilikKostRow[]>({
-    queryKey: ["/api/pemilik-kost"],
-    queryFn: getQueryFn({ on401: "throw" }),
-    staleTime: 30_000,
-  });
+export function useVisitrw3AdminCounts(
+  product: PengajuanProduct = "visit",
+): Visitrw3AdminCounts {
+  const isBiz = product === "rw3biz";
+  const path = isBiz
+    ? "/api/admin/rw3biz/pengajuan?status=menunggu_survey"
+    : "/api/admin/visitrw3/pengajuan?status=menunggu_survey&produk=visit";
 
-  const { data: pengajuan = [], isLoading: lq } = useQuery<PengajuanRow[]>({
-    queryKey: ["/api/admin/visitrw3/pengajuan", "menunggu_survey"],
+  const { data: pengajuan = [], isLoading } = useQuery<PengajuanRow[]>({
+    queryKey: [isBiz ? "/api/admin/rw3biz/pengajuan" : "/api/admin/visitrw3/pengajuan", "menunggu_survey", product],
     queryFn: async () => {
-      const res = await fetch("/api/admin/visitrw3/pengajuan?status=menunggu_survey", {
-        credentials: "include",
-      });
+      const res = await fetch(path, { credentials: "include" });
       if (!res.ok) throw new Error("Gagal memuat antrian survey");
       return res.json();
     },
@@ -30,8 +28,8 @@ export function useVisitrw3AdminCounts(): Visitrw3AdminCounts {
   });
 
   return {
-    propertiMenunggu: properti.filter((p) => p.statusProperti === "menunggu_verifikasi").length,
+    propertiMenunggu: 0,
     surveyMenunggu: pengajuan.length,
-    isLoading: lp || lq,
+    isLoading,
   };
 }

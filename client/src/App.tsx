@@ -19,23 +19,15 @@ const PublicLanding = lazy(() => import("@/pages/public/landing"));
 
 const PublicLapor = lazy(() => import("@/pages/public/lapor"));
 const PublicLaporMasalah = lazy(() => import("@/pages/public/lapor-masalah"));
-const PublicLaporKekeringan = lazy(() => import("@/pages/public/lapor-kekeringan"));
-const PublicLaporKekeringanStatus = lazy(() => import("@/pages/public/lapor-kekeringan-status"));
 const PublicLaporStatus = lazy(() => import("@/pages/public/lapor-status"));
-const PublicProgram = lazy(() => import("@/pages/public/program"));
-const PublicProgramPilar = lazy(() => import("@/pages/public/program-pilar"));
-const PublicTransparansi = lazy(() => import("@/pages/public/transparansi"));
-const PublicKampungUmkm = lazy(() => import("@/pages/public/kampung-umkm"));
 
 const PublicPelayanan = lazy(() => import("@/pages/public/pelayanan"));
 
 const Rw3lawIndex = lazy(() => import("@/pages/public/rw3law/index"));
 const Rw3lawDokumen = lazy(() => import("@/pages/public/rw3law/dokumen"));
 
-import { VISITRW3_ROUTES } from "@/lib/visitrw3-routes";
 const Visitrw3Hub = lazy(() => import("@/pages/visitrw3/hub"));
 const Visitrw3HubPemilik = lazy(() => import("@/pages/visitrw3/hub-pemilik"));
-const Visitrw3HubUsahaRumahan = lazy(() => import("@/pages/visitrw3/hub-usaha-rumahan"));
 const Visitrw3HubPenyewa = lazy(() => import("@/pages/visitrw3/hub-penyewa"));
 const Visitrw3DaftarProperti = lazy(() => import("@/pages/visitrw3/daftar-properti"));
 const Visitrw3Pengajuan = lazy(() => import("@/pages/visitrw3/pengajuan"));
@@ -43,6 +35,16 @@ const Visitrw3Perpanjang = lazy(() => import("@/pages/visitrw3/perpanjang"));
 const Visitrw3Status = lazy(() => import("@/pages/visitrw3/status"));
 const Visitrw3StatusProperti = lazy(() => import("@/pages/visitrw3/status-properti"));
 const Visitrw3Panduan = lazy(() => import("@/pages/visitrw3/panduan"));
+
+const Rw3bizHub = lazy(() => import("@/pages/rw3biz/hub"));
+const Rw3bizPengajuan = lazy(() => import("@/pages/rw3biz/pengajuan"));
+const Rw3bizPanduan = lazy(() => import("@/pages/rw3biz/panduan"));
+const Rw3bizStatus = lazy(() => import("@/pages/rw3biz/status"));
+const Rw3bizPerpanjang = lazy(() => import("@/pages/rw3biz/perpanjang"));
+
+const KarangtarunaHub = lazy(() => import("@/pages/karangtaruna/hub"));
+const KarangtarunaDaftar = lazy(() => import("@/pages/karangtaruna/daftar"));
+const KarangtarunaStatus = lazy(() => import("@/pages/karangtaruna/status"));
 
 const AdminLayout = lazy(() => import("@/components/admin-layout"));
 
@@ -55,19 +57,22 @@ const AdminSuratRw = lazy(() => import("@/pages/admin/surat-rw"));
 const AdminVisitrw3Landing = lazy(() => import("@/pages/admin/visitrw3-landing"));
 const AdminVisitrw3Dashboard = lazy(() => import("@/pages/admin/visitrw3-dashboard"));
 const AdminVisitrw3Kalender = lazy(() => import("@/pages/admin/visitrw3-kalender"));
-const AdminVisitrw3Antrian = lazy(() => import("@/pages/admin/visitrw3-antrian"));
+const AdminVisitrw3Antrian = lazy(() => import("@/pages/admin/visitrw3-antrian-page"));
 const AdminVisitrw3Properti = lazy(() => import("@/pages/admin/visitrw3-properti"));
 const AdminVisitrw3Penghuni = lazy(() => import("@/pages/admin/visitrw3-penghuni"));
 const AdminVisitrw3Pengaturan = lazy(() => import("@/pages/admin/visitrw3-pengaturan"));
+const AdminRw3bizLanding = lazy(() => import("@/pages/admin/rw3biz-landing"));
+const AdminRw3bizAntrian = lazy(() => import("@/pages/admin/rw3biz-antrian"));
+const AdminRw3bizBlast = lazy(() => import("@/pages/admin/rw3biz-blast"));
+const AdminRw3bizDashboard = lazy(() => import("@/pages/admin/rw3biz-dashboard"));
+const AdminRw3bizPengaturan = lazy(() => import("@/pages/admin/rw3biz-pengaturan"));
+const AdminKarangtarunaLanding = lazy(() => import("@/pages/admin/karangtaruna-landing"));
+const AdminKarangtarunaAnggota = lazy(() => import("@/pages/admin/karangtaruna-anggota"));
+const AdminKarangtarunaDashboard = lazy(() => import("@/pages/admin/karangtaruna-dashboard"));
 
 const AdminKeuangan = lazy(() => import("@/pages/admin/keuangan"));
 
 const AdminKelolaLaporan = lazy(() => import("@/pages/admin/kelola-laporan"));
-const AdminKelolaKekeringan = lazy(() => import("@/pages/admin/kelola-kekeringan"));
-const AdminProgramKerjaDashboard = lazy(() => import("@/pages/admin/program-kerja-dashboard"));
-const AdminProgramKerjaKelola = lazy(() => import("@/pages/admin/program-kerja-kelola"));
-const AdminInfrastruktur = lazy(() => import("@/pages/admin/program-kerja-infrastruktur"));
-const AdminUmkmMakeover = lazy(() => import("@/pages/admin/program-kerja-umkm"));
 
 import BlusukanrwLogin from "@/pages/blusukanrw/login";
 import BlusukanrwQuest from "@/pages/blusukanrw/quest";
@@ -127,8 +132,8 @@ function singgahLegacyRedirect(rest?: string): string {
   if (path === "pengajuan" || path.startsWith("pengajuan")) return "/visitrw3/pengajuan";
   if (path === "perpanjang" || path.startsWith("perpanjang")) return "/visitrw3/perpanjang";
   if (path === "status" || path.startsWith("status")) return "/visitrw3/status";
-  if (path === "login") return "/visitrw3/penyewa";
-  return "/visitrw3/penyewa";
+  if (path === "login") return "/visitrw3";
+  return "/visitrw3";
 }
 
 
@@ -320,7 +325,7 @@ function AdminRoutes() {
         <Route path="/admin/kependudukan" component={AdminKependudukanRingkasan} />
 
         <Route path="/admin/laporan" component={AdminKelolaLaporan} />
-        <Route path="/admin/kekeringan" component={AdminKelolaKekeringan} />
+        <Route path="/admin/kekeringan">{() => <Redirect to="/admin/laporan" />}</Route>
 
         <Route path="/admin/surat-warga">{() => <Redirect to="/admin/laporan" />}</Route>
         <Route path="/admin/dashboard">{() => <Redirect to="/admin/kependudukan" />}</Route>
@@ -332,6 +337,14 @@ function AdminRoutes() {
 
         <Route path="/admin/surat-rw" component={AdminSuratRw} />
 
+        <Route path="/admin/rw3biz/pengaturan" component={AdminRw3bizPengaturan} />
+        <Route path="/admin/rw3biz/antrian" component={AdminRw3bizAntrian} />
+        <Route path="/admin/rw3biz/blast" component={AdminRw3bizBlast} />
+        <Route path="/admin/rw3biz/dashboard" component={AdminRw3bizDashboard} />
+        <Route path="/admin/rw3biz" component={AdminRw3bizLanding} />
+        <Route path="/admin/karangtaruna/anggota" component={AdminKarangtarunaAnggota} />
+        <Route path="/admin/karangtaruna/dashboard" component={AdminKarangtarunaDashboard} />
+        <Route path="/admin/karangtaruna" component={AdminKarangtarunaLanding} />
         <Route path="/admin/visitrw3/pengaturan" component={AdminVisitrw3Pengaturan} />
         <Route path="/admin/visitrw3/properti" component={AdminVisitrw3Properti} />
         <Route path="/admin/visitrw3/penghuni" component={AdminVisitrw3Penghuni} />
@@ -339,15 +352,15 @@ function AdminRoutes() {
         <Route path="/admin/visitrw3/kalender" component={AdminVisitrw3Kalender} />
         <Route path="/admin/visitrw3/dashboard" component={AdminVisitrw3Dashboard} />
         <Route path="/admin/visitrw3" component={AdminVisitrw3Landing} />
-        <Route path="/admin/pemilik-kost">{() => <Redirect to="/admin/visitrw3/properti" />}</Route>
+        <Route path="/admin/pemilik-kost">{() => <Redirect to="/admin/visitrw3/antrian" />}</Route>
         <Route path="/admin/warga-singgah">{() => <Redirect to="/admin/visitrw3/penghuni" />}</Route>
 
         <Route path="/admin/keuangan" component={AdminKeuangan} />
 
-        <Route path="/admin/program-kerja/kelola" component={AdminProgramKerjaKelola} />
-        <Route path="/admin/program-kerja/infrastruktur" component={AdminInfrastruktur} />
-        <Route path="/admin/program-kerja/umkm" component={AdminUmkmMakeover} />
-        <Route path="/admin/program-kerja" component={AdminProgramKerjaDashboard} />
+        <Route path="/admin/program-kerja/kelola">{() => <Redirect to="/admin/laporan" />}</Route>
+        <Route path="/admin/program-kerja/infrastruktur">{() => <Redirect to="/admin/laporan" />}</Route>
+        <Route path="/admin/program-kerja/umkm">{() => <Redirect to="/admin/laporan" />}</Route>
+        <Route path="/admin/program-kerja">{() => <Redirect to="/admin/laporan" />}</Route>
 
         <Route path="/admin">{() => <Redirect to="/admin/laporan" />}</Route>
 
@@ -431,15 +444,15 @@ function PublicRoutes() {
     <Switch>
       {/* Beranda & form warga publik */}
       <Route path="/" component={PublicLanding} />
-      <Route path="/lapor/kekeringan/status" component={PublicLaporKekeringanStatus} />
-      <Route path="/lapor/kekeringan" component={PublicLaporKekeringan} />
+      <Route path="/lapor/kekeringan/status">{() => <Redirect to="/lapor" />}</Route>
+      <Route path="/lapor/kekeringan">{() => <Redirect to="/lapor" />}</Route>
       <Route path="/lapor/masalah" component={PublicLaporMasalah} />
       <Route path="/lapor/status" component={PublicLaporStatus} />
       <Route path="/lapor" component={PublicLapor} />
-      <Route path="/program/transparansi" component={PublicTransparansi} />
-      <Route path="/program/:pilar" component={PublicProgramPilar} />
-      <Route path="/program" component={PublicProgram} />
-      <Route path="/kampung-umkm" component={PublicKampungUmkm} />
+      <Route path="/program/transparansi">{() => <Redirect to="/" />}</Route>
+      <Route path="/program/:pilar">{() => <Redirect to="/" />}</Route>
+      <Route path="/program">{() => <Redirect to="/" />}</Route>
+      <Route path="/kampung-umkm">{() => <Redirect to="/" />}</Route>
       <Route path="/pelayanan" component={PublicPelayanan} />
 
       {/* RW3LAW — path kanonik /rwlaw */}
@@ -450,14 +463,28 @@ function PublicRoutes() {
       </Route>
       <Route path="/rw3law">{() => <Redirect to="/rwlaw" />}</Route>
 
-      {/* Visit RW3 */}
+      {/* RW3BIZ — izin usaha / jualan */}
+      <Route path="/rw3biz/pengajuan" component={Rw3bizPengajuan} />
+      <Route path="/rw3biz/perpanjang" component={Rw3bizPerpanjang} />
+      <Route path="/rw3biz/status" component={Rw3bizStatus} />
+      <Route path="/rw3biz/panduan" component={Rw3bizPanduan} />
+      <Route path="/rw3biz" component={Rw3bizHub} />
+
+      {/* Karang Taruna — pendataan pemuda */}
+      <Route path="/karangtaruna/daftar" component={KarangtarunaDaftar} />
+      <Route path="/karangtaruna/status" component={KarangtarunaStatus} />
+      <Route path="/karangtaruna" component={KarangtarunaHub} />
+
+      {/* Visit RW3 — tinggal (kost / kontrakan) */}
       <Route path="/visitrw3/daftar-usaha-rumahan">
-        {() => <Redirect to={VISITRW3_ROUTES.usahaRumahan.daftarProperti} />}
+        {() => <Redirect to="/rw3biz" />}
       </Route>
       <Route path="/visitrw3/ajukan-usaha-rumahan">
-        {() => <Redirect to={VISITRW3_ROUTES.usahaRumahan.pengajuan} />}
+        {() => <Redirect to="/rw3biz/pengajuan" />}
       </Route>
-      <Route path="/visitrw3/usaha-rumahan" component={Visitrw3HubUsahaRumahan} />
+      <Route path="/visitrw3/usaha-rumahan">
+        {() => <Redirect to="/rw3biz" />}
+      </Route>
       <Route path="/visitrw3/pemilik" component={Visitrw3HubPemilik} />
       <Route path="/visitrw3/penyewa" component={Visitrw3HubPenyewa} />
       <Route path="/visitrw3/daftar-properti" component={Visitrw3DaftarProperti} />
@@ -467,8 +494,12 @@ function PublicRoutes() {
       <Route path="/visitrw3/status" component={Visitrw3Status} />
       <Route path="/visitrw3/panduan" component={Visitrw3Panduan} />
       <Route path="/visitrw3/laporan">{() => <Redirect to="/lapor" />}</Route>
-      <Route path="/visitrw3/login">{() => <Redirect to="/visitrw3/penyewa" />}</Route>
+      <Route path="/visitrw3/login">{() => <Redirect to="/visitrw3" />}</Route>
       <Route path="/visitrw3" component={Visitrw3Hub} />
+
+      {/* Alias pendek — hindari tabrakan dengan /rwlaw */}
+      <Route path="/biz/pengajuan">{() => <Redirect to="/rw3biz/pengajuan" />}</Route>
+      <Route path="/biz">{() => <Redirect to="/rw3biz" />}</Route>
 
       {/* Fitur lama — redirect */}
       <Route path="/login">{() => <Redirect to="/" />}</Route>

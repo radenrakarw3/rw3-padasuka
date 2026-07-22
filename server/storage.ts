@@ -1973,6 +1973,9 @@ export class DatabaseStorage implements IStorage {
     const results = await db.select({
       id: wargaSinggah.id,
       pemilikKostId: wargaSinggah.pemilikKostId,
+      jenisWarga: wargaSinggah.jenisWarga,
+      rt: wargaSinggah.rt,
+      alamat: wargaSinggah.alamat,
       namaLengkap: wargaSinggah.namaLengkap,
       nik: wargaSinggah.nik,
       nomorWhatsapp: wargaSinggah.nomorWhatsapp,
@@ -1986,12 +1989,12 @@ export class DatabaseStorage implements IStorage {
       pengajuanId: wargaSinggah.pengajuanId,
       terminBulan: wargaSinggah.terminBulan,
       createdAt: wargaSinggah.createdAt,
-      namaKost: pemilikKost.namaKost,
-      namaPemilik: pemilikKost.namaPemilik,
-      rtKost: pemilikKost.rt,
+      namaKost: sql<string>`COALESCE(${wargaSinggah.alamat}, ${pemilikKost.namaKost}, '-')`,
+      namaPemilik: sql<string>`COALESCE(${pemilikKost.namaPemilik}, '')`,
+      rtKost: sql<number>`COALESCE(${wargaSinggah.rt}, ${pemilikKost.rt}, 0)`,
     })
       .from(wargaSinggah)
-      .innerJoin(pemilikKost, eq(wargaSinggah.pemilikKostId, pemilikKost.id))
+      .leftJoin(pemilikKost, eq(wargaSinggah.pemilikKostId, pemilikKost.id))
       .orderBy(desc(wargaSinggah.createdAt));
     return results;
   }
@@ -2066,6 +2069,9 @@ export class DatabaseStorage implements IStorage {
     const results = await db.select({
       id: wargaSinggah.id,
       pemilikKostId: wargaSinggah.pemilikKostId,
+      jenisWarga: wargaSinggah.jenisWarga,
+      rt: wargaSinggah.rt,
+      alamat: wargaSinggah.alamat,
       namaLengkap: wargaSinggah.namaLengkap,
       nik: wargaSinggah.nik,
       nomorWhatsapp: wargaSinggah.nomorWhatsapp,
@@ -2079,12 +2085,12 @@ export class DatabaseStorage implements IStorage {
       pengajuanId: wargaSinggah.pengajuanId,
       terminBulan: wargaSinggah.terminBulan,
       createdAt: wargaSinggah.createdAt,
-      namaKost: pemilikKost.namaKost,
-      namaPemilik: pemilikKost.namaPemilik,
-      nomorWaPemilik: pemilikKost.nomorWaPemilik,
+      namaKost: sql<string>`COALESCE(${wargaSinggah.alamat}, ${pemilikKost.namaKost}, '-')`,
+      namaPemilik: sql<string>`COALESCE(${pemilikKost.namaPemilik}, '')`,
+      nomorWaPemilik: sql<string>`COALESCE(${pemilikKost.nomorWaPemilik}, '')`,
     })
       .from(wargaSinggah)
-      .innerJoin(pemilikKost, eq(wargaSinggah.pemilikKostId, pemilikKost.id))
+      .leftJoin(pemilikKost, eq(wargaSinggah.pemilikKostId, pemilikKost.id))
       .where(and(
         eq(wargaSinggah.status, "aktif"),
         or(
@@ -2107,6 +2113,9 @@ export class DatabaseStorage implements IStorage {
       .select({
         id: wargaSinggah.id,
         pemilikKostId: wargaSinggah.pemilikKostId,
+        jenisWarga: wargaSinggah.jenisWarga,
+        rt: wargaSinggah.rt,
+        alamat: wargaSinggah.alamat,
         namaLengkap: wargaSinggah.namaLengkap,
         nik: wargaSinggah.nik,
         nomorWhatsapp: wargaSinggah.nomorWhatsapp,
@@ -2120,12 +2129,12 @@ export class DatabaseStorage implements IStorage {
         pengajuanId: wargaSinggah.pengajuanId,
         terminBulan: wargaSinggah.terminBulan,
         createdAt: wargaSinggah.createdAt,
-        namaKost: pemilikKost.namaKost,
-        namaPemilik: pemilikKost.namaPemilik,
-        nomorWaPemilik: pemilikKost.nomorWaPemilik,
+        namaKost: sql<string>`COALESCE(${wargaSinggah.alamat}, ${pemilikKost.namaKost}, '-')`,
+        namaPemilik: sql<string>`COALESCE(${pemilikKost.namaPemilik}, '')`,
+        nomorWaPemilik: sql<string>`COALESCE(${pemilikKost.nomorWaPemilik}, '')`,
       })
       .from(wargaSinggah)
-      .innerJoin(pemilikKost, eq(wargaSinggah.pemilikKostId, pemilikKost.id))
+      .leftJoin(pemilikKost, eq(wargaSinggah.pemilikKostId, pemilikKost.id))
       .where(and(eq(wargaSinggah.status, "aktif"), eq(wargaSinggah.tanggalHabisKontrak, targetStr)));
 
     return results;

@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, getQueryFn, getApiErrorMessage } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -18,235 +17,87 @@ type SettingRow = {
   keterangan?: string | null;
 };
 
-const FEE_GROUPS: { title: string; description?: string; keys: string[] }[] = [
-  {
-    title: "Batas ukuran properti (jumlah pintu)",
-    description: "Kelompok kecil / sedang / besar untuk kost & kontrakan.",
-    keys: ["tier_pintu_sedang_min", "tier_pintu_besar_min"],
-  },
-  {
-    title: "Bisnis — tarif per hari",
-    description:
-      "Panduan saat survey: tarif × jumlah hari periode izin = total masuk Kas RW. Usaha rumahan memakai tarif kiosk.",
-    keys: ["fee_bisnis_lapak_per_hari", "fee_bisnis_kiosk_per_hari", "fee_bisnis_lain_per_hari"],
-  },
-  {
-    title: "Penyewa tinggal — kost (per unit/bulan)",
-    description: "Panduan: tarif × termin bulan pengajuan = total masuk Kas RW (bukan per bulan terpisah).",
-    keys: ["fee_kost_kecil_per_unit_bulan", "fee_kost_sedang_per_unit_bulan", "fee_kost_besar_per_unit_bulan"],
-  },
-  {
-    title: "Penyewa tinggal — kontrakan (per unit/bulan)",
-    description: "Sama seperti kost — dikalikan termin bulan, bukan dicatat per bulan.",
-    keys: [
-      "fee_kontrakan_kecil_per_unit_bulan",
-      "fee_kontrakan_sedang_per_unit_bulan",
-      "fee_kontrakan_besar_per_unit_bulan",
-    ],
-  },
-  {
-    title: "Pemilik — lapak, kiosk & usaha rumahan (per bulan)",
-    description: "Kontribusi pendaftaran properti — total sekali masuk Kas RW (biasanya 1 bulan).",
-    keys: ["fee_pemilik_lapak_per_bulan", "fee_pemilik_kiosk_per_bulan"],
-  },
-  {
-    title: "Pemilik — kost (per bulan)",
-    description: "Tarif panduan kontribusi pemilik per bulan (total sekali saat verifikasi properti).",
-    keys: ["fee_pemilik_kost_kecil_per_bulan", "fee_pemilik_kost_sedang_per_bulan", "fee_pemilik_kost_besar_per_bulan"],
-  },
-  {
-    title: "Pemilik — kontrakan (per bulan)",
-    description: "Tarif panduan kontribusi pemilik per bulan (total sekali saat verifikasi properti).",
-    keys: [
-      "fee_pemilik_kontrakan_kecil_per_bulan",
-      "fee_pemilik_kontrakan_sedang_per_bulan",
-      "fee_pemilik_kontrakan_besar_per_bulan",
-    ],
-  },
-];
+const TEXT_KEYS = ["tata_tertib_masyarakat", "tata_tertib_penyewa"] as const;
 
-function feeUnitSuffix(key: string): string {
-  if (key.includes("per_hari")) return "Rp / hari";
-  if (key.includes("per_bulan") || key.includes("per_unit_bulan")) return "Rp / bulan";
-  if (key.startsWith("tier_")) return "pintu";
-  return "Rp";
-}
-
-const TEXT_KEYS = ["tata_tertib_masyarakat", "tata_tertib_penyewa", "tata_tertib_pemilik"] as const;
-
-const ALL_FEE_KEYS = FEE_GROUPS.flatMap((g) => g.keys);
+const LABEL_OVERRIDE: Partial<Record<(typeof TEXT_KEYS)[number], string>> = {
+  tata_tertib_penyewa: "Tata tertib warga singgah",
+};
 
 export default function AdminVisitrw3Pengaturan() {
   const { toast } = useToast();
-  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
 
-  const {
-    data: rows = [],
-    isLoading,
-    isError,
-    error,
-    refetch,
-    isFetching,
-  } = useQuery<SettingRow[]>({
+  const { data: rows = [], isLoading, refetch, isFetching } = useQuery<SettingRow[]>({
     queryKey: ["/api/admin/visitrw3/settings"],
     queryFn: getQueryFn({ on401: "throw" }),
-    staleTime: 0,
-    retry: 1,
   });
 
-  const saveMutation = useMutation({
+  const byKey = Object.fromEntries(rows.map((r) => [r.key, r]));
+
+  const mutation = useMutation({
     mutationFn: async ({ key, value }: { key: string; value: string }) => {
-      const res = await apiRequest("PATCH", `/api/admin/visitrw3/settings/${encodeURIComponent(key)}`, {
-        value,
-      });
-      return res.json();
+      await apiRequest("PATCH", `/api/admin/visitrw3/settings/${encodeURIComponent(key)}`, { value });
     },
-    onSuccess: (_data, vars) => {
-      toast({ title: "Disimpan", description: vars.key });
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/visitrw3/settings"] });
       queryClient.invalidateQueries({ queryKey: ["/api/public/visitrw3/settings"] });
+      toast({ title: "Pengaturan disimpan" });
     },
-    onError: (e: unknown) => {
+    onError: (e: Error) => {
       toast({ title: "Gagal menyimpan", description: getApiErrorMessage(e), variant: "destructive" });
     },
   });
 
-  function valueFor(key: string) {
-    if (draft[key] !== undefined) return draft[key];
-    return rows.find((r) => r.key === key)?.value ?? "";
+  function valueOf(key: string) {
+    return drafts[key] ?? byKey[key]?.value ?? "";
   }
 
-  function save(key: string) {
-    saveMutation.mutate({ key, value: valueFor(key) });
-    setDraft((d) => {
-      const next = { ...d };
-      delete next[key];
-      return next;
-    });
-  }
-
-  const header = (
-    <Visitrw3AdminNav
-      title="Pengaturan"
-      description="Tarif panduan survey dan tata tertib"
-      actions={
-        <Button variant="outline" size="sm" className="gap-1" onClick={() => refetch()} disabled={isFetching}>
-          <RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} />
-          Muat ulang
-        </Button>
-      }
-    />
-  );
-
-  if (isLoading && rows.length === 0 && !isError) {
-    return (
-      <Visitrw3AdminShell>
-        {header}
-        <div className="flex justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-        </div>
-      </Visitrw3AdminShell>
-    );
-  }
-
-  if (isError && !rows.length) {
-    return (
-      <Visitrw3AdminShell>
-        {header}
-        <div className="max-w-3xl space-y-5">
-          <Visitrw3Panel>
-            <div className="space-y-3">
-              <p className="text-sm text-destructive">Gagal memuat pengaturan: {getApiErrorMessage(error)}</p>
-              <p className="text-xs text-muted-foreground">
-                Pastikan server berjalan dan Anda sudah login sebagai admin. Tabel pengaturan akan dibuat otomatis saat
-                dimuat ulang.
-              </p>
-              <Button onClick={() => refetch()}>Coba lagi</Button>
-            </div>
-          </Visitrw3Panel>
-        </div>
-      </Visitrw3AdminShell>
-    );
+  function displayLabel(key: (typeof TEXT_KEYS)[number]) {
+    return LABEL_OVERRIDE[key] ?? byKey[key]?.label ?? key;
   }
 
   return (
     <Visitrw3AdminShell>
-      {header}
+      <Visitrw3AdminNav
+        title="Pengaturan"
+        description="Tata tertib yang ditampilkan di formulir publik Visit RW3"
+        actions={
+          <Button type="button" variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+            {isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            <span className="ml-1.5">Muat ulang</span>
+          </Button>
+        }
+      />
 
-      <div className="max-w-3xl space-y-5">
-      <p className="text-sm text-muted-foreground">
-        Tarif berjenjang sebagai panduan saat survey. Nominal + satuan (per hari/minggu/bulan/tahun)
-        disimpan di pengajuan — pencatatan uang ke Kas RW dilakukan manual di menu Keuangan.
-      </p>
-
-      {FEE_GROUPS.map((group) => (
-        <Visitrw3Panel key={group.title} title={group.title} description={group.description}>
-          <div className="space-y-4">
-            {group.keys.map((key) => {
-              const meta = rows.find((r) => r.key === key);
-              return (
-                <div key={key} className="space-y-2">
-                  <Label>{meta?.label ?? key.replace(/_/g, " ")}</Label>
-                  {meta?.keterangan && (
-                    <p className="text-xs text-muted-foreground">{meta.keterangan}</p>
-                  )}
-                  {!meta && (
-                    <p className="text-xs text-amber-600">
-                      Belum ada di database — isi nilai lalu Simpan untuk membuat entri.
-                    </p>
-                  )}
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <Input
-                        type="number"
-                        min={0}
-                        className="pr-24"
-                        value={valueFor(key)}
-                        onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
-                      />
-                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-                        {feeUnitSuffix(key)}
-                      </span>
-                    </div>
-                    <Button type="button" onClick={() => save(key)} disabled={saveMutation.isPending}>
-                      Simpan
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Visitrw3Panel>
-      ))}
-
-      <Visitrw3Panel title="Tata tertib">
-        <div className="space-y-6">
-          {TEXT_KEYS.map((key) => {
-            const meta = rows.find((r) => r.key === key);
-            const val = valueFor(key);
-            return (
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Memuat…</p>
+      ) : (
+        <Visitrw3Panel title="Tata tertib">
+          <div className="space-y-6">
+            {TEXT_KEYS.map((key) => (
               <div key={key} className="space-y-2">
-                <Label>{meta?.label ?? key}</Label>
+                <Label>{displayLabel(key)}</Label>
+                {byKey[key]?.keterangan ? (
+                  <p className="text-xs text-muted-foreground">{byKey[key].keterangan}</p>
+                ) : null}
                 <Textarea
-                  rows={8}
-                  value={val}
-                  onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
+                  rows={6}
+                  value={valueOf(key)}
+                  onChange={(e) => setDrafts((d) => ({ ...d, [key]: e.target.value }))}
                 />
-                <Button type="button" onClick={() => save(key)} disabled={saveMutation.isPending}>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={mutation.isPending || valueOf(key) === (byKey[key]?.value ?? "")}
+                  onClick={() => mutation.mutate({ key, value: valueOf(key) })}
+                >
                   Simpan
                 </Button>
               </div>
-            );
-          })}
-        </div>
-      </Visitrw3Panel>
-
-      {ALL_FEE_KEYS.some((k) => !rows.find((r) => r.key === k)) && (
-        <p className="text-xs text-muted-foreground text-center">
-          Beberapa tarif tier belum ter-seed. Klik Muat ulang setelah restart server, atau simpan tiap field di atas.
-        </p>
+            ))}
+          </div>
+        </Visitrw3Panel>
       )}
-      </div>
     </Visitrw3AdminShell>
   );
 }

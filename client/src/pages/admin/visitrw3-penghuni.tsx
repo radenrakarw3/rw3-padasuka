@@ -15,7 +15,6 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { pekerjaanLegacyOptions, keperluanTinggalOptions, rtOptions } from "@/lib/constants";
 import { Visitrw3AdminNav } from "@/components/admin/visitrw3-admin-nav";
-import { isPropertiUntukPenghuniTinggal } from "@/lib/visitrw3-admin-labels";
 import {
   Visitrw3AdminShell,
   Visitrw3EmptyState,
@@ -24,21 +23,17 @@ import {
   Visitrw3RtBadge,
   Visitrw3Toolbar,
 } from "@/components/admin/visitrw3-admin-ui";
-import { Plus, Pencil, Trash2, User, Phone, Briefcase, Calendar, Users as UsersIcon, RefreshCw, History } from "lucide-react";
-
-interface PemilikKost {
-  id: number;
-  namaKost: string;
-  namaPemilik: string;
-  rt: number;
-  jenisProperti?: string;
-  izinTinggal?: boolean;
-  statusProperti?: string;
-}
+import { Plus, Pencil, Trash2, User, Phone, Briefcase, Calendar, Users as UsersIcon, RefreshCw, History, MapPin } from "lucide-react";
+import { labelJenisWarga } from "@shared/visitrw3-jenis-warga";
+import { VISIT_RW3_JENIS, isPengajuanVisitRw3 } from "@shared/visitrw3-produk";
+import { getStatusKontrak, getDaysRemaining } from "@/lib/visitrw3-kontrak";
 
 interface WargaSinggahItem {
   id: number;
-  pemilikKostId: number;
+  pemilikKostId: number | null;
+  jenisWarga?: string | null;
+  rt?: number | null;
+  alamat?: string | null;
   namaLengkap: string;
   nik: string;
   nomorWhatsapp: string;
@@ -63,7 +58,13 @@ interface RiwayatKontrak {
   createdAt: string;
 }
 
-import { getStatusKontrak, getDaysRemaining } from "@/lib/visitrw3-kontrak";
+function displayRt(item: WargaSinggahItem): number {
+  return item.rt ?? item.rtKost ?? 0;
+}
+
+function displayAlamat(item: WargaSinggahItem): string {
+  return item.alamat?.trim() || item.namaKost || "—";
+}
 
 export default function AdminVisitrw3Penghuni() {
   const { toast } = useToast();
@@ -75,9 +76,12 @@ export default function AdminVisitrw3Penghuni() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterRt, setFilterRt] = useState<string>("semua");
   const [filterStatus, setFilterStatus] = useState<string>("semua");
+  const [filterJenisWarga, setFilterJenisWarga] = useState<string>("semua");
 
   const [formData, setFormData] = useState({
-    pemilikKostId: "",
+    jenisWarga: "kontrak",
+    rt: "",
+    alamat: "",
     namaLengkap: "",
     nik: "",
     nomorWhatsapp: "",
@@ -106,11 +110,6 @@ export default function AdminVisitrw3Penghuni() {
     if (target) setPerpanjangTarget(target);
   }, [wargaList]);
 
-  const { data: pemilikList } = useQuery<PemilikKost[]>({
-    queryKey: ["/api/pemilik-kost"],
-    queryFn: getQueryFn({ on401: "throw" }),
-  });
-
   const { data: riwayatList } = useQuery<RiwayatKontrak[]>({
     queryKey: ["/api/warga-singgah", riwayatTarget, "riwayat"],
     queryFn: getQueryFn({ on401: "throw" }),
@@ -118,7 +117,7 @@ export default function AdminVisitrw3Penghuni() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: unknown) => {
       const res = await apiRequest("POST", "/api/warga-singgah", data);
       return readJsonSafely(res);
     },
@@ -132,7 +131,7 @@ export default function AdminVisitrw3Penghuni() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+    mutationFn: async ({ id, data }: { id: number; data: unknown }) => {
       const res = await apiRequest("PUT", `/api/warga-singgah/${id}`, data);
       return readJsonSafely(res);
     },
@@ -160,7 +159,7 @@ export default function AdminVisitrw3Penghuni() {
   });
 
   const perpanjangMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+    mutationFn: async ({ id, data }: { id: number; data: unknown }) => {
       const res = await apiRequest("PATCH", `/api/warga-singgah/${id}/perpanjang`, data);
       return readJsonSafely(res);
     },
@@ -175,7 +174,19 @@ export default function AdminVisitrw3Penghuni() {
   });
 
   function resetForm() {
-    setFormData({ pemilikKostId: "", namaLengkap: "", nik: "", nomorWhatsapp: "", pekerjaan: "", tanggalMulaiKontrak: "", tanggalHabisKontrak: "", jumlahPenghuni: "1", keperluanTinggal: "" });
+    setFormData({
+      jenisWarga: "kontrak",
+      rt: "",
+      alamat: "",
+      namaLengkap: "",
+      nik: "",
+      nomorWhatsapp: "",
+      pekerjaan: "",
+      tanggalMulaiKontrak: "",
+      tanggalHabisKontrak: "",
+      jumlahPenghuni: "1",
+      keperluanTinggal: "",
+    });
     setEditData(null);
     setShowForm(false);
   }
@@ -183,7 +194,9 @@ export default function AdminVisitrw3Penghuni() {
   function handleEdit(item: WargaSinggahItem) {
     setEditData(item);
     setFormData({
-      pemilikKostId: String(item.pemilikKostId),
+      jenisWarga: item.jenisWarga || "kontrak",
+      rt: String(displayRt(item) || ""),
+      alamat: item.alamat?.trim() || item.namaKost || "",
       namaLengkap: item.namaLengkap,
       nik: item.nik,
       nomorWhatsapp: item.nomorWhatsapp,
@@ -199,14 +212,17 @@ export default function AdminVisitrw3Penghuni() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const payload = {
-      pemilikKostId: parseInt(formData.pemilikKostId),
+      pemilikKostId: null,
+      jenisWarga: formData.jenisWarga,
+      rt: parseInt(formData.rt, 10),
+      alamat: formData.alamat.trim(),
       namaLengkap: formData.namaLengkap,
       nik: formData.nik,
       nomorWhatsapp: formData.nomorWhatsapp,
       pekerjaan: formData.pekerjaan,
       tanggalMulaiKontrak: formData.tanggalMulaiKontrak,
       tanggalHabisKontrak: formData.tanggalHabisKontrak,
-      jumlahPenghuni: parseInt(formData.jumlahPenghuni),
+      jumlahPenghuni: parseInt(formData.jumlahPenghuni, 10),
       keperluanTinggal: formData.keperluanTinggal,
     };
     if (editData) {
@@ -216,39 +232,34 @@ export default function AdminVisitrw3Penghuni() {
     }
   }
 
-  const propertiTinggal = (pemilikList || []).filter(isPropertiUntukPenghuniTinggal);
-
-  const propertiUntukForm = (() => {
-    const ids = new Set(propertiTinggal.map((p) => p.id));
-    if (editData && !ids.has(editData.pemilikKostId)) {
-      const current = (pemilikList || []).find((p) => p.id === editData.pemilikKostId);
-      if (current) return [current, ...propertiTinggal];
-    }
-    return propertiTinggal;
-  })();
-
   const filtered = (wargaList || []).filter((w) => {
-    const matchSearch = searchTerm === "" ||
+    if (!isPengajuanVisitRw3({ jenisWarga: w.jenisWarga })) return false;
+    const alamat = displayAlamat(w).toLowerCase();
+    const matchSearch =
+      searchTerm === "" ||
       w.namaLengkap.toLowerCase().includes(searchTerm.toLowerCase()) ||
       w.nik.includes(searchTerm) ||
-      w.namaKost.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchRt = filterRt === "semua" || w.rtKost === parseInt(filterRt);
+      alamat.includes(searchTerm.toLowerCase());
+    const matchRt = filterRt === "semua" || displayRt(w) === parseInt(filterRt, 10);
+    const matchJenis =
+      filterJenisWarga === "semua" || (w.jenisWarga || "") === filterJenisWarga;
     const status = getStatusKontrak(w.tanggalHabisKontrak);
-    const matchStatus = filterStatus === "semua" ||
+    const matchStatus =
+      filterStatus === "semua" ||
       (filterStatus === "aktif" && status.label === "Aktif") ||
       (filterStatus === "mendekati" && status.label.startsWith("H-")) ||
       (filterStatus === "habis" && status.label === "Habis");
-    return matchSearch && matchRt && matchStatus;
+    return matchSearch && matchRt && matchJenis && matchStatus;
   });
 
   return (
     <Visitrw3AdminShell>
       <Visitrw3AdminNav
-        title="Kontrak aktif"
-        description={`Penghuni dengan izin Visit RW3 yang sudah disetujui · ${wargaList?.length || 0} kontrak aktif`}
+        title="Warga singgah aktif"
+        description={`Kontrak izin Visit RW3 yang sudah disetujui · ${wargaList?.length || 0} warga aktif`}
         actions={
           <Button size="sm" onClick={() => { resetForm(); setShowForm(true); }} data-testid="button-tambah-warga-singgah">
-            <Plus className="w-4 h-4 mr-1" /> Tambah penghuni
+            <Plus className="w-4 h-4 mr-1" /> Tambah warga
           </Button>
         }
       />
@@ -256,8 +267,19 @@ export default function AdminVisitrw3Penghuni() {
       <Visitrw3Toolbar
         search={searchTerm}
         onSearchChange={setSearchTerm}
-        searchPlaceholder="Cari nama/NIK/kost..."
+        searchPlaceholder="Cari nama/NIK/alamat..."
       >
+        <Select value={filterJenisWarga} onValueChange={setFilterJenisWarga}>
+          <SelectTrigger className="w-36 h-9" data-testid="select-filter-jenis-singgah">
+            <SelectValue placeholder="Jenis" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="semua">Semua jenis</SelectItem>
+            {VISIT_RW3_JENIS.map((j) => (
+              <SelectItem key={j} value={j}>{labelJenisWarga(j)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Select value={filterRt} onValueChange={setFilterRt}>
           <SelectTrigger className="w-28 h-9" data-testid="select-filter-rt-singgah">
             <SelectValue />
@@ -285,22 +307,39 @@ export default function AdminVisitrw3Penghuni() {
       {showForm && (
         <Visitrw3FormCard title={editData ? "Edit kontrak penghuni" : "Tambah kontrak penghuni"} onClose={resetForm}>
             <form onSubmit={handleSubmit} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Jenis warga</Label>
+                  <Select value={formData.jenisWarga} onValueChange={(v) => setFormData({ ...formData, jenisWarga: v })}>
+                    <SelectTrigger data-testid="select-jenis-warga-singgah"><SelectValue placeholder="Pilih" /></SelectTrigger>
+                    <SelectContent>
+                      {VISIT_RW3_JENIS.map((j) => (
+                        <SelectItem key={j} value={j}>{labelJenisWarga(j)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">RT</Label>
+                  <Select value={formData.rt} onValueChange={(v) => setFormData({ ...formData, rt: v })}>
+                    <SelectTrigger data-testid="select-rt-singgah"><SelectValue placeholder="Pilih RT" /></SelectTrigger>
+                    <SelectContent>
+                      {rtOptions.map((rt) => (
+                        <SelectItem key={rt} value={String(rt)}>RT {String(rt).padStart(2, "0")}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
               <div>
-                <Label className="text-xs">Kost / kontrakan</Label>
-                <Select value={formData.pemilikKostId} onValueChange={(v) => setFormData({ ...formData, pemilikKostId: v })}>
-                  <SelectTrigger data-testid="select-pemilik-kost"><SelectValue placeholder="Pilih kost/kontrakan" /></SelectTrigger>
-                  <SelectContent>
-                    {propertiUntukForm.map((p) => (
-                      <SelectItem key={p.id} value={String(p.id)}>
-                        {p.namaKost} (RT {String(p.rt).padStart(2, "0")})
-                        {!isPropertiUntukPenghuniTinggal(p) ? " — tidak aktif untuk tinggal" : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  Hanya kost/kontrakan dengan izin tinggal. Usaha rumahan & kiosk dikelola lewat menu properti terpisah.
-                </p>
+                <Label className="text-xs">Alamat</Label>
+                <Input
+                  value={formData.alamat}
+                  onChange={(e) => setFormData({ ...formData, alamat: e.target.value })}
+                  required
+                  placeholder="Alamat tinggal / lokasi usaha"
+                  data-testid="input-alamat-singgah"
+                />
               </div>
               <div>
                 <Label className="text-xs">Nama Lengkap</Label>
@@ -354,7 +393,7 @@ export default function AdminVisitrw3Penghuni() {
                 <Label className="text-xs">Jumlah Penghuni</Label>
                 <Input type="number" min="1" value={formData.jumlahPenghuni} onChange={(e) => setFormData({ ...formData, jumlahPenghuni: e.target.value })} required data-testid="input-jumlah-penghuni-singgah" />
               </div>
-              <Button type="submit" className="w-full" disabled={createMutation.isPending || updateMutation.isPending} data-testid="button-submit-warga-singgah">
+              <Button type="submit" className="w-full" disabled={createMutation.isPending || updateMutation.isPending || !formData.rt} data-testid="button-submit-warga-singgah">
                 {(createMutation.isPending || updateMutation.isPending) ? "Menyimpan..." : editData ? "Perbarui" : "Simpan"}
               </Button>
             </form>
@@ -383,6 +422,7 @@ export default function AdminVisitrw3Penghuni() {
             const daysLeft = getDaysRemaining(item.tanggalHabisKontrak);
             const accent =
               status.label === "Habis" ? "danger" : status.label.startsWith("H-") ? "warning" : "success";
+            const rt = displayRt(item);
             return (
               <Visitrw3ListItem
                 key={item.id}
@@ -409,10 +449,16 @@ export default function AdminVisitrw3Penghuni() {
                   <User className="w-4 h-4 text-[hsl(163,55%,22%)] shrink-0" />
                   <span className="font-semibold text-sm" data-testid={`text-nama-singgah-${item.id}`}>{item.namaLengkap}</span>
                   <Badge variant={status.variant} className="text-[10px]" data-testid={`badge-status-${item.id}`}>{status.label}</Badge>
-                  <Visitrw3RtBadge rt={item.rtKost} />
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[hsl(163,55%,22%)]/10 text-[hsl(163,55%,22%)]">
+                    {labelJenisWarga(item.jenisWarga)}
+                  </span>
+                  {rt > 0 && <Visitrw3RtBadge rt={rt} />}
                 </div>
                 <p className="text-xs text-muted-foreground font-mono">{item.nik}</p>
-                <p className="text-xs text-muted-foreground">{item.namaKost}</p>
+                <p className="text-xs text-muted-foreground flex items-start gap-1 mt-0.5">
+                  <MapPin className="w-3 h-3 shrink-0 mt-0.5" />
+                  <span className="break-words">{displayAlamat(item)}</span>
+                </p>
                 <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mt-1.5">
                   <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{item.nomorWhatsapp}</span>
                   <span className="flex items-center gap-1"><Briefcase className="w-3 h-3" />{item.pekerjaan}</span>

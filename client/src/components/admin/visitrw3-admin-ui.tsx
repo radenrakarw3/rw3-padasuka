@@ -149,14 +149,18 @@ export function Visitrw3ChipFilters<T extends string>({
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-wrap gap-1.5", className)}>
+    <div className={cn("flex flex-wrap gap-1.5", className)} role="tablist">
       {options.map((opt) => {
         const active = value === opt.value;
         return (
           <button
             key={opt.value}
             type="button"
-            onClick={() => onChange(opt.value)}
+            role="tab"
+            aria-selected={active}
+            onClick={() => {
+              if (!active) onChange(opt.value);
+            }}
             className={cn(
               "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all",
               active
@@ -165,7 +169,7 @@ export function Visitrw3ChipFilters<T extends string>({
             )}
           >
             {opt.label}
-            {opt.count != null && opt.count > 0 && (
+            {opt.count != null && (
               <span
                 className={cn(
                   "min-w-[1.25rem] rounded-full px-1 py-0.5 text-[10px] text-center leading-none",

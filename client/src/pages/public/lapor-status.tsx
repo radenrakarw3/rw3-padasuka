@@ -50,7 +50,7 @@ export default function PublicLaporStatus() {
       <FeatureExplain title="Cek laporan masalah lingkungan" className="mb-4">
         <p>
           Masukkan nomor referensi dari konfirmasi laporan masalah (format <strong>LAP-…</strong>).
-          Status: menunggu → diproses → selesai. Bukan untuk antrian kekeringan air atau Visit RW3.
+          Status: menunggu → diproses → selesai. Bukan untuk Visit RW3.
         </p>
       </FeatureExplain>
 

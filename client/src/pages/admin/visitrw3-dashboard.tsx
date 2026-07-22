@@ -2,13 +2,12 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
-  Building2,
   ClipboardList,
   Users,
-  Wallet,
   Clock,
   CheckCircle2,
   Filter,
+  UserRound,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -25,7 +24,6 @@ import {
   DonutBlock,
   FunnelBlock,
   HistogramBlock,
-  CHART_GOLD,
   MetricRingBlock,
   PIE_COLORS,
   pairsToPie,
@@ -33,18 +31,14 @@ import {
   RankedBarBlock,
   rowsToPie,
   StackedPercentBlock,
-  StatChips,
   toPieData,
 } from "@/components/admin/visitrw3-dashboard-charts";
-import { formatRupiah } from "@/lib/visitrw3-kontribusi";
 import { rtOptions } from "@/lib/constants";
 import { getApiErrorMessage, readJsonSafely } from "@/lib/queryClient";
 import {
   type Visitrw3DashboardStats,
   normalizeVisitrw3DashboardStats,
-  visitrw3JenisPropertiLabels,
   visitrw3KeperluanLabels,
-  visitrw3PropertiStatusLabels,
   visitrw3StatusLabels,
   visitrw3TipeLabels,
 } from "@shared/visitrw3-analytics";
@@ -53,10 +47,6 @@ const DEFAULT_RT_LIST = [...rtOptions];
 
 function formatNumber(n: number) {
   return n.toLocaleString("id-ID");
-}
-
-function labelPropertiJenis(label: string) {
-  return visitrw3JenisPropertiLabels[label] ?? label;
 }
 
 export default function AdminVisitrw3Dashboard() {
@@ -95,25 +85,12 @@ export default function AdminVisitrw3Dashboard() {
     ];
   }, [data?.ringkasan]);
 
+  const jenisWargaPie = useMemo(() => rowsToPie(data?.pengajuan.byJenisWarga ?? []), [data?.pengajuan.byJenisWarga]);
+  const jenisWargaRadial = useMemo(() => rowsToPie(data?.pengajuan.byJenisWarga ?? []), [data?.pengajuan.byJenisWarga]);
+
   const keperluanSegments = useMemo(() => {
     if (!data?.pengajuan) return [];
     return toPieData(data.pengajuan.byKeperluan ?? {}, visitrw3KeperluanLabels);
-  }, [data?.pengajuan]);
-
-  const bisnisWilayahSegments = useMemo(() => {
-    if (!data?.pengajuan) return [];
-    return pairsToPie([
-      { label: "Bisnis di wilayah RW3", value: data.pengajuan.bisnisDiRw3 },
-      { label: "Bisnis luar wilayah", value: data.pengajuan.bisnisLuar },
-    ]);
-  }, [data?.pengajuan]);
-
-  const propertiTerkaitSegments = useMemo(() => {
-    if (!data?.pengajuan) return [];
-    return pairsToPie([
-      { label: "Terhubung properti", value: data.pengajuan.denganProperti },
-      { label: "Tanpa properti (luar)", value: data.pengajuan.tanpaProperti },
-    ]);
   }, [data?.pengajuan]);
 
   const anakSegments = useMemo(() => {
@@ -166,41 +143,9 @@ export default function AdminVisitrw3Dashboard() {
     return decided > 0 ? (disetujui / decided) * 100 : null;
   }, [data?.ringkasan]);
 
-  const pjPropertiPct = useMemo(() => {
-    if (!data?.properti) return null;
-    const total = data.properti.denganPenanggungJawab + data.properti.tanpaPenanggungJawab;
-    return total > 0 ? (data.properti.denganPenanggungJawab / total) * 100 : null;
-  }, [data?.properti]);
-
-  const propertiStatusPie = useMemo(
-    () =>
-      rowsToPie(
-        (data?.properti.byStatusProperti ?? []).map((r) => ({
-          label: visitrw3PropertiStatusLabels[r.label] ?? r.label,
-          count: r.count,
-        })),
-      ),
-    [data?.properti.byStatusProperti],
-  );
-  const izinPropertiDonut = useMemo(() => rowsToPie(data?.properti.byIzinKombinasi ?? []), [data?.properti.byIzinKombinasi]);
-  const propertiJenisRadial = useMemo(
-    () =>
-      rowsToPie(
-        (data?.properti.byJenisProperti ?? []).map((r) => ({
-          label: labelPropertiJenis(r.label),
-          count: r.count,
-        })),
-      ),
-    [data?.properti.byJenisProperti],
-  );
-
   const rtBar = useMemo(
     () => (data?.pengajuan.byRt ?? []).map((r) => ({ label: `RT ${String(r.rt).padStart(2, "0")}`, count: r.count })),
     [data?.pengajuan.byRt],
-  );
-  const propertiRtBar = useMemo(
-    () => (data?.properti.byRt ?? []).map((r) => ({ label: `RT ${String(r.rt).padStart(2, "0")}`, count: r.count })),
-    [data?.properti.byRt],
   );
   const jumlahPenghuniRanked = useMemo(() => data?.pengajuan.byJumlahPenghuni ?? [], [data?.pengajuan.byJumlahPenghuni]);
   const pekerjaanRanked = useMemo(() => data?.penghuni.topPekerjaan ?? [], [data?.penghuni.topPekerjaan]);
@@ -210,7 +155,6 @@ export default function AdminVisitrw3Dashboard() {
   const jenisKendaraanRanked = useMemo(() => data?.penghuni.byJenisKendaraan ?? [], [data?.penghuni.byJenisKendaraan]);
   const tempatKerjaRanked = useMemo(() => data?.penghuni.topTempatKerja ?? [], [data?.penghuni.topTempatKerja]);
   const jenisUsahaRanked = useMemo(() => data?.pengajuan.byJenisTempatUsaha ?? [], [data?.pengajuan.byJenisTempatUsaha]);
-  const pintuTierBar = useMemo(() => data?.properti.byJumlahPintu ?? [], [data?.properti.byJumlahPintu]);
   const trenArea = useMemo(() => (data?.trenBulan ?? []).map((r) => ({ label: r.bulan, count: r.count })), [data?.trenBulan]);
 
   const pengajuanBaru = data?.pengajuan.byTipe?.pengajuan_baru ?? 0;
@@ -222,7 +166,7 @@ export default function AdminVisitrw3Dashboard() {
     <Visitrw3AdminShell className="space-y-6">
       <Visitrw3AdminNav
         title="Statistik Visit RW3"
-        description={`Analytics form pengajuan, properti, dan kontrak aktif — ${selectedRtLabel}`}
+        description={`Analytics pengajuan & warga singgah aktif — ${selectedRtLabel}`}
         actions={
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-muted-foreground" />
@@ -264,12 +208,12 @@ export default function AdminVisitrw3Dashboard() {
         </div>
       ) : data && !isError ? (
         <>
-          {data.ringkasan.totalPengajuan === 0 && data.ringkasan.totalProperti === 0 && (
+          {data.ringkasan.totalPengajuan === 0 && data.ringkasan.penghuniAktif === 0 && (
             <Alert>
               <AlertTitle>Belum ada data Visit RW3</AlertTitle>
               <AlertDescription>
-                Statistik akan terisi otomatis dari form publik (pengajuan, daftar properti) dan data penghuni pada
-                setiap pengajuan.
+                Statistik akan terisi otomatis dari pengajuan warga singgah (ngontrak, ngekost, jualan) dan data
+                penghuni pada setiap pengajuan.
               </AlertDescription>
             </Alert>
           )}
@@ -287,18 +231,23 @@ export default function AdminVisitrw3Dashboard() {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <Visitrw3StatCard title="Menunggu survey" value={formatNumber(data.ringkasan.menungguSurvey)} description="Belum diproses admin" icon={Clock} tone="warning" href="/admin/visitrw3/antrian?tab=pengajuan&view=belum" />
-            <Visitrw3StatCard title="Disetujui" value={formatNumber(data.ringkasan.disetujui)} description={`Dari ${formatNumber(data.ringkasan.totalPengajuan)} pengajuan`} icon={CheckCircle2} tone="success" href="/admin/visitrw3/antrian?tab=pengajuan&view=sudah" />
-            <Visitrw3StatCard title="Properti" value={formatNumber(data.ringkasan.totalProperti)} description={data.ringkasan.propertiMenunggu > 0 ? `${data.ringkasan.propertiMenunggu} menunggu verifikasi` : "Terdaftar"} icon={Building2} href={data.ringkasan.propertiMenunggu > 0 ? "/admin/visitrw3/antrian?tab=properti&view=belum" : "/admin/visitrw3/properti"} />
-            <Visitrw3StatCard title="Penghuni aktif" value={formatNumber(data.ringkasan.penghuniAktif)} description="Kontrak aktif" icon={Users} href="/admin/visitrw3/penghuni" />
-            <Visitrw3StatCard title="Kontribusi Kas RW" value={formatRupiah(data.ringkasan.totalKontribusiKasRw)} description="Setelah survey & persetujuan" icon={Wallet} tone="gold" />
+            <Visitrw3StatCard title="Menunggu survey" value={formatNumber(data.ringkasan.menungguSurvey)} description="Belum diproses admin" icon={Clock} tone="warning" href="/admin/visitrw3/antrian?view=belum" />
+            <Visitrw3StatCard title="Disetujui" value={formatNumber(data.ringkasan.disetujui)} description={`Dari ${formatNumber(data.ringkasan.totalPengajuan)} pengajuan`} icon={CheckCircle2} tone="success" href="/admin/visitrw3/antrian?view=sudah" />
+            <Visitrw3StatCard title="Warga singgah aktif" value={formatNumber(data.ringkasan.penghuniAktif)} description="Kontrak aktif di wilayah" icon={Users} href="/admin/visitrw3/penghuni" />
             <Visitrw3StatCard title="Baris form penghuni" value={formatNumber(data.penghuni.totalBaris)} description="Isian penghuni pada pengajuan" icon={ClipboardList} />
+            <Visitrw3StatCard title="Total pengajuan" value={formatNumber(data.ringkasan.totalPengajuan)} description="Semua pengajuan VRW3" icon={UserRound} href="/admin/visitrw3/antrian?view=belum" />
           </div>
 
-          <DashboardSection title="Form pengajuan" description="Alur, tren waktu, distribusi RT, dan komposisi keperluan" />
+          <DashboardSection title="Form pengajuan" description="Alur, jenis warga, tren, status, tipe, RT, dan termin" />
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <ChartCard title="Alur pengajuan" description="Corong dari masuk hingga keputusan admin">
               <FunnelBlock stages={funnelPengajuan} empty="Belum ada pengajuan" />
+            </ChartCard>
+            <ChartCard title="Jenis warga singgah" description="Donut — ngontrak · ngekost · jualan">
+              <DonutBlock data={jenisWargaPie} empty="Belum ada data" centerLabel="pengajuan" />
+            </ChartCard>
+            <ChartCard title="Sebaran jenis warga" description="Radial — komposisi kontrak / kost / jualan">
+              <RadialBarBlock data={jenisWargaRadial} empty="Belum ada data" />
             </ChartCard>
             <ChartCard title="Tren pengajuan masuk" description="Area chart — 12 bulan terakhir (created_at)">
               <AreaTrendBlock data={trenArea} empty="Belum ada data" />
@@ -319,7 +268,7 @@ export default function AdminVisitrw3Dashboard() {
                 color={PIE_COLORS[1]}
               />
             </ChartCard>
-            <ChartCard title="Keperluan pengajuan" description="Bar 100% — tinggal vs bisnis">
+            <ChartCard title="Keperluan (legacy)" description="Bar 100% — tinggal vs bisnis">
               <StackedPercentBlock segments={keperluanSegments} empty="Belum ada data" />
             </ChartCard>
             <ChartCard title="Tipe pengajuan" description="Radial — pengajuan baru vs perpanjang">
@@ -331,12 +280,6 @@ export default function AdminVisitrw3Dashboard() {
             <ChartCard title="Pengajuan per RT" description="Batang — sebaran wilayah">
               <BarBlock data={rtBar} empty="Belum ada data" />
             </ChartCard>
-            <ChartCard title="Bisnis: wilayah RW3" description="Bar 100% — di dalam vs luar wilayah">
-              <StackedPercentBlock segments={bisnisWilayahSegments} empty="Belum ada pengajuan bisnis" />
-            </ChartCard>
-            <ChartCard title="Terhubung properti" description="Bar 100% — kost terpilih vs bisnis luar">
-              <StackedPercentBlock segments={propertiTerkaitSegments} empty="Belum ada data" />
-            </ChartCard>
             <ChartCard title="Setuju tata tertib" description="Ring KPI — persetujuan syarat form">
               <MetricRingBlock
                 percent={setujuSyaratPct}
@@ -345,8 +288,8 @@ export default function AdminVisitrw3Dashboard() {
                 empty="Belum ada data"
               />
             </ChartCard>
-            <ChartCard title="Jenis tempat usaha" description="Peringkat — lapak · kiosk · lainnya">
-              <RankedBarBlock data={jenisUsahaRanked} empty="Belum ada pengajuan bisnis" />
+            <ChartCard title="Jenis tempat usaha" description="Peringkat — lapak · kiosk · lainnya (jualan)">
+              <RankedBarBlock data={jenisUsahaRanked} empty="Belum ada pengajuan jualan" />
             </ChartCard>
             <ChartCard title="Jumlah penghuni / pengajuan" description="Peringkat — ukuran rombongan">
               <RankedBarBlock data={jumlahPenghuniRanked} empty="Belum ada data" />
@@ -393,54 +336,11 @@ export default function AdminVisitrw3Dashboard() {
             </ChartCard>
           </div>
 
-          <DashboardSection title="Form daftar properti" description="Jenis, lokasi RT, ukuran, dan izin pengajuan" />
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <ChartCard title="Status properti" description="Donut — aktif · menunggu verifikasi">
-              <DonutBlock data={propertiStatusPie} empty="Belum ada properti" centerLabel="properti" />
-            </ChartCard>
-            <ChartCard title="Jenis properti" description="Radial — kost · kontrakan · kiosk · lapak">
-              <RadialBarBlock data={propertiJenisRadial} empty="Belum ada properti" />
-            </ChartCard>
-            <ChartCard title="Properti per RT" description="Batang — sebaran lokasi">
-              <BarBlock data={propertiRtBar} empty="Belum ada properti" color={CHART_GOLD} />
-            </ChartCard>
-            <ChartCard title="Ukuran properti (pintu)" description="Batang — tier kecil / sedang / besar">
-              <BarBlock data={pintuTierBar} empty="Belum ada properti" />
-            </ChartCard>
-            <ChartCard title="Izin yang dibuka" description="Donut — kombinasi izin tinggal & bisnis">
-              <DonutBlock data={izinPropertiDonut} empty="Belum ada properti" centerLabel="izin" />
-            </ChartCard>
-            <ChartCard title="Penanggung jawab pengelola" description="Ring KPI — kelengkapan data PJ">
-              <MetricRingBlock
-                percent={pjPropertiPct}
-                label="Properti ada PJ"
-                detail={`${data.properti.denganPenanggungJawab} lengkap · ${data.properti.tanpaPenanggungJawab} belum`}
-                empty="Belum ada properti"
-                color={CHART_GOLD}
-              />
-            </ChartCard>
-          </div>
-
-          <Visitrw3Panel
-            title="Ringkasan izin properti"
-            description="Jumlah properti yang mengizinkan tiap jenis pengajuan"
-          >
-            <StatChips
-              items={[
-                { label: "Izin tinggal", value: formatNumber(data.properti.izinTinggal) },
-                { label: "Izin bisnis", value: formatNumber(data.properti.izinBisnis) },
-                { label: "Bisnis di RW3", value: formatNumber(data.pengajuan.bisnisDiRw3) },
-                { label: "Bisnis luar", value: formatNumber(data.pengajuan.bisnisLuar) },
-                { label: "Catatan pemohon properti", value: formatNumber(data.properti.denganCatatanPemohon) },
-              ]}
-            />
-          </Visitrw3Panel>
-
           <Visitrw3Panel
             title="Pengajuan terbaru"
-            description="5 entri terakhir dari form publik"
+            description="5 entri terakhir dari form publik warga singgah"
             actions={
-              <Link href="/admin/visitrw3/antrian">
+              <Link href="/admin/visitrw3/antrian?view=belum">
                 <Button variant="outline" size="sm">Buka antrian</Button>
               </Link>
             }
@@ -467,9 +367,9 @@ export default function AdminVisitrw3Dashboard() {
           </Visitrw3Panel>
 
           <p className="text-xs text-muted-foreground">
-            Statistik penghuni diambil dari tabel visitrw3_penghuni (semua pengajuan). Penghuni aktif hanya yang sudah
-            disetujui dan tercatat di warga_singgah. Field bisnis seperti jam operasional dan alamat usaha tidak
-            diagregasi numerik karena bersifat teks/unik per pengajuan — lihat detail di antrian.
+            Statistik penghuni diambil dari tabel visitrw3_penghuni (semua pengajuan). Warga singgah aktif hanya yang
+            sudah disetujui dan tercatat di warga_singgah. Field usaha seperti jam operasional bersifat teks/unik per
+            pengajuan — lihat detail di antrian.
           </p>
         </>
       ) : (

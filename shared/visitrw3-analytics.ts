@@ -25,6 +25,7 @@ export type Visitrw3DashboardStats = {
   };
   pengajuan: {
     byKeperluan: Record<string, number>;
+    byJenisWarga: Visitrw3StatsRow[];
     byTipe: Record<string, number>;
     byStatus: Record<string, number>;
     byRt: { rt: number; count: number }[];
@@ -169,6 +170,7 @@ export function emptyVisitrw3DashboardStats(): Visitrw3DashboardStats {
     },
     pengajuan: {
       byKeperluan: {},
+      byJenisWarga: [],
       byTipe: {},
       byStatus: {},
       byRt: [],
@@ -256,6 +258,7 @@ export function normalizeVisitrw3DashboardStats(
       ...base.pengajuan,
       ...p,
       byKeperluan: p?.byKeperluan ?? base.pengajuan.byKeperluan,
+      byJenisWarga: statsRowsFromLegacy(p?.byJenisWarga as Visitrw3StatsRow[] | Record<string, number>),
       byTipe: p?.byTipe ?? base.pengajuan.byTipe,
       byStatus: p?.byStatus ?? base.pengajuan.byStatus,
       byRt: p?.byRt ?? base.pengajuan.byRt,

@@ -24,7 +24,7 @@ export function Visitrw3SyaratPanel({ tataMasyarakat, tataKhusus, setuju, onSetu
       </div>
 
       <p className="text-xs text-muted-foreground rounded-lg border border-dashed p-3">
-        Besaran kontribusi ditetapkan oleh pengurus RW setelah survey. Pembayaran dicatat manual di Kas RW.
+        Setelah disetujui, pengurus RW dapat menghubungi Anda lewat WhatsApp yang terdaftar.
       </p>
 
       {loading && <p className="text-sm text-muted-foreground">Memuat pengaturan…</p>}

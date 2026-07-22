@@ -5,7 +5,7 @@ import { Visitrw3AdminShell } from "@/components/admin/visitrw3-admin-ui";
 
 /** Arahkan admin ke tahap yang paling perlu tindakan. */
 export default function AdminVisitrw3Landing() {
-  const { propertiMenunggu, surveyMenunggu, isLoading } = useVisitrw3AdminCounts();
+  const { surveyMenunggu, isLoading } = useVisitrw3AdminCounts();
 
   if (isLoading) {
     return (
@@ -15,11 +15,8 @@ export default function AdminVisitrw3Landing() {
     );
   }
 
-  if (propertiMenunggu > 0) {
-    return <Redirect to="/admin/visitrw3/antrian?tab=properti&view=belum" />;
-  }
   if (surveyMenunggu > 0) {
-    return <Redirect to="/admin/visitrw3/antrian?tab=pengajuan&view=belum" />;
+    return <Redirect to="/admin/visitrw3/antrian?view=belum" />;
   }
-  return <Redirect to="/admin/visitrw3/properti" />;
+  return <Redirect to="/admin/visitrw3/antrian?view=sudah" />;
 }

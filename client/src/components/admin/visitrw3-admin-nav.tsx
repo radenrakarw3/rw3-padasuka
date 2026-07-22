@@ -1,63 +1,81 @@
 import { Link, useLocation } from "wouter";
 import {
   BarChart3,
-  Building2,
   CalendarDays,
   ClipboardList,
   ExternalLink,
+  Megaphone,
   Settings,
+  Shield,
+  Store,
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useVisitrw3AdminCounts } from "@/hooks/use-visitrw3-admin-counts";
 import { Visitrw3WorkflowSteps } from "@/components/admin/visitrw3-workflow-steps";
+import { RW3BIZ_ROUTES } from "@/lib/rw3biz-routes";
+import { VISITRW3_ROUTES } from "@/lib/visitrw3-routes";
+import type { PengajuanProduct } from "@/lib/visitrw3-produk-ui";
 
 type TabDef = {
   href: string;
   label: string;
   icon: typeof ClipboardList;
-  exact?: boolean;
-  badgeKey?: "properti" | "survey";
+  badgeKey?: "survey";
 };
 
-/** Urutan mengikuti alur operasional harian admin. */
-const NAV_TABS: TabDef[] = [
-  { href: "/admin/visitrw3/properti", label: "Properti", icon: Building2, exact: true },
-  { href: "/admin/visitrw3/antrian", label: "Survey", icon: ClipboardList, exact: true, badgeKey: "survey" },
-  { href: "/admin/visitrw3/penghuni", label: "Kontrak", icon: Users },
-  { href: "/admin/visitrw3/kalender", label: "Kalender", icon: CalendarDays },
-  { href: "/admin/visitrw3/dashboard", label: "Statistik", icon: BarChart3 },
-  { href: "/admin/visitrw3/pengaturan", label: "Pengaturan", icon: Settings },
-];
+function tabsFor(product: PengajuanProduct): TabDef[] {
+  if (product === "rw3biz") {
+    return [
+      {
+        href: RW3BIZ_ROUTES.admin.antrianSurvey,
+        label: "Survey usaha",
+        icon: ClipboardList,
+        badgeKey: "survey",
+      },
+      { href: RW3BIZ_ROUTES.admin.blast, label: "WA Blast", icon: Megaphone },
+      { href: RW3BIZ_ROUTES.admin.dashboard, label: "Statistik", icon: BarChart3 },
+      { href: RW3BIZ_ROUTES.admin.pengaturan, label: "Pengaturan", icon: Settings },
+    ];
+  }
+  return [
+    {
+      href: VISITRW3_ROUTES.admin.antrianSurvey,
+      label: "Survey",
+      icon: ClipboardList,
+      badgeKey: "survey",
+    },
+    { href: VISITRW3_ROUTES.admin.penghuni, label: "Warga singgah", icon: Users },
+    { href: VISITRW3_ROUTES.admin.kalender, label: "Kalender", icon: CalendarDays },
+    { href: VISITRW3_ROUTES.admin.dashboard, label: "Statistik", icon: BarChart3 },
+    { href: VISITRW3_ROUTES.admin.pengaturan, label: "Pengaturan", icon: Settings },
+  ];
+}
 
-function isActive(location: string, href: string, exact?: boolean) {
-  if (href === "/admin/visitrw3/dashboard") return location === href;
-  if (href === "/admin/visitrw3/kalender") return location === href;
-  if (href === "/admin/visitrw3/antrian") {
-    return location === href || location.startsWith("/admin/visitrw3/antrian?");
-  }
-  if (href === "/admin/visitrw3/properti") {
-    return location === href || location === "/admin/visitrw3" || location === "/admin/pemilik-kost";
-  }
-  if (exact) return location === href;
-  return location === href || location.startsWith(`${href}/`);
+function isActive(location: string, href: string) {
+  const path = href.split("?")[0];
+  return location === path || location.startsWith(`${path}?`) || location.startsWith(`${path}/`);
 }
 
 type Props = {
   title: string;
   description?: string;
   actions?: React.ReactNode;
+  product?: PengajuanProduct;
 };
 
-export function Visitrw3AdminNav({ title, description, actions }: Props) {
+export function Visitrw3AdminNav({ title, description, actions, product = "visit" }: Props) {
   const [location] = useLocation();
-  const { propertiMenunggu, surveyMenunggu } = useVisitrw3AdminCounts();
+  const { surveyMenunggu } = useVisitrw3AdminCounts(product);
+  const tabs = tabsFor(product);
 
-  function badgeCount(key?: TabDef["badgeKey"]) {
-    if (key === "properti") return propertiMenunggu;
-    if (key === "survey") return propertiMenunggu + surveyMenunggu;
-    return 0;
-  }
+  const publicHref = product === "rw3biz" ? RW3BIZ_ROUTES.hub : VISITRW3_ROUTES.hub;
+  const publicLabel =
+    product === "rw3biz" ? "Halaman publik /rw3biz" : "Halaman warga /visitrw3";
+  const brandLabel = product === "rw3biz" ? "Admin RW3BIZ" : "Admin Visit RW3";
+  const brandSub =
+    product === "rw3biz" ? "Izin usaha / jualan · RW 03" : "Kost & kontrakan · RW 03 Padasuka";
+  const BrandIcon = product === "rw3biz" ? Store : Shield;
 
   return (
     <div className="space-y-4">
@@ -66,73 +84,72 @@ export function Visitrw3AdminNav({ title, description, actions }: Props) {
         <div className="relative flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
           <div className="flex items-center gap-3 min-w-0">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm">
-              <Building2 className="h-5 w-5" />
+              <BrandIcon className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-white/70">Admin Visit RW3</p>
-              <p className="text-sm font-semibold truncate">Izin tinggal & bisnis · RW 03 Padasuka</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-white/70">{brandLabel}</p>
+              <p className="text-sm font-semibold truncate">{brandSub}</p>
             </div>
           </div>
           <a
-            href="/visitrw3"
+            href={publicHref}
             target="_blank"
             rel="noreferrer"
+            title={
+              product === "rw3biz"
+                ? "Membuka halaman publik RW3BIZ (izin usaha / jualan)"
+                : "Membuka halaman publik Visit RW3 (ngontrak / ngekost)"
+            }
             className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-2 text-xs font-medium hover:bg-white/20 transition-colors shrink-0"
           >
-            Form publik
-            <ExternalLink className="w-3.5 h-3.5" />
+            {publicLabel}
+            <ExternalLink className="h-3.5 w-3.5" />
           </a>
         </div>
       </div>
 
-      <Visitrw3WorkflowSteps />
+      {product === "visit" ? <Visitrw3WorkflowSteps /> : null}
 
-      <nav className="flex gap-1 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
-        <div className="flex gap-1 p-1 rounded-xl bg-muted/50 border border-border/50 min-w-max">
-          {NAV_TABS.map((tab) => {
-            const active = isActive(location, tab.href, tab.exact);
-            const Icon = tab.icon;
-            const count = badgeCount(tab.badgeKey);
-            const propertiBadge = tab.href === "/admin/visitrw3/properti" ? propertiMenunggu : 0;
-            const showBadge = count > 0 || propertiBadge > 0;
-            const badge = tab.href === "/admin/visitrw3/properti" ? propertiBadge : count;
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-foreground">{title}</h1>
+          {description ? <p className="text-sm text-muted-foreground mt-0.5">{description}</p> : null}
+        </div>
+        {actions}
+      </div>
 
-            return (
-              <Link key={tab.href} href={tab.href}>
+      <nav className="flex gap-1 overflow-x-auto pb-1 -mx-1 px-1" aria-label="Navigasi admin">
+        {tabs.map((tab) => {
+          const active = isActive(location, tab.href);
+          const count = tab.badgeKey === "survey" ? surveyMenunggu : 0;
+          const Icon = tab.icon;
+          return (
+            <Link
+              key={tab.href}
+              href={tab.href}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors",
+                active
+                  ? "bg-[hsl(163,55%,22%)] text-white shadow-sm"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              {tab.label}
+              {count > 0 ? (
                 <span
                   className={cn(
-                    "inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-lg transition-all cursor-pointer whitespace-nowrap",
-                    active
-                      ? "bg-[hsl(163,55%,22%)] text-white shadow-sm"
-                      : "text-muted-foreground hover:text-foreground hover:bg-background/80",
+                    "ml-0.5 min-w-[1.25rem] rounded-full px-1.5 py-0.5 text-center text-[10px] font-bold",
+                    active ? "bg-white/20 text-white" : "bg-destructive/15 text-destructive",
                   )}
                 >
-                  <Icon className="w-4 h-4 shrink-0" />
-                  {tab.label}
-                  {showBadge && badge > 0 && (
-                    <span
-                      className={cn(
-                        "min-w-[1.25rem] rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none text-center",
-                        active ? "bg-white/25 text-white" : "bg-amber-500 text-white",
-                      )}
-                    >
-                      {badge}
-                    </span>
-                  )}
+                  {count > 99 ? "99+" : count}
                 </span>
-              </Link>
-            );
-          })}
-        </div>
+              ) : null}
+            </Link>
+          );
+        })}
       </nav>
-
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight">{title}</h1>
-          {description && <p className="text-sm text-muted-foreground mt-0.5 max-w-2xl">{description}</p>}
-        </div>
-        {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
-      </div>
     </div>
   );
 }

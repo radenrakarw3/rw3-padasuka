@@ -99,7 +99,7 @@ export default function Visitrw3Perpanjang() {
 
   if (result) {
     return (
-      <Visitrw3Shell title="Perpanjang" backHref="/visitrw3/penyewa">
+      <Visitrw3Shell title="Perpanjang" backHref="/visitrw3">
         <SuccessPanel
           title="Perpanjang terkirim"
           referenceLabel="Nomor antrian baru"
@@ -110,14 +110,14 @@ export default function Visitrw3Perpanjang() {
             "Gunakan nomor antrian baru untuk cek status.",
           ]}
           primaryAction={{ label: "Cek status", href: "/visitrw3/status" }}
-          secondaryAction={{ label: "Menu penyewa", href: "/visitrw3/penyewa" }}
+          secondaryAction={{ label: "Kembali ke Visit RW3", href: "/visitrw3" }}
         />
       </Visitrw3Shell>
     );
   }
 
   return (
-    <Visitrw3Shell title="Perpanjang izin" backHref="/visitrw3/penyewa">
+    <Visitrw3Shell title="Perpanjang izin" backHref="/visitrw3">
       <FeatureExplain title="Kapan pakai perpanjang?" className="mb-4">
         <p>
           Hanya untuk izin Visit RW3 yang <strong>sudah pernah disetujui</strong> dan ingin

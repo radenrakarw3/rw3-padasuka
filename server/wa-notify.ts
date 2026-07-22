@@ -292,13 +292,10 @@ export function notifyVisitrw3Perpanjang(
 export function notifyVisitrw3Disetujui(
   pengajuan: Visitrw3Pengajuan,
   penghuni: Visitrw3Penghuni[],
-  kost: PemilikKost | null,
+  _kost: PemilikKost | null,
 ): void {
   notifyWaSafe(async () => {
     const recipients = dewasaPenghuniRecipients(penghuni);
-    if (kost?.nomorWaPemilik?.trim()) {
-      recipients.push({ to: kost.nomorWaPemilik, nama: kost.namaPemilik });
-    }
 
     const berlaku = pengajuan.tanggalBerlakuSampai
       ? formatTanggalId(pengajuan.tanggalBerlakuSampai)
@@ -351,73 +348,11 @@ export function notifyVisitrw3Ditolak(
   });
 }
 
-export function notifyVisitrw3PropertiDidaftar(properti: PemilikKost): void {
-  notifyWaSafe(async () => {
-    const recipients: WaRecipient[] = [];
-    if (properti.nomorWaPemilik?.trim()) {
-      recipients.push({ to: properti.nomorWaPemilik, nama: properti.namaPemilik });
-    }
-    if (properti.nomorWaPenanggungJawab?.trim()) {
-      recipients.push({
-        to: properti.nomorWaPenanggungJawab,
-        nama: properti.namaPenanggungJawab ?? undefined,
-      });
-    }
-    if (!recipients.length) return;
+/** @deprecated Alur pemilik properti dihapus. */
+export function notifyVisitrw3PropertiDidaftar(_properti: PemilikKost): void {}
 
-    const nomor = properti.nomorPendaftaran ?? `PROP-${properti.id}`;
-    const statusUrl = siteUrl("/visitrw3/status-properti");
-
-    await sendToRecipients(
-      recipients,
-      (nama) =>
-        `${salam(nama)}\n\n` +
-        `Pendaftaran properti *${properti.namaKost}* sudah kami terima.\n\n` +
-        `Nomor pendaftaran: *${nomor}*\n` +
-        `Status: *menunggu verifikasi* pengurus RW\n\n` +
-        `Pantau perkembangan di:\n${statusUrl}\n\n` +
-        `— ${SENDER_LABEL}`,
-      {
-        eventKeyPrefix: `visitrw3:properti:submitted:${properti.id}`,
-        referenceType: "pemilik_kost",
-        referenceId: properti.id,
-      },
-    );
-  });
-}
-
-export function notifyVisitrw3PropertiDisetujui(properti: PemilikKost): void {
-  notifyWaSafe(async () => {
-    const recipients: WaRecipient[] = [];
-    if (properti.nomorWaPemilik?.trim()) {
-      recipients.push({ to: properti.nomorWaPemilik, nama: properti.namaPemilik });
-    }
-    if (properti.nomorWaPenanggungJawab?.trim()) {
-      recipients.push({
-        to: properti.nomorWaPenanggungJawab,
-        nama: properti.namaPenanggungJawab ?? undefined,
-      });
-    }
-    if (!recipients.length) return;
-
-    const pengajuanUrl = siteUrl("/visitrw3/pengajuan");
-
-    await sendToRecipients(
-      recipients,
-      (nama) =>
-        `${salam(nama)}\n\n` +
-        `Properti *${properti.namaKost}* sudah *aktif* di sistem Visit RW3.\n\n` +
-        `Penghuni kini dapat mengajukan izin tinggal melalui:\n${pengajuanUrl}\n\n` +
-        `Terima kasih atas kerja samanya.\n\n` +
-        `— ${SENDER_LABEL}`,
-      {
-        eventKeyPrefix: `visitrw3:properti:approved:${properti.id}`,
-        referenceType: "pemilik_kost",
-        referenceId: properti.id,
-      },
-    );
-  });
-}
+/** @deprecated Alur pemilik properti dihapus. */
+export function notifyVisitrw3PropertiDisetujui(_properti: PemilikKost): void {}
 
 // --- Laporan masalah ---
 
@@ -813,22 +748,6 @@ async function notifyKontrakReminder(
   if (row.nomorWhatsapp?.trim()) {
     await sendWaIfConfigured(row.nomorWhatsapp, bodyPenghuni, {
       eventKey: `${eventPrefix}:penghuni:${normalizeStarSenderPhone(row.nomorWhatsapp)}`,
-      referenceType: "warga_singgah",
-      referenceId: row.id,
-      dedup: true,
-    });
-  }
-
-  if ((kind === "h1" || kind === "expired") && row.nomorWaPemilik?.trim()) {
-    const bodyPemilik =
-      `${salam(row.namaPemilik)}\n\n` +
-      `Info untuk pemilik *${row.namaKost}*: izin Visit RW3 penghuni *${row.namaLengkap}* (*${nomor}*) ` +
-      (kind === "h1" ? `*besok berakhir* (${berlaku}).` : `*berakhir hari ini* (${berlaku}).`) +
-      `\n\nMohon ingatkan penghuni untuk perpanjang di:\n${perpanjangUrl}\n\n` +
-      `— ${SENDER_LABEL}`;
-
-    await sendWaIfConfigured(row.nomorWaPemilik, bodyPemilik, {
-      eventKey: `${eventPrefix}:pemilik:${normalizeStarSenderPhone(row.nomorWaPemilik)}`,
       referenceType: "warga_singgah",
       referenceId: row.id,
       dedup: true,

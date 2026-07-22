@@ -17,6 +17,8 @@ declare module "http" {
 
 app.use(
   express.json({
+    // Foto KTP (data URL) bisa ikut di body pengajuan Visit/RW3BIZ
+    limit: "20mb",
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },

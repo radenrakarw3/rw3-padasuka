@@ -343,9 +343,17 @@ export const pemilikKost = pgTable("pemilik_kost", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+/** Jenis warga singgah Visit RW3 (tanpa perantara pemilik properti). */
+export const JENIS_WARGA_VALUES = ["kontrak", "kost", "jualan"] as const;
+export type JenisWarga = (typeof JENIS_WARGA_VALUES)[number];
+
 export const wargaSinggah = pgTable("warga_singgah", {
   id: serial("id").primaryKey(),
-  pemilikKostId: integer("pemilik_kost_id").notNull().references(() => pemilikKost.id),
+  /** Legacy — tidak dipakai di alur baru; boleh null. */
+  pemilikKostId: integer("pemilik_kost_id").references(() => pemilikKost.id),
+  jenisWarga: text("jenis_warga"),
+  rt: integer("rt"),
+  alamat: text("alamat"),
   namaLengkap: text("nama_lengkap").notNull(),
   nik: text("nik").notNull().unique(),
   nomorWhatsapp: text("nomor_whatsapp").notNull(),
@@ -367,8 +375,13 @@ export const visitrw3Pengajuan = pgTable("visitrw3_pengajuan", {
   tipe: text("tipe").notNull(),
   status: text("status").notNull().default("menunggu_survey"),
   keperluanPengajuan: text("keperluan_pengajuan").notNull(),
+  /** kontrak | kost | jualan */
+  jenisWarga: text("jenis_warga"),
+  /** Legacy — tidak dipakai di alur baru. */
   pemilikKostId: integer("pemilik_kost_id").references(() => pemilikKost.id),
   rt: integer("rt").notNull(),
+  /** Alamat tinggal / lokasi usaha di wilayah RW 03. */
+  alamat: text("alamat"),
   namaUsaha: text("nama_usaha"),
   jenisUsaha: text("jenis_usaha"),
   jenisTempatUsaha: text("jenis_tempat_usaha"),
@@ -448,9 +461,156 @@ export const visitrw3Penghuni = pgTable("visitrw3_penghuni", {
   punyaKendaraan: boolean("punya_kendaraan").notNull().default(false),
   jenisKendaraan: text("jenis_kendaraan"),
   platNomor: text("plat_nomor"),
+  /** Path legacy disk atau token; untuk tampilan admin gunakan endpoint by id. */
   fotoKtpPath: text("foto_ktp_path"),
+  /** data:image/...;base64,... — disimpan di DB (Railway ephemeral FS). */
+  fotoKtpData: text("foto_ktp_data"),
   urutan: integer("urutan").notNull().default(0),
 });
+
+// ===================== RW3BIZ (izin usaha / jualan) =====================
+// Basis data terpisah dari Visit RW3. Visit RW3 hanya melayani kontrak/kost;
+// data jualan/usaha hidup di tabel rw3biz_* agar bisa dipakai WA blast ke PJ/pemilik usaha.
+
+/** Usaha aktif RW3BIZ (dibuat setelah pengajuan disetujui). */
+export const rw3bizUsaha = pgTable("rw3biz_usaha", {
+  id: serial("id").primaryKey(),
+  /** Format BIZ-YYYY-#### */
+  nomorBiz: text("nomor_biz").notNull().unique(),
+  rt: integer("rt").notNull(),
+  alamat: text("alamat").notNull(),
+  nomorLokasi: text("nomor_lokasi"),
+  namaUsaha: text("nama_usaha").notNull(),
+  jenisTempatUsaha: text("jenis_tempat_usaha"),
+  jenisTempatUsahaLain: text("jenis_tempat_usaha_lain"),
+  /** JSON array kategori/jenis usaha. */
+  kategoriUsaha: text("kategori_usaha"),
+  jamBuka: text("jam_buka"),
+  jamTutup: text("jam_tutup"),
+  alamatUsaha: text("alamat_usaha"),
+  pjNama: text("pj_nama").notNull(),
+  pjNik: text("pj_nik"),
+  /** Nomor WA penanggung jawab — kunci untuk WA blast RW3BIZ. */
+  pjNomorWhatsapp: text("pj_nomor_whatsapp").notNull(),
+  pjSetujuNotifikasi: boolean("pj_setuju_notifikasi").notNull().default(true),
+  status: text("status").notNull().default("aktif"),
+  tanggalMulai: text("tanggal_mulai").notNull(),
+  tanggalHabis: text("tanggal_habis").notNull(),
+  terminBulan: integer("termin_bulan"),
+  pengajuanId: integer("pengajuan_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+/** Pengajuan izin usaha RW3BIZ (baru / perpanjang). */
+export const rw3bizPengajuan = pgTable("rw3biz_pengajuan", {
+  id: serial("id").primaryKey(),
+  nomorBiz: text("nomor_biz").notNull().unique(),
+  /** pengajuan_baru | perpanjang */
+  tipe: text("tipe").notNull(),
+  status: text("status").notNull().default("menunggu_survey"),
+  rt: integer("rt").notNull(),
+  alamat: text("alamat").notNull(),
+  nomorLokasi: text("nomor_lokasi"),
+  namaUsaha: text("nama_usaha").notNull(),
+  jenisTempatUsaha: text("jenis_tempat_usaha"),
+  jenisTempatUsahaLain: text("jenis_tempat_usaha_lain"),
+  kategoriUsaha: text("kategori_usaha"),
+  jamBuka: text("jam_buka"),
+  jamTutup: text("jam_tutup"),
+  alamatUsaha: text("alamat_usaha"),
+  pjNama: text("pj_nama").notNull(),
+  pjNik: text("pj_nik"),
+  pjNomorWhatsapp: text("pj_nomor_whatsapp").notNull(),
+  pjSetujuNotifikasi: boolean("pj_setuju_notifikasi").notNull().default(true),
+  jumlahOrang: integer("jumlah_orang").notNull(),
+  tanggalBayar: text("tanggal_bayar").notNull(),
+  terminBulan: integer("termin_bulan").notNull(),
+  tanggalBerlakuSampai: text("tanggal_berlaku_sampai").notNull(),
+  usahaId: integer("usaha_id").references(() => rw3bizUsaha.id),
+  catatanPemohon: text("catatan_pemohon"),
+  catatanSurvey: text("catatan_survey"),
+  alasanTolak: text("alasan_tolak"),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewedBy: text("reviewed_by"),
+  setujuTataTertib: boolean("setuju_tata_tertib").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+/** Orang yang tercatat di pengajuan RW3BIZ: penanggung jawab + pekerja. */
+export const rw3bizOrang = pgTable("rw3biz_orang", {
+  id: serial("id").primaryKey(),
+  pengajuanId: integer("pengajuan_id").notNull().references(() => rw3bizPengajuan.id, { onDelete: "cascade" }),
+  namaLengkap: text("nama_lengkap").notNull(),
+  tanggalLahir: text("tanggal_lahir").notNull(),
+  isAnak: boolean("is_anak").notNull().default(false),
+  isPenanggungJawab: boolean("is_penanggung_jawab").notNull().default(false),
+  nik: text("nik"),
+  nomorWhatsapp: text("nomor_whatsapp"),
+  jenisKelamin: text("jenis_kelamin"),
+  pekerjaan: text("pekerjaan"),
+  namaTempatKerja: text("nama_tempat_kerja"),
+  namaSekolah: text("nama_sekolah"),
+  punyaKendaraan: boolean("punya_kendaraan").notNull().default(false),
+  jenisKendaraan: text("jenis_kendaraan"),
+  platNomor: text("plat_nomor"),
+  fotoKtpPath: text("foto_ktp_path"),
+  fotoKtpData: text("foto_ktp_data"),
+  urutan: integer("urutan").notNull().default(0),
+});
+
+/** Pengaturan key/value RW3BIZ (setara visitrw3_settings). */
+export const rw3bizSettings = pgTable("rw3biz_settings", {
+  id: serial("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  value: text("value").notNull(),
+  label: text("label").notNull(),
+  keterangan: text("keterangan"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+// ===================== END RW3BIZ =====================
+
+// ===================== KARANG TARUNA (pendataan anggota) =====================
+// Basis data pemuda RW 03: identitas real + skill/potensi + harapan difasilitasi RW.
+// Tabel tunggal & self-contained (tidak lewat storage.ts), mirip pola rw3biz_*.
+
+export const karangtarunaAnggota = pgTable("karangtaruna_anggota", {
+  id: serial("id").primaryKey(),
+  /** Format KT-YYYY-#### */
+  nomorAnggota: text("nomor_anggota").notNull().unique(),
+  // --- Identitas ---
+  namaLengkap: text("nama_lengkap").notNull(),
+  nik: text("nik"),
+  rt: integer("rt").notNull(),
+  alamat: text("alamat").notNull(),
+  nomorWhatsapp: text("nomor_whatsapp").notNull(),
+  jenisKelamin: text("jenis_kelamin"),
+  tanggalLahir: text("tanggal_lahir").notNull(),
+  pendidikanTerakhir: text("pendidikan_terakhir"),
+  statusAktivitas: text("status_aktivitas"),
+  pekerjaan: text("pekerjaan"),
+  instagram: text("instagram"),
+  // --- Skill & potensi (cerita nyata anggota) ---
+  bidangKeahlian: text("bidang_keahlian"), // JSON array string
+  ceritaSkill: text("cerita_skill").notNull(),
+  pengalamanOrganisasi: text("pengalaman_organisasi"),
+  prestasi: text("prestasi"),
+  // --- Minat & fasilitasi RW ---
+  bidangMinat: text("bidang_minat"), // JSON array string
+  harapanFasilitasi: text("harapan_fasilitasi").notNull(),
+  ketersediaanWaktu: text("ketersediaan_waktu"),
+  bersediaAktif: boolean("bersedia_aktif").notNull().default(true),
+  // --- Kelola admin ---
+  statusKeanggotaan: text("status_keanggotaan").notNull().default("baru"),
+  potensiUnggulan: text("potensi_unggulan"),
+  catatanAdmin: text("catatan_admin"),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewedBy: text("reviewed_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_karangtaruna_anggota_rt").on(table.rt),
+  index("idx_karangtaruna_anggota_status").on(table.statusKeanggotaan),
+]);
+// ===================== END KARANG TARUNA =====================
 
 export const riwayatKontrak = pgTable("riwayat_kontrak", {
   id: serial("id").primaryKey(),
@@ -1269,6 +1429,30 @@ export const insertVisitrw3PengajuanSchema = createInsertSchema(visitrw3Pengajua
 });
 export const insertVisitrw3PenghuniSchema = createInsertSchema(visitrw3Penghuni).omit({ id: true });
 
+export const insertRw3bizUsahaSchema = createInsertSchema(rw3bizUsaha).omit({ id: true, createdAt: true });
+export const insertRw3bizPengajuanSchema = createInsertSchema(rw3bizPengajuan).omit({
+  id: true,
+  createdAt: true,
+  status: true,
+  reviewedAt: true,
+  reviewedBy: true,
+  alasanTolak: true,
+  catatanSurvey: true,
+});
+export const insertRw3bizOrangSchema = createInsertSchema(rw3bizOrang).omit({ id: true });
+export const insertRw3bizSettingsSchema = createInsertSchema(rw3bizSettings).omit({ id: true, updatedAt: true });
+
+export const insertKarangtarunaAnggotaSchema = createInsertSchema(karangtarunaAnggota).omit({
+  id: true,
+  createdAt: true,
+  nomorAnggota: true,
+  statusKeanggotaan: true,
+  potensiUnggulan: true,
+  catatanAdmin: true,
+  reviewedAt: true,
+  reviewedBy: true,
+});
+
 export const insertUsahaSchema = createInsertSchema(usaha).omit({ id: true, createdAt: true, status: true, nomorStiker: true, tanggalStikerTerbit: true, tanggalStikerExpired: true, alasanPenolakan: true });
 export const insertKaryawanUsahaSchema = createInsertSchema(karyawanUsaha).omit({ id: true, createdAt: true });
 export const insertIzinTetanggaSchema = createInsertSchema(izinTetangga).omit({ id: true, createdAt: true });
@@ -1292,6 +1476,18 @@ export type Rw3lawDokumen = typeof rw3lawDokumen.$inferSelect;
 export type InsertRw3lawDokumen = z.infer<typeof insertRw3lawDokumenSchema>;
 export type InsertVisitrw3Pengajuan = z.infer<typeof insertVisitrw3PengajuanSchema>;
 export type InsertVisitrw3Penghuni = z.infer<typeof insertVisitrw3PenghuniSchema>;
+
+export type Rw3bizUsaha = typeof rw3bizUsaha.$inferSelect;
+export type InsertRw3bizUsaha = z.infer<typeof insertRw3bizUsahaSchema>;
+export type Rw3bizPengajuan = typeof rw3bizPengajuan.$inferSelect;
+export type InsertRw3bizPengajuan = z.infer<typeof insertRw3bizPengajuanSchema>;
+export type Rw3bizOrang = typeof rw3bizOrang.$inferSelect;
+export type InsertRw3bizOrang = z.infer<typeof insertRw3bizOrangSchema>;
+export type Rw3bizSettings = typeof rw3bizSettings.$inferSelect;
+export type InsertRw3bizSettings = z.infer<typeof insertRw3bizSettingsSchema>;
+
+export type KarangtarunaAnggota = typeof karangtarunaAnggota.$inferSelect;
+export type InsertKarangtarunaAnggota = z.infer<typeof insertKarangtarunaAnggotaSchema>;
 
 export type Usaha = typeof usaha.$inferSelect;
 export type InsertUsaha = z.infer<typeof insertUsahaSchema>;

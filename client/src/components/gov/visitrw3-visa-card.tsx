@@ -22,7 +22,7 @@ export function Visitrw3VisaCard({ href = "/visitrw3", className }: Visitrw3Visa
         "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-accent-muted",
         className,
       )}
-      aria-label="Visit RW3 — izin warga singgah"
+      aria-label="Visit RW3 — izin tinggal ngontrak atau ngekost"
     >
       {/* Base gradient — kartu visa */}
       <div
@@ -92,7 +92,7 @@ export function Visitrw3VisaCard({ href = "/visitrw3", className }: Visitrw3Visa
             Visit<span className="text-[hsl(40,58%,68%)]">RW3</span>
           </p>
           <p className="text-xs text-white/60 mt-2 max-w-[240px]">
-            Izin tinggal & bisnis — seperti nomor visa wilayah RW
+            Izin tinggal: ngontrak atau ngekost di RW 03
           </p>
         </div>
 

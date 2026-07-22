@@ -125,10 +125,10 @@ export function validateStepLokasiBisnis(
     }
   } else {
     if (!input.jamBuka.trim() || !TIME_REGEX.test(input.jamBuka)) {
-      return "Jam buka wajib diisi (format HH:MM, contoh 08:00)";
+      return "Jam buka wajib diisi (format 24 jam, contoh 08:00)";
     }
     if (!input.jamTutup.trim() || !TIME_REGEX.test(input.jamTutup)) {
-      return "Jam tutup wajib diisi (format HH:MM, contoh 21:00)";
+      return "Jam tutup wajib diisi (format 24 jam, contoh 21:00)";
     }
     if (!input.alamatUsaha.trim()) return "Alamat usaha wajib diisi";
     if (!input.pjNik || input.pjNik.length !== 16) return "NIK penanggung jawab 16 digit wajib";
@@ -144,11 +144,33 @@ export function validateStepJumlah(jumlahDewasa: number) {
   return null;
 }
 
+export type ValidatePenghuniOptions = {
+  /** tinggal = kontrak/kost; bisnis = jualan */
+  keperluan: "tinggal" | "bisnis";
+  requireKeperluanTinggal?: boolean;
+  requirePekerjaan?: boolean;
+  requireTempatKerja?: boolean;
+  tempatKerjaLabel?: string;
+};
+
 export function validateSinglePenghuni(
   p: PenghuniDraft,
-  keperluan: "tinggal" | "bisnis",
+  keperluanOrOpts: "tinggal" | "bisnis" | ValidatePenghuniOptions,
 ): string | null {
-  const label = p.isAnak ? "Anak" : "Dewasa";
+  const opts: ValidatePenghuniOptions =
+    typeof keperluanOrOpts === "string"
+      ? {
+          keperluan: keperluanOrOpts,
+          requireKeperluanTinggal: keperluanOrOpts === "tinggal",
+          requireTempatKerja: true,
+        }
+      : keperluanOrOpts;
+  const requireKeperluan =
+    opts.requireKeperluanTinggal ?? opts.keperluan === "tinggal";
+  const requirePekerjaan =
+    opts.requirePekerjaan ?? opts.keperluan !== "bisnis";
+  const requireTempat = opts.requireTempatKerja !== false;
+  const tempatLabel = opts.tempatKerjaLabel ?? "tempat kerja";
 
   if (!p.namaLengkap.trim()) return "Isi nama lengkap";
   if (!p.tanggalLahir) return "Pilih tanggal lahir";
@@ -164,10 +186,12 @@ export function validateSinglePenghuni(
   if (!p.nik || p.nik.length !== 16) return "NIK harus 16 digit";
   if (!p.nomorWhatsapp.trim()) return "Isi nomor WhatsApp";
   if (!p.jenisKelamin) return "Pilih jenis kelamin";
-  if (!p.pekerjaan) return "Pilih pekerjaan";
-  if (keperluan === "tinggal" && !p.keperluanTinggal) return "Pilih keperluan tinggal";
+  if (requirePekerjaan && !p.pekerjaan) return "Pilih pekerjaan";
+  if (requireKeperluan && !p.keperluanTinggal) return "Pilih keperluan tinggal";
   const u = umur(p.tanggalLahir);
-  if (!p.namaTempatKerja.trim()) return "Isi nama tempat kerja";
+  if (requireTempat && !p.namaTempatKerja.trim()) {
+    return `Isi ${tempatLabel.toLowerCase()}`;
+  }
   if (u < 21 && !p.namaSekolah.trim()) return "Isi nama sekolah (usia di bawah 21 tahun)";
   if (!p.fotoKtpPath) return "Unggah foto KTP";
 
@@ -188,10 +212,10 @@ export function validateSinglePenghuni(
 
 export function validatePenghuniList(
   penghuni: PenghuniDraft[],
-  keperluan: "tinggal" | "bisnis",
+  keperluanOrOpts: "tinggal" | "bisnis" | ValidatePenghuniOptions,
 ): string | null {
   for (let i = 0; i < penghuni.length; i++) {
-    const err = validateSinglePenghuni(penghuni[i], keperluan);
+    const err = validateSinglePenghuni(penghuni[i], keperluanOrOpts);
     if (err) {
       const p = penghuni[i];
       const who = p.namaLengkap.trim() || (p.isAnak ? `Anak ${i + 1}` : `Dewasa ${i + 1}`);
@@ -230,8 +254,8 @@ export function validateLokasiSubBisnis(
     return null;
   }
   if (sub === "operasional") {
-    if (!input.jamBuka.trim() || !TIME_REGEX.test(input.jamBuka)) return "Isi jam buka (contoh 08:00)";
-    if (!input.jamTutup.trim() || !TIME_REGEX.test(input.jamTutup)) return "Isi jam tutup (contoh 21:00)";
+    if (!input.jamBuka.trim() || !TIME_REGEX.test(input.jamBuka)) return "Isi jam buka (format 24 jam, contoh 08:00)";
+    if (!input.jamTutup.trim() || !TIME_REGEX.test(input.jamTutup)) return "Isi jam tutup (format 24 jam, contoh 21:00)";
     if (!input.alamatUsaha.trim()) return "Isi alamat usaha di RW 03";
     return null;
   }
@@ -259,21 +283,96 @@ export function validateStepSyarat(setuju: boolean) {
   return null;
 }
 
+export function validateLokasiWargaSinggah(input: {
+  rt: string;
+  alamat: string;
+  jenisWarga: string;
+  nomorUnit?: string;
+}): string | null {
+  if (!input.rt) return "Pilih RT";
+  if (!input.alamat.trim() || input.alamat.trim().length < 5) {
+    return input.jenisWarga === "jualan"
+      ? "Alamat lokasi usaha minimal 5 karakter"
+      : input.jenisWarga === "kost"
+        ? "Alamat kost minimal 5 karakter"
+        : "Alamat kontrakan minimal 5 karakter";
+  }
+  if (input.jenisWarga === "kost" && !input.nomorUnit?.trim()) {
+    return "Nomor kamar/unit wajib diisi";
+  }
+  return null;
+}
+
+export function validateJumlahByJenis(
+  jumlahDewasa: number,
+  jumlahAnak: number,
+  profile: { maxDewasa: number; maxAnak: number; maxTotal: number; showAnak: boolean },
+): string | null {
+  if (jumlahDewasa < 1) return "Minimal 1 orang dewasa";
+  if (jumlahDewasa > profile.maxDewasa) {
+    return `Maksimal ${profile.maxDewasa} orang dewasa untuk jenis ini`;
+  }
+  if (!profile.showAnak && jumlahAnak > 0) {
+    return "Jenis ngekost tidak mencatat anak — gunakan ngontrak jika keluarga";
+  }
+  if (jumlahAnak > profile.maxAnak) {
+    return `Maksimal ${profile.maxAnak} anak untuk jenis ini`;
+  }
+  if (jumlahDewasa + jumlahAnak > profile.maxTotal) {
+    return `Total maksimal ${profile.maxTotal} orang untuk jenis ini`;
+  }
+  return null;
+}
+
+export function validateJualanFields(input: {
+  namaUsaha: string;
+  jenisTempatUsaha: string;
+  jenisTempatUsahaLain: string;
+  kategoriUsaha: string[];
+  kategoriUsahaLain: string;
+  penanggungJawab: string;
+  jamBuka?: string;
+  jamTutup?: string;
+  alamatUsaha?: string;
+  requireJamOperasional?: boolean;
+}): string | null {
+  if (!input.namaUsaha.trim()) return "Nama usaha wajib diisi";
+  if (!input.penanggungJawab.trim()) return "Penanggung jawab wajib diisi";
+  const kategoriErr = validateKategoriUsaha(input.kategoriUsaha, input.kategoriUsahaLain);
+  if (kategoriErr) return kategoriErr;
+  if (!input.jenisTempatUsaha) return "Pilih jenis tempat usaha (lapak, kiosk, atau lainnya)";
+  if (input.jenisTempatUsaha === "lainnya" && !input.jenisTempatUsahaLain.trim()) {
+    return "Jelaskan jenis usaha lainnya";
+  }
+  const requireJam = input.requireJamOperasional !== false;
+  if (requireJam) {
+    if (!input.jamBuka?.trim() || !TIME_REGEX.test(input.jamBuka)) {
+      return "Jam buka wajib diisi (format 24 jam, contoh 08:00)";
+    }
+    if (!input.jamTutup?.trim() || !TIME_REGEX.test(input.jamTutup)) {
+      return "Jam tutup wajib diisi (format 24 jam, contoh 21:00)";
+    }
+  } else {
+    if (input.jamBuka?.trim() && !TIME_REGEX.test(input.jamBuka)) {
+      return "Jam buka tidak valid (format 24 jam, contoh 08:00)";
+    }
+    if (input.jamTutup?.trim() && !TIME_REGEX.test(input.jamTutup)) {
+      return "Jam tutup tidak valid (format 24 jam, contoh 21:00)";
+    }
+  }
+  return null;
+}
+
 export function validateStepBayar(
   tanggalBayar: string,
   terminBulan: string,
-  nomorUnit: string,
-  catatan: string,
-  keperluan?: string,
+  _nomorUnit?: string,
+  _catatan?: string,
+  _keperluan?: string,
   setujuTataTertib?: boolean,
 ) {
   if (!setujuTataTertib) return "Lengkapi langkah syarat terlebih dahulu";
   if (!tanggalBayar) return "Tanggal bayar wajib diisi";
   if (!terminBulan) return "Termin pembayaran wajib dipilih";
-  if (!nomorUnit.trim()) {
-    return keperluan === "bisnis"
-      ? "Nomor unit/lokasi usaha wajib diisi"
-      : "Nomor unit/kamar wajib diisi";
-  }
   return null;
 }
