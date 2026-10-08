@@ -65,6 +65,9 @@ declare module "express-session" {
     adminNama?: string;
     blusukanAuth?: boolean;
     blusukanLoginAt?: number;
+    rtjuaraRt?: number;        // RT JUARA — nomor RT ketua RT yang sedang login
+    rtjuaraNama?: string;
+    rtjuaraLoginAt?: number;
   }
 }
 
@@ -213,8 +216,28 @@ export async function registerRoutes(
     })
   );
 
+  // Master warga/KK dikelola Ketua RT (portal /rt). Endpoint lama milik admin RW & Blusukan hanya baca.
+  // IZINKAN_RW_EDIT_MASTER=true hanya untuk masa transisi darurat.
+  const { tolakUbahMasterOlehRw } = await import("./wilayah-auth");
+  const MASTER_LAMA = /^\/api\/(kk|warga|blusukan\/kk|blusukan\/warga)(\/\d+)?\/?$/;
+  app.use((req, res, next) => {
+    if (process.env.IZINKAN_RW_EDIT_MASTER === "true") return next();
+    if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") return next();
+    if (MASTER_LAMA.test(req.path)) return tolakUbahMasterOlehRw(req, res);
+    next();
+  });
+
+  const { pastikanSkemaWilayah } = await import("./wilayah-skema");
+  await pastikanSkemaWilayah();
+  const { registerWilayahRoutes } = await import("./wilayah-routes");
+  registerWilayahRoutes(app);
+
   const { registerBlusukanRoutes } = await import("./blusukan-routes");
   await registerBlusukanRoutes(app);
+
+  const { registerRtjuaraRoutes } = await import("./rtjuara-routes");
+  await registerRtjuaraRoutes(app);
+  console.log("[RTJUARA] Route portal RT / admin / publik terdaftar");
 
   const { registerRw3lawRoutes } = await import("./rw3law-routes");
   registerRw3lawRoutes(app);
@@ -1096,6 +1119,12 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
       }
 
       const data = await storage.createSuratRw(parsed);
+
+      const tanggalTerbit = parsed.tanggalSurat ? new Date(`${parsed.tanggalSurat}T00:00:00`) : new Date();
+      const { nomoriSuratLama } = await import("./wilayah-surat");
+      if (await nomoriSuratLama(data.id, parsed.jenisSurat, tanggalTerbit)) {
+        return res.json(await storage.getSuratRwById(data.id));
+      }
 
       const currentCount = await storage.countSuratRwThisYear();
       const seq = String(currentCount + 1).padStart(3, "0");

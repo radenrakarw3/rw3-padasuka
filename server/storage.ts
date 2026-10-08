@@ -4,15 +4,12 @@ import { getWargaAge } from "@shared/warga-form-tier";
 import { needsLiterasi, needsStatusAngkatanKerja } from "@shared/warga-international";
 import {
   buildKelompokUsiaMap,
-  pekerjaanUntukUsiaAnakKecil,
-  pekerjaanUntukUsiaLansia,
-  pekerjaanUntukUsiaPelajar,
   resolveKategoriUmur,
 } from "@shared/kategori-umur";
 import { resolvePekerjaanCanon } from "@shared/pekerjaan-status";
 import { isPengangguran } from "./kependudukan-stats";
 import { alias } from "drizzle-orm/pg-core";
-import { db } from "./db";
+import { db, pool } from "./db";
 import {
   kartuKeluarga, warga, rtData, laporan, laporanKekeringan, suratWarga, suratRw,
   profileEditRequest, adminUser, waBlast, waBlastRecipient, pengajuanBansos, donasiCampaign, donasi, kasRw,
@@ -73,19 +70,7 @@ function normalizeWargaPayload<T extends Partial<InsertWarga>>(data: T): T {
     tanggalLahir !== undefined ? resolveKategoriUmur(tanggalLahir) : undefined;
   const age = tanggalLahir !== undefined ? getWargaAge(tanggalLahir) : null;
   const lansia = age !== null && age !== undefined ? age >= 60 : undefined;
-  const anakKecilPekerjaan =
-    age !== null && age !== undefined
-      ? pekerjaanUntukUsiaAnakKecil(data.pekerjaan, age)
-      : undefined;
-  const pelajarPekerjaan =
-    age !== null && age !== undefined
-      ? pekerjaanUntukUsiaPelajar(data.pekerjaan, age)
-      : undefined;
-  const lansiaPekerjaan =
-    age !== null && age !== undefined
-      ? pekerjaanUntukUsiaLansia(data.pekerjaan, age)
-      : undefined;
-  const pekerjaanByUsia = anakKecilPekerjaan ?? pelajarPekerjaan ?? lansiaPekerjaan;
+  // Pekerjaan tidak lagi diturunkan dari umur: anak belum tentu pelajar, lansia belum tentu pensiun.
   const pekerjaanCanon = Object.prototype.hasOwnProperty.call(data, "pekerjaan")
     ? (() => {
         const raw = data.pekerjaan;
@@ -94,7 +79,7 @@ function normalizeWargaPayload<T extends Partial<InsertWarga>>(data: T): T {
         return canon !== raw ? canon : undefined;
       })()
     : undefined;
-  const pekerjaanFinal = pekerjaanByUsia ?? pekerjaanCanon;
+  const pekerjaanFinal = pekerjaanCanon;
 
   return {
     ...data,
@@ -487,6 +472,18 @@ export interface DashboardStats {
   totalLayakBansos: number;
   kkEkonomiTerisi: number;
 }
+
+/** Kolom surat_rw sebelum migrasi 0023 — query lama tidak boleh bergantung pada kolom Surat Sakti. */
+const SURAT_RW_LEGACY_COLS = {
+  id: suratRw.id,
+  nomorSurat: suratRw.nomorSurat,
+  jenisSurat: suratRw.jenisSurat,
+  perihal: suratRw.perihal,
+  tujuan: suratRw.tujuan,
+  isiSurat: suratRw.isiSurat,
+  tanggalSurat: suratRw.tanggalSurat,
+  createdAt: suratRw.createdAt,
+};
 
 export class DatabaseStorage implements IStorage {
   private async ensureRwcoinWalletTx(
@@ -891,17 +888,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllSuratRw(): Promise<SuratRw[]> {
-    return db.select().from(suratRw).orderBy(desc(suratRw.createdAt));
+    return db.select(SURAT_RW_LEGACY_COLS).from(suratRw).orderBy(desc(suratRw.createdAt)) as unknown as Promise<SuratRw[]>;
   }
 
   async getSuratRwById(id: number): Promise<SuratRw | undefined> {
-    const [result] = await db.select().from(suratRw).where(eq(suratRw.id, id));
-    return result;
+    const [result] = await db.select(SURAT_RW_LEGACY_COLS).from(suratRw).where(eq(suratRw.id, id));
+    return result as SuratRw | undefined;
   }
 
   async createSuratRw(data: InsertSuratRw): Promise<SuratRw> {
-    const [result] = await db.insert(suratRw).values(data).returning();
-    return result;
+    // SQL eksplisit: tetap jalan sebelum kolom Surat Sakti dimigrasi.
+    const { rows } = await pool.query(
+      `INSERT INTO surat_rw (nomor_surat, jenis_surat, perihal, tujuan, isi_surat, tanggal_surat)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [data.nomorSurat ?? null, data.jenisSurat, data.perihal, data.tujuan ?? null, data.isiSurat ?? null, data.tanggalSurat ?? null],
+    );
+    return (await this.getSuratRwById(rows[0].id))!;
   }
 
   async getProfileEditsByKkId(kkId: number): Promise<ProfileEditRequest[]> {
@@ -1167,13 +1169,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateSuratRwNomor(id: number, nomorSurat: string): Promise<SuratRw | undefined> {
-    const [result] = await db.update(suratRw).set({ nomorSurat }).where(eq(suratRw.id, id)).returning();
-    return result;
+    const [result] = await db.update(suratRw).set({ nomorSurat }).where(eq(suratRw.id, id)).returning(SURAT_RW_LEGACY_COLS);
+    return result as SuratRw | undefined;
   }
 
   async updateSuratRwIsi(id: number, isiSurat: string): Promise<SuratRw | undefined> {
-    const [result] = await db.update(suratRw).set({ isiSurat }).where(eq(suratRw.id, id)).returning();
-    return result;
+    const [result] = await db.update(suratRw).set({ isiSurat }).where(eq(suratRw.id, id)).returning(SURAT_RW_LEGACY_COLS);
+    return result as SuratRw | undefined;
   }
 
   async getBansosRecipients(): Promise<(KartuKeluarga & { kepalaKeluarga: string | null })[]> {
@@ -1408,7 +1410,7 @@ export class DatabaseStorage implements IStorage {
       db.select().from(rtData).where(inArray(rtData.nomorRt, [...ACTIVE_RT_NUMBERS])).orderBy(rtData.nomorRt),
       db.select().from(laporan),
       db.select().from(suratWarga),
-      db.select().from(suratRw),
+      db.select(SURAT_RW_LEGACY_COLS).from(suratRw),
       db.select().from(profileEditRequest),
       db.select().from(pengajuanBansos),
       db.select().from(kasRw),

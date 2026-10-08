@@ -20,6 +20,7 @@ import {
   stripLaporanMetaPrefix,
 } from "@shared/laporan-pelapor";
 import { jenisLaporanMasalahLabel } from "@shared/laporan-public-form";
+import { isNomorHpValid, looksLikeNik } from "@shared/kontak";
 import type { Visitrw3Penghuni, Visitrw3Pengajuan, PemilikKost, Laporan, LaporanKekeringan, Usaha } from "@shared/schema";
 
 const PUBLIC_SITE_URL =
@@ -99,7 +100,7 @@ async function claimEventKey(
   referenceId?: number,
 ): Promise<boolean> {
   const normalized = normalizeStarSenderPhone(phone);
-  if (!normalized || normalized.replace(/\D/g, "").length < 9) return false;
+  if (!normalized || !isNomorHpValid(normalized) || looksLikeNik(phone)) return false;
 
   try {
     await db.insert(waNotifikasiLog).values({

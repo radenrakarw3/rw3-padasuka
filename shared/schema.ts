@@ -3,6 +3,7 @@ import { pgTable, text, varchar, serial, integer, boolean, timestamp, jsonb, uni
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { isActiveRt } from "./rt";
+import { RTJUARA_MAX_FOTO, RTJUARA_PERIODE, isRtjuaraRt } from "./rtjuara";
 import { parseKkKendaraanData, validateKkKendaraanList } from "./kk-kendaraan";
 
 export const kartuKeluarga = pgTable("kartu_keluarga", {
@@ -207,6 +208,20 @@ export const suratRw = pgTable("surat_rw", {
   isiSurat: text("isi_surat"),
   tanggalSurat: text("tanggal_surat"),
   createdAt: timestamp("created_at").defaultNow(),
+  // Surat Sakti (migrations/0023_wilayah.sql)
+  status: text("status").notNull().default("terbit"),
+  dataForm: jsonb("data_form"),
+  dibuatOleh: text("dibuat_oleh"),
+  diterbitkanAt: timestamp("diterbitkan_at"),
+  dibatalkanAt: timestamp("dibatalkan_at"),
+  alasanBatal: text("alasan_batal"),
+  menggantiId: integer("mengganti_id"),
+  kejadianId: integer("kejadian_id"),
+  kegiatanId: integer("kegiatan_id"),
+  permintaanId: integer("permintaan_id"),
+  nomorUrut: integer("nomor_urut"),
+  tahunNomor: integer("tahun_nomor"),
+  updatedAt: timestamp("updated_at"),
 });
 
 export const profileEditRequest = pgTable("profile_edit_request", {
@@ -1530,3 +1545,185 @@ export type IuranKk = typeof iuranKk.$inferSelect;
 export type InsertIuranKk = z.infer<typeof insertIuranKkSchema>;
 
 // ===================== END IURAN PER KK =====================
+
+// ===================== RT JUARA — "RW3 Muncul, RT-nya JUARA" =====================
+
+/** Master quest yang dibuat admin RW; bobot poin tetap per quest. */
+export const rtjuaraQuest = pgTable("rtjuara_quest", {
+  id: serial("id").primaryKey(),
+  judul: text("judul").notNull(),
+  deskripsi: text("deskripsi").notNull(),
+  periode: text("periode").notNull(),
+  poin: integer("poin").notNull().default(10),
+  instruksiBukti: text("instruksi_bukti"),
+  minFoto: integer("min_foto").notNull().default(1),
+  wajibJumlahPeserta: boolean("wajib_jumlah_peserta").notNull().default(false),
+  berlakuMulai: text("berlaku_mulai"),
+  berlakuSampai: text("berlaku_sampai"),
+  aktif: boolean("aktif").notNull().default(true),
+  dibuatOleh: text("dibuat_oleh"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_rtjuara_quest_periode").on(table.periode),
+  index("idx_rtjuara_quest_aktif").on(table.aktif),
+]);
+
+/** Bukti pengerjaan quest yang dikirim ketua RT (form + dokumentasi foto). */
+export const rtjuaraSubmission = pgTable("rtjuara_submission", {
+  id: serial("id").primaryKey(),
+  questId: integer("quest_id").notNull().references(() => rtjuaraQuest.id, { onDelete: "cascade" }),
+  rt: integer("rt").notNull(),
+  periodeKey: text("periode_key").notNull(),
+  bulanKey: text("bulan_key").notNull(),
+  judulKegiatan: text("judul_kegiatan").notNull(),
+  tanggalKegiatan: text("tanggal_kegiatan").notNull(),
+  lokasi: text("lokasi").notNull(),
+  jumlahPeserta: integer("jumlah_peserta"),
+  deskripsi: text("deskripsi").notNull(),
+  status: text("status").notNull().default("menunggu"),
+  /** Snapshot bobot quest saat bukti dikirim — poin tidak berubah kalau quest diedit. */
+  poinPotensi: integer("poin_potensi").notNull().default(0),
+  poinDiberikan: integer("poin_diberikan").notNull().default(0),
+  catatanAdmin: text("catatan_admin"),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewedBy: text("reviewed_by"),
+  dikirimOleh: text("dikirim_oleh"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_rtjuara_submission_rt").on(table.rt),
+  index("idx_rtjuara_submission_status").on(table.status),
+  index("idx_rtjuara_submission_bulan").on(table.bulanKey),
+  index("idx_rtjuara_submission_quest").on(table.questId),
+]);
+
+/** Foto dokumentasi disimpan terpisah supaya query list tidak menyeret base64. */
+export const rtjuaraSubmissionFoto = pgTable("rtjuara_submission_foto", {
+  id: serial("id").primaryKey(),
+  submissionId: integer("submission_id").notNull().references(() => rtjuaraSubmission.id, { onDelete: "cascade" }),
+  /** data:image/...;base64,... — disimpan di DB (Railway ephemeral FS). */
+  fotoData: text("foto_data").notNull(),
+  urutan: integer("urutan").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_rtjuara_foto_submission").on(table.submissionId),
+]);
+
+/** Akun login ketua RT (PIN 6 digit, disimpan sebagai hash bcrypt). */
+export const rtjuaraRtAkun = pgTable("rtjuara_rt_akun", {
+  id: serial("id").primaryKey(),
+  rt: integer("rt").notNull().unique(),
+  namaKetua: text("nama_ketua").notNull(),
+  nomorWhatsapp: text("nomor_whatsapp"),
+  pinHash: text("pin_hash").notNull(),
+  aktif: boolean("aktif").notNull().default(true),
+  lastLoginAt: timestamp("last_login_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+/** Snapshot beku pengumuman RT Juara bulanan. */
+export const rtjuaraJuara = pgTable("rtjuara_juara", {
+  id: serial("id").primaryKey(),
+  bulanKey: text("bulan_key").notNull(),
+  rt: integer("rt").notNull(),
+  peringkat: integer("peringkat").notNull(),
+  totalPoin: integer("total_poin").notNull().default(0),
+  jumlahQuest: integer("jumlah_quest").notNull().default(0),
+  catatan: text("catatan"),
+  diumumkanAt: timestamp("diumumkan_at").defaultNow(),
+  diumumkanOleh: text("diumumkan_oleh"),
+}, (table) => [
+  uniqueIndex("rtjuara_juara_bulan_rt_unique").on(table.bulanKey, table.rt),
+  index("idx_rtjuara_juara_bulan").on(table.bulanKey),
+]);
+
+export const insertRtjuaraQuestSchema = createInsertSchema(rtjuaraQuest).omit({
+  id: true,
+  createdAt: true,
+  dibuatOleh: true,
+}).extend({
+  judul: z.string().min(3, "Judul quest minimal 3 karakter").max(120, "Judul quest terlalu panjang"),
+  deskripsi: z.string().min(10, "Deskripsi quest minimal 10 karakter"),
+  periode: z.enum(RTJUARA_PERIODE, { errorMap: () => ({ message: "Periode harus harian, mingguan, atau bulanan" }) }),
+  poin: z.coerce.number().int().min(1, "Poin minimal 1").max(1000, "Poin maksimal 1000"),
+  instruksiBukti: z.string().nullable().optional(),
+  minFoto: z.coerce.number().int().min(1, "Minimal 1 foto dokumentasi").max(RTJUARA_MAX_FOTO, `Maksimal ${RTJUARA_MAX_FOTO} foto`).optional(),
+  wajibJumlahPeserta: z.boolean().optional(),
+  berlakuMulai: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal: YYYY-MM-DD").nullable().optional(),
+  berlakuSampai: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal: YYYY-MM-DD").nullable().optional(),
+  aktif: z.boolean().optional(),
+}).superRefine((data, ctx) => {
+  if (data.berlakuMulai && data.berlakuSampai && data.berlakuSampai < data.berlakuMulai) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["berlakuSampai"],
+      message: "Tanggal selesai tidak boleh sebelum tanggal mulai",
+    });
+  }
+});
+
+export const patchRtjuaraQuestSchema = createInsertSchema(rtjuaraQuest).omit({
+  id: true,
+  createdAt: true,
+  dibuatOleh: true,
+}).partial().extend({
+  judul: z.string().min(3, "Judul quest minimal 3 karakter").max(120).optional(),
+  deskripsi: z.string().min(10, "Deskripsi quest minimal 10 karakter").optional(),
+  periode: z.enum(RTJUARA_PERIODE).optional(),
+  poin: z.coerce.number().int().min(1).max(1000).optional(),
+  minFoto: z.coerce.number().int().min(1).max(RTJUARA_MAX_FOTO).optional(),
+  berlakuMulai: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal: YYYY-MM-DD").nullable().optional(),
+  berlakuSampai: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal: YYYY-MM-DD").nullable().optional(),
+});
+
+/** Payload kirim bukti dari portal RT — `rt` diambil dari sesi, bukan dari body. */
+export const insertRtjuaraSubmissionSchema = z.object({
+  questId: z.coerce.number().int().positive("Quest tidak valid"),
+  judulKegiatan: z.string().min(3, "Judul kegiatan minimal 3 karakter").max(150, "Judul kegiatan terlalu panjang"),
+  tanggalKegiatan: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal kegiatan: YYYY-MM-DD"),
+  lokasi: z.string().min(3, "Lokasi kegiatan wajib diisi"),
+  jumlahPeserta: z.coerce.number().int().min(0, "Jumlah peserta tidak boleh negatif").max(100000).nullable().optional(),
+  deskripsi: z.string().min(10, "Ceritakan kegiatannya minimal 10 karakter"),
+  dikirimOleh: z.string().max(100).nullable().optional(),
+  foto: z
+    .array(z.string().startsWith("data:image/", "Format foto tidak valid"))
+    .min(1, "Wajib melampirkan minimal 1 foto dokumentasi")
+    .max(RTJUARA_MAX_FOTO, `Maksimal ${RTJUARA_MAX_FOTO} foto dokumentasi`),
+});
+
+export const reviewRtjuaraSubmissionSchema = z.object({
+  status: z.enum(["disetujui", "ditolak"], {
+    errorMap: () => ({ message: "Status verifikasi harus disetujui atau ditolak" }),
+  }),
+  catatanAdmin: z.string().max(500).nullable().optional(),
+}).superRefine((data, ctx) => {
+  if (data.status === "ditolak" && !data.catatanAdmin?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["catatanAdmin"],
+      message: "Alasan penolakan wajib diisi",
+    });
+  }
+});
+
+export const upsertRtjuaraAkunSchema = z.object({
+  rt: z.coerce.number().int().refine((n) => isRtjuaraRt(n), "RT tidak valid (01–07)"),
+  namaKetua: z.string().min(2, "Nama ketua RT wajib diisi").max(100),
+  nomorWhatsapp: z.string().max(30).nullable().optional(),
+  pin: z.string().regex(/^\d{6}$/, "PIN harus 6 digit angka").optional(),
+  aktif: z.boolean().optional(),
+});
+
+export const rtjuaraLoginSchema = z.object({
+  rt: z.coerce.number().int().refine((n) => isRtjuaraRt(n), "Pilih RT terlebih dahulu"),
+  pin: z.string().regex(/^\d{6}$/, "PIN harus 6 digit angka"),
+});
+
+export type RtjuaraQuest = typeof rtjuaraQuest.$inferSelect;
+export type InsertRtjuaraQuest = z.infer<typeof insertRtjuaraQuestSchema>;
+export type RtjuaraSubmission = typeof rtjuaraSubmission.$inferSelect;
+export type InsertRtjuaraSubmission = z.infer<typeof insertRtjuaraSubmissionSchema>;
+export type RtjuaraSubmissionFoto = typeof rtjuaraSubmissionFoto.$inferSelect;
+export type RtjuaraRtAkun = typeof rtjuaraRtAkun.$inferSelect;
+export type RtjuaraJuara = typeof rtjuaraJuara.$inferSelect;
+
+// ===================== END RT JUARA =====================

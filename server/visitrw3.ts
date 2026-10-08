@@ -4,6 +4,7 @@ import fs from "fs";
 import path from "path";
 import { db, pool } from "./db";
 import { eq, and, desc, asc, inArray, sql } from "drizzle-orm";
+import { maskNik } from "@shared/kontak";
 import {
   pemilikKost,
   visitrw3Pengajuan,
@@ -293,13 +294,13 @@ function validatePenghuni(
 
 async function assertNikAvailable(nik: string) {
   const [ws] = await db.select({ id: wargaSinggah.id }).from(wargaSinggah).where(eq(wargaSinggah.nik, nik));
-  if (ws) throw new Error(`NIK ${nik} sudah terdaftar sebagai warga singgah`);
+  if (ws) throw new Error(`NIK ${maskNik(nik)} sudah terdaftar sebagai warga singgah`);
   const [pending] = await db
     .select({ id: visitrw3Penghuni.id })
     .from(visitrw3Penghuni)
     .innerJoin(visitrw3Pengajuan, eq(visitrw3Penghuni.pengajuanId, visitrw3Pengajuan.id))
     .where(and(eq(visitrw3Penghuni.nik, nik), eq(visitrw3Pengajuan.status, "menunggu_survey")));
-  if (pending) throw new Error(`NIK ${nik} sedang dalam pengajuan lain`);
+  if (pending) throw new Error(`NIK ${maskNik(nik)} sedang dalam pengajuan lain`);
 }
 
 /** @deprecated Alur pemilik properti dihapus — selalu kosong. */

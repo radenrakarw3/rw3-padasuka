@@ -1,0 +1,19 @@
+# Migrasi & rollback
+
+Migrasi `migrations/0023_wilayah.sql` bersifat **additive dan idempoten**: hanya membuat tabel `wil_*` dan menambah kolom pada `surat_rw` (nullable, atau `status` dengan default `'terbit'` agar surat lama tetap terbit). Data lama tidak dihapus atau diubah. Drizzle `db:push` mengabaikan `wil_*` (`tablesFilter`).
+
+## Langkah (hanya atas instruksi Ketua RW)
+
+1. **Backup**: `pg_dump "$DATABASE_URL" -Fc -f backup-sebelum-wilayah.dump`
+2. **Dry-run**: `npm run wilayah:migrate`. SQL dijalankan dalam transaksi lalu di-ROLLBACK, dan laporan rekonsiliasi dicetak.
+3. **Terapkan**: `npm run wilayah:migrate -- --apply`
+4. **Impor data lama sebagai `perlu_cek`** (opsional): `npm run wilayah:migrate -- --import-lama` (dry-run), lalu `--import-lama --apply`. Pemetaan ID tetap memakai `kartu_keluarga.id` dan `warga.id` yang sudah ada.
+5. **Rekonsiliasi**: pastikan jumlah KK/warga lama sama sebelum dan sesudah, dan jumlah fakta `perlu_cek` sesuai laporan dry-run.
+6. Set env: `QR_TOKEN_SECRET` (≥ 32 karakter acak), `BLUSUKAN_PIN` (≥ 6 karakter).
+7. Buat/atur PIN 7 akun RT di `/admin/rtjuara/akun`. Jangan bagikan PIN lewat grup.
+
+## Rollback
+
+- Kode: rollback deploy ke commit sebelumnya. Endpoint lama tetap jalan tanpa tabel `wil_*` (nomor surat kembali ke cara lama).
+- Skema: `psql "$DATABASE_URL" -f migrations/0023_wilayah.down.sql`. Ini menghapus tabel `wil_*` dan kolom tambahan, jadi data wilayah baru ikut hilang.
+- Darurat penuh: `pg_restore --clean -d "$DATABASE_URL" backup-sebelum-wilayah.dump`.

@@ -52,12 +52,14 @@ function checkRateLimit(ip: string): boolean {
   return true;
 }
 
-function getExpectedPin(): string {
-  return process.env.BLUSUKAN_PIN || "664599";
+function getExpectedPin(): string | null {
+  const pin = process.env.BLUSUKAN_PIN?.trim();
+  return pin && pin.length >= 6 ? pin : null;
 }
 
 function verifyPin(pin: string): boolean {
   const expected = getExpectedPin();
+  if (!expected) return false;
   if (pin.length !== expected.length) return false;
   try {
     return crypto.timingSafeEqual(Buffer.from(pin), Buffer.from(expected));

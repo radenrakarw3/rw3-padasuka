@@ -13,6 +13,9 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "test:rw3law": "tsx script/rw3law-smoke.ts",
+    "test:rtjuara": "tsx script/rtjuara-smoke.ts",
+    "test:wilayah": "tsx script/wilayah-smoke.ts",
+    "wilayah:migrate": "tsx script/wilayah-migrate.ts",
     "seed:rw3law": "tsx script/seed-rw3law-peraturan.ts",
     "db:rw3law": "tsx script/seed-rw3law-peraturan.ts"
   },

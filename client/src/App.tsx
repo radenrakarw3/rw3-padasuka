@@ -46,6 +46,13 @@ const KarangtarunaHub = lazy(() => import("@/pages/karangtaruna/hub"));
 const KarangtarunaDaftar = lazy(() => import("@/pages/karangtaruna/daftar"));
 const KarangtarunaStatus = lazy(() => import("@/pages/karangtaruna/status"));
 
+const PublicRtjuara = lazy(() => import("@/pages/public/rtjuara"));
+const RtjuaraLogin = lazy(() => import("@/pages/rtjuara/login"));
+const RtjuaraQuest = lazy(() => import("@/pages/rtjuara/quest"));
+const RtjuaraKirim = lazy(() => import("@/pages/rtjuara/kirim"));
+const RtjuaraRiwayat = lazy(() => import("@/pages/rtjuara/riwayat"));
+const RtjuaraPeringkat = lazy(() => import("@/pages/rtjuara/peringkat"));
+
 const AdminLayout = lazy(() => import("@/components/admin-layout"));
 
 const AdminKependudukanRingkasan = lazy(() => import("@/pages/admin/kependudukan-ringkasan"));
@@ -53,6 +60,10 @@ const AdminKependudukanRingkasan = lazy(() => import("@/pages/admin/kependudukan
 const AdminRw3law = lazy(() => import("@/pages/admin/rw3law"));
 
 const AdminSuratRw = lazy(() => import("@/pages/admin/surat-rw"));
+const AdminSuratSakti = lazy(() => import("@/pages/admin/surat-sakti"));
+const AdminRwDashboard = lazy(() => import("@/pages/admin/rw-dashboard"));
+const RtApp = lazy(() => import("@/pages/rt/app"));
+const PublicIsi = lazy(() => import("@/pages/public/isi"));
 
 const AdminVisitrw3Landing = lazy(() => import("@/pages/admin/visitrw3-landing"));
 const AdminVisitrw3Dashboard = lazy(() => import("@/pages/admin/visitrw3-dashboard"));
@@ -66,6 +77,10 @@ const AdminRw3bizAntrian = lazy(() => import("@/pages/admin/rw3biz-antrian"));
 const AdminRw3bizBlast = lazy(() => import("@/pages/admin/rw3biz-blast"));
 const AdminRw3bizDashboard = lazy(() => import("@/pages/admin/rw3biz-dashboard"));
 const AdminRw3bizPengaturan = lazy(() => import("@/pages/admin/rw3biz-pengaturan"));
+const AdminRtjuaraDashboard = lazy(() => import("@/pages/admin/rtjuara-dashboard"));
+const AdminRtjuaraQuest = lazy(() => import("@/pages/admin/rtjuara-quest"));
+const AdminRtjuaraVerifikasi = lazy(() => import("@/pages/admin/rtjuara-verifikasi"));
+const AdminRtjuaraAkun = lazy(() => import("@/pages/admin/rtjuara-akun"));
 const AdminKarangtarunaLanding = lazy(() => import("@/pages/admin/karangtaruna-landing"));
 const AdminKarangtarunaAnggota = lazy(() => import("@/pages/admin/karangtaruna-anggota"));
 const AdminKarangtarunaDashboard = lazy(() => import("@/pages/admin/karangtaruna-dashboard"));
@@ -83,6 +98,8 @@ import BlusukanrwKkDetail from "@/pages/blusukanrw/kk-detail";
 import goldLogo from "@assets/RW3-Cimahi-Logo-Gold.webp";
 import { BlusukanAuthProvider, useBlusukanAuth } from "@/lib/blusukan-auth";
 import { BlusukanrwLayout } from "@/components/blusukanrw-layout";
+import { RtjuaraAuthProvider, useRtjuaraAuth } from "@/lib/rtjuara-auth";
+import { RtjuaraLayout } from "@/components/rtjuara-layout";
 
 import emblemSvg from "@assets/rw03-emblem.svg";
 
@@ -328,20 +345,25 @@ function AdminRoutes() {
         <Route path="/admin/kekeringan">{() => <Redirect to="/admin/laporan" />}</Route>
 
         <Route path="/admin/surat-warga">{() => <Redirect to="/admin/laporan" />}</Route>
-        <Route path="/admin/dashboard">{() => <Redirect to="/admin/kependudukan" />}</Route>
+        <Route path="/admin/dashboard" component={AdminRwDashboard} />
         <Route path="/admin/antrian-warga">{() => <Redirect to="/admin/laporan" />}</Route>
         <Route path="/admin/rwcoin">{() => <Redirect to="/admin/laporan" />}</Route>
 
         <Route path="/admin/rw3law" component={AdminRw3law} />
         <Route path="/admin/rwlaw">{() => <Redirect to="/admin/rw3law" />}</Route>
 
-        <Route path="/admin/surat-rw" component={AdminSuratRw} />
+        <Route path="/admin/surat-rw-lama" component={AdminSuratRw} />
+        <Route path="/admin/surat-rw" component={AdminSuratSakti} />
 
         <Route path="/admin/rw3biz/pengaturan" component={AdminRw3bizPengaturan} />
         <Route path="/admin/rw3biz/antrian" component={AdminRw3bizAntrian} />
         <Route path="/admin/rw3biz/blast" component={AdminRw3bizBlast} />
         <Route path="/admin/rw3biz/dashboard" component={AdminRw3bizDashboard} />
         <Route path="/admin/rw3biz" component={AdminRw3bizLanding} />
+        <Route path="/admin/rtjuara/quest" component={AdminRtjuaraQuest} />
+        <Route path="/admin/rtjuara/verifikasi" component={AdminRtjuaraVerifikasi} />
+        <Route path="/admin/rtjuara/akun" component={AdminRtjuaraAkun} />
+        <Route path="/admin/rtjuara" component={AdminRtjuaraDashboard} />
         <Route path="/admin/karangtaruna/anggota" component={AdminKarangtarunaAnggota} />
         <Route path="/admin/karangtaruna/dashboard" component={AdminKarangtarunaDashboard} />
         <Route path="/admin/karangtaruna" component={AdminKarangtarunaLanding} />
@@ -362,9 +384,9 @@ function AdminRoutes() {
         <Route path="/admin/program-kerja/umkm">{() => <Redirect to="/admin/laporan" />}</Route>
         <Route path="/admin/program-kerja">{() => <Redirect to="/admin/laporan" />}</Route>
 
-        <Route path="/admin">{() => <Redirect to="/admin/laporan" />}</Route>
+        <Route path="/admin">{() => <Redirect to="/admin/dashboard" />}</Route>
 
-        <Route>{() => <Redirect to="/admin/laporan" />}</Route>
+        <Route>{() => <Redirect to="/admin/dashboard" />}</Route>
 
       </Switch>
         </Suspense>
@@ -437,6 +459,54 @@ function BlusukanrwApp() {
   );
 }
 
+function RtjuaraPortalRoutes() {
+  const { sesi, loading, bootError } = useRtjuaraAuth();
+
+  if (loading) return <PageLoader />;
+
+  if (!sesi) {
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <RtjuaraLogin bootError={bootError} />
+      </Suspense>
+    );
+  }
+
+  return (
+    <RtjuaraLayout>
+      <Suspense fallback={<PageLoader />}>
+        <Switch>
+          <Route path="/rtjuara/quest" component={RtjuaraQuest} />
+          <Route path="/rtjuara/kirim/:questId" component={RtjuaraKirim} />
+          <Route path="/rtjuara/riwayat" component={RtjuaraRiwayat} />
+          <Route path="/rtjuara/peringkat" component={RtjuaraPeringkat} />
+          <Route path="/rtjuara/login">{() => <Redirect to="/rtjuara/quest" />}</Route>
+          <Route>{() => <Redirect to="/rtjuara/quest" />}</Route>
+        </Switch>
+      </Suspense>
+    </RtjuaraLayout>
+  );
+}
+
+/** /rtjuara publik (papan peringkat warga); sub-path lainnya adalah portal ketua RT. */
+function RtjuaraApp() {
+  const [location] = useLocation();
+
+  if (location === "/rtjuara" || location === "/rtjuara/") {
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <PublicRtjuara />
+      </Suspense>
+    );
+  }
+
+  return (
+    <RtjuaraAuthProvider>
+      <RtjuaraPortalRoutes />
+    </RtjuaraAuthProvider>
+  );
+}
+
 function PublicRoutes() {
 
   return (
@@ -454,6 +524,11 @@ function PublicRoutes() {
       <Route path="/program">{() => <Redirect to="/" />}</Route>
       <Route path="/kampung-umkm">{() => <Redirect to="/" />}</Route>
       <Route path="/pelayanan" component={PublicPelayanan} />
+
+      {/* QR pendataan keluarga — token tidak pernah membuka data lama */}
+      <Route path="/isi/status">{() => <PublicIsi status />}</Route>
+      <Route path="/isi/:token">{(p) => <PublicIsi token={p.token} />}</Route>
+      <Route path="/isi">{() => <PublicIsi />}</Route>
 
       {/* RW3LAW — path kanonik /rwlaw */}
       <Route path="/rwlaw/:slug" component={Rw3lawDokumen} />
@@ -552,6 +627,26 @@ function AppContent() {
     return <BlusukanrwApp />;
   }
 
+  if (location.startsWith("/rtjuara")) {
+    return <RtjuaraApp />;
+  }
+
+  if (location === "/rt" || location.startsWith("/rt/")) {
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <RtApp />
+      </Suspense>
+    );
+  }
+
+  if (location === "/isi" || location.startsWith("/isi/")) {
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <PublicRoutes />
+      </Suspense>
+    );
+  }
+
   if (needsAuthSession(location) && loading) {
 
     return <PageLoader />;
@@ -561,7 +656,7 @@ function AppContent() {
 
 
   if (user?.type === "admin" || user?.isAdmin) {
-    return <Redirect to="/admin/laporan" />;
+    return <Redirect to="/admin/dashboard" />;
   }
 
   return (

@@ -38,9 +38,13 @@ export function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
+/** Body respons jalur ini berisi data warga atau token QR — jangan pernah masuk log. */
+const LOG_TANPA_BODY = ["/api/wilayah", "/api/isi", "/api/warga", "/api/kk", "/api/blusukan"];
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
+  const tanpaBody = LOG_TANPA_BODY.some((p) => path.startsWith(p));
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
   const originalResJson = res.json;
@@ -53,7 +57,7 @@ app.use((req, res, next) => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
+      if (capturedJsonResponse && !tanpaBody) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
 

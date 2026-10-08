@@ -1,10 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
-import {
-  Megaphone, Scale,
-  LogOut, Menu, X, Building2, Wallet, FileText, BarChart3, Store, Sparkles,
-} from "lucide-react";
+import { Megaphone, LogOut, Menu, X, FileText, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import logoGold from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
 
@@ -13,21 +10,14 @@ type NavItem = { path: string; icon: typeof Megaphone; label: string };
 /** Path kanonik admin Karang Taruna (langsung ke anggota, hindari redirect ganda). */
 export const ADMIN_KARANGTARUNA_PATH = "/admin/karangtaruna/anggota";
 
-const navFormWarga: NavItem[] = [
-  { path: "/admin/laporan", icon: Megaphone, label: "Laporan" },
-  { path: "/admin/visitrw3", icon: Building2, label: "Visit RW3" },
-  { path: "/admin/rw3biz", icon: Store, label: "RW3BIZ" },
-  { path: ADMIN_KARANGTARUNA_PATH, icon: Sparkles, label: "Karang Taruna" },
-];
-
-const navPengelolaan: NavItem[] = [
-  { path: "/admin/kependudukan", icon: BarChart3, label: "Kependudukan" },
-  { path: "/admin/keuangan", icon: Wallet, label: "Kas RW" },
-  { path: "/admin/rw3law", icon: Scale, label: "RW3LAW" },
+/** Menu utama RW hanya dua. Modul lain (Kas, RW3LAW, Visit, BIZ, dst.) dibuka dari Dashboard › Modul lain. */
+const navUtama: NavItem[] = [
+  { path: "/admin/dashboard", icon: BarChart3, label: "Dashboard" },
   { path: "/admin/surat-rw", icon: FileText, label: "Surat RW" },
 ];
 
 function isNavActive(location: string, path: string): boolean {
+  if (path === "/admin/dashboard") return !location.startsWith("/admin/surat-rw");
   if (path === "/admin/laporan") return location === path || location.startsWith("/admin/laporan/");
   if (path === "/admin/visitrw3") {
     return location === path || location.startsWith("/admin/visitrw3/");
@@ -37,6 +27,9 @@ function isNavActive(location: string, path: string): boolean {
   }
   if (path === ADMIN_KARANGTARUNA_PATH || path === "/admin/karangtaruna") {
     return location === "/admin/karangtaruna" || location.startsWith("/admin/karangtaruna/");
+  }
+  if (path === "/admin/rtjuara") {
+    return location === path || location.startsWith("/admin/rtjuara/");
   }
   if (path === "/admin/kependudukan") {
     return location === path;
@@ -131,18 +124,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         >
           <nav className="p-3 space-y-4">
             <div className="space-y-1">
-              <p className="px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Form warga
-              </p>
-              {navFormWarga.map((item) => (
-                <NavButton key={item.path} item={item} location={location} onNavigate={go} />
-              ))}
-            </div>
-            <div className="space-y-1 border-t border-border/60 pt-3">
-              <p className="px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Pengelolaan data
-              </p>
-              {navPengelolaan.map((item) => (
+              {navUtama.map((item) => (
                 <NavButton key={item.path} item={item} location={location} onNavigate={go} />
               ))}
             </div>

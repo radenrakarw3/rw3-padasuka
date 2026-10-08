@@ -1,4 +1,4 @@
-import { Megaphone, Headphones } from "lucide-react";
+import { Megaphone, Headphones, QrCode, UserCog } from "lucide-react";
 import { PublicKioskLayout } from "@/components/public-kiosk-layout";
 import { ServiceCard } from "@/components/gov/service-card";
 import { FeatureExplain } from "@/components/gov/feature-explain";
@@ -12,6 +12,9 @@ export default function PublicLanding() {
     <PublicKioskLayout variant="hero">
       <FeatureExplain title="Pilih layanan sesuai kebutuhan" variant="glass">
         <ul className="list-disc pl-4 space-y-1">
+          <li>
+            <strong>Isi data keluarga</strong> — pakai kode di kartu QR dari Ketua RT. Isian diperiksa RT dulu, data lama tidak ditampilkan.
+          </li>
           <li>
             <strong>Lapor warga</strong> — sampaikan keluhan lingkungan di wilayah RW.
           </li>
@@ -33,6 +36,15 @@ export default function PublicLanding() {
         </ul>
       </FeatureExplain>
       <ServiceCard
+        href="/isi"
+        icon={QrCode}
+        eyebrow="Pendataan keluarga"
+        title="Isi data keluarga"
+        description="Punya kartu QR dari Ketua RT? Scan atau ketik kodenya di sini. Bisa juga cek status isian."
+        variant="solid"
+        iconClassName="bg-accent"
+      />
+      <ServiceCard
         href="/lapor"
         icon={Megaphone}
         title="Lapor warga"
@@ -51,6 +63,14 @@ export default function PublicLanding() {
       <Rw3bizCard />
       <KarangtarunaCard />
       <Rw3lawCard />
+      <ServiceCard
+        href="/rt"
+        icon={UserCog}
+        eyebrow="Khusus pengurus"
+        title="Portal Ketua RT"
+        description="Masuk dengan PIN untuk mengelola data warga, laporan bulanan, dan kartu QR"
+        variant="glass"
+      />
     </PublicKioskLayout>
   );
 }

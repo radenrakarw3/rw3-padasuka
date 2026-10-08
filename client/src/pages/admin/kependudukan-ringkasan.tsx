@@ -45,6 +45,7 @@ function enrichKkStats(
   kkRows: KkRow[] | undefined,
   rtFilter: string,
 ): KependudukanStats {
+  // wargaRows harus daftar lengkap semua RT: rincian per RT dihitung dari sini.
   const scopedRt = rtFilter === "semua" ? undefined : Number(rtFilter);
   const kkFromApi = (kkRows ?? []).filter((k) =>
     scopedRt === undefined ? true : k.rt === scopedRt,
@@ -66,7 +67,8 @@ function enrichKkStats(
       };
     });
   } else if (totalKk === 0 && wargaRows.length > 0) {
-    const kkIds = new Set(wargaRows.map((w) => w.kkId));
+    const scopedRows = scopedRt === undefined ? wargaRows : wargaRows.filter((w) => w.rt === scopedRt);
+    const kkIds = new Set(scopedRows.map((w) => w.kkId));
     totalKk = kkIds.size;
     perRt = [...ACTIVE_RT_NUMBERS].map((rt) => {
       const rowsRt = wargaRows.filter((w) => w.rt === rt);
@@ -249,8 +251,8 @@ export default function KependudukanRingkasan() {
 
   const displayStats = useMemo(() => {
     if (!data) return null;
-    return enrichKkStats(data, wargaFiltered, kkList, rtFilter);
-  }, [data, wargaFiltered, kkList, rtFilter]);
+    return enrichKkStats(data, wargaList ?? [], kkList, rtFilter);
+  }, [data, wargaList, kkList, rtFilter]);
 
   const refetchAll = () => {
     refetchStats();

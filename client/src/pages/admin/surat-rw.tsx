@@ -50,7 +50,7 @@ function makeDasarSection(lines: string[]): string {
   return `Dasar:\n${lines.map((line, index) => `${index + 1}. ${line}`).join("\n")}`;
 }
 
-function generateIsiSurat(jenisSurat: string, perihal: string, fields: Record<string, string>): string {
+export function generateIsiSurat(jenisSurat: string, perihal: string, fields: Record<string, string>): string {
   const tanggal = parseTanggalSurat(fields.tanggalSurat);
   const ttd = TTD(tanggal);
   const formal = true;
@@ -301,7 +301,7 @@ function generateIsiSurat(jenisSurat: string, perihal: string, fields: Record<st
   }
 }
 
-function buildPreviewSections(isiSurat?: string | null): { body: string[]; signature: string[] } {
+export function buildPreviewSections(isiSurat?: string | null): { body: string[]; signature: string[] } {
   if (!isiSurat) return { body: [], signature: [] };
   const cleaned = isiSurat.replace(/^Nomor\s*:.*\n?/m, "").trim();
   const chunks = cleaned.split(/\n{2,}/).map((chunk) => chunk.trim()).filter(Boolean);
@@ -317,7 +317,7 @@ function buildPreviewSections(isiSurat?: string | null): { body: string[]; signa
   };
 }
 
-type FormField = {
+export type FormField = {
   key: string;
   label: string;
   placeholder: string;
@@ -325,7 +325,7 @@ type FormField = {
   required?: boolean;
 };
 
-type JenisSuratConfig = {
+export type JenisSuratConfig = {
   value: string;
   label: string;
   perihalLabel: string;
@@ -333,7 +333,7 @@ type JenisSuratConfig = {
   fields: FormField[];
 };
 
-const jenisSuratConfigs: JenisSuratConfig[] = [
+export const jenisSuratConfigs: JenisSuratConfig[] = [
   {
     value: "Surat Undangan",
     label: "Surat Undangan",
