@@ -28,6 +28,11 @@ export function kodeSuratRw(jenisSurat: string): string {
 }
 
 export function formatNomorSuratRw(urut: number, jenisSurat: string, tanggal: Date): string {
+  return formatNomorKode(urut, kodeSuratRw(jenisSurat), tanggal.getFullYear(), tanggal.getMonth() + 1);
+}
+
+/** Surat Sakti v2: kode dari registry (nomorKode). Urutan tahunan dipakai bersama semua jenis. */
+export function formatNomorKode(urut: number, kode: string, tahun: number, bulan: number): string {
   const seq = String(urut).padStart(3, "0");
-  return `${seq}/${kodeSuratRw(jenisSurat)}/RW.03/KEL.PADASUKA/KEC.CIMAHI-TENGAH/KOTA.CIMAHI/${bulanRomawi(tanggal.getMonth() + 1)}/${tanggal.getFullYear()}`;
+  return `${seq}/${kode}/RW.03/KEL.PADASUKA/KEC.CIMAHI-TENGAH/KOTA.CIMAHI/${bulanRomawi(bulan)}/${tahun}`;
 }

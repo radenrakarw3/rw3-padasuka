@@ -31,7 +31,8 @@ Scope RT selalu dari sesi (`req.session.rtjuaraRt`). Tidak ada peran ketiga.
 |---|---|
 | Portal RT mobile (Beranda / Warga / Laporan) | `/rt` → `client/src/pages/rt/*` |
 | Form QR warga | `/isi/<token>`, `/isi/status` → `client/src/pages/public/isi.tsx` |
-| Dashboard RW (4 tab) | `/admin/dashboard` → `client/src/pages/admin/rw-dashboard.tsx` |
+| Dashboard RW (5 tab) | `/admin/dashboard` → `client/src/pages/admin/rw-dashboard.tsx` |
+| Data Warga + formulir dari RW | tab Data Warga → `client/src/pages/admin/rw-data-warga.tsx`, `POST/GET /api/wilayah/rw/usulan` |
 | Surat Sakti | `/admin/surat-rw` → `client/src/pages/admin/surat-sakti.tsx` |
 | API | `server/wilayah-routes.ts` (`/api/wilayah/*`, `/api/isi/*`) |
 | Model fakta, temporal + riwayat | `server/wilayah-data.ts`, tabel `wil_fakta` |

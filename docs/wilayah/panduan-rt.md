@@ -21,6 +21,7 @@ Data lama ditandai **"Perlu dicek"**. Tekan **Benar** bila sesuai atau **Salah**
 ## QR keluarga
 - Menu **Cetak kartu QR**: *Cetak satu* atau *Cetak semua* (A5, dua kartu per A4). Kartu tidak memuat NIK maupun nomor KK.
 - Warga memindai QR lalu mengirim isian. Isian **tidak langsung mengubah data**. Buka **Periksa isian warga**, bandingkan, lalu pilih *Terima*, *Minta klarifikasi*, atau *Tolak*.
+- Isian bertanda **dari RW** diinput Ketua RW untuk warga yang datang langsung, dan diperiksa dengan cara yang sama. Untuk *keluarga baru*, pilih KK yang sudah ada atau daftarkan KK baru dulu (alamat terisi otomatis), lalu terima. Setelah itu lengkapi anggota beserta NIK.
 - Kartu hilang atau tersebar: **Ganti QR**. Kartu lama langsung tidak berlaku.
 
 ## Laporan bulanan

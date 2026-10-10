@@ -45,6 +45,7 @@ async function harusGagal(fn: () => Promise<unknown>, status: number, pesan: str
     await fn();
   } catch (e: any) {
     if (e?.status === status) return;
+    if (status === 400 && e?.name === "ZodError") return;
     throw new Error(`${pesan}: status ${e?.status ?? "?"} (${e?.message})`);
   }
   throw new Error(`${pesan}: tidak ditolak`);
@@ -267,12 +268,23 @@ async function main() {
   process.exit(0);
 }
 
+let draftUji: (kode: string, perihal: string, extra?: Record<string, unknown>) => Record<string, unknown>;
+let hapusSuratUji: (pool: any, ids: number[]) => Promise<void>;
+
 async function ujiDatabase() {
   console.log("\n[Integrasi DB]");
   const { pool } = await import("../server/db");
   const data = await import("../server/wilayah-data");
   const qr = await import("../server/wilayah-qr");
-  const surat = await import("../server/wilayah-surat");
+  const surat = {
+    ...(await import("../server/wilayah-surat")),
+    ...(await import("../server/surat-sakti/layanan")),
+    ...(await import("../server/surat-sakti/tindak")),
+  };
+  const { contohData } = await import("../shared/surat-sakti/contoh");
+  const { PETA_JENIS } = await import("../shared/surat-sakti");
+  draftUji = (kode, perihal, extra = {}) => ({ kodeJenis: kode, perihal, tanggalSurat: "2026-10-08", dataForm: contohData(PETA_JENIS[kode]), ...extra });
+  hapusSuratUji = (await import("./surat-sakti-integrasi")).hapusSuratUji;
   const lap = await import("../server/wilayah-laporan");
   const { rows: cek } = await pool.query(`SELECT to_regclass('wil_fakta') AS t`);
   if (!cek[0].t) {
@@ -286,7 +298,7 @@ async function ujiDatabase() {
   const acak = () => String(Math.floor(Math.random() * 1e12)).padStart(12, "0");
   const nomorKk = `9900${acak()}`;
   const nik1 = `9901${acak()}`;
-  const bersih: { kk?: number; surat: number[] } = { surat: [] };
+  const bersih: { kk?: number; kkLain: number[]; surat: number[] } = { surat: [], kkLain: [] };
 
   try {
     let kkId = 0;
@@ -340,20 +352,21 @@ async function ujiDatabase() {
     });
 
     await uji("nomor surat aman saat terbit bersamaan (tanpa duplikat)", async () => {
-      const isi = "Isi surat uji ".repeat(12);
       for (let i = 0; i < 6; i++) {
-        const s = await surat.simpanDraft(rw, { jenisSurat: "Surat Undangan", perihal: `Uji paralel ${i}`, tanggalSurat: "2026-10-08", isiSurat: isi });
+        const s = await surat.simpanDraft(rw, draftUji("c_undangan", `Uji paralel ${i}`));
         bersih.surat.push(s.id);
       }
-      const hasil = await Promise.all(bersih.surat.map((id) => surat.terbitkanSurat(rw, id)));
+      const hasil = await Promise.all(bersih.surat.map((id) => surat.terbitkan(rw, id)));
       sama(new Set(hasil.map((h) => h.nomorSurat)).size, hasil.length, "nomor unik");
-      await harusGagal(() => surat.simpanDraft(rw, { jenisSurat: "Surat Undangan", perihal: "Ubah", tanggalSurat: "2026-10-08", isiSurat: isi }, bersih.surat[0]), 409, "surat terbit diubah");
-      await harusGagal(() => surat.simpanDraft(rt7, { jenisSurat: "Surat Undangan", perihal: "RT", tanggalSurat: "2026-10-08" }), 403, "RT membuat surat");
+      await harusGagal(() => surat.simpanDraft(rw, draftUji("c_undangan", "Ubah"), bersih.surat[0]), 409, "surat terbit diubah");
+      await harusGagal(() => surat.simpanDraft(rt7, draftUji("c_undangan", "RT")), 403, "RT membuat surat");
     });
 
     await alurLengkap({ pool, data, qr, surat, lap, rt7, rt6, rw, kkId: () => kkId, nik1, bersih, acak });
   } finally {
-    if (bersih.surat.length) await pool.query(`DELETE FROM surat_rw WHERE id = ANY($1::int[])`, [bersih.surat]).catch(() => {});
+    await hapusSuratUji(pool, bersih.surat);
+    await pool.query(`DELETE FROM wil_usulan WHERE diinput_oleh = $1`, [rw.label]).catch(() => {});
+    if (bersih.kkLain.length) await pool.query(`DELETE FROM kartu_keluarga WHERE id = ANY($1::int[])`, [bersih.kkLain]).catch(() => {});
     if (bersih.kk) {
       await pool.query(`DELETE FROM wil_usulan WHERE kk_id = $1`, [bersih.kk]).catch(() => {});
       await pool.query(`DELETE FROM wil_kk_token WHERE kk_id = $1`, [bersih.kk]).catch(() => {});
@@ -455,7 +468,8 @@ async function alurLengkap(k: any) {
       dash.ringkasanRw(2026, 10), dash.aksiRw(2026, 10), lap.statusLaporanSemuaRt(2026, 10),
       lap.pratinjauLaporan(rt7, null, 2026, 10), lap.pratinjauLaporan(rw, null, 2026, 10), lap.pratinjauLaporan(rw, 1, 2026, 10),
       lap.daftarVersi(rw, 7, 2026, 9),
-      ...["draft", "tindak", "arsip"].map((b) => surat.daftarSurat(b, "")),
+      ...["draft", "belum_distribusi", "arsip"].map((b) => surat.daftarSurat(rw, { bagian: b })),
+      surat.daftarSurat(rt7, {}), surat.ringkasan(rw), surat.daftarTindak(rw), surat.daftarRangkaian(rw), surat.referensi(rw),
     ]);
     const ex = await lap.dataEkspor(rw, null, 2026, [9, 10, 11, 12]);
     sama(ex.baris.length, 119, "ekspor rekap");
@@ -464,24 +478,23 @@ async function alurLengkap(k: any) {
     await pool.query(`DELETE FROM wil_laporan WHERE id = $1`, [fin.id]);
   });
   await uji("surat: permintaan RT → draft → lampiran → terbit → kirim berbukti → tindak → pengganti", async () => {
-    const isi = "Isi surat uji ".repeat(12);
-    const p = await surat.ajukanPermintaan(rt7, { jenisSurat: "Surat Pengajuan", perihal: "Pengajuan uji", uraian: "Mohon dibuatkan surat pengajuan uji", kejadianId: ids.kej, idempotencyKey: `prm-${acak()}-kunci` });
-    const s = await surat.simpanDraft(rw, { jenisSurat: "Surat Pengajuan", perihal: "Pengantar uji", tanggalSurat: "2026-10-08", isiSurat: isi, permintaanId: p.id });
+    const p = await surat.ajukanPermintaan(rt7, { kodeJenis: "b_permohonan_instansi", perihal: "Pengajuan uji", uraian: "Mohon dibuatkan surat pengajuan uji", kejadianId: ids.kej, idempotencyKey: `prm-${acak()}-kunci` });
+    const s = await surat.simpanDraft(rw, draftUji("b_permohonan_instansi", "Pengantar uji", { permintaanId: p.id }));
     bersih.surat.push(s.id);
     const lamp = await surat.tambahLampiran(rw, s.id, { nama: "uji.png", data: "data:image/png;base64,iVBORw0KGgo=" });
-    pastikan((await surat.ambilLampiran(lamp.id)), "lampiran");
-    const t = await surat.terbitkanSurat(rw, s.id);
+    pastikan((await surat.ambilLampiranAman(rw, lamp.id)), "lampiran");
+    const t = await surat.terbitkan(rw, s.id);
     await harusGagal(() => surat.tambahLampiran(rw, s.id, { nama: "x.png", data: "data:image/png;base64,AA==" }), 409, "lampiran setelah terbit");
     await harusGagal(() => surat.catatKirim(rw, s.id, { kanal: "WhatsApp", penerima: "Lurah", bukti: "data:text/html;base64,AA==", dikirimPada: new Date().toISOString() }), 400, "bukti bukan foto/PDF");
     await surat.catatKirim(rw, s.id, { kanal: "Diantar langsung", penerima: "Kelurahan", bukti: "Diterima staf kelurahan", dikirimPada: new Date().toISOString() });
-    const td = await surat.tambahTindak(rw, s.id, { catatan: "Tunggu balasan", tenggat: "2026-10-20" });
-    await surat.selesaikanTindak(rw, td.id);
-    pastikan((await surat.ringkasanWa(s.id)).includes(t.nomorSurat), "ringkasan WA tanpa nomor");
+    const td = await surat.tambahTindak(rw, s.id, { tindakan: "Tunggu balasan", picNama: "Ketua RW", tenggat: "2026-10-20" });
+    await surat.perbaruiTindak(rw, td.id, { catatan: "Balasan diterima", status: "selesai", bukti: "Surat balasan kelurahan" });
+    pastikan((await surat.pengantarWa(rw, s.id)).includes(t.nomorSurat), "pengantar WA tanpa nomor");
     const g = await surat.buatPengganti(rw, s.id);
     bersih.surat.push(g.id);
-    await surat.terbitkanSurat(rw, g.id);
-    const lama = await surat.detailSurat(s.id);
-    sama(lama.status, "dibatalkan", "surat lama");
+    await surat.terbitkan(rw, g.id);
+    const lama = await surat.detailSurat(rw, s.id);
+    sama(lama.status, "digantikan", "surat lama");
     sama(lama.nomorSurat, t.nomorSurat, "nomor lama tetap");
     const { rows } = await pool.query(`SELECT status FROM wil_permintaan_surat WHERE id = $1`, [p.id]);
     sama(rows[0].status, "selesai", "permintaan");
@@ -507,17 +520,48 @@ async function alurLengkap(k: any) {
     pastikan((await qr.kartuUntukCetak(rt6, "semua", false)).length >= 1, "cetak semua kosong");
     const p = await surat.ajukanPermintaan(rt6, { jenisSurat: "Surat Undangan", perihal: "Undangan uji", uraian: "Mohon undangan rapat uji", idempotencyKey: `prm-${acak()}-kunci` });
     await surat.tolakPermintaan(rw, p.id, "Sudah ada undangan");
-    const isi = "Isi surat uji ".repeat(12);
-    const d1 = await surat.simpanDraft(rw, { jenisSurat: "Surat Edaran", perihal: "Edaran uji", tanggalSurat: "2026-10-08", isiSurat: isi });
+    const d1 = await surat.simpanDraft(rw, draftUji("c_edaran", "Edaran uji"));
     const l = await surat.tambahLampiran(rw, d1.id, { nama: "a.pdf", data: "data:application/pdf;base64,JVBERi0=" });
     await surat.hapusLampiran(rw, l.id);
     await surat.hapusDraft(rw, d1.id);
-    const d2 = await surat.simpanDraft(rw, { jenisSurat: "Surat Edaran", perihal: "Edaran uji 2", tanggalSurat: "2026-10-08", isiSurat: isi });
+    const d2 = await surat.simpanDraft(rw, draftUji("c_edaran", "Edaran uji 2"));
     bersih.surat.push(d2.id);
-    await surat.terbitkanSurat(rw, d2.id);
-    await harusGagal(() => surat.batalkanSurat(rw, d2.id, "x"), 400, "batal tanpa alasan");
-    await surat.batalkanSurat(rw, d2.id, "Salah tujuan surat");
+    await surat.terbitkan(rw, d2.id);
+    await harusGagal(() => surat.batalkan(rw, d2.id, "x"), 400, "batal tanpa alasan");
+    await surat.batalkan(rw, d2.id, "Salah tujuan surat");
     await data.tindakLanjutKejadian(rw, ids.kej, { catatan: "RW sudah koordinasi" }).catch((e: any) => { if (e?.status !== 403) throw e; });
+  });
+  const isiRw = { versiForm: 1, namaPengisi: "Uji Datang ke RW", hubunganPengisi: "Kepala Keluarga", rumahTangga: { air_bersih: "ya" }, anggota: [{ nama: "Uji Datang", hubungan: "Kepala Keluarga", jenisKelamin: "Perempuan", jawaban: {} }], usaha: [] };
+  await uji("formulir dari RW (KK terdaftar): masuk antrean RT pemilik, idempoten, RT lain & RT memanggil jalur RW ditolak", async () => {
+    const body = { idempotencyKey: `rw-${acak()}-kunci`, kkId, isi: isiRw };
+    const a = await qr.kirimUsulanRw(rw, body);
+    const b = await qr.kirimUsulanRw(rw, body);
+    sama(b.kodeTerima, a.kodeTerima, "kirim ganda RW");
+    sama(a.rt, 6, "RT tujuan");
+    await harusGagal(() => qr.kirimUsulanRw(rt6, { ...body, idempotencyKey: `rw-${acak()}-kunci` }), 403, "RT memakai jalur RW");
+    pastikan(!(await qr.daftarUsulan(rt7)).some((x: any) => x.kk_id === kkId), "RT lain melihat usulan RW");
+    const u = (await qr.daftarUsulan(rt6)).find((x: any) => x.kk_id === kkId && x.sumber === "rw");
+    pastikan(u, "usulan RW tak muncul di antrean RT");
+    await qr.putuskanUsulan(rt6, u.id, { aksi: "terima", fakta: [{ subjek: "kk", subjekId: kkId, kunci: "air_bersih", nilai: "ya" }] });
+    const r = (await qr.daftarUsulanRw(rw)).find((x: any) => x.kode_terima === a.kodeTerima);
+    pastikan(r && r.status === "diterima", "status di riwayat RW");
+  });
+  await uji("formulir dari RW (keluarga baru): RT wajib daftarkan KK dulu, lalu fakta tercatat di KK tersebut", async () => {
+    const a = await qr.kirimUsulanRw(rw, { idempotencyKey: `rwb-${acak()}-kunci`, keluargaBaru: { rt: 6, alamat: "Jl. Uji Baru 9" }, isi: isiRw });
+    const zod400 = (e: any) => { if (e?.name === "ZodError") e.status = 400; throw e; };
+    await harusGagal(() => qr.kirimUsulanRw(rw, { idempotencyKey: `rwx-${acak()}-kunci`, isi: isiRw }).catch(zod400), 400, "tanpa KK maupun keluarga baru");
+    pastikan(!(await qr.daftarUsulan(rt7)).some((x: any) => x.kode_terima === a.kodeTerima || (x.kk_id == null && x.sumber === "rw")), "RT lain melihat keluarga baru");
+    const u = (await qr.daftarUsulan(rt6)).find((x: any) => x.kk_id == null && x.sumber === "rw");
+    pastikan(u, "keluarga baru tak muncul di RT tujuan");
+    const baru = (await data.tambahKeluarga(rt6, { nomorKk: `9905${acak()}`, alamat: "Jl. Uji Baru 9" })).id;
+    bersih.kkLain.push(baru);
+    const fakta = [{ subjek: "kk", subjekId: baru, kunci: "air_bersih", nilai: "ya" }];
+    await harusGagal(() => qr.putuskanUsulan(rt6, u.id, { aksi: "terima", fakta }), 400, "terima tanpa KK");
+    const kkRt7 = (await data.daftarKeluarga(rt7, {}))[0]?.id;
+    if (kkRt7) await harusGagal(() => qr.putuskanUsulan(rt6, u.id, { aksi: "terima", kkId: kkRt7, fakta }), 404, "KK di luar RT");
+    await qr.putuskanUsulan(rt6, u.id, { aksi: "terima", kkId: baru, fakta });
+    const d = await data.detailKeluarga(rt6, baru);
+    pastikan(d.fakta.some((f: any) => f.kunci === "air_bersih" && f.nilai === "ya"), "fakta keluarga baru tidak tercatat");
   });
 }
 

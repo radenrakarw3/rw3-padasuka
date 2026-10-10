@@ -91,7 +91,8 @@ export class WilayahError extends Error {
 export function kirimError(res: Response, error: unknown, fallback: string) {
   if (error instanceof WilayahError) return res.status(error.status).json({ message: error.message });
   const msg = error instanceof Error ? error.message : String(error);
-  if (/relation "wil_\w+" does not exist/i.test(msg)) {
+  if (/(Dokumen final|Berkas PDF final) tidak dapat diubah/.test(msg)) return res.status(409).json({ message: "Dokumen final tidak dapat diubah. Gunakan koreksi (dokumen pengganti) atau pembatalan." });
+  if (/relation "wil_\w+" does not exist|column "?[\w.]+"? (of relation "\w+" )?does not exist/i.test(msg)) {
     console.error(`[wilayah] ${fallback}: skema belum terpasang —`, msg);
     return res.status(503).json({ message: "Modul wilayah sedang disiapkan. Muat ulang halaman sebentar lagi; bila tetap muncul, hubungi pengelola sistem." });
   }

@@ -6,7 +6,7 @@ import { useDraft, useKirimSekali, wil } from "@/lib/wilayah-api";
 import { BarisRingkas, IsianPanjang, IsianTeks, Judul, Langkah, Memuat, Pesan, PilihTombol, TombolBesar } from "@/components/wilayah/ui";
 import { FormFakta, kunciAwal } from "@/components/wilayah/form-fakta";
 import { JENIS_FASILITAS, JENIS_KEGIATAN, JENIS_KELOMPOK, KATEGORI_USAHA, isoTanggal } from "@shared/wilayah";
-import { JENIS_SURAT_RW } from "@shared/surat-nomor";
+import { SuratRt } from "@/components/surat-sakti/rt-surat";
 
 type Tab = "usaha" | "fasilitas" | "kelompok" | "kegiatan" | "surat";
 const opsi = (l: readonly { nilai: string; label: string }[]) => l.map((x) => ({ nilai: x.nilai, label: x.label }));
@@ -93,26 +93,6 @@ function FormObjek({ tab, selesai, batal }: { tab: "fasilitas" | "kelompok" | "k
   );
 }
 
-function FormSurat({ kejadianId, selesai, batal }: { kejadianId: number | null; selesai: () => void; batal: () => void }) {
-  const { nilai: d, setNilai, hapus } = useDraft("permintaan-surat", { jenisSurat: "", perihal: "", uraian: "" });
-  const set = (p: Partial<typeof d>) => setNilai({ ...d, ...p });
-  const { kirim, mengirim, error } = useKirimSekali(async (kunci) => {
-    await wil("/api/wilayah/rt/permintaan-surat", { body: { ...d, kejadianId, idempotencyKey: kunci } });
-    hapus();
-    return true;
-  });
-  return (
-    <Langkah langkah={1} total={1} judul="Minta surat ke Ketua RW" onKembali={batal} labelLanjut="Kirim permintaan" memuat={mengirim}
-      bisaLanjut={!!d.jenisSurat && d.perihal.trim().length >= 3 && d.uraian.trim().length >= 10} onLanjut={async () => { if (await kirim()) selesai(); }}>
-      {kejadianId && <Pesan>Terkait masalah #{kejadianId}.</Pesan>}
-      <PilihTombol label="Jenis surat" belumTahu={false} kolom={1} nilai={d.jenisSurat || null} onChange={(v) => set({ jenisSurat: v ?? "" })} pilihan={JENIS_SURAT_RW.map((j) => ({ nilai: j, label: j }))} />
-      <IsianTeks label="Perihal" nilai={d.perihal} onChange={(v) => set({ perihal: v })} />
-      <IsianPanjang label="Jelaskan keperluannya" nilai={d.uraian} onChange={(v) => set({ uraian: v })} />
-      {error && <Pesan jenis="error">{error}</Pesan>}
-    </Langkah>
-  );
-}
-
 export default function Objek() {
   const [, go] = useLocation();
   const params = new URLSearchParams(useSearch());
@@ -122,8 +102,8 @@ export default function Objek() {
   const [form, setForm] = useState<boolean>(!!kejadian);
   const [izin, setIzin] = useState<{ id: number; nama: string } | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  const url = tab === "surat" ? "/api/wilayah/permintaan-surat" : `/api/wilayah/${tab}`;
-  const { data, isLoading, error } = useQuery<any[]>({ queryKey: [url], queryFn: () => wil(url) });
+  const url = `/api/wilayah/${tab}`;
+  const { data, isLoading, error } = useQuery<any[]>({ queryKey: [url], queryFn: () => wil(url), enabled: tab !== "surat" });
   const selesai = async (pesan: string) => {
     await qc.invalidateQueries({ queryKey: [url] });
     setForm(false);
@@ -141,13 +121,22 @@ export default function Objek() {
       </div>
     );
   }
+  if (tab === "surat") {
+    return (
+      <div className="space-y-4">
+        <Judul kembali={() => go("/rt")}>Surat dari / ke Ketua RW</Judul>
+        <PilihTombol label="Pilih" belumTahu={false} kolom={3} nilai={tab} onChange={(v) => { if (v) { setTab(v as Tab); setInfo(null); } }}
+          pilihan={[{ nilai: "usaha", label: "Usaha" }, { nilai: "fasilitas", label: "Fasilitas" }, { nilai: "kelompok", label: "Kelompok" }, { nilai: "kegiatan", label: "Kegiatan" }, { nilai: "surat", label: "Surat" }]} />
+        <SuratRt kejadianAwal={kejadian ? Number(kejadian) : null} />
+      </div>
+    );
+  }
   if (form) {
     return (
       <div>
-        <Judul kembali={() => setForm(false)}>Tambah {tab === "surat" ? "permintaan surat" : tab}</Judul>
+        <Judul kembali={() => setForm(false)}>Tambah {tab}</Judul>
         {tab === "usaha" && <FormUsaha batal={() => setForm(false)} selesai={() => selesai("Usaha tersimpan.")} />}
         {(tab === "fasilitas" || tab === "kelompok" || tab === "kegiatan") && <FormObjek tab={tab} batal={() => setForm(false)} selesai={() => selesai("Tersimpan.")} />}
-        {tab === "surat" && <FormSurat kejadianId={kejadian ? Number(kejadian) : null} batal={() => setForm(false)} selesai={() => selesai("Permintaan surat terkirim ke Ketua RW.")} />}
       </div>
     );
   }
@@ -167,8 +156,7 @@ export default function Objek() {
           <li key={x.id} className="bg-white rounded-2xl border-2 border-gray-200 p-4">
             <p className="text-lg font-semibold">{x.nama ?? x.judul ?? x.perihal}</p>
             <p className="text-base text-gray-600">
-              {tab === "surat" ? `${x.jenis_surat} · ${x.status}${x.nomor_surat ? ` · ${x.nomor_surat}` : ""}${x.jawaban ? ` · ${x.jawaban}` : ""}`
-                : tab === "kegiatan" ? `${new Date(x.tanggal).toLocaleDateString("id-ID")} · ${x.pengelola === "rw" ? "Kegiatan RW" : "Kegiatan RT"}`
+              {tab === "kegiatan" ? `${new Date(x.tanggal).toLocaleDateString("id-ID")} · ${x.pengelola === "rw" ? "Kegiatan RW" : "Kegiatan RT"}`
                 : x.pengelola === "rw" ? "Dikelola RW" : "Dikelola RT"}
             </p>
             {tab === "usaha" && <div className="mt-2"><TombolBesar varian="kedua" onClick={() => setIzin({ id: x.id, nama: x.nama })}>Izin & pemasaran</TombolBesar></div>}

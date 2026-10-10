@@ -3,7 +3,8 @@ import { useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
 import { useKirimSekali, wil } from "@/lib/wilayah-api";
-import { IsianPanjang, Judul, Memuat, Pesan, PilihTombol, TombolBesar } from "@/components/wilayah/ui";
+import { IsianPanjang, IsianTeks, Judul, Memuat, Pesan, PilihTombol, TombolBesar } from "@/components/wilayah/ui";
+import { KeluargaBaru } from "./warga";
 import { FAKTA_BY_KUNCI, labelNilaiFakta, type IsiUsulan } from "@shared/wilayah";
 
 interface Fakta { kunci: string; nilai: string; statusVerifikasi: string }
@@ -13,7 +14,14 @@ interface Resmi {
   rumah: { id: number; fakta: Fakta[] } | null;
   fakta: Fakta[];
 }
-interface Detail { usulan: { id: number; kkId: number; isi: IsiUsulan; status: string; dibuat: string }; resmi: Resmi }
+interface Detail {
+  usulan: {
+    id: number; kkId: number | null; isi: IsiUsulan; status: string; dibuat: string;
+    sumber: string; diinputOleh: string | null; keluargaBaru: { rt: number; alamat: string; noUnit?: string | null } | null;
+  };
+  resmi: Resmi | null;
+}
+interface KeluargaRingkas { id: number; kepala: string | null; alamat: string; noUnit: string | null }
 
 const nilaiResmi = (fakta: Fakta[], kunci: string) => fakta.find((f) => f.kunci === kunci && f.statusVerifikasi === "terverifikasi")?.nilai ?? null;
 
@@ -35,9 +43,20 @@ function Periksa({ id }: { id: number }) {
   const [cocok, setCocok] = useState<Record<number, string>>({});
   const [catatan, setCatatan] = useState("");
   const [aksi, setAksi] = useState<"terima" | "klarifikasi" | "tolak">("terima");
+  const [kkPilih, setKkPilih] = useState<number | null>(null);
+  const [modeKk, setModeKk] = useState<"pilih" | "baru" | "tolak">("pilih");
+  const [cariKk, setCariKk] = useState("");
+  const keluargaBaru = !!data && !data.resmi;
+  const { data: resmiPilih } = useQuery<Resmi>({
+    queryKey: [`/api/wilayah/keluarga/${kkPilih}`], queryFn: () => wil(`/api/wilayah/keluarga/${kkPilih}`), enabled: keluargaBaru && !!kkPilih,
+  });
+  const { data: daftarKk } = useQuery<KeluargaRingkas[]>({
+    queryKey: ["/api/wilayah/keluarga"], queryFn: () => wil("/api/wilayah/keluarga?batas=1000"), enabled: keluargaBaru,
+  });
 
   const usulan = data?.usulan;
-  const resmi = data?.resmi;
+  const resmi = data?.resmi ?? resmiPilih;
+  const kkTujuan = usulan?.kkId ?? kkPilih;
   const cocokAwal = useMemo(() => {
     const out: Record<number, string> = {};
     usulan?.isi.anggota.forEach((a, i) => {
@@ -85,6 +104,7 @@ function Periksa({ id }: { id: number }) {
     const body = aksi === "terima"
       ? {
           aksi, catatan: catatan || undefined,
+          kkId: usulan?.kkId ? undefined : kkPilih ?? undefined,
           fakta: item.filter((x) => x.fakta && terpilih(x.key)).map((x) => x.fakta),
           tanggalLahir: item.filter((x) => x.tgl && terpilih(x.key)).map((x) => x.tgl),
           nomorHp: item.find((x) => x.hp && terpilih(x.key))?.hp,
@@ -93,19 +113,78 @@ function Periksa({ id }: { id: number }) {
     const r = await wil<{ diterapkan: number }>(`/api/wilayah/rt/usulan/${id}/putuskan`, { body });
     await qc.invalidateQueries({ queryKey: ["/api/wilayah/rt/usulan"] });
     await qc.invalidateQueries({ queryKey: ["/api/wilayah/rt/antrean"] });
-    await qc.invalidateQueries({ queryKey: [`/api/wilayah/keluarga/${usulan?.kkId}`] });
+    await qc.invalidateQueries({ queryKey: [`/api/wilayah/keluarga/${kkTujuan}`] });
+    await qc.invalidateQueries({ queryKey: ["/api/wilayah/keluarga"] });
     return r;
   });
 
   if (isLoading) return <Memuat />;
-  if (galatMuat || !usulan || !resmi) return <Pesan jenis="error">{(galatMuat as Error)?.message ?? "Gagal memuat"}</Pesan>;
+  if (galatMuat || !usulan) return <Pesan jenis="error">{(galatMuat as Error)?.message ?? "Gagal memuat"}</Pesan>;
   const terbuka = usulan.status === "menunggu" || usulan.status === "klarifikasi";
+  const asal = usulan.sumber === "rw" ? `Diinput di RW${usulan.diinputOleh ? ` (${usulan.diinputOleh})` : ""} untuk ${usulan.isi.namaPengisi}` : `Dari ${usulan.isi.namaPengisi} (${usulan.isi.hubunganPengisi})`;
+
+  if (!resmi) {
+    if (!keluargaBaru || kkPilih) return <Memuat />;
+    const kb = usulan.keluargaBaru;
+    const q = cariKk.trim().toLowerCase();
+    const cocokKk = (daftarKk ?? []).filter((k) => !q || (k.kepala ?? "").toLowerCase().includes(q) || k.alamat.toLowerCase().includes(q)).slice(0, 20);
+    return (
+      <div className="space-y-4">
+        <Judul kembali={() => go("/rt/usulan")} sub={`${asal} · ${new Date(usulan.dibuat).toLocaleDateString("id-ID")}`}>Keluarga belum terdaftar</Judul>
+        <Pesan>
+          Alamat: <b>{kb?.alamat}{kb?.noUnit ? ` No. ${kb.noUnit}` : ""}</b><br />
+          Anggota: {usulan.isi.anggota.map((a) => `${a.nama} (${a.hubungan})`).join(", ")}
+        </Pesan>
+        {!terbuka ? <Pesan>Isian ini sudah diputus ({usulan.status}).</Pesan> : (
+          <>
+            <PilihTombol label="Apa langkahnya?" belumTahu={false} kolom={1} nilai={modeKk}
+              onChange={(v) => { if (!v) return; setModeKk(v as typeof modeKk); setAksi(v === "tolak" ? "klarifikasi" : "terima"); }}
+              pilihan={[{ nilai: "pilih", label: "Keluarga ini sudah ada di daftar RT" }, { nilai: "baru", label: "Daftarkan KK baru" }, { nilai: "tolak", label: "Tolak / minta perbaikan" }]} />
+            {modeKk === "baru" && (
+              <KeluargaBaru draftKey={`kk-baru:usulan:${usulan.id}`} awal={{ alamat: kb?.alamat, noUnit: kb?.noUnit }} selesai={(kid) => setKkPilih(kid)} />
+            )}
+            {modeKk === "pilih" && (
+              <>
+                <IsianTeks label="Cari nama kepala keluarga / alamat" nilai={cariKk} onChange={setCariKk} />
+                <ul className="bg-white rounded-2xl border-2 border-gray-200 divide-y-2 divide-gray-100">
+                  {cocokKk.map((k) => (
+                    <li key={k.id}>
+                      <button type="button" onClick={() => setKkPilih(k.id)} className="w-full min-h-[64px] px-4 py-3 flex items-center gap-3 text-left">
+                        <span className="flex-1"><span className="block text-lg font-semibold">{k.kepala ?? "Tanpa kepala keluarga"}</span><span className="block text-base text-gray-600">{k.alamat}{k.noUnit ? ` No. ${k.noUnit}` : ""}</span></span>
+                        <ChevronRight className="w-6 h-6 text-gray-400" />
+                      </button>
+                    </li>
+                  ))}
+                  {cocokKk.length === 0 && <li className="p-4 text-base text-gray-600">Tidak ditemukan. Pilih “Daftarkan KK baru”.</li>}
+                </ul>
+              </>
+            )}
+            {modeKk === "tolak" && (
+              <>
+                <PilihTombol label="Keputusan" belumTahu={false} kolom={1} nilai={aksi} onChange={(v) => v && setAksi(v as typeof aksi)}
+                  pilihan={[{ nilai: "klarifikasi", label: "Minta keluarga memperbaiki" }, { nilai: "tolak", label: "Tolak" }]} />
+                <IsianPanjang label="Pesan untuk keluarga (wajib)" nilai={catatan} onChange={setCatatan} />
+                {error && <Pesan jenis="error">{error}</Pesan>}
+                <TombolBesar memuat={mengirim} disabled={catatan.trim().length < 3} onClick={async () => { const r = await kirim(); if (r) go("/rt/usulan"); }}>Simpan keputusan</TombolBesar>
+              </>
+            )}
+          </>
+        )}
+      </div>
+    );
+  }
   const baru = usulan.isi.anggota.filter((a, i) => a.keterangan === "baru" || cocokFinal[i] === "baru");
   const keluar = usulan.isi.anggota.filter((a) => a.keterangan === "pindah" || a.keterangan === "meninggal");
 
   return (
     <div className="space-y-4">
-      <Judul kembali={() => go("/rt/usulan")} sub={`Dari ${usulan.isi.namaPengisi} (${usulan.isi.hubunganPengisi}) · ${new Date(usulan.dibuat).toLocaleDateString("id-ID")}`}>Periksa isian warga</Judul>
+      <Judul kembali={() => go("/rt/usulan")} sub={`${asal} · ${new Date(usulan.dibuat).toLocaleDateString("id-ID")}`}>Periksa isian warga</Judul>
+      {keluargaBaru && (
+        <Pesan jenis="peringatan">
+          Isian dicocokkan ke KK yang dipilih/didaftarkan. Setelah diterima, tambahkan anggotanya (dengan NIK) di halaman keluarga.{" "}
+          <button type="button" className="underline" onClick={() => setKkPilih(null)}>Ganti KK</button>
+        </Pesan>
+      )}
       <Pesan>Data resmi belum berubah. Centang jawaban yang benar, lalu tekan “Terima yang dicentang”.</Pesan>
 
       <section>
@@ -139,7 +218,7 @@ function Periksa({ id }: { id: number }) {
           <IsianPanjang label={aksi === "terima" ? "Catatan (boleh kosong)" : "Pesan untuk keluarga (wajib)"} nilai={catatan} onChange={setCatatan} />
           {error && <Pesan jenis="error">{error}</Pesan>}
           <TombolBesar memuat={mengirim} disabled={aksi !== "terima" && catatan.trim().length < 3}
-            onClick={async () => { const r = await kirim(); if (r) go(`/rt/keluarga/${usulan.kkId}`); }}>
+            onClick={async () => { const r = await kirim(); if (r) go(aksi === "terima" ? `/rt/keluarga/${kkTujuan}${keluargaBaru ? "?langkah=anggota" : ""}` : "/rt/usulan"); }}>
             Simpan keputusan
           </TombolBesar>
         </>
@@ -151,7 +230,7 @@ function Periksa({ id }: { id: number }) {
 export default function Usulan({ id }: { id?: number }) {
   const [, go] = useLocation();
   const [status, setStatus] = useState("menunggu");
-  const { data, isLoading, error } = useQuery<{ id: number; kepala: string | null; alamat: string; pengisi: string; status: string; created_at: string }[]>({
+  const { data, isLoading, error } = useQuery<{ id: number; kepala: string | null; alamat: string; pengisi: string; status: string; created_at: string; sumber: string; keluarga_baru: boolean }[]>({
     queryKey: ["/api/wilayah/rt/usulan", status], queryFn: () => wil(`/api/wilayah/rt/usulan?status=${status}`), enabled: !id,
   });
   if (id) return <Periksa id={id} />;
@@ -168,7 +247,10 @@ export default function Usulan({ id }: { id?: number }) {
           <li key={u.id}>
             <button type="button" onClick={() => go(`/rt/usulan/${u.id}`)} className="w-full min-h-[72px] px-4 py-3 flex items-center gap-3 text-left">
               <span className="flex-1">
-                <span className="block text-lg font-semibold">{u.kepala ?? "Keluarga"}</span>
+                <span className="block text-lg font-semibold">
+                  {u.keluarga_baru ? `Keluarga baru · ${u.alamat}` : u.kepala ?? "Keluarga"}
+                  {u.sumber === "rw" && <span className="ml-2 text-sm font-semibold rounded-full px-2 py-0.5 bg-amber-100 text-amber-800 align-middle">dari RW</span>}
+                </span>
                 <span className="block text-base text-gray-600">Diisi {u.pengisi} · {new Date(u.created_at).toLocaleDateString("id-ID")} · {u.status}</span>
               </span>
               <ChevronRight className="w-6 h-6 text-gray-400" />

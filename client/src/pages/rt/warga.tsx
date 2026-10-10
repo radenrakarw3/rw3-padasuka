@@ -14,8 +14,8 @@ function inisial(nama: string | null) {
   return (nama ?? "?").split(/\s+/).filter(Boolean).slice(0, 2).map((s) => s[0]).join("").toUpperCase();
 }
 
-function KeluargaBaru({ selesai }: { selesai: (id: number) => void }) {
-  const { nilai, setNilai, hapus } = useDraft("kk-baru", { langkah: 1, alamat: "", noUnit: "", nomorKk: "" });
+export function KeluargaBaru({ selesai, awal, draftKey = "kk-baru" }: { selesai: (id: number) => void; awal?: { alamat?: string; noUnit?: string | null }; draftKey?: string }) {
+  const { nilai, setNilai, hapus } = useDraft(draftKey, { langkah: 1, alamat: awal?.alamat ?? "", noUnit: awal?.noUnit ?? "", nomorKk: "" });
   const qc = useQueryClient();
   const { kirim, mengirim, error } = useKirimSekali(async () => {
     const r = await wil<{ id: number }>("/api/wilayah/rt/keluarga", { body: { alamat: nilai.alamat, noUnit: nilai.noUnit || null, nomorKk: nilai.nomorKk } });

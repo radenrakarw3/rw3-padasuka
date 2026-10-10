@@ -972,142 +972,47 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
     return "ADM";
   }
 
+  // Verifikasi publik: hanya informasi minimum (nomor, tanggal, penerbit, status). Isi dokumen tidak ditampilkan.
+  const halamanVerifikasi = async (res: any, by: { token?: string; id?: number }, nomorDiharapkan?: string | null) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-Robots-Tag", "noindex");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    const { verifikasi } = await import("./surat-sakti/tindak");
+    const s = await verifikasi(by).catch(() => undefined);
+    const esc = (v: string) => v.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" } as Record<string, string>)[c]);
+    const cocok = !!s && (nomorDiharapkan === undefined || nomorDiharapkan === s.nomor_surat);
+    const statusTeks = !s || !cocok ? (nomorDiharapkan === "" || !s ? "TIDAK DITEMUKAN" : "NOMOR TIDAK SESUAI")
+      : s.status === "terbit" ? "TERDAFTAR & BERLAKU"
+      : s.status === "digantikan" ? "SUDAH DIGANTIKAN"
+      : s.status === "dibatalkan" ? "DIBATALKAN" : s.status.toUpperCase();
+    const baik = cocok && s?.status === "terbit";
+    const baris = s && cocok ? [
+      ["Nomor", s.nomor_surat], ["Tanggal", s.tanggal_surat ?? "-"], ["Jenis", s.jenis_surat],
+      ["Penerbit", "Ketua RW 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi"],
+    ] : [];
+    res.status(s && cocok ? 200 : 404).type("html").send(`<!doctype html><html lang="id"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cek Nomor Dokumen RW 03</title><style>
+body{margin:0;font-family:system-ui,sans-serif;background:#f5f5f4;color:#1c1917}.w{max-width:560px;margin:0 auto;padding:28px 18px}
+.c{background:#fff;border:1px solid #e7e5e4;border-radius:18px;overflow:hidden}.h{background:hsl(163,55%,22%);color:#fff;padding:18px 20px}
+.h b{display:block;font-size:18px}.s{display:inline-block;margin:16px 20px 4px;padding:6px 12px;border-radius:999px;font-weight:700;font-size:13px;
+background:${baik ? "#dcfce7" : "#fee2e2"};color:${baik ? "#166534" : "#991b1b"}}dl{margin:0;padding:8px 20px 4px;display:grid;grid-template-columns:110px 1fr;gap:8px 12px;font-size:15px}
+dt{color:#57534e}dd{margin:0;font-weight:600;word-break:break-word}p{padding:0 20px 18px;font-size:13px;line-height:1.6;color:#57534e}</style></head>
+<body><div class="w"><div class="c"><div class="h"><small>KPP RW 03 Padasuka</small><b>Cek Nomor Dokumen</b></div>
+<span class="s">${statusTeks}</span><dl>${baris.map(([k, v]) => `<dt>${k}</dt><dd>${esc(String(v))}</dd>`).join("")}</dl>
+<p>Halaman ini hanya mencocokkan nomor dan status dokumen pada arsip RW 03. Ini bukan tanda tangan elektronik tersertifikasi;
+dokumen sah bila ditandatangani basah oleh pejabat yang tercantum. Isi dokumen tidak ditampilkan di sini.</p></div></div></body></html>`);
+  };
+
+  app.get("/verify/surat/:token", async (req, res) => {
+    const token = String(req.params.token);
+    if (!/^[A-Za-z0-9_-]{16,64}$/.test(token)) return halamanVerifikasi(res, { token: "-" });
+    await halamanVerifikasi(res, { token });
+  });
+
+  // Tautan QR arsip lama (ID berurutan): wajib menyertakan ?nomor= agar ID tidak bisa ditelusuri satu per satu.
   app.get("/verify/surat-rw/:id", async (req, res) => {
     const id = Number(req.params.id);
-    if (!Number.isFinite(id)) {
-      return res.status(400).send("<h1>Verifikasi gagal</h1><p>ID surat tidak valid.</p>");
-    }
-
-    const surat = await storage.getSuratRwById(id);
-    if (!surat?.nomorSurat) {
-      return res.status(404).send("<h1>Surat tidak ditemukan</h1><p>Data surat RW tidak tersedia atau belum memiliki nomor resmi.</p>");
-    }
-
-    const expectedNomor = typeof req.query.nomor === "string" ? req.query.nomor : null;
-    const isMatch = !expectedNomor || expectedNomor === surat.nomorSurat;
-    const statusText = isMatch ? "TERVERIFIKASI" : "NOMOR TIDAK SESUAI";
-    const statusColor = isMatch ? "#166534" : "#991b1b";
-    const cardBg = isMatch ? "#f0fdf4" : "#fef2f2";
-    const accent = isMatch ? "#0f766e" : "#b91c1c";
-    const escapedIsi = (surat.isiSurat || "").replace(/[&<>"]/g, (char) => (
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" } as Record<string, string>)[char] || char
-    ));
-
-    res.type("html").send(`<!doctype html>
-<html lang="id">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Verifikasi Surat RW 03</title>
-  <style>
-    :root { color-scheme: light; }
-    body { margin: 0; font-family: Georgia, "Times New Roman", serif; background:
-      radial-gradient(circle at top, rgba(15,118,110,0.10), transparent 30%),
-      linear-gradient(135deg, #e7e5e4, #fafaf9 34%, #f5f5f4);
-      color: #111827; }
-    .wrap { max-width: 980px; margin: 0 auto; padding: 32px 20px 56px; }
-    .card { position: relative; background: rgba(255,255,255,0.94); border: 1px solid #d6d3d1; border-radius: 28px; box-shadow: 0 28px 80px rgba(0,0,0,0.12); overflow: hidden; backdrop-filter: blur(10px); }
-    .watermark { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 120px; font-weight: 700; letter-spacing: 0.18em; color: rgba(15,23,42,0.035); transform: rotate(-26deg); pointer-events: none; user-select: none; }
-    .hero { position: relative; padding: 28px 30px 22px; color: white; background:
-      linear-gradient(135deg, rgba(17,24,39,0.96), rgba(31,41,55,0.88)),
-      linear-gradient(90deg, #0f766e, #111827); border-bottom: 1px solid rgba(255,255,255,0.12); }
-    .hero-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-    .brand { max-width: 70%; }
-    .brand-kicker { font-size: 11px; letter-spacing: 0.32em; text-transform: uppercase; opacity: 0.85; }
-    .brand-title { margin: 10px 0 6px; font-size: 32px; line-height: 1.1; font-weight: 700; }
-    .brand-subtitle { margin: 0; max-width: 620px; line-height: 1.7; color: rgba(255,255,255,0.82); }
-    .seal { min-width: 104px; height: 104px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.34); display: grid; place-items: center; position: relative; }
-    .seal:before { content: ""; position: absolute; inset: 10px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.22); }
-    .seal span { font-size: 11px; text-align: center; line-height: 1.6; letter-spacing: 0.16em; text-transform: uppercase; }
-    .pill { display: inline-block; margin-top: 18px; padding: 8px 14px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: 0.12em; background: ${cardBg}; color: ${statusColor}; }
-    .meta-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin-top: 18px; background: rgba(255,255,255,0.12); border-radius: 18px; overflow: hidden; }
-    .meta-item { padding: 14px 16px; background: rgba(255,255,255,0.04); }
-    .meta-label { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; opacity: 0.75; }
-    .meta-value { margin-top: 6px; font-size: 15px; font-weight: 700; word-break: break-word; }
-    .section { position: relative; padding: 28px 30px 30px; }
-    .section-title { margin: 0 0 18px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.18em; color: ${accent}; }
-    .content-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(260px, 0.85fr); gap: 24px; }
-    .panel { border: 1px solid #e7e5e4; border-radius: 24px; background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(250,250,249,0.92)); padding: 22px; }
-    .grid { display: grid; grid-template-columns: 160px 1fr; gap: 12px 16px; font-size: 15px; }
-    .label { color: #57534e; }
-    .value { font-weight: 600; word-break: break-word; }
-    .isi { margin-top: 18px; padding: 18px 20px; border-radius: 18px; background: #fafaf9; border: 1px solid #e7e5e4; white-space: pre-wrap; line-height: 1.78; min-height: 220px; }
-    .badge { display: inline-flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 18px; background: ${cardBg}; border: 1px solid ${isMatch ? "#bbf7d0" : "#fecaca"}; color: ${statusColor}; font-weight: 700; }
-    .badge-dot { width: 10px; height: 10px; border-radius: 999px; background: currentColor; }
-    .side-copy { margin: 18px 0 0; color: #44403c; line-height: 1.8; }
-    .codebox { margin-top: 18px; padding: 16px 18px; border-radius: 18px; background: #111827; color: #f9fafb; }
-    .codebox-label { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.72; }
-    .codebox-value { margin-top: 8px; font-size: 18px; line-height: 1.5; word-break: break-word; }
-    .footer-note { margin-top: 18px; font-size: 13px; line-height: 1.8; color: #57534e; }
-    @media (max-width: 760px) {
-      .hero-top { flex-direction: column; align-items: flex-start; }
-      .brand { max-width: 100%; }
-      .seal { align-self: flex-start; }
-      .meta-strip, .content-grid { grid-template-columns: 1fr; }
-      .grid { grid-template-columns: 1fr; }
-      .brand-title { font-size: 26px; }
-      .watermark { font-size: 70px; }
-    }
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <div class="card">
-      <div class="watermark">CIMAHI</div>
-      <div class="hero">
-        <div class="hero-top">
-          <div class="brand">
-            <div class="brand-kicker">Portal Dokumen Resmi</div>
-            <h1 class="brand-title">Verifikasi Surat RW 03 Padasuka</h1>
-            <p class="brand-subtitle">Validasi administratif digital untuk dokumen resmi RW 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi.</p>
-          </div>
-          <div class="seal"><span>RW 03<br/>Padasuka<br/>Cimahi</span></div>
-        </div>
-        <span class="pill">${statusText}</span>
-        <div class="meta-strip">
-          <div class="meta-item">
-            <div class="meta-label">Nomor Dokumen</div>
-            <div class="meta-value">${surat.nomorSurat}</div>
-          </div>
-          <div class="meta-item">
-            <div class="meta-label">Jenis Surat</div>
-            <div class="meta-value">${surat.jenisSurat}</div>
-          </div>
-          <div class="meta-item">
-            <div class="meta-label">Status Validasi</div>
-            <div class="meta-value">${statusText}</div>
-          </div>
-        </div>
-      </div>
-      <div class="section">
-        <h2 class="section-title">Detail Autentikasi Dokumen</h2>
-        <div class="content-grid">
-          <div class="panel">
-            <div class="grid">
-              <div class="label">Nomor Surat</div><div class="value">${surat.nomorSurat}</div>
-              <div class="label">Jenis Surat</div><div class="value">${surat.jenisSurat}</div>
-              <div class="label">Perihal</div><div class="value">${surat.perihal}</div>
-              <div class="label">Tujuan</div><div class="value">${surat.tujuan || "-"}</div>
-              <div class="label">Tanggal Surat</div><div class="value">${surat.tanggalSurat || "-"}</div>
-              <div class="label">Waktu Terekam</div><div class="value">${surat.createdAt ? new Date(surat.createdAt).toLocaleString("id-ID") : "-"}</div>
-            </div>
-            <div class="isi">${escapedIsi || "Isi surat tidak tersedia."}</div>
-          </div>
-          <div class="panel">
-            <div class="badge"><span class="badge-dot"></span> Status dokumen: ${statusText}</div>
-            <p class="side-copy">Halaman ini menandakan bahwa dokumen telah tercatat dalam administrasi RW 03. Nomor surat, jenis surat, dan isi surat dapat dicocokkan langsung dengan lembar cetak yang diterima.</p>
-            <div class="codebox">
-              <div class="codebox-label">Kode Validasi</div>
-              <div class="codebox-value">${surat.id}-${Buffer.from(surat.nomorSurat).toString("base64").slice(0, 18)}</div>
-            </div>
-            <p class="footer-note">Apabila terdapat perbedaan nomor atau isi dokumen, mohon konfirmasi kembali kepada pengurus RW 03 Kelurahan Padasuka.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</body>
-</html>`);
+    await halamanVerifikasi(res, { id: Number.isInteger(id) && id > 0 ? id : -1 }, typeof req.query.nomor === "string" ? req.query.nomor : "");
   });
 
   app.post("/api/surat-rw", requireAdmin, async (req, res) => {

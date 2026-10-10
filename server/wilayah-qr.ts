@@ -302,17 +302,81 @@ export async function statusUsulan(kode: string) {
 }
 
 // ===========================================================================
+// Admin RW: input formulir untuk warga yang datang langsung ke RW.
+// Hasilnya tetap usulan yang diputus Ketua RT — RW tidak mengubah data resmi.
+// ===========================================================================
+
+const usulanRwSchema = z.object({
+  idempotencyKey: z.string().regex(/^[A-Za-z0-9-]{16,64}$/),
+  kkId: z.number().int().positive().optional(),
+  keluargaBaru: z.object({
+    rt: z.number().int().min(1).max(7),
+    alamat: z.string().trim().min(3, "Alamat wajib diisi").max(200),
+    noUnit: z.string().trim().max(20).nullable().optional(),
+  }).optional(),
+  isi: isiUsulanSchema,
+}).refine((d) => !!d.kkId !== !!d.keluargaBaru, "Pilih keluarga yang sudah terdaftar atau isi data keluarga baru");
+
+export async function kirimUsulanRw(aktor: Aktor, body: unknown) {
+  if (aktor.role !== "rw") throw new WilayahError(403, "Hanya admin RW");
+  const d = usulanRwSchema.parse(body);
+  const { rows: ulang } = await pool.query(`SELECT kode_terima, sumber FROM wil_usulan WHERE idempotency_key = $1`, [d.idempotencyKey]);
+  if (ulang[0]) {
+    if (ulang[0].sumber !== "rw") throw new WilayahError(409, "Pengiriman ganda terdeteksi");
+    return { kodeTerima: ulang[0].kode_terima as string, ulang: true };
+  }
+  let rt: number;
+  if (d.kkId) {
+    const { rows } = await pool.query(`SELECT rt FROM kartu_keluarga WHERE id = $1`, [d.kkId]);
+    if (!rows[0]) throw new WilayahError(404, "KK tidak ditemukan");
+    rt = rows[0].rt;
+  } else {
+    rt = d.keluargaBaru!.rt;
+  }
+  const kodeTerima = acak(10);
+  return denganTransaksi(async (c) => {
+    if (d.kkId) await c.query(`UPDATE wil_usulan SET status = 'digantikan' WHERE kk_id = $1 AND status IN ('menunggu', 'klarifikasi')`, [d.kkId]);
+    const { rows } = await c.query(
+      `INSERT INTO wil_usulan (token_id, kk_id, rt, isi, idempotency_key, kode_terima, sumber, diinput_oleh, keluarga_baru)
+       VALUES (NULL, $1, $2, $3, $4, $5, 'rw', $6, $7)
+       ON CONFLICT (idempotency_key) DO NOTHING RETURNING id, kode_terima`,
+      [d.kkId ?? null, rt, JSON.stringify(d.isi), d.idempotencyKey, kodeTerima, aktor.label, d.keluargaBaru ? JSON.stringify(d.keluargaBaru) : null],
+    );
+    if (!rows[0]) {
+      const { rows: ada } = await c.query(`SELECT kode_terima FROM wil_usulan WHERE idempotency_key = $1`, [d.idempotencyKey]);
+      return { kodeTerima: ada[0].kode_terima as string, ulang: true };
+    }
+    await catatAudit(aktor, "usulan_rw", "usulan", rows[0].id, rt, null, { kkId: d.kkId ?? null, keluargaBaru: !!d.keluargaBaru }, c);
+    return { kodeTerima: rows[0].kode_terima as string, ulang: false, rt };
+  });
+}
+
+/** Riwayat formulir yang diinput RW, agar RW bisa memberi tahu warga statusnya. */
+export async function daftarUsulanRw(aktor: Aktor) {
+  if (aktor.role !== "rw") throw new WilayahError(403, "Hanya admin RW");
+  const { rows } = await pool.query(
+    `SELECT u.id, u.kk_id, u.rt, u.status, u.kode_terima, u.catatan_rt, u.created_at, u.diputus_at, u.isi->>'namaPengisi' AS pengisi,
+            (SELECT nama_lengkap FROM warga w WHERE w.kk_id = u.kk_id AND w.kedudukan_keluarga = 'Kepala Keluarga' LIMIT 1) AS kepala,
+            COALESCE(k.alamat, u.keluarga_baru->>'alamat') AS alamat, u.kk_id IS NULL AS keluarga_baru
+       FROM wil_usulan u LEFT JOIN kartu_keluarga k ON k.id = u.kk_id
+      WHERE u.sumber = 'rw'
+      ORDER BY u.created_at DESC LIMIT 100`,
+  );
+  return rows;
+}
+
+// ===========================================================================
 // Ketua RT: periksa & putuskan usulan
 // ===========================================================================
 
 export async function daftarUsulan(aktor: Aktor, status = "menunggu") {
   if (aktor.role !== "rt") throw new WilayahError(403, "Hanya Ketua RT");
   const { rows } = await pool.query(
-    `SELECT u.id, u.kk_id, u.status, u.created_at, u.isi->>'namaPengisi' AS pengisi,
+    `SELECT u.id, u.kk_id, u.status, u.created_at, u.sumber, u.isi->>'namaPengisi' AS pengisi,
             (SELECT nama_lengkap FROM warga w WHERE w.kk_id = u.kk_id AND w.kedudukan_keluarga = 'Kepala Keluarga' LIMIT 1) AS kepala,
-            k.alamat
-       FROM wil_usulan u JOIN kartu_keluarga k ON k.id = u.kk_id
-      WHERE u.rt = $1 AND k.rt = $1 AND ($2 = 'semua' OR u.status = $2)
+            COALESCE(k.alamat, u.keluarga_baru->>'alamat') AS alamat, u.kk_id IS NULL AS keluarga_baru
+       FROM wil_usulan u LEFT JOIN kartu_keluarga k ON k.id = u.kk_id
+      WHERE u.rt = $1 AND (u.kk_id IS NULL OR k.rt = $1) AND ($2 = 'semua' OR u.status = $2)
       ORDER BY u.created_at DESC LIMIT 200`,
     [aktor.rt, status],
   );
@@ -321,11 +385,21 @@ export async function daftarUsulan(aktor: Aktor, status = "menunggu") {
 
 export async function detailUsulan(aktor: Aktor, id: number) {
   if (aktor.role !== "rt") throw new WilayahError(403, "Hanya Ketua RT");
-  const { rows } = await pool.query(`SELECT id, kk_id, rt, isi, status, catatan_rt, created_at FROM wil_usulan WHERE id = $1`, [id]);
+  const { rows } = await pool.query(
+    `SELECT id, kk_id, rt, isi, status, catatan_rt, created_at, sumber, diinput_oleh, keluarga_baru FROM wil_usulan WHERE id = $1`,
+    [id],
+  );
   const u = rows[0];
   if (!u || u.rt !== aktor.rt) throw new WilayahError(404, "Usulan tidak ditemukan");
-  const resmi = await detailKeluarga(aktor, u.kk_id);
-  return { usulan: { id: u.id, kkId: u.kk_id, isi: u.isi as IsiUsulan, status: u.status, catatanRt: u.catatan_rt, dibuat: u.created_at }, resmi };
+  const resmi = u.kk_id ? await detailKeluarga(aktor, u.kk_id) : null;
+  return {
+    usulan: {
+      id: u.id, kkId: u.kk_id, isi: u.isi as IsiUsulan, status: u.status, catatanRt: u.catatan_rt, dibuat: u.created_at,
+      sumber: u.sumber as string, diinputOleh: u.diinput_oleh as string | null,
+      keluargaBaru: u.keluarga_baru as { rt: number; alamat: string; noUnit?: string | null } | null,
+    },
+    resmi,
+  };
 }
 
 const putusanSchema = z.discriminatedUnion("aksi", [
@@ -334,6 +408,8 @@ const putusanSchema = z.discriminatedUnion("aksi", [
   z.object({
     aksi: z.literal("terima"),
     catatan: z.string().trim().max(500).optional(),
+    /** Wajib untuk usulan keluarga baru: KK di RT ini yang sudah didaftarkan RT. */
+    kkId: z.number().int().positive().optional(),
     /** Jawaban yang dipilih RT untuk diterapkan (subjek & ID resmi dipilih RT, bukan dari warga). */
     fakta: z.array(z.object({
       subjek: z.enum(["warga", "kk", "rumah", "usaha"]),
@@ -355,8 +431,11 @@ export async function putuskanUsulan(aktor: Aktor, id: number, input: unknown) {
     const u = rows[0];
     if (!u || u.rt !== rt) throw new WilayahError(404, "Usulan tidak ditemukan");
     if (u.status !== "menunggu" && u.status !== "klarifikasi") throw new WilayahError(409, "Usulan ini sudah diputus atau digantikan kiriman baru");
-    const { rows: kk } = await c.query(`SELECT rt FROM kartu_keluarga WHERE id = $1`, [u.kk_id]);
-    if (kk[0]?.rt !== rt) throw new WilayahError(409, "KK sudah tidak berada di RT Anda");
+    let kkId = u.kk_id as number | null;
+    if (kkId) {
+      const { rows: kk } = await c.query(`SELECT rt FROM kartu_keluarga WHERE id = $1`, [kkId]);
+      if (kk[0]?.rt !== rt) throw new WilayahError(409, "KK sudah tidak berada di RT Anda");
+    }
 
     if (d.aksi !== "terima") {
       await c.query(`UPDATE wil_usulan SET status = $2, catatan_rt = $3, diputus_at = now(), diputus_oleh = $4 WHERE id = $1`, [id, d.aksi === "tolak" ? "ditolak" : "klarifikasi", d.catatan, aktor.label]);
@@ -364,13 +443,21 @@ export async function putuskanUsulan(aktor: Aktor, id: number, input: unknown) {
       return { ok: true, diterapkan: 0 };
     }
 
-    const { rows: anggota } = await c.query(`SELECT id FROM warga WHERE kk_id = $1`, [u.kk_id]);
+    if (!kkId) {
+      if (!d.kkId) throw new WilayahError(400, "Daftarkan atau pilih KK keluarga ini terlebih dahulu");
+      const { rows: kk } = await c.query(`SELECT rt FROM kartu_keluarga WHERE id = $1`, [d.kkId]);
+      if (kk[0]?.rt !== rt) throw new WilayahError(404, "KK tidak ditemukan di wilayah RT Anda");
+      kkId = d.kkId;
+      await c.query(`UPDATE wil_usulan SET kk_id = $2 WHERE id = $1`, [id, kkId]);
+    }
+
+    const { rows: anggota } = await c.query(`SELECT id FROM warga WHERE kk_id = $1`, [kkId]);
     const idAnggota = new Set(anggota.map((a) => a.id));
-    const { rows: rumah } = await c.query(`SELECT rumah_id FROM wil_rumah_kk WHERE kk_id = $1 AND sampai IS NULL`, [u.kk_id]);
+    const { rows: rumah } = await c.query(`SELECT rumah_id FROM wil_rumah_kk WHERE kk_id = $1 AND sampai IS NULL`, [kkId]);
     let n = 0;
     for (const f of d.fakta) {
       if (f.subjek === "warga" && !idAnggota.has(f.subjekId)) throw new WilayahError(400, "Jawaban hanya boleh diterapkan ke anggota KK ini");
-      if (f.subjek === "kk" && f.subjekId !== u.kk_id) throw new WilayahError(400, "Jawaban rumah tangga hanya untuk KK ini");
+      if (f.subjek === "kk" && f.subjekId !== kkId) throw new WilayahError(400, "Jawaban rumah tangga hanya untuk KK ini");
       if (f.subjek === "rumah" && rumah[0]?.rumah_id !== f.subjekId) throw new WilayahError(400, "Hubungkan KK ke rumah terlebih dahulu");
       const r = await simpanFakta(aktor, { ...f, sumber: "usulan_warga", catatan: `Usulan warga #${id}` }, c);
       if (!r.tidakBerubah) n++;

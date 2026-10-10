@@ -222,6 +222,17 @@ export const suratRw = pgTable("surat_rw", {
   nomorUrut: integer("nomor_urut"),
   tahunNomor: integer("tahun_nomor"),
   updatedAt: timestamp("updated_at"),
+  // Surat Sakti v2 (migrations/0025_surat_sakti.sql)
+  kodeJenis: text("kode_jenis"),
+  templateVersi: integer("template_versi"),
+  rangkaianId: integer("rangkaian_id"),
+  indukId: integer("induk_id"),
+  akses: text("akses").notNull().default("internal"),
+  rtTerkait: integer("rt_terkait").array().notNull().default(sql`'{}'::integer[]`),
+  snapshot: jsonb("snapshot"),
+  verifikasiToken: text("verifikasi_token"),
+  perluPemeriksaan: boolean("perlu_pemeriksaan").notNull().default(false),
+  idempotencyKey: text("idempotency_key"),
 });
 
 export const profileEditRequest = pgTable("profile_edit_request", {

@@ -60,6 +60,30 @@ export async function unduh(path: string, namaCadangan: string, peran?: "rt" | "
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
+/** Buka berkas (PDF/foto) berotorisasi di tab baru. Tab dibuka dulu agar tidak diblokir browser. */
+export async function bukaBerkas(path: string, peran?: "rt" | "rw") {
+  const w = window.open("", "_blank");
+  try {
+    const res = await fetch(path, { credentials: "include", headers: peran ? { "X-Wilayah-Peran": peran } : {} });
+    if (!res.ok) {
+      let m = `Gagal membuka berkas (kode ${res.status})`;
+      try {
+        m = JSON.parse(await res.text()).message || m;
+      } catch {
+        /* abaikan */
+      }
+      throw new WilayahApiError(res.status, m);
+    }
+    const url = URL.createObjectURL(await res.blob());
+    if (w) w.location.href = url;
+    else window.location.href = url;
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch (e) {
+    w?.close();
+    throw e;
+  }
+}
+
 export function kunciIdempoten(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;

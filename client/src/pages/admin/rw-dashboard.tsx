@@ -9,6 +9,7 @@ import { unduh, useKirimSekali, wil } from "@/lib/wilayah-api";
 import { eksporPdfLaporan } from "@/lib/laporan-pdf";
 import { FormFakta, kunciAwal } from "@/components/wilayah/form-fakta";
 import { TabelIndikator, LABEL_STATUS, type HasilSel } from "@/pages/rt/laporan";
+import DataWarga from "./rw-data-warga";
 import { BAGIAN_KONFIRMASI, JENIS_FASILITAS, JENIS_KEGIATAN, JENIS_KELOMPOK, NAMA_BULAN, STATUS_KEJADIAN, isoTanggal } from "@shared/wilayah";
 
 const RW = { peran: "rw" as const };
@@ -215,6 +216,7 @@ function Aksi({ tahun, bulan }: { tahun: number; bulan: number }) {
   const { data, error } = useQuery<any>({ queryKey: ["/api/wilayah/rw/aksi", tahun, bulan], queryFn: () => wil(`/api/wilayah/rw/aksi?tahun=${tahun}&bulan=${bulan}`, RW) });
   const { data: koreksi } = useQuery<any[]>({ queryKey: ["/api/wilayah/koreksi", "rw"], queryFn: () => wil("/api/wilayah/koreksi", RW) });
   const { data: permintaan } = useQuery<any[]>({ queryKey: ["/api/wilayah/permintaan-surat", "rw"], queryFn: () => wil("/api/wilayah/permintaan-surat", RW) });
+  const { data: surat } = useQuery<any>({ queryKey: ["/api/wilayah/rw/surat-ringkasan"], queryFn: () => wil("/api/wilayah/rw/surat-ringkasan", RW) });
   const { data: lap } = useQuery<any>({ queryKey: ["/api/wilayah/laporan", "rw-konf", tahun, bulan], queryFn: () => wil(`/api/wilayah/laporan?tahun=${tahun}&bulan=${bulan}`, RW) });
   const [g, setG] = useState({ jenis: "rembug_rw", judul: "", tanggal: isoTanggal(new Date()), lokasi: "", rt: [1, 2, 3, 4, 5, 6, 7] });
   const [err, setErr] = useState<unknown>(null);
@@ -300,14 +302,35 @@ function Aksi({ tahun, bulan }: { tahun: number; bulan: number }) {
       </section>
 
       <section>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-semibold">Surat Sakti</h3>
+          <Button size="sm" variant="outline" onClick={() => go("/admin/surat-rw")}>Buka Surat Sakti</Button>
+        </div>
+        {surat && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+            {([
+              ["Permintaan RT baru", surat.permintaan_rt], ["Draft", surat.draft], ["Terbit belum diserahkan", surat.belum_distribusi],
+              ["Tindak lanjut terlambat", surat.tindak_terlambat], ["Jatuh tempo ≤3 hari", surat.tindak_jatuh_tempo], ["Permohonan belum dibalas", surat.permohonan_tanpa_respons],
+              ["Pekerjaan selesai 30 hari", surat.pekerjaan_selesai_30h], ["Rangkaian aktif", surat.rangkaian_aktif],
+            ] as [string, number][]).map(([l, n]) => (
+              <button key={l} type="button" onClick={() => go("/admin/surat-rw")} className="rounded-lg border p-2 text-left hover:bg-muted/40">
+                <p className={`text-xl font-bold ${n && (l.includes("terlambat") || l.includes("belum")) ? "text-amber-700" : ""}`}>{n}</p>
+                <p className="text-xs text-muted-foreground">{l}</p>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section>
         <h3 className="font-semibold mb-2">Permintaan surat dari RT</h3>
         <ul className="text-sm divide-y border rounded-lg">
           {permintaan?.filter((p) => p.status === "baru").length === 0 && <li className="p-2 text-muted-foreground">Tidak ada.</li>}
           {permintaan?.filter((p) => p.status === "baru").map((p) => (
             <li key={p.id} className="p-2 flex flex-wrap justify-between gap-2">
-              <span>{rt2(p.rt)} · {p.jenis_surat}: <b>{p.perihal}</b> — {p.uraian}</span>
+              <span>{rt2(p.rt)} · {p.jenis_surat}: <b>{p.perihal}</b> — {p.uraian}{p.jumlah_fakta ? ` (${p.jumlah_fakta} fakta tambahan)` : ""}</span>
               <span className="flex gap-2">
-                <Button size="sm" onClick={() => go(`/admin/surat-rw?permintaan=${p.id}`)}>Buat surat</Button>
+                <Button size="sm" onClick={() => go(`/admin/surat-rw?permintaan=${p.id}`)}>Buat dokumen</Button>
                 <Button size="sm" variant="outline" onClick={() => { const j = prompt("Alasan untuk RT:"); if (j) jalankan(() => wil(`/api/wilayah/rw/permintaan-surat/${p.id}/tolak`, { ...RW, body: { jawaban: j } })); }}>Tolak</Button>
               </span>
             </li>
@@ -393,11 +416,13 @@ export default function RwDashboard() {
       <Tabs defaultValue="ringkasan">
         <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="ringkasan">Ringkasan</TabsTrigger>
+          <TabsTrigger value="warga">Data Warga</TabsTrigger>
           <TabsTrigger value="bersama">Data Bersama</TabsTrigger>
           <TabsTrigger value="aksi">Kegiatan & Aksi RW</TabsTrigger>
           <TabsTrigger value="laporan">Laporan Kecamatan</TabsTrigger>
         </TabsList>
         <TabsContent value="ringkasan"><Ringkasan tahun={tahun} bulan={bulan} /></TabsContent>
+        <TabsContent value="warga"><DataWarga /></TabsContent>
         <TabsContent value="bersama"><DataBersama /></TabsContent>
         <TabsContent value="aksi"><Aksi tahun={tahun} bulan={bulan} /></TabsContent>
         <TabsContent value="laporan"><LaporanKecamatan tahun={tahun} bulan={bulan} /></TabsContent>

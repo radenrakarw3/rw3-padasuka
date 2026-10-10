@@ -4,6 +4,7 @@ Masuk admin, lalu buka menu utama **Dashboard** dan **Surat RW**.
 
 ## Dashboard
 - **Ringkasan**: angka utama dengan periode, scope, satuan, kelengkapan, dan rincian per RT. Detail keluarga disamarkan dan setiap pembukaan dicatat. Tidak ada tombol ubah master warga, karena perubahan master dilakukan oleh RT.
+- **Data Warga**: data keluarga yang sama dengan milik Ketua RT (satu sumber), bisa difilter per RT dan dicari. *Detail* hanya baca: NIK disamarkan dan setiap pembukaan dicatat. Untuk warga yang datang langsung ke RW, pilih keluarganya lalu **Isi formulir**. Bila keluarganya belum terdaftar, pakai **Formulir keluarga belum terdaftar** (pilih RT dan alamat dulu). Isian masuk antrean **Periksa isian** Ketua RT dengan tanda "dari RW" dan baru mengubah data setelah RT menerimanya. Status dan pesan RT terlihat di *Formulir yang diinput di RW*.
 - **Data Bersama**: fasilitas/kelompok milik RW (mis. posyandu) beserta RT yang dilayani.
 - **Kegiatan & Aksi RW**: buat kegiatan RW (setiap RT mengisi pesertanya sendiri), putuskan kejadian dan usulan koreksi dari RT, tanggapi permintaan surat.
 - **Laporan Kecamatan**: lihat per RT atau rekap RW (objek unik), unduh XLSX/PDF, finalkan rekap. Sel "Menunggu data tingkat RW" berarti RW perlu melengkapi Data Bersama.
