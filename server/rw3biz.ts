@@ -3,13 +3,14 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { db, pool } from "./db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import {
   rw3bizUsaha,
   rw3bizPengajuan,
   rw3bizOrang,
   type Rw3bizPengajuan,
   type Rw3bizOrang,
+  type Rw3bizUsaha,
 } from "@shared/schema";
 import { ACTIVE_RT_NUMBERS } from "@shared/rt";
 import { hitungTanggalBerlaku } from "@shared/visitrw3-kontribusi";
@@ -20,6 +21,34 @@ import {
   notifyRw3bizDisetujui,
   notifyRw3bizDitolak,
 } from "./wa-notify-rw3biz";
+import {
+  ASAL_ORANG_BIZ,
+  JENIS_TEMPAT_BIZ,
+  MAKS_ANAK_BIZ,
+  MAKS_ORANG_BIZ,
+  PERAN_ORANG_BIZ,
+  turunkanOperasionalMalam,
+} from "@shared/rw3biz-kontribusi";
+
+const MAKS_TOTAL_ORANG = MAKS_ORANG_BIZ + MAKS_ANAK_BIZ;
+import { tandaiRaziaSelesai } from "./rw3biz-razia";
+import {
+  alokasiUntuk,
+  buatTagihanTermin,
+  cocokkanWargaRw3,
+  dataUsahaDariBaris,
+  dataUsahaSchema,
+  hitungRincian,
+  kolomDataUsaha,
+  kolomKontribusi,
+  koreksiSurveySchema,
+  loadTarif,
+  orangKontribusiSchema,
+  orangUntukPengajuan,
+  tentukanTahapTransisi,
+  type DataUsaha,
+  type KoreksiSurvey,
+} from "./rw3biz-kontribusi";
 
 export { hitungTanggalBerlaku } from "@shared/visitrw3-kontribusi";
 
@@ -119,37 +148,107 @@ const orangInputSchema = z.object({
   jenisKendaraan: z.string().optional().nullable(),
   platNomor: z.string().optional().nullable(),
   fotoKtpPath: z.string().optional().nullable(),
-});
+}).merge(orangKontribusiSchema);
 
-export const pengajuanBaruSchema = z.object({
+const dataUsahaPengajuanSchema = dataUsahaSchema
+  .omit({ jenisTempatUsaha: true, operasionalMalam: true })
+  .extend({ operasionalMalam: dataUsahaSchema.shape.operasionalMalam.optional().nullable() });
+
+export const pengajuanBaruSchema = dataUsahaPengajuanSchema.extend({
   rt: z.number().int().refine((n) => (ACTIVE_RT_NUMBERS as readonly number[]).includes(n), "RT tidak valid"),
   alamat: z.string().min(5, "Alamat lengkap wajib diisi"),
   nomorLokasi: z.string().optional().nullable(),
   namaUsaha: z.string().min(2, "Nama usaha wajib diisi"),
-  jenisTempatUsaha: z.enum(["lapak", "kiosk", "usaha_rumahan", "lainnya"]).optional().nullable(),
+  jenisTempatUsaha: z.enum(JENIS_TEMPAT_BIZ).optional().nullable(),
   jenisTempatUsahaLain: z.string().optional().nullable(),
   kategoriUsaha: z.array(z.string().min(1).max(120)).max(12).optional().nullable(),
   jamBuka: z.string().regex(TIME_REGEX, "Jam buka wajib diisi (format HH:MM)"),
   jamTutup: z.string().regex(TIME_REGEX, "Jam tutup wajib diisi (format HH:MM)"),
   alamatUsaha: z.string().optional().nullable(),
   pjSetujuNotifikasi: z.boolean().default(true),
-  jumlahOrang: z.number().int().min(1).max(20),
+  jumlahOrang: z.number().int().min(1).max(MAKS_TOTAL_ORANG),
   tanggalBayar: z.string().regex(DATE_REGEX),
   terminBulan: z.number().refine((n): n is (typeof TERMIN_VALUES)[number] => TERMIN_VALUES.includes(n as (typeof TERMIN_VALUES)[number]), "Termin tidak valid"),
   catatanPemohon: z.string().optional().nullable(),
-  orang: z.array(orangInputSchema).min(1, "Minimal satu orang penanggung jawab"),
+  orang: z.array(orangInputSchema).min(1, "Minimal satu orang penanggung jawab").max(MAKS_TOTAL_ORANG),
   setujuTataTertib: z.literal(true, { errorMap: () => ({ message: "Persetujuan tata tertib wajib" }) }),
 });
 
 export const perpanjangSchema = z.object({
+  /** NIU-RW3-#### atau nomor BIZ terakhir. */
   nomorBiz: z.string().min(8),
+  /** Verifikasi: harus sama dengan WA penanggung jawab terdaftar. */
+  nomorWhatsapp: z.string().trim().min(8, "Isi nomor WhatsApp penanggung jawab"),
   tanggalBayar: z.string().regex(DATE_REGEX),
   terminBulan: z.number().refine((n): n is (typeof TERMIN_VALUES)[number] => TERMIN_VALUES.includes(n as (typeof TERMIN_VALUES)[number]), "Termin tidak valid"),
   catatanPemohon: z.string().optional().nullable(),
   setujuTataTertib: z.literal(true, { errorMap: () => ({ message: "Persetujuan tata tertib wajib" }) }),
+  /** Data usaha terbaru; kosong = sama dengan periode lalu. */
+  dataUsaha: dataUsahaSchema.optional(),
+  jamBuka: z.string().regex(TIME_REGEX).optional(),
+  jamTutup: z.string().regex(TIME_REGEX).optional(),
+  /** Orang terdaftar periode lalu: tetap/berhenti + pembaruan peran & asal. Kosong = semua tetap. */
+  orangLama: z
+    .array(
+      z.object({
+        id: z.number().int(),
+        tetap: z.boolean(),
+        peran: z.enum(PERAN_ORANG_BIZ).optional(),
+        asal: z.enum(ASAL_ORANG_BIZ).optional(),
+        domisili: z.string().trim().max(300).optional().nullable(),
+      }),
+    )
+    .max(MAKS_TOTAL_ORANG)
+    .optional(),
+  orangBaru: z.array(orangInputSchema).max(MAKS_TOTAL_ORANG).default([]),
 });
 
+function digitWa(nomor?: string | null): string {
+  const d = String(nomor ?? "").replace(/\D/g, "");
+  return d.startsWith("62") ? `0${d.slice(2)}` : d;
+}
+
 type OrangInput = z.infer<typeof orangInputSchema>;
+
+function nilaiOrangBaru(
+  o: OrangInput & { wargaId: number | null },
+  pengajuanId: number,
+  urutan: number,
+  isPenanggungJawab: boolean,
+): typeof rw3bizOrang.$inferInsert {
+  const fotoKtpPath = o.isAnak ? null : o.fotoKtpPath || null;
+  return {
+    pengajuanId,
+    namaLengkap: o.namaLengkap,
+    tanggalLahir: o.tanggalLahir,
+    isAnak: o.isAnak,
+    isPenanggungJawab,
+    nik: o.isAnak ? null : o.nik?.trim() || null,
+    nomorWhatsapp: o.nomorWhatsapp?.trim() || null,
+    jenisKelamin: o.jenisKelamin?.trim() || null,
+    pekerjaan: o.pekerjaan?.trim() || null,
+    namaTempatKerja: o.namaTempatKerja?.trim() || null,
+    namaSekolah: o.namaSekolah?.trim() || null,
+    punyaKendaraan: o.punyaKendaraan,
+    jenisKendaraan: o.jenisKendaraan?.trim() || null,
+    platNomor: o.platNomor?.trim() || null,
+    fotoKtpPath,
+    fotoKtpData: o.isAnak ? null : resolveFotoKtpData(fotoKtpPath),
+    urutan,
+    peran: o.peran,
+    asal: o.asal,
+    domisili: o.domisili?.trim() || null,
+    wargaId: o.wargaId,
+  };
+}
+
+async function cocokkanOrangInput(orang: OrangInput[]) {
+  const wargaCocok = await cocokkanWargaRw3(orang.map((o) => o.nik));
+  return orang.map((o) => {
+    const info = o.isAnak ? undefined : wargaCocok.get(String(o.nik ?? "").replace(/\D/g, ""));
+    return { ...o, asal: info ? ("rw3" as const) : o.asal, wargaId: info?.wargaId ?? null };
+  });
+}
 
 /** Tentukan penanggung jawab: flag isPenanggungJawab dulu, lalu dewasa pertama ber-WA. */
 function pickPenanggungJawab(orang: OrangInput[]): OrangInput {
@@ -192,6 +291,15 @@ export async function createPengajuanBaru(input: z.infer<typeof pengajuanBaruSch
   const nomorBiz = await generateNomorBiz();
   const alamat = parsed.alamat.trim();
 
+  const dataUsaha: DataUsaha = {
+    ...parsed,
+    jenisTempatUsaha: parsed.jenisTempatUsaha,
+    operasionalMalam: parsed.operasionalMalam ?? turunkanOperasionalMalam(parsed.jamBuka, parsed.jamTutup),
+  };
+  const orangFinal = await cocokkanOrangInput(parsed.orang);
+  const tarif = await loadTarif();
+  const rincian = hitungRincian(dataUsaha, orangFinal, tarif);
+
   const pengajuan = await db.transaction(async (tx) => {
     const [row] = await tx
       .insert(rw3bizPengajuan)
@@ -219,33 +327,13 @@ export async function createPengajuanBaru(input: z.infer<typeof pengajuanBaruSch
         tanggalBerlakuSampai,
         catatanPemohon: parsed.catatanPemohon?.trim() || null,
         setujuTataTertib: true,
+        ...kolomDataUsaha(dataUsaha),
+        ...kolomKontribusi(rincian),
       })
       .returning();
 
-    for (let i = 0; i < parsed.orang.length; i++) {
-      const o = parsed.orang[i];
-      const isPj = o === pj;
-      const fotoKtpPath = o.isAnak ? null : o.fotoKtpPath || null;
-      const fotoKtpData = o.isAnak ? null : resolveFotoKtpData(fotoKtpPath);
-      await tx.insert(rw3bizOrang).values({
-        pengajuanId: row.id,
-        namaLengkap: o.namaLengkap,
-        tanggalLahir: o.tanggalLahir,
-        isAnak: o.isAnak,
-        isPenanggungJawab: isPj,
-        nik: o.isAnak ? null : o.nik?.trim() || null,
-        nomorWhatsapp: o.nomorWhatsapp?.trim() || null,
-        jenisKelamin: o.jenisKelamin?.trim() || null,
-        pekerjaan: o.pekerjaan?.trim() || null,
-        namaTempatKerja: o.namaTempatKerja?.trim() || null,
-        namaSekolah: o.namaSekolah?.trim() || null,
-        punyaKendaraan: o.punyaKendaraan,
-        jenisKendaraan: o.jenisKendaraan?.trim() || null,
-        platNomor: o.platNomor?.trim() || null,
-        fotoKtpPath,
-        fotoKtpData,
-        urutan: i,
-      });
+    for (let i = 0; i < orangFinal.length; i++) {
+      await tx.insert(rw3bizOrang).values(nilaiOrangBaru(orangFinal[i], row.id, i, parsed.orang[i] === pj));
     }
 
     return row;
@@ -260,92 +348,218 @@ export async function createPengajuanBaru(input: z.infer<typeof pengajuanBaruSch
   return pengajuan;
 }
 
+/** Data periode lalu untuk form perpanjang — hanya setelah WA penanggung jawab cocok. */
+export async function dataUntukPerpanjang(input: unknown) {
+  const { nomor, nomorWhatsapp } = z.object({ nomor: z.string().min(8), nomorWhatsapp: z.string().min(8) }).parse(input);
+  const usaha = await cariUsahaByNomor(nomor);
+  if (!usaha) throw new Error("Nomor induk / nomor RW3BIZ tidak ditemukan atau belum disetujui");
+  if (digitWa(usaha.pjNomorWhatsapp) !== digitWa(nomorWhatsapp)) {
+    throw new Error("Nomor WhatsApp tidak cocok dengan penanggung jawab usaha terdaftar");
+  }
+  const orang = await orangUntukPengajuan(usaha.pengajuanId);
+  return {
+    nomorInduk: usaha.nomorInduk,
+    nomorBiz: usaha.nomorBiz,
+    namaUsaha: usaha.namaUsaha,
+    rt: usaha.rt,
+    alamat: usaha.alamatUsaha || usaha.alamat,
+    tanggalHabis: usaha.tanggalHabis,
+    terminBulan: usaha.terminBulan,
+    jamBuka: usaha.jamBuka,
+    jamTutup: usaha.jamTutup,
+    kontribusiBulanan: usaha.kontribusiBulanan,
+    dataUsaha: dataUsahaDariBaris(usaha),
+    orang: orang.map((o) => ({
+      id: o.id,
+      namaLengkap: o.namaLengkap,
+      isAnak: o.isAnak,
+      isPenanggungJawab: o.isPenanggungJawab,
+      peran: o.peran,
+      asal: o.asal,
+      domisili: o.domisili,
+      cocokWarga: Boolean(o.wargaId),
+      nikSamar: o.nik ? `${o.nik.slice(0, 4)}********${o.nik.slice(-4)}` : null,
+    })),
+  };
+}
+
 export async function createPerpanjang(input: z.infer<typeof perpanjangSchema>) {
   const parsed = perpanjangSchema.parse(input);
-  const nomor = parsed.nomorBiz.trim().toUpperCase();
+
+  const usaha = await cariUsahaByNomor(parsed.nomorBiz);
+  if (!usaha) throw new Error("Nomor induk / nomor RW3BIZ tidak ditemukan atau belum disetujui");
+  if (digitWa(usaha.pjNomorWhatsapp) !== digitWa(parsed.nomorWhatsapp)) {
+    throw new Error("Nomor WhatsApp tidak cocok dengan penanggung jawab usaha terdaftar");
+  }
+  const nomor = usaha.nomorBiz;
 
   const [pending] = await db
-    .select()
+    .select({ nomorBiz: rw3bizPengajuan.nomorBiz })
     .from(rw3bizPengajuan)
-    .where(and(eq(rw3bizPengajuan.nomorBiz, nomor), eq(rw3bizPengajuan.status, "menunggu_survey")))
+    .where(and(eq(rw3bizPengajuan.usahaId, usaha.id), eq(rw3bizPengajuan.status, "menunggu_survey")))
     .limit(1);
-  if (pending) throw new Error("Masih ada pengajuan menunggu survey untuk nomor ini");
-
-  const [usaha] = await db
-    .select()
-    .from(rw3bizUsaha)
-    .where(eq(rw3bizUsaha.nomorBiz, nomor))
-    .orderBy(desc(rw3bizUsaha.createdAt))
-    .limit(1);
-  if (!usaha) throw new Error("Nomor RW3BIZ tidak ditemukan atau belum disetujui");
+  if (pending) throw new Error(`Masih ada pengajuan ${pending.nomorBiz} yang menunggu survey untuk usaha ini`);
 
   const tanggalBerlakuSampai = hitungTanggalBerlaku(parsed.tanggalBayar, parsed.terminBulan);
   const nomorBaru = await generateNomorBiz();
+  const orangLamaRows = await orangUntukPengajuan(usaha.pengajuanId);
+  const dataUsaha: DataUsaha = parsed.dataUsaha ?? dataUsahaDariBaris(usaha);
 
-  const [pengajuan] = await db
-    .insert(rw3bizPengajuan)
-    .values({
-      nomorBiz: nomorBaru,
-      tipe: "perpanjang",
-      status: "menunggu_survey",
-      rt: usaha.rt,
-      alamat: usaha.alamat,
-      nomorLokasi: usaha.nomorLokasi,
-      namaUsaha: usaha.namaUsaha,
-      jenisTempatUsaha: usaha.jenisTempatUsaha,
-      jenisTempatUsahaLain: usaha.jenisTempatUsahaLain,
-      kategoriUsaha: usaha.kategoriUsaha,
-      jamBuka: usaha.jamBuka,
-      jamTutup: usaha.jamTutup,
-      alamatUsaha: usaha.alamatUsaha,
-      pjNama: usaha.pjNama,
-      pjNik: usaha.pjNik,
-      pjNomorWhatsapp: usaha.pjNomorWhatsapp,
-      pjSetujuNotifikasi: usaha.pjSetujuNotifikasi,
-      jumlahOrang: 1,
-      tanggalBayar: parsed.tanggalBayar,
-      terminBulan: parsed.terminBulan,
-      tanggalBerlakuSampai,
-      usahaId: usaha.id,
-      catatanPemohon: parsed.catatanPemohon?.trim() || null,
-      setujuTataTertib: true,
-    })
-    .returning();
+  const ubahLama = parsed.orangLama ? new Map(parsed.orangLama.map((o) => [o.id, o])) : null;
+  const orangTetap = orangLamaRows
+    .filter((r) => !ubahLama || ubahLama.get(r.id)?.tetap)
+    .map(({ id, pengajuanId: _p, ...salin }) => {
+      const u = ubahLama?.get(id);
+      if (!u || salin.isAnak) return salin;
+      const asal = salin.wargaId ? "rw3" : u.asal ?? salin.asal;
+      return {
+        ...salin,
+        peran: u.peran ?? salin.peran,
+        asal,
+        domisili: asal === "luar" ? (u.domisili?.trim() || salin.domisili) : null,
+      };
+    });
+  const orangBaru = await cocokkanOrangInput(parsed.orangBaru);
+  if (![...orangTetap, ...orangBaru].some((o) => !o.isAnak)) {
+    throw new Error("Minimal satu orang dewasa (pemilik / penanggung jawab) harus tetap terdata");
+  }
+  if (orangTetap.length + orangBaru.length > MAKS_TOTAL_ORANG) {
+    throw new Error(`Maksimal ${MAKS_TOTAL_ORANG} orang per usaha`);
+  }
+
+  let pjLama = orangTetap.find((o) => o.isPenanggungJawab && !o.isAnak) ?? null;
+  const pjBaru = pjLama
+    ? null
+    : orangBaru.find((o) => !o.isAnak && o.isPenanggungJawab && o.nomorWhatsapp?.trim()) ??
+      orangBaru.find((o) => !o.isAnak && (o.peran === "pemilik" || o.peran === "penanggung_jawab") && o.nomorWhatsapp?.trim()) ??
+      null;
+  if (!pjLama && !pjBaru) {
+    pjLama = orangTetap.find((o) => !o.isAnak && o.nomorWhatsapp?.trim()) ?? null;
+    if (pjLama) pjLama.isPenanggungJawab = true;
+  }
+  const pj = pjLama
+    ? { nama: pjLama.namaLengkap, nik: pjLama.nik, wa: pjLama.nomorWhatsapp }
+    : pjBaru
+      ? { nama: pjBaru.namaLengkap, nik: pjBaru.nik?.trim() || null, wa: pjBaru.nomorWhatsapp?.trim() || null }
+      : null;
+  if (!pj?.wa) throw new Error("Penanggung jawab dengan nomor WhatsApp wajib ada");
+  const pjWa = pj.wa;
+
+  const semuaOrang = [
+    ...orangTetap.map((o) => ({ peran: o.peran, asal: o.asal, isAnak: o.isAnak })),
+    ...orangBaru.map((o) => ({ peran: o.peran, asal: o.asal, isAnak: o.isAnak })),
+  ];
+  const rincian = hitungRincian(dataUsaha, semuaOrang, await loadTarif());
+
+  const pengajuan = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(rw3bizPengajuan)
+      .values({
+        nomorBiz: nomorBaru,
+        tipe: "perpanjang",
+        status: "menunggu_survey",
+        rt: usaha.rt,
+        alamat: usaha.alamat,
+        nomorLokasi: usaha.nomorLokasi,
+        namaUsaha: usaha.namaUsaha,
+        jenisTempatUsaha: parsed.dataUsaha?.jenisTempatUsaha ?? usaha.jenisTempatUsaha,
+        jenisTempatUsahaLain: usaha.jenisTempatUsahaLain,
+        kategoriUsaha: usaha.kategoriUsaha,
+        jamBuka: parsed.jamBuka ?? usaha.jamBuka,
+        jamTutup: parsed.jamTutup ?? usaha.jamTutup,
+        alamatUsaha: usaha.alamatUsaha,
+        pjNama: pj.nama,
+        pjNik: pj.nik,
+        pjNomorWhatsapp: pjWa,
+        pjSetujuNotifikasi: usaha.pjSetujuNotifikasi,
+        jumlahOrang: Math.max(1, semuaOrang.length),
+        tanggalBayar: parsed.tanggalBayar,
+        terminBulan: parsed.terminBulan,
+        tanggalBerlakuSampai,
+        usahaId: usaha.id,
+        catatanPemohon: parsed.catatanPemohon?.trim() || null,
+        setujuTataTertib: true,
+        ...kolomDataUsaha(dataUsaha),
+        ...kolomKontribusi(rincian),
+      })
+      .returning();
+    let urutan = 0;
+    for (const o of orangTetap) {
+      await tx.insert(rw3bizOrang).values({ ...o, pengajuanId: row.id, urutan: urutan++ });
+    }
+    for (const o of orangBaru) {
+      await tx.insert(rw3bizOrang).values(nilaiOrangBaru(o, row.id, urutan++, o === pjBaru));
+    }
+    return row;
+  });
 
   notifyRw3bizPerpanjang(pengajuan, nomor);
-  return { pengajuan, nomorLama: nomor, nomorBaru };
+  return { pengajuan, nomorLama: nomor, nomorBaru, nomorInduk: usaha.nomorInduk };
+}
+
+const NIU_REGEX = /^NIU-RW3-\d+$/;
+
+/** Nomor Induk Usaha berikutnya; panggil di dalam transaksi (dikunci advisory lock). */
+async function nomorIndukBaru(tx: Parameters<Parameters<typeof db.transaction>[0]>[0]): Promise<string> {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('rw3biz_nomor_induk'))`);
+  const hasil = await tx.execute<{ n: number }>(sql`
+    SELECT COALESCE(MAX(substring(nomor_induk from '(\\d+)$')::int), 0) + 1 AS n
+    FROM rw3biz_usaha WHERE nomor_induk ~ '^NIU-RW3-\\d+$'
+  `);
+  const n = Number(hasil.rows[0]?.n ?? 1);
+  return `NIU-RW3-${String(n).padStart(4, "0")}`;
+}
+
+/** Usaha berdasarkan NIU (tetap) atau nomor BIZ (berganti tiap perpanjang). */
+export async function cariUsahaByNomor(nomorRaw: string) {
+  const nomor = nomorRaw.trim().toUpperCase();
+  const kolom = NIU_REGEX.test(nomor) ? rw3bizUsaha.nomorInduk : rw3bizUsaha.nomorBiz;
+  const [usaha] = await db.select().from(rw3bizUsaha).where(eq(kolom, nomor)).limit(1);
+  if (usaha || NIU_REGEX.test(nomor)) return usaha ?? null;
+  const [p] = await db
+    .select({ usahaId: rw3bizPengajuan.usahaId })
+    .from(rw3bizPengajuan)
+    .where(eq(rw3bizPengajuan.nomorBiz, nomor))
+    .limit(1);
+  if (!p?.usahaId) return null;
+  const [u] = await db.select().from(rw3bizUsaha).where(eq(rw3bizUsaha.id, p.usahaId)).limit(1);
+  return u ?? null;
 }
 
 export async function getStatusByNomor(nomorRaw: string) {
   const nomor = nomorRaw.trim().toUpperCase();
-  const list = await db
-    .select()
-    .from(rw3bizPengajuan)
-    .where(eq(rw3bizPengajuan.nomorBiz, nomor))
-    .orderBy(desc(rw3bizPengajuan.createdAt));
-
-  // Perpanjang membuat nomor baru; cari juga lewat usahaId → nomor lama.
-  if (!list.length) {
-    const [usaha] = await db.select().from(rw3bizUsaha).where(eq(rw3bizUsaha.nomorBiz, nomor)).limit(1);
+  let usaha: Rw3bizUsaha | null = null;
+  let dicari: Rw3bizPengajuan | null = null;
+  if (NIU_REGEX.test(nomor)) {
+    usaha = await cariUsahaByNomor(nomor);
     if (!usaha) return null;
-    return { pengajuan: null as Rw3bizPengajuan | null, riwayat: [], usaha, orang: [] as Rw3bizOrang[] };
-  }
-
-  const latest = list[0];
-  const orang = await db
-    .select()
-    .from(rw3bizOrang)
-    .where(eq(rw3bizOrang.pengajuanId, latest.id))
-    .orderBy(rw3bizOrang.urutan);
-
-  let usaha = null;
-  if (latest.usahaId) {
-    [usaha] = await db.select().from(rw3bizUsaha).where(eq(rw3bizUsaha.id, latest.usahaId)).limit(1);
   } else {
-    [usaha] = await db.select().from(rw3bizUsaha).where(eq(rw3bizUsaha.nomorBiz, nomor)).limit(1);
+    [dicari] = await db.select().from(rw3bizPengajuan).where(eq(rw3bizPengajuan.nomorBiz, nomor)).limit(1);
+    if (dicari?.usahaId) {
+      [usaha] = await db.select().from(rw3bizUsaha).where(eq(rw3bizUsaha.id, dicari.usahaId)).limit(1);
+    } else if (!dicari) {
+      usaha = await cariUsahaByNomor(nomor);
+      if (!usaha) return null;
+    }
   }
 
-  return { pengajuan: latest, riwayat: list, usaha: usaha ?? null, orang };
+  const riwayat = usaha
+    ? await db
+        .select()
+        .from(rw3bizPengajuan)
+        .where(eq(rw3bizPengajuan.usahaId, usaha.id))
+        .orderBy(desc(rw3bizPengajuan.createdAt))
+    : dicari
+      ? [dicari]
+      : [];
+  // Cari pakai NIU → tampilkan pengajuan terbaru (bisa perpanjang yang masih menunggu).
+  const pengajuan = dicari ?? riwayat[0] ?? null;
+  const orangDari = pengajuan?.id ?? usaha?.pengajuanId;
+  const orang = orangDari
+    ? await db.select().from(rw3bizOrang).where(eq(rw3bizOrang.pengajuanId, orangDari)).orderBy(rw3bizOrang.urutan)
+    : [];
+
+  return { pengajuan, riwayat, usaha: usaha ?? null, orang };
 }
 
 export async function listPengajuanAdmin(status?: string) {
@@ -379,75 +593,159 @@ export async function getPengajuanDetailAdmin(id: number) {
   return { pengajuan, orang, usaha };
 }
 
-export async function approvePengajuan(id: number, adminUsername: string, catatanSurvey?: string | null) {
-  const [pengajuan] = await db.select().from(rw3bizPengajuan).where(eq(rw3bizPengajuan.id, id));
-  if (!pengajuan) throw new Error("Pengajuan tidak ditemukan");
-  if (pengajuan.status !== "menunggu_survey") throw new Error("Pengajuan sudah diproses");
+export const approveSchema = z.object({
+  catatanSurvey: z.string().optional().nullable(),
+  koreksi: koreksiSurveySchema.optional(),
+});
 
-  const baseUpdate = {
-    status: "disetujui" as const,
-    catatanSurvey: catatanSurvey?.trim() || null,
-    reviewedAt: new Date(),
-    reviewedBy: adminUsername,
-  };
-
-  let usahaId = pengajuan.usahaId ?? null;
-
-  if (pengajuan.tipe === "perpanjang" && pengajuan.usahaId) {
-    // Perpanjang: update usaha yang sudah ada.
-    await db
-      .update(rw3bizUsaha)
-      .set({
-        status: "aktif",
-        tanggalMulai: pengajuan.tanggalBayar,
-        tanggalHabis: pengajuan.tanggalBerlakuSampai,
-        terminBulan: pengajuan.terminBulan,
-        nomorBiz: pengajuan.nomorBiz,
-        pengajuanId: pengajuan.id,
-      })
-      .where(eq(rw3bizUsaha.id, pengajuan.usahaId));
-    usahaId = pengajuan.usahaId;
-  } else {
-    // Pengajuan baru: buat usaha aktif.
-    const [usaha] = await db
-      .insert(rw3bizUsaha)
-      .values({
-        nomorBiz: pengajuan.nomorBiz,
-        rt: pengajuan.rt,
-        alamat: pengajuan.alamat,
-        nomorLokasi: pengajuan.nomorLokasi,
-        namaUsaha: pengajuan.namaUsaha,
-        jenisTempatUsaha: pengajuan.jenisTempatUsaha,
-        jenisTempatUsahaLain: pengajuan.jenisTempatUsahaLain,
-        kategoriUsaha: pengajuan.kategoriUsaha,
-        jamBuka: pengajuan.jamBuka,
-        jamTutup: pengajuan.jamTutup,
-        alamatUsaha: pengajuan.alamatUsaha,
-        pjNama: pengajuan.pjNama,
-        pjNik: pengajuan.pjNik,
-        pjNomorWhatsapp: pengajuan.pjNomorWhatsapp,
-        pjSetujuNotifikasi: pengajuan.pjSetujuNotifikasi,
-        status: "aktif",
-        tanggalMulai: pengajuan.tanggalBayar,
-        tanggalHabis: pengajuan.tanggalBerlakuSampai,
-        terminBulan: pengajuan.terminBulan,
-        pengajuanId: pengajuan.id,
-      })
-      .returning();
-    usahaId = usaha.id;
+/** Terapkan koreksi survey ke pengajuan + orang, lalu hitung ulang kontribusi final. */
+async function terapkanKoreksiSurvey(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  pengajuan: Rw3bizPengajuan,
+  koreksi: KoreksiSurvey | undefined,
+) {
+  for (const k of koreksi?.orang ?? []) {
+    const set: Partial<Rw3bizOrang> = {};
+    if (k.peran) set.peran = k.peran;
+    if (k.asal) set.asal = k.asal;
+    if (Object.keys(set).length) {
+      await tx.update(rw3bizOrang).set(set).where(and(eq(rw3bizOrang.id, k.id), eq(rw3bizOrang.pengajuanId, pengajuan.id)));
+    }
   }
+  const { orang: _o, ...koreksiUsaha } = koreksi ?? {};
+  const data: DataUsaha = { ...dataUsahaDariBaris(pengajuan) };
+  for (const [k, v] of Object.entries(koreksiUsaha)) {
+    if (v !== undefined) (data as Record<string, unknown>)[k] = v;
+  }
+  const orang = await orangUntukPengajuan(pengajuan.id, tx);
+  const rincian = hitungRincian(data, orang, await loadTarif());
+  const kolom = { jenisTempatUsaha: data.jenisTempatUsaha, ...kolomDataUsaha(data), ...kolomKontribusi(rincian) };
+  await tx.update(rw3bizPengajuan).set(kolom).where(eq(rw3bizPengajuan.id, pengajuan.id));
+  return kolom;
+}
 
-  const [updated] = await db
-    .update(rw3bizPengajuan)
-    .set({ ...baseUpdate, usahaId })
-    .where(eq(rw3bizPengajuan.id, id))
-    .returning();
+export async function approvePengajuan(id: number, adminUsername: string, input?: z.infer<typeof approveSchema>) {
+  const { catatanSurvey, koreksi } = approveSchema.parse(input ?? {});
+  const tarif = await loadTarif();
+
+  const { updated, usaha } = await db.transaction(async (tx) => {
+    const [pengajuan] = await tx.select().from(rw3bizPengajuan).where(eq(rw3bizPengajuan.id, id)).for("update");
+    if (!pengajuan) throw new Error("Pengajuan tidak ditemukan");
+    if (pengajuan.status !== "menunggu_survey") throw new Error("Pengajuan sudah diproses");
+
+    const kolom = await terapkanKoreksiSurvey(tx, pengajuan, koreksi);
+    const periodeMulai = pengajuan.tanggalBayar.slice(0, 7);
+
+    let usahaRow;
+    if (pengajuan.tipe === "perpanjang" && pengajuan.usahaId) {
+      const [lama] = await tx
+        .select({ nomorInduk: rw3bizUsaha.nomorInduk })
+        .from(rw3bizUsaha)
+        .where(eq(rw3bizUsaha.id, pengajuan.usahaId));
+      [usahaRow] = await tx
+        .update(rw3bizUsaha)
+        .set({
+          nomorInduk: lama?.nomorInduk ?? (await nomorIndukBaru(tx)),
+          status: "aktif",
+          namaUsaha: pengajuan.namaUsaha,
+          jamBuka: pengajuan.jamBuka,
+          jamTutup: pengajuan.jamTutup,
+          kategoriUsaha: pengajuan.kategoriUsaha,
+          pjNama: pengajuan.pjNama,
+          pjNik: pengajuan.pjNik,
+          pjNomorWhatsapp: pengajuan.pjNomorWhatsapp,
+          tanggalMulai: pengajuan.tanggalBayar,
+          tanggalHabis: pengajuan.tanggalBerlakuSampai,
+          terminBulan: pengajuan.terminBulan,
+          nomorBiz: pengajuan.nomorBiz,
+          pengajuanId: pengajuan.id,
+          ...kolom,
+          periodeTagihanMulai: sql`COALESCE(${rw3bizUsaha.periodeTagihanMulai}, ${periodeMulai})`,
+        })
+        .where(eq(rw3bizUsaha.id, pengajuan.usahaId))
+        .returning();
+      await tandaiRaziaSelesai(tx, pengajuan.usahaId);
+    } else {
+      [usahaRow] = await tx
+        .insert(rw3bizUsaha)
+        .values({
+          nomorBiz: pengajuan.nomorBiz,
+          nomorInduk: await nomorIndukBaru(tx),
+          rt: pengajuan.rt,
+          alamat: pengajuan.alamat,
+          nomorLokasi: pengajuan.nomorLokasi,
+          namaUsaha: pengajuan.namaUsaha,
+          jenisTempatUsahaLain: pengajuan.jenisTempatUsahaLain,
+          kategoriUsaha: pengajuan.kategoriUsaha,
+          jamBuka: pengajuan.jamBuka,
+          jamTutup: pengajuan.jamTutup,
+          alamatUsaha: pengajuan.alamatUsaha,
+          pjNama: pengajuan.pjNama,
+          pjNik: pengajuan.pjNik,
+          pjNomorWhatsapp: pengajuan.pjNomorWhatsapp,
+          pjSetujuNotifikasi: pengajuan.pjSetujuNotifikasi,
+          status: "aktif",
+          tanggalMulai: pengajuan.tanggalBayar,
+          tanggalHabis: pengajuan.tanggalBerlakuSampai,
+          terminBulan: pengajuan.terminBulan,
+          pengajuanId: pengajuan.id,
+          ...kolom,
+          periodeTagihanMulai: periodeMulai,
+          tahapTransisiMulai: tentukanTahapTransisi(periodeMulai, tarif),
+        })
+        .returning();
+    }
+    if (!usahaRow) throw new Error("Usaha untuk pengajuan ini tidak ditemukan");
+
+    await buatTagihanTermin(tx, usahaRow, pengajuan.tanggalBayar, pengajuan.terminBulan, tarif);
+
+    const [p] = await tx
+      .update(rw3bizPengajuan)
+      .set({
+        status: "disetujui",
+        catatanSurvey: catatanSurvey?.trim() || null,
+        reviewedAt: new Date(),
+        reviewedBy: adminUsername,
+        usahaId: usahaRow.id,
+      })
+      .where(eq(rw3bizPengajuan.id, id))
+      .returning();
+    return { updated: p, usaha: usahaRow };
+  });
 
   notifyRw3bizDisetujui(updated);
-  const [usaha] = usahaId
-    ? await db.select().from(rw3bizUsaha).where(eq(rw3bizUsaha.id, usahaId)).limit(1)
-    : [null];
-  return { pengajuan: updated, usaha: usaha ?? null };
+  return { pengajuan: updated, usaha };
+}
+
+/** Pratinjau kontribusi untuk form publik (asal pekerja sesuai isian; NIK dicocokkan saat kirim). */
+export const previewKontribusiSchema = dataUsahaSchema
+  .omit({ operasionalMalam: true, kendaraanOperasional: true })
+  .extend({
+    operasionalMalam: dataUsahaSchema.shape.operasionalMalam.optional().nullable(),
+    jamBuka: z.string().optional().nullable(),
+    jamTutup: z.string().optional().nullable(),
+    orang: z.array(orangKontribusiSchema.extend({ isAnak: z.boolean().default(false) })).max(MAKS_TOTAL_ORANG),
+  });
+
+export async function previewKontribusi(input: unknown) {
+  const p = previewKontribusiSchema.parse(input);
+  const tarif = await loadTarif();
+  const data: DataUsaha = {
+    ...p,
+    kendaraanOperasional: [],
+    operasionalMalam: p.operasionalMalam ?? turunkanOperasionalMalam(p.jamBuka, p.jamTutup),
+  };
+  const { hasil } = hitungRincian(data, p.orang, tarif);
+  const potonganTermin = tarif.potonganTermin;
+  return {
+    hasil,
+    operasionalMalam: data.operasionalMalam,
+    alokasi: alokasiUntuk(hasil.total, tarif),
+    potonganTermin,
+    bulanGratisUsahaBaru: tarif.bulanGratisUsahaBaru,
+    transisiPersen: tarif.transisiPersen,
+    tenggangHari: tarif.tenggangHari,
+  };
 }
 
 export async function rejectPengajuan(id: number, adminUsername: string, alasanTolak: string) {
@@ -570,4 +868,14 @@ export async function ensureRw3bizSchema() {
     CREATE INDEX IF NOT EXISTS rw3biz_pengajuan_pj_wa_idx ON rw3biz_pengajuan (pj_nomor_whatsapp);
     CREATE INDEX IF NOT EXISTS rw3biz_orang_pengajuan_idx ON rw3biz_orang (pengajuan_id);
   `);
+  for (const file of ["0027_rw3biz_kontribusi.sql", "0028_rw3biz_niu_kendaraan.sql", "0029_rw3biz_charter_razia.sql", "0030_rw3biz_pelanggaran.sql"]) {
+    const kandidat = [path.join(process.cwd(), "migrations", file)];
+    if (typeof __dirname !== "undefined") kandidat.push(path.join(__dirname, "..", "migrations", file));
+    const lokasi = kandidat.find((p) => fs.existsSync(p));
+    if (!lokasi) {
+      console.error(`[RW3BIZ] migrations/${file} tidak ditemukan; kolom tidak dipasang otomatis`);
+      return;
+    }
+    await pool.query(fs.readFileSync(lokasi, "utf8"));
+  }
 }

@@ -21,7 +21,7 @@ export function StatusKependudukanBadge({
   return (
     <Badge
       variant="outline"
-      className={cn("text-[10px] font-medium", VARIANT[label] ?? "", className)}
+      className={cn("text-[11px] font-medium sm:text-[10px]", VARIANT[label] ?? "", className)}
     >
       {label}
     </Badge>

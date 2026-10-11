@@ -53,8 +53,8 @@ export function Visitrw3StatCard({
           <p className="text-2xl font-bold tracking-tight tabular-nums">{value}</p>
           {description && <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>}
         </div>
-        <div className={cn("rounded-2xl bg-gradient-to-br p-3 shrink-0", toneClass)}>
-          <Icon className="h-5 w-5" />
+        <div className={cn("rounded-xl bg-gradient-to-br p-2 shrink-0 sm:rounded-2xl sm:p-3", toneClass)}>
+          <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
         </div>
       </div>
     </div>
@@ -86,7 +86,7 @@ export function Visitrw3Panel({
   noPadding?: boolean;
 }) {
   return (
-    <div className={cn("rounded-2xl border border-border/60 bg-card/90 shadow-sm overflow-hidden", className)}>
+    <div className={cn("rounded-2xl border border-border/60 bg-card/90 shadow-sm overflow-clip", className)}>
       {(title || actions) && (
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/50 bg-muted/20 px-4 py-3 sm:px-5">
           <div>
@@ -128,7 +128,7 @@ export function Visitrw3Toolbar({
             value={search ?? ""}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder={searchPlaceholder}
-            className="pl-9 h-9 text-sm border-0 bg-muted/40 focus-visible:ring-1"
+            className="min-h-11 pl-9 text-base border-0 bg-muted/40 focus-visible:ring-1 sm:min-h-9 sm:h-9 sm:text-sm"
           />
         </div>
       )}
@@ -149,7 +149,13 @@ export function Visitrw3ChipFilters<T extends string>({
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-wrap gap-1.5", className)} role="tablist">
+    <div
+      className={cn(
+        "no-scrollbar -mx-3 flex gap-2 overflow-x-auto px-3 sm:mx-0 sm:flex-wrap sm:gap-1.5 sm:overflow-visible sm:px-0",
+        className,
+      )}
+      role="tablist"
+    >
       {options.map((opt) => {
         const active = value === opt.value;
         return (
@@ -162,7 +168,7 @@ export function Visitrw3ChipFilters<T extends string>({
               if (!active) onChange(opt.value);
             }}
             className={cn(
-              "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all",
+              "inline-flex min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-all sm:min-h-0 sm:px-3 sm:py-1.5 sm:text-xs",
               active
                 ? "bg-[hsl(163,55%,22%)] text-white shadow-sm"
                 : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -233,12 +239,21 @@ export function Visitrw3ListItem({
     success: "bg-emerald-500",
   }[accent];
 
-  const Wrapper = onClick ? "button" : "div";
-
   return (
-    <Wrapper
-      type={onClick ? "button" : undefined}
+    <div
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
       onClick={onClick}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
       data-testid={testId}
       className={cn(
         "group relative w-full text-left rounded-xl border border-border/60 bg-card/90 shadow-sm",
@@ -248,13 +263,15 @@ export function Visitrw3ListItem({
       )}
     >
       <div className={cn("absolute left-0 top-3 bottom-3 w-1 rounded-r-full", accentBar)} />
-      <div className="flex items-start justify-between gap-3 py-3.5 pl-4 pr-3 sm:pl-5 sm:pr-4">
+      <div className="flex flex-col gap-3 py-3.5 pl-4 pr-3 sm:flex-row sm:items-start sm:justify-between sm:pl-5 sm:pr-4">
         <div className="flex-1 min-w-0">{children}</div>
         {actions && (
-          <div className="flex items-center gap-1 shrink-0 opacity-90 group-hover:opacity-100">{actions}</div>
+          <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:gap-1 sm:opacity-90 sm:group-hover:opacity-100">
+            {actions}
+          </div>
         )}
       </div>
-    </Wrapper>
+    </div>
   );
 }
 
@@ -271,7 +288,7 @@ export function Visitrw3FormCard({
     <Visitrw3Panel
       title={title}
       actions={
-        <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={onClose} aria-label="Tutup">
+        <Button type="button" size="icon" variant="ghost" onClick={onClose} aria-label="Tutup">
           <X className="w-4 h-4" />
         </Button>
       }

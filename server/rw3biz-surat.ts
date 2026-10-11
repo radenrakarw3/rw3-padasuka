@@ -1,0 +1,956 @@
+/**
+ * Dokumen cetak RW3BIZ (F4, jsPDF):
+ * - Surat Izin Usaha RW 03 — terbit setiap pengajuan disetujui; wajib diperbarui sebelum masa berlaku habis.
+ * - Formulir pendaftaran — salinan lengkap isian pengajuan (semua status), untuk arsip & survey.
+ * - Kwitansi — bukti setiap pembayaran kontribusi / denda razia yang masuk Kas RW 03.
+ */
+import { jsPDF } from "jspdf";
+import QRCode from "qrcode";
+import { and, desc, eq, gt, lt } from "drizzle-orm";
+import { db } from "./db";
+import {
+  rw3bizOrang,
+  rw3bizPembayaran,
+  rw3bizPengajuan,
+  rw3bizTagihan,
+  rw3bizUsaha,
+  type Rw3bizOrang,
+  type Rw3bizPengajuan,
+  type Rw3bizUsaha,
+} from "@shared/schema";
+import { IDENTITAS_RW } from "@shared/surat-sakti/identitas";
+import { terbilang } from "@shared/surat-sakti/redaksi";
+import { F4 } from "@shared/kertas";
+import { formatKategoriUsahaLabel } from "@shared/visitrw3-kategori-usaha";
+import {
+  ASAL_ORANG_BIZ_LABEL,
+  JENIS_TEMPAT_BIZ_LABEL,
+  CHARTER_BIZ,
+  JENIS_PELANGGARAN_INFO,
+  KATEGORI_KAS_DENDA_PELANGGARAN,
+  KATEGORI_KAS_DENDA_RAZIA,
+  KATEGORI_KAS_KONTRIBUSI,
+  KENDARAAN_BIZ,
+  nomorKwitansiPelanggaran,
+  nomorKwitansiRazia,
+  type JenisPelanggaran,
+  OPERASIONAL_MALAM_LABEL,
+  PERAN_ORANG_BIZ_LABEL,
+  RENTANG_OMZET_LABEL,
+  STATUS_TEMPAT_BIZ_LABEL,
+  formatRp,
+  labelPeriode,
+  nomorKwitansi,
+  type AsalOrangBiz,
+  type JenisTempatBiz,
+  type OperasionalMalam,
+  type PeranOrangBiz,
+  type RentangOmzet,
+  type StatusTempatBiz,
+} from "@shared/rw3biz-kontribusi";
+import { bersihkan, muatLogo } from "./surat-sakti/pdf";
+import { dataUsahaDariBaris, loadTarif, parseRincianTersimpan } from "./rw3biz-kontribusi";
+import type { getDataKwitansiRazia } from "./rw3biz-razia";
+import type { getDataKwitansiPelanggaran } from "./rw3biz-pelanggaran";
+
+/** Batas pengajuan perpanjang: H-7 sebelum masa berlaku habis. */
+export const HARI_BATAS_PERBARUI_BIZ = 7;
+
+const W = F4.w;
+const H = F4.h;
+const ML = 20;
+const MR = 18;
+const CW = W - ML - MR;
+const HIJAU: [number, number, number] = [25, 87, 72];
+const EMAS: [number, number, number] = [196, 160, 92];
+const NIU_REGEX = /^NIU-RW3-\d+$/;
+
+function situs(): string {
+  return (process.env.PUBLIC_SITE_URL || "https://rw3padasukacimahi.org").replace(/\/+$/, "");
+}
+
+function tanggalWib(d: Date): string {
+  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+}
+
+function keHari(iso: string): number {
+  return Math.round(Date.parse(`${iso}T00:00:00Z`) / 86_400_000);
+}
+
+function tambahHari(iso: string, n: number): string {
+  return new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+}
+
+function tgl(iso: string | null | undefined): string {
+  if (!iso) return "-";
+  const d = new Date(`${iso.slice(0, 10)}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+}
+
+function tglPendek(iso: string | null | undefined): string {
+  if (!iso) return "-";
+  const d = new Date(`${iso.slice(0, 10)}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("id-ID", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" });
+}
+
+function samarNik(n: string | null | undefined): string {
+  const d = String(n ?? "").replace(/\D/g, "");
+  return d.length >= 8 ? `${d.slice(0, 4)}********${d.slice(-4)}` : "-";
+}
+
+function samarWa(n: string | null | undefined): string {
+  const d = String(n ?? "").replace(/\D/g, "");
+  return d.length >= 7 ? `${d.slice(0, 4)}****${d.slice(-3)}` : "-";
+}
+
+function rupiahTerbilang(n: number): string {
+  const t = terbilang(n);
+  return `${t.charAt(0).toUpperCase()}${t.slice(1)} rupiah`;
+}
+
+const label = <K extends string>(peta: Record<K, string>, v: string | null | undefined, fallback = "-") =>
+  v && v in peta ? peta[v as K] : v || fallback;
+
+// ---------------------------------------------------------------- Penulis PDF
+
+type Gaya = "normal" | "bold" | "italic";
+
+class Lembar {
+  doc = new jsPDF({ unit: "mm", format: [W, H], compress: true });
+  y = 14;
+
+  constructor(private lanjutan: string, judulDokumen: string) {
+    this.doc.setProperties({ title: judulDokumen, creator: IDENTITAS_RW.penerbit });
+  }
+
+  font(gaya: Gaya = "normal", size = 11) {
+    this.doc.setFont("times", gaya);
+    this.doc.setFontSize(size);
+  }
+
+  pecah(t: string, w: number): string[] {
+    return this.doc.splitTextToSize(bersihkan(t), w) as string[];
+  }
+
+  ruang(h: number) {
+    if (this.y + h <= H - 18) return;
+    const { fontStyle } = this.doc.getFont();
+    const ukuran = this.doc.getFontSize();
+    this.doc.addPage([W, H]);
+    this.font("italic", 9);
+    this.doc.setTextColor(110);
+    this.doc.text(bersihkan(this.lanjutan), ML, 14);
+    this.doc.setTextColor(0);
+    this.font(fontStyle as Gaya, ukuran);
+    this.y = 22;
+  }
+
+  kop(atas = 9, kecil = false) {
+    const d = this.doc;
+    const logo = muatLogo();
+    const tinggiLogo = kecil ? 17 : 24.6;
+    if (logo) {
+      try {
+        d.addImage(logo, "PNG", ML - 2, atas, tinggiLogo * 0.69, tinggiLogo);
+      } catch {
+        /* logo opsional */
+      }
+    }
+    const cx = W / 2 + 8;
+    const s = kecil ? 0.8 : 1;
+    this.font("bold", 14 * s);
+    d.text(IDENTITAS_RW.baris1, cx, atas + 7 * s, { align: "center" });
+    this.font("bold", 13 * s);
+    d.text(IDENTITAS_RW.baris2, cx, atas + 13 * s, { align: "center" });
+    this.font("normal", 11 * s);
+    d.text(IDENTITAS_RW.baris3, cx, atas + 18.5 * s, { align: "center" });
+    this.font("normal", 8.5 * s);
+    d.text(bersihkan(IDENTITAS_RW.alamat), cx, atas + 23 * s, { align: "center", maxWidth: 150 });
+    const garis = atas + 28 * s;
+    d.setLineWidth(0.8);
+    d.line(ML - 4, garis, W - MR + 3, garis);
+    d.setLineWidth(0.25);
+    d.line(ML - 4, garis + 1.2, W - MR + 3, garis + 1.2);
+    this.y = garis + 10;
+  }
+
+  judul(teks: string, sub?: string, nomor?: string) {
+    const d = this.doc;
+    this.font("bold", 14);
+    d.text(teks, W / 2, this.y, { align: "center" });
+    const wj = d.getTextWidth(teks);
+    d.setLineWidth(0.35);
+    d.line(W / 2 - wj / 2, this.y + 1.2, W / 2 + wj / 2, this.y + 1.2);
+    this.y += 6;
+    if (sub) {
+      this.font("bold", 10.5);
+      d.setTextColor(...HIJAU);
+      d.text(bersihkan(sub), W / 2, this.y, { align: "center" });
+      d.setTextColor(0);
+      this.y += 5.5;
+    }
+    if (nomor) {
+      this.font("normal", 11);
+      d.text(bersihkan(nomor), W / 2, this.y, { align: "center" });
+      this.y += 5.5;
+    }
+    this.y += 3;
+  }
+
+  paragraf(teks: string, size = 11, lh = 5.2) {
+    this.font("normal", size);
+    for (const l of this.pecah(teks, CW)) {
+      this.ruang(lh);
+      this.doc.text(l, ML, this.y);
+      this.y += lh;
+    }
+  }
+
+  subjudul(teks: string) {
+    this.ruang(12);
+    this.y += 2;
+    this.font("bold", 11);
+    this.doc.setTextColor(...HIJAU);
+    this.doc.text(bersihkan(teks), ML, this.y);
+    this.doc.setTextColor(0);
+    this.doc.setDrawColor(...EMAS);
+    this.doc.setLineWidth(0.3);
+    this.doc.line(ML, this.y + 1.3, ML + CW, this.y + 1.3);
+    this.doc.setDrawColor(0);
+    this.y += 6;
+  }
+
+  labelNilai(rows: [string, string][], lw = 50, size = 10.5, lh = 5) {
+    for (const [a, v] of rows) {
+      this.font("normal", size);
+      const kanan = this.pecah(v || "-", CW - lw - 4);
+      this.ruang(lh * kanan.length);
+      this.doc.text(bersihkan(a), ML, this.y);
+      this.doc.text(":", ML + lw, this.y);
+      kanan.forEach((l, i) => this.doc.text(l, ML + lw + 3, this.y + i * lh));
+      this.y += lh * Math.max(1, kanan.length);
+    }
+  }
+
+  tabel(kolom: string[], lebar: number[], baris: string[][], size = 9) {
+    const xs = lebar.reduce<number[]>((acc, w, i) => [...acc, i === 0 ? ML : acc[i - 1] + lebar[i - 1]], []);
+    const tulis = (sel: string[], tebal: boolean, isi?: boolean) => {
+      this.font(tebal ? "bold" : "normal", size);
+      const pecahan = sel.map((s, i) => this.pecah(s || "-", lebar[i] - 2.4));
+      const h = Math.max(...pecahan.map((x) => x.length)) * (size * 0.43) + 2.6;
+      this.ruang(h);
+      this.font(tebal ? "bold" : "normal", size);
+      if (isi) {
+        this.doc.setFillColor(235, 243, 240);
+        this.doc.rect(ML, this.y, lebar.reduce((s, w) => s + w, 0), h, "F");
+      }
+      this.doc.setLineWidth(0.2);
+      pecahan.forEach((ls, i) => {
+        this.doc.rect(xs[i], this.y, lebar[i], h);
+        ls.forEach((l, j) => this.doc.text(l, xs[i] + 1.2, this.y + size * 0.42 + j * (size * 0.43)));
+      });
+      this.y += h;
+    };
+    tulis(kolom, true, true);
+    for (const b of baris) tulis(b, false);
+    this.y += 3;
+  }
+
+  daftarBernomor(items: string[], size = 10) {
+    this.font("normal", size);
+    const lh = size * 0.48;
+    items.forEach((k, i) => {
+      const ls = this.pecah(k, CW - 7);
+      this.ruang(lh * ls.length);
+      ls.forEach((l, j) => {
+        if (j === 0) this.doc.text(`${i + 1}.`, ML + 1, this.y);
+        this.doc.text(l, ML + 7, this.y);
+        this.y += lh;
+      });
+    });
+  }
+
+  /** Blok tanda tangan berjajar; nama kosong = garis titik untuk ditulis tangan. */
+  tandaTangan(kolom: { jabatan: string; nama?: string | null }[], tempatTanggal?: string) {
+    this.ruang(44);
+    const lebar = CW / kolom.length;
+    this.font("normal", 10.5);
+    if (tempatTanggal) {
+      this.doc.text(bersihkan(tempatTanggal), ML + lebar * (kolom.length - 0.5), this.y, { align: "center" });
+      this.y += 5;
+    }
+    kolom.forEach((k, i) => this.doc.text(bersihkan(k.jabatan), ML + lebar * (i + 0.5), this.y, { align: "center" }));
+    this.y += 22;
+    this.font("bold", 10.5);
+    kolom.forEach((k, i) => {
+      const x = ML + lebar * (i + 0.5);
+      const n = k.nama ? this.pecah(k.nama, lebar - 6)[0] ?? "" : "(..............................)";
+      this.doc.text(n, x, this.y, { align: "center" });
+      if (k.nama) {
+        const w = this.doc.getTextWidth(n);
+        this.doc.setLineWidth(0.2);
+        this.doc.line(x - w / 2, this.y + 0.8, x + w / 2, this.y + 0.8);
+      }
+    });
+    this.y += 8;
+  }
+
+  async qr(url: string, baris: string[], ukuran = 22) {
+    this.ruang(ukuran + 2);
+    const yQr = this.y;
+    try {
+      const gambar = await QRCode.toDataURL(url, { margin: 0, width: 240 });
+      this.doc.addImage(gambar, "PNG", ML, yQr, ukuran, ukuran);
+    } catch {
+      /* QR opsional */
+    }
+    this.font("italic", 8.5);
+    baris.forEach((t, i) => this.doc.text(bersihkan(t), ML + ukuran + 3, yQr + 5 + i * 4.2));
+    this.y = yQr + ukuran + 3;
+  }
+
+  watermark(teks: string, sub?: string) {
+    const d = this.doc;
+    for (let hal = 1; hal <= d.getNumberOfPages(); hal++) {
+      d.setPage(hal);
+      d.setTextColor(170, 30, 30);
+      this.font("bold", 40);
+      try {
+        const GState = (d as any).GState;
+        if (GState) d.setGState(new GState({ opacity: 0.16 }));
+      } catch {
+        /* tanpa transparansi */
+      }
+      d.text(bersihkan(teks), W / 2, H / 2, { align: "center", angle: 35 });
+      if (sub) {
+        this.font("bold", 18);
+        d.text(bersihkan(sub), W / 2 + 8, H / 2 + 14, { align: "center", angle: 35 });
+      }
+      try {
+        const GState = (d as any).GState;
+        if (GState) d.setGState(new GState({ opacity: 1 }));
+      } catch {
+        /* abaikan */
+      }
+      d.setTextColor(0);
+    }
+  }
+
+  kaki(kiri: string) {
+    const d = this.doc;
+    const n = d.getNumberOfPages();
+    for (let hal = 1; hal <= n; hal++) {
+      d.setPage(hal);
+      d.setTextColor(110);
+      this.font("normal", 8);
+      d.text(bersihkan(`${kiri}${n > 1 ? ` - hal. ${hal}/${n}` : ""}`), ML, H - 10);
+      d.text(bersihkan(`Dicetak ${tgl(tanggalWib(new Date()))}`), W - MR, H - 10, { align: "right" });
+      d.setTextColor(0);
+    }
+  }
+
+  buffer(): Buffer {
+    return Buffer.from(this.doc.output("arraybuffer"));
+  }
+}
+
+// ---------------------------------------------------------------- Data bersama
+
+type BarisUsaha = Rw3bizPengajuan | Rw3bizUsaha;
+
+function barisKendaraan(row: BarisUsaha, tarif?: Awaited<ReturnType<typeof loadTarif>>): string[][] {
+  const data = dataUsahaDariBaris(row);
+  const milik = KENDARAAN_BIZ.filter((k) => (data[k.kode] ?? 0) > 0).map((k) => [
+    k.label + (k.beratJalan ? " (beban jalan)" : ""),
+    `${data[k.kode]} unit`,
+    tarif ? `${formatRp(tarif[k.kode])}/unit` : "-",
+  ]);
+  const charter = CHARTER_BIZ.filter((c) => (data[c.kode] ?? 0) > 0).map((c) => [
+    `${c.label} (beban jalan)`,
+    `${data[c.kode]}x datang/minggu`,
+    tarif ? `${formatRp(tarif[c.tarif])}/datang` : "-",
+  ]);
+  return [...milik, ...charter];
+}
+
+function ringkasKendaraan(row: BarisUsaha): string {
+  const data = dataUsahaDariBaris(row);
+  const bagian = KENDARAAN_BIZ.filter((k) => (data[k.kode] ?? 0) > 0).map((k) => `${data[k.kode]} ${k.label.toLowerCase()}`);
+  const plat = data.kendaraanOperasional.length ? ` (plat: ${data.kendaraanOperasional.join(", ")})` : "";
+  const charter = CHARTER_BIZ.filter((c) => (data[c.kode] ?? 0) > 0).map((c) => `${c.label.toLowerCase()} ${data[c.kode]}x/minggu`);
+  const teksCharter = charter.length
+    ? `${bagian.length ? "; " : ""}${charter.join(", ")}${data.charterPenyedia ? ` dari ${data.charterPenyedia}` : ""}`
+    : "";
+  if (!bagian.length && !charter.length) return "Tidak ada";
+  return `${bagian.join(", ")}${bagian.length ? plat : ""}${teksCharter}`;
+}
+
+function baris(o: Rw3bizOrang, nikLengkap: boolean, waLengkap: boolean, denganWa = true): string[] {
+  const lp = o.jenisKelamin?.startsWith("L") ? "L" : o.jenisKelamin?.startsWith("P") ? "P" : "-";
+  const peran = o.isAnak ? "Anak (bukan pegawai)" : `${label(PERAN_ORANG_BIZ_LABEL, o.peran as PeranOrangBiz)}${o.isPenanggungJawab ? " - PJ" : ""}`;
+  const asal = o.isAnak
+    ? "-"
+    : `${label(ASAL_ORANG_BIZ_LABEL, o.asal as AsalOrangBiz)}${o.wargaId ? " (cocok data warga)" : ""}${o.asal === "luar" && o.domisili ? `; ${o.domisili}` : ""}`;
+  const nik = o.isAnak ? "-" : nikLengkap ? o.nik || "-" : samarNik(o.nik);
+  const sel = [o.namaLengkap, nik, lp, tglPendek(o.tanggalLahir), peran, asal];
+  if (denganWa) sel.push(o.isAnak ? "-" : waLengkap ? o.nomorWhatsapp || "-" : samarWa(o.nomorWhatsapp));
+  return sel;
+}
+
+// ---------------------------------------------------------------- Surat Izin Usaha
+
+export type DataSuratUsaha = {
+  pengajuan: Rw3bizPengajuan;
+  usaha: Rw3bizUsaha;
+  orang: Rw3bizOrang[];
+  tanggalTerbit: string;
+  berlakuMulai: string;
+  berlakuSampai: string;
+  perbaruiPalingLambat: string;
+  sisaHari: number;
+  kedaluwarsa: boolean;
+  nomorSebelumnya: string | null;
+  digantiOleh: string | null;
+};
+
+/** Surat untuk nomor BIZ tertentu, atau surat terbaru bila yang dimasukkan NIU. */
+export async function getDataSuratUsaha(nomorRaw: string): Promise<DataSuratUsaha | null> {
+  const nomor = nomorRaw.trim().toUpperCase();
+  let p: Rw3bizPengajuan | undefined;
+  if (NIU_REGEX.test(nomor)) {
+    const [u] = await db.select({ id: rw3bizUsaha.id }).from(rw3bizUsaha).where(eq(rw3bizUsaha.nomorInduk, nomor)).limit(1);
+    if (!u) return null;
+    [p] = await db
+      .select()
+      .from(rw3bizPengajuan)
+      .where(and(eq(rw3bizPengajuan.usahaId, u.id), eq(rw3bizPengajuan.status, "disetujui")))
+      .orderBy(desc(rw3bizPengajuan.id))
+      .limit(1);
+  } else {
+    [p] = await db.select().from(rw3bizPengajuan).where(eq(rw3bizPengajuan.nomorBiz, nomor)).limit(1);
+  }
+  if (!p || p.status !== "disetujui" || !p.usahaId) return null;
+  const [usaha] = await db.select().from(rw3bizUsaha).where(eq(rw3bizUsaha.id, p.usahaId)).limit(1);
+  if (!usaha) return null;
+  const orang = await db.select().from(rw3bizOrang).where(eq(rw3bizOrang.pengajuanId, p.id)).orderBy(rw3bizOrang.urutan);
+
+  const sama = and(eq(rw3bizPengajuan.usahaId, p.usahaId), eq(rw3bizPengajuan.status, "disetujui"));
+  const [lama] = await db
+    .select({ nomor: rw3bizPengajuan.nomorBiz })
+    .from(rw3bizPengajuan)
+    .where(and(sama, lt(rw3bizPengajuan.id, p.id)))
+    .orderBy(desc(rw3bizPengajuan.id))
+    .limit(1);
+  const [baru] = await db
+    .select({ nomor: rw3bizPengajuan.nomorBiz })
+    .from(rw3bizPengajuan)
+    .where(and(sama, gt(rw3bizPengajuan.id, p.id)))
+    .orderBy(desc(rw3bizPengajuan.id))
+    .limit(1);
+
+  const hariIni = tanggalWib(new Date());
+  const sisaHari = keHari(p.tanggalBerlakuSampai) - keHari(hariIni);
+  return {
+    pengajuan: p,
+    usaha,
+    orang,
+    tanggalTerbit: p.reviewedAt ? tanggalWib(new Date(p.reviewedAt)) : hariIni,
+    berlakuMulai: p.tanggalBayar,
+    berlakuSampai: p.tanggalBerlakuSampai,
+    perbaruiPalingLambat: tambahHari(p.tanggalBerlakuSampai, -HARI_BATAS_PERBARUI_BIZ),
+    sisaHari,
+    kedaluwarsa: sisaHari < 0,
+    nomorSebelumnya: lama?.nomor ?? null,
+    digantiOleh: baru?.nomor ?? null,
+  };
+}
+
+/** Ringkasan aman untuk halaman cek status. */
+export function ringkasSuratUsaha(d: DataSuratUsaha) {
+  return {
+    nomor: d.pengajuan.nomorBiz,
+    nomorInduk: d.usaha.nomorInduk,
+    namaUsaha: d.pengajuan.namaUsaha,
+    tanggalTerbit: d.tanggalTerbit,
+    berlakuMulai: d.berlakuMulai,
+    berlakuSampai: d.berlakuSampai,
+    perbaruiPalingLambat: d.perbaruiPalingLambat,
+    terminBulan: d.pengajuan.terminBulan,
+    sisaHari: d.sisaHari,
+    kedaluwarsa: d.kedaluwarsa,
+    nomorSebelumnya: d.nomorSebelumnya,
+    digantiOleh: d.digantiOleh,
+  };
+}
+
+export async function buatPdfSuratUsaha(d: DataSuratUsaha, opsi: { nikLengkap: boolean }) {
+  const p = d.pengajuan;
+  const niu = d.usaha.nomorInduk ?? "-";
+  const L = new Lembar(`Lanjutan Surat Izin Usaha RW 03 No. ${p.nomorBiz}`, `Surat Izin Usaha ${p.nomorBiz}`);
+  L.kop();
+  L.judul("SURAT IZIN USAHA", "RW3BIZ - IZIN USAHA DI WILAYAH RW 03 PADASUKA", `Nomor: ${p.nomorBiz}`);
+
+  // Nomor induk menonjol: dipakai untuk cek status, bayar, dan perpanjang
+  const kotakNiuH = 13;
+  L.doc.setDrawColor(...HIJAU);
+  L.doc.setLineWidth(0.6);
+  L.doc.roundedRect(W / 2 - 45, L.y - 4, 90, kotakNiuH, 2, 2);
+  L.doc.setDrawColor(0);
+  L.font("bold", 8);
+  L.doc.setTextColor(...HIJAU);
+  L.doc.text("NOMOR INDUK USAHA RW3", W / 2, L.y, { align: "center" });
+  L.doc.setTextColor(0);
+  L.font("bold", 15);
+  L.doc.text(bersihkan(niu), W / 2, L.y + 6.5, { align: "center" });
+  L.y += kotakNiuH + 4;
+
+  L.paragraf(
+    `Ketua Rukun Warga 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi menerangkan bahwa usaha ` +
+      `di bawah ini telah didata, disurvey, dan diizinkan menjalankan kegiatan usaha di wilayah RW 03 dengan keterangan:`,
+  );
+  L.y += 2;
+
+  const rincian = parseRincianTersimpan(p.rincianKontribusi);
+  const kontribusi = p.kontribusiBulanan ?? rincian?.hasil.total ?? null;
+  const pegawai = d.orang.filter((o) => !o.isAnak && o.peran !== "pemilik");
+  const pegawaiRw3 = pegawai.filter((o) => o.asal === "rw3").length;
+  const pjNik = p.pjNik ? (opsi.nikLengkap ? p.pjNik : samarNik(p.pjNik)) : null;
+  const jenisTempat =
+    p.jenisTempatUsaha === "lainnya" && p.jenisTempatUsahaLain
+      ? `Lainnya - ${p.jenisTempatUsahaLain}`
+      : label(JENIS_TEMPAT_BIZ_LABEL, p.jenisTempatUsaha as JenisTempatBiz);
+  L.labelNilai([
+    ["Nama usaha", p.namaUsaha],
+    ["Jenis tempat usaha", jenisTempat],
+    ["Kategori usaha", formatKategoriUsahaLabel(p.kategoriUsaha) || "-"],
+    ["Alamat usaha", `${p.alamatUsaha?.trim() || p.alamat}${p.nomorLokasi ? ` (${p.nomorLokasi})` : ""}`],
+    ["RT / RW", `${String(p.rt).padStart(2, "0")} / 03, Kel. Padasuka`],
+    ["Jam operasional", p.jamBuka && p.jamTutup ? `${p.jamBuka} - ${p.jamTutup} WIB` : "-"],
+    ["Penanggung jawab", `${p.pjNama}${pjNik ? ` (NIK ${pjNik})` : ""}`],
+    ["Status tempat", label(STATUS_TEMPAT_BIZ_LABEL, p.statusTempat as StatusTempatBiz)],
+    ["Jumlah pegawai", `${pegawai.length} orang (${pegawaiRw3} warga RW 03, ${pegawai.length - pegawaiRw3} dari luar)`],
+    ["Kendaraan operasional", ringkasKendaraan(p)],
+    ["Kontribusi bulanan", kontribusi != null ? `${formatRp(kontribusi)} (${rupiahTerbilang(kontribusi)})` : "-"],
+    [
+      "Jenis surat",
+      p.tipe === "perpanjang"
+        ? `Pembaruan${d.nomorSebelumnya ? ` (menggantikan No. ${d.nomorSebelumnya})` : ""}`
+        : "Terbitan pertama",
+    ],
+  ], 46);
+  L.y += 2;
+
+  L.subjudul("Pemilik, penanggung jawab, dan pegawai terdaftar");
+  L.tabel(
+    ["No", "Nama lengkap", "NIK", "L/P", "Tgl. lahir", "Peran", "Asal"],
+    [8, 40, 31, 9, 20, 29, CW - 137],
+    d.orang.map((o, i) => [String(i + 1), ...baris(o, opsi.nikLengkap, false, false)]),
+  );
+
+  // Kotak masa berlaku
+  const kotakH = 34;
+  L.ruang(kotakH + 4);
+  const y = L.y;
+  L.doc.setDrawColor(...HIJAU);
+  L.doc.setLineWidth(0.9);
+  L.doc.roundedRect(ML, y, CW, kotakH, 2.5, 2.5);
+  L.doc.setDrawColor(...EMAS);
+  L.doc.setLineWidth(0.3);
+  L.doc.roundedRect(ML + 1.6, y + 1.6, CW - 3.2, kotakH - 3.2, 1.8, 1.8);
+  L.doc.setDrawColor(0);
+  const kol = CW / 3;
+  ([
+    ["TANGGAL TERBIT", tgl(d.tanggalTerbit), false],
+    ["BERLAKU MULAI", tgl(d.berlakuMulai), false],
+    [`BERLAKU SAMPAI (${p.terminBulan} BULAN)`, tgl(d.berlakuSampai), true],
+  ] as const).forEach(([k, v, utama], i) => {
+    const tx = ML + kol * i + kol / 2;
+    L.font("bold", 8);
+    L.doc.setTextColor(...HIJAU);
+    L.doc.text(k, tx, y + 8, { align: "center" });
+    L.doc.setTextColor(0);
+    L.font("bold", utama ? 14 : 11.5);
+    L.doc.text(bersihkan(v), tx, y + 15.5, { align: "center" });
+  });
+  L.doc.setLineWidth(0.2);
+  L.doc.line(ML + 6, y + 20, ML + CW - 6, y + 20);
+  L.font("bold", 10.5);
+  L.doc.setTextColor(170, 30, 30);
+  L.doc.text(bersihkan(`WAJIB DIPERBARUI paling lambat ${tgl(d.perbaruiPalingLambat)}`), W / 2, y + 26, { align: "center" });
+  L.doc.setTextColor(0);
+  L.font("normal", 8.5);
+  L.doc.text(
+    bersihkan(`Perbarui di ${situs().replace(/^https?:\/\//, "")}/rw3biz/perpanjang dengan Nomor Induk ${niu}`),
+    W / 2,
+    y + 30.5,
+    { align: "center" },
+  );
+  L.y = y + kotakH + 7;
+
+  const tarif = await loadTarif();
+  L.ruang(20);
+  L.font("bold", 11);
+  L.doc.text("Ketentuan:", ML, L.y);
+  L.y += 5.2;
+  L.daftarBernomor([
+    "Surat ini hanya berlaku untuk usaha, lokasi, pegawai, dan kendaraan yang tercantum, sampai tanggal BERLAKU SAMPAI.",
+    `Surat wajib diperbarui sebelum masa berlaku habis (paling lambat ${tgl(d.perbaruiPalingLambat)}) sekaligus memperbarui data pegawai dan kendaraan operasional. Setelah disetujui, terbit surat baru dan surat ini tidak berlaku lagi. Nomor Induk Usaha tetap sama.`,
+    "Setiap penambahan atau pengurangan pegawai dan kendaraan operasional - milik sendiri maupun charter/sewaan (terutama kolbak dan truk yang membebani jalan lingkungan) - wajib dilaporkan kepada pengurus RW, karena ikut menentukan kontribusi.",
+    "Pengurus RW dapat melakukan razia kendaraan. Kendaraan menuju usaha ini yang tidak tercatat di surat ini dikenai denda yang disetor ke Kas RW 03, dan data usaha wajib diperbarui.",
+    `Kontribusi bulanan dibayarkan ke Kas RW 03 paling lambat tanggal ${1 + tarif.tenggangHari} setiap bulan. Setiap pembayaran diberi kwitansi resmi; simpan kwitansi sebagai bukti.`,
+    "Pemegang izin wajib menjaga kebersihan, ketertiban, dan keamanan lingkungan, serta tidak merusak jalan dan fasilitas umum di wilayah RW 03.",
+    "Pelanggaran (sampah tercecer, kebisingan, parkir menghalangi jalan, limbah/bau, melanggar jam operasional, merusak fasilitas umum, data tidak sesuai, dll) dari aduan warga yang terbukti atau temuan petugas dikenai teguran / denda: denda dasar x tingkat (ringan/sedang/berat) x pengulangan dalam 12 bulan. Denda disetor ke Kas RW 03 dengan kwitansi.",
+    "Bila kontribusi dan denda yang terkumpul dalam sebulan melebihi kebutuhan anggaran RW, kelebihannya dijadikan voucher belanja bagi warga RW 03 yang hanya dapat dibelanjakan di usaha RW3BIZ yang tertib berkontribusi. Voucher yang diterima usaha ditukar ke Kas RW 03 senilai nominalnya.",
+    "Simpan surat ini di tempat usaha dan tunjukkan bila diminta oleh pengurus RT/RW atau petugas.",
+  ]);
+  L.y += 5;
+
+  L.tandaTangan(
+    [
+      { jabatan: "Pemegang izin,", nama: p.pjNama },
+      { jabatan: `${IDENTITAS_RW.ketua.jabatan},`, nama: IDENTITAS_RW.ketua.nama },
+    ],
+    `${IDENTITAS_RW.tempat}, ${tgl(d.tanggalTerbit)}`,
+  );
+
+  const urlCek = `${situs()}/rw3biz/status?nomor=${encodeURIComponent(niu !== "-" ? niu : p.nomorBiz)}`;
+  await L.qr(urlCek, [
+    "Pindai untuk memeriksa keaslian, masa berlaku, dan kontribusi usaha ini.",
+    urlCek.replace(/^https?:\/\//, ""),
+    "Kode QR bukan tanda tangan elektronik. Surat sah bila ditandatangani basah.",
+  ]);
+
+  const tidakBerlaku = d.digantiOleh ? `DIGANTI ${d.digantiOleh}` : d.kedaluwarsa ? "MASA BERLAKU HABIS" : null;
+  if (tidakBerlaku) L.watermark("TIDAK BERLAKU", tidakBerlaku);
+  L.kaki(`No. ${p.nomorBiz} · ${niu}`);
+  return { buffer: L.buffer(), nama: `Surat-Izin-Usaha-${p.nomorBiz}.pdf` };
+}
+
+// ---------------------------------------------------------------- Formulir pendaftaran
+
+const STATUS_LABEL: Record<string, string> = {
+  menunggu_survey: "Menunggu survey",
+  disetujui: "Disetujui",
+  ditolak: "Ditolak",
+};
+
+export async function getDataFormulir(cari: { nomorBiz: string } | { id: number }) {
+  const [p] = await db
+    .select()
+    .from(rw3bizPengajuan)
+    .where("id" in cari ? eq(rw3bizPengajuan.id, cari.id) : eq(rw3bizPengajuan.nomorBiz, cari.nomorBiz.trim().toUpperCase()))
+    .limit(1);
+  if (!p) return null;
+  const orang = await db.select().from(rw3bizOrang).where(eq(rw3bizOrang.pengajuanId, p.id)).orderBy(rw3bizOrang.urutan);
+  const usaha = p.usahaId ? (await db.select().from(rw3bizUsaha).where(eq(rw3bizUsaha.id, p.usahaId)).limit(1))[0] ?? null : null;
+  return { pengajuan: p, orang, usaha };
+}
+
+export async function buatPdfFormulir(
+  data: NonNullable<Awaited<ReturnType<typeof getDataFormulir>>>,
+  opsi: { lengkap: boolean },
+) {
+  const { pengajuan: p, orang, usaha } = data;
+  const tarif = await loadTarif();
+  const L = new Lembar(`Lanjutan Formulir RW3BIZ ${p.nomorBiz}`, `Formulir RW3BIZ ${p.nomorBiz}`);
+  L.kop();
+  L.judul(
+    "FORMULIR PENDAFTARAN USAHA",
+    p.tipe === "perpanjang" ? "RW3BIZ - PEMBARUAN IZIN USAHA" : "RW3BIZ - PENDAFTARAN USAHA BARU",
+    `Nomor pengajuan: ${p.nomorBiz}`,
+  );
+
+  L.subjudul("A. Pengajuan");
+  L.labelNilai([
+    ["Nomor Induk Usaha", usaha?.nomorInduk ?? "Diberikan setelah disetujui"],
+    ["Status", STATUS_LABEL[p.status] ?? p.status],
+    ["Tanggal pengajuan", p.createdAt ? tgl(tanggalWib(new Date(p.createdAt))) : "-"],
+    ["Masa berlaku diminta", `${p.terminBulan} bulan: ${tgl(p.tanggalBayar)} s.d. ${tgl(p.tanggalBerlakuSampai)}`],
+    ...(p.reviewedAt ? ([["Diproses", `${tgl(tanggalWib(new Date(p.reviewedAt)))} oleh ${p.reviewedBy ?? "admin"}`]] as [string, string][]) : []),
+    ...(p.alasanTolak ? ([["Alasan ditolak", p.alasanTolak]] as [string, string][]) : []),
+  ]);
+
+  L.subjudul("B. Data usaha");
+  const jenisTempat =
+    p.jenisTempatUsaha === "lainnya" && p.jenisTempatUsahaLain
+      ? `Lainnya - ${p.jenisTempatUsahaLain}`
+      : label(JENIS_TEMPAT_BIZ_LABEL, p.jenisTempatUsaha as JenisTempatBiz);
+  L.labelNilai([
+    ["Nama usaha", p.namaUsaha],
+    ["Jenis tempat usaha", jenisTempat],
+    ["Kategori usaha", formatKategoriUsahaLabel(p.kategoriUsaha) || "-"],
+    ["Alamat lokasi", `${p.alamat}${p.nomorLokasi ? ` (${p.nomorLokasi})` : ""}`],
+    ...(p.alamatUsaha && p.alamatUsaha !== p.alamat ? ([["Alamat usaha", p.alamatUsaha]] as [string, string][]) : []),
+    ["RT / RW", `${String(p.rt).padStart(2, "0")} / 03`],
+    ["Jam operasional", p.jamBuka && p.jamTutup ? `${p.jamBuka} - ${p.jamTutup} WIB` : "-"],
+    ["Hari buka per minggu", p.hariOperasional ? `${p.hariOperasional} hari` : "-"],
+    ["Operasional malam", label(OPERASIONAL_MALAM_LABEL, p.operasionalMalam as OperasionalMalam)],
+    ["Status tempat", label(STATUS_TEMPAT_BIZ_LABEL, p.statusTempat as StatusTempatBiz)],
+    ["Luas tempat", p.luasM2 != null ? `${p.luasM2} m²` : "-"],
+    ["Kisaran omzet / bulan", label(RENTANG_OMZET_LABEL, p.rentangOmzet as RentangOmzet)],
+    ["Sampah per hari", p.sampahKantongHari != null ? `${p.sampahKantongHari} kantong` : "-"],
+    ["Memakai bahu jalan", p.pakaiBahuJalan ? "Ya" : "Tidak"],
+    ["Usaha baru (< 3 bulan)", p.usahaBaru ? "Ya" : "Tidak"],
+  ]);
+
+  L.subjudul("C. Kendaraan operasional");
+  const kendaraan = barisKendaraan(p, tarif);
+  if (kendaraan.length) {
+    L.tabel(["Jenis kendaraan", "Jumlah", "Tarif"], [80, 40, CW - 120], kendaraan);
+    const du = dataUsahaDariBaris(p);
+    L.labelNilai(
+      [
+        ["Plat milik usaha", du.kendaraanOperasional.length ? du.kendaraanOperasional.join(", ") : "-"],
+        ...(du.charterPenyedia ? ([["Penyedia charter", du.charterPenyedia]] as [string, string][]) : []),
+      ],
+      36,
+    );
+  } else {
+    L.paragraf("Tidak ada kendaraan operasional.", 10.5);
+  }
+
+  L.subjudul(`D. Pemilik, penanggung jawab, dan pegawai (${orang.length} orang)`);
+  L.tabel(
+    ["No", "Nama lengkap", "NIK", "L/P", "Tgl. lahir", "Peran", "Asal / domisili", "WhatsApp"],
+    [8, 34, 28, 8, 19, 26, 28, CW - 151],
+    orang.map((o, i) => [String(i + 1), ...baris(o, opsi.lengkap, opsi.lengkap)]),
+    8.5,
+  );
+
+  L.subjudul(p.status === "disetujui" ? "E. Kontribusi bulanan (ditetapkan)" : "E. Perkiraan kontribusi bulanan");
+  const rincian = parseRincianTersimpan(p.rincianKontribusi);
+  if (rincian) {
+    const h = rincian.hasil;
+    const rows: string[][] = h.komponen.map((k) => [k.label, formatRp(k.nominal)]);
+    if (h.diskonLokal > 0) rows.push([`Potongan pegawai warga RW 03 (${h.diskonLokalPersen}%)`, `-${formatRp(h.diskonLokal)}`]);
+    if (h.faktorPenyesuaian !== 1) rows.push(["Faktor penyesuaian RAB", `x ${h.faktorPenyesuaian.toFixed(2)}`]);
+    if (h.terkenaBatasAtas) rows.push([`Dibatasi: ${h.batasAtasAlasan}`, ""]);
+    L.tabel(["Komponen", "Nominal"], [CW - 40, 40], rows);
+    const total = p.kontribusiBulanan ?? h.total;
+    L.font("bold", 11);
+    L.ruang(6);
+    L.doc.text(bersihkan(`Kontribusi per bulan: ${formatRp(total)}`), ML, L.y);
+    L.y += 5;
+    L.font("italic", 9.5);
+    L.paragraf(`(${rupiahTerbilang(total)})`, 9.5, 4.6);
+    if (p.status !== "disetujui") {
+      L.paragraf("Angka final ditetapkan pengurus setelah survey lapangan.", 9.5, 4.6);
+    }
+  } else {
+    L.paragraf("Belum dihitung.", 10.5);
+  }
+
+  if (p.catatanPemohon?.trim()) {
+    L.subjudul("Catatan pemohon");
+    L.paragraf(p.catatanPemohon.trim(), 10);
+  }
+
+  L.subjudul("F. Hasil survey lapangan (diisi petugas)");
+  if (p.catatanSurvey?.trim()) {
+    L.paragraf(p.catatanSurvey.trim(), 10);
+  } else {
+    L.font("normal", 10);
+    for (let i = 0; i < 4; i++) {
+      L.ruang(7);
+      L.doc.setLineWidth(0.15);
+      L.doc.setDrawColor(150);
+      L.doc.line(ML, L.y + 1, ML + CW, L.y + 1);
+      L.doc.setDrawColor(0);
+      L.y += 7;
+    }
+  }
+  L.y += 3;
+
+  L.paragraf(
+    "Dengan menandatangani formulir ini, pemohon menyatakan data di atas benar, bersedia disurvey, dan sanggup membayar kontribusi bulanan ke Kas RW 03 sesuai ketentuan.",
+    9.5,
+    4.6,
+  );
+  L.y += 3;
+  L.tandaTangan(
+    [
+      { jabatan: "Pemohon / penanggung jawab,", nama: p.pjNama },
+      { jabatan: "Petugas survey," },
+      { jabatan: `${IDENTITAS_RW.ketua.jabatan},`, nama: IDENTITAS_RW.ketua.nama },
+    ],
+    `${IDENTITAS_RW.tempat}, ....................................`,
+  );
+
+  if (!opsi.lengkap) {
+    L.font("italic", 8.5);
+    L.paragraf("Salinan pemohon: NIK dan nomor WhatsApp disamarkan.", 8.5, 4.2);
+  }
+  L.kaki(`Formulir RW3BIZ ${p.nomorBiz}${usaha?.nomorInduk ? ` · ${usaha.nomorInduk}` : ""}`);
+  return { buffer: L.buffer(), nama: `Formulir-RW3BIZ-${p.nomorBiz}.pdf` };
+}
+
+// ---------------------------------------------------------------- Kwitansi
+
+export async function getDataKwitansi(pembayaranId: number) {
+  const [row] = await db
+    .select({ bayar: rw3bizPembayaran, tagihan: rw3bizTagihan, usaha: rw3bizUsaha })
+    .from(rw3bizPembayaran)
+    .innerJoin(rw3bizTagihan, eq(rw3bizPembayaran.tagihanId, rw3bizTagihan.id))
+    .innerJoin(rw3bizUsaha, eq(rw3bizTagihan.usahaId, rw3bizUsaha.id))
+    .where(eq(rw3bizPembayaran.id, pembayaranId))
+    .limit(1);
+  if (!row) return null;
+  const semua = await db
+    .select({ id: rw3bizPembayaran.id, jumlah: rw3bizPembayaran.jumlah })
+    .from(rw3bizPembayaran)
+    .where(eq(rw3bizPembayaran.tagihanId, row.tagihan.id))
+    .orderBy(rw3bizPembayaran.id);
+  const sampaiIni = semua.filter((b) => b.id <= row.bayar.id).reduce((s, b) => s + b.jumlah, 0);
+  return { ...row, terbayarSampaiIni: sampaiIni, cicilanKe: semua.findIndex((b) => b.id === row.bayar.id) + 1, jumlahCicilan: semua.length };
+}
+
+export async function buatPdfKwitansi(d: NonNullable<Awaited<ReturnType<typeof getDataKwitansi>>>) {
+  const { bayar, tagihan, usaha } = d;
+  const sisa = Math.max(0, tagihan.jumlah - d.terbayarSampaiIni);
+  const keterangan =
+    `Kontribusi bulanan RW3BIZ periode ${labelPeriode(tagihan.periode)}` +
+    (d.jumlahCicilan > 1 || sisa > 0 ? ` (pembayaran ke-${d.cicilanKe}${sisa > 0 ? ", cicilan" : ", pelunasan"})` : " (lunas)");
+  return pdfKwitansi({
+    nomor: nomorKwitansi(bayar.id, bayar.tanggal),
+    jumlah: bayar.jumlah,
+    tanggal: bayar.tanggal,
+    dicatatOleh: bayar.dicatatOleh,
+    baris: [
+      ["Telah terima dari", `${usaha.pjNama} - ${usaha.namaUsaha}`],
+      ["Nomor Induk Usaha", usaha.nomorInduk ?? usaha.nomorBiz],
+      ["Uang sejumlah", rupiahTerbilang(bayar.jumlah)],
+      ["Untuk pembayaran", keterangan],
+      ["Rincian tagihan", `Tagihan ${formatRp(tagihan.jumlah)} · terbayar ${formatRp(d.terbayarSampaiIni)} · sisa ${formatRp(sisa)}`],
+      ["Disetor ke", `Kas RW 03 - kategori "${KATEGORI_KAS_KONTRIBUSI}"${bayar.kasRwId ? ` (ref. kas #${bayar.kasRwId})` : ""}`],
+    ],
+    nomorCek: usaha.nomorInduk ?? usaha.nomorBiz,
+    catatanKaki: "Kwitansi sah bila ditandatangani penerima. Seluruh kontribusi masuk Kas RW 03 dan dilaporkan terbuka di halaman RW3BIZ.",
+  });
+}
+
+export async function buatPdfKwitansiRazia(d: NonNullable<Awaited<ReturnType<typeof getDataKwitansiRazia>>>) {
+  const { razia: r, usaha } = d;
+  const tanggalBayar = r.tanggalBayar!;
+  const jenis = KENDARAAN_BIZ.find((k) => k.kode === r.jenis)?.label ?? r.jenis;
+  return pdfKwitansi({
+    nomor: nomorKwitansiRazia(r.id, tanggalBayar),
+    jumlah: r.denda,
+    tanggal: tanggalBayar,
+    dicatatOleh: r.dicatatOleh,
+    baris: [
+      ["Telah terima dari", r.pembayarNama || (usaha ? `${usaha.pjNama} - ${usaha.namaUsaha}` : r.namaSopir || "-")],
+      ...(usaha ? ([["Nomor Induk Usaha", usaha.nomorInduk ?? usaha.nomorBiz]] as [string, string][]) : []),
+      ["Uang sejumlah", rupiahTerbilang(r.denda)],
+      ["Untuk pembayaran", `Denda razia kendaraan tidak terdaftar: ${jenis} ${r.plat}, ${tgl(r.tanggal)} di ${r.lokasi}`],
+      ["Disetor ke", `Kas RW 03 - kategori "${KATEGORI_KAS_DENDA_RAZIA}"${r.kasRwId ? ` (ref. kas #${r.kasRwId})` : ""}`],
+    ],
+    nomorCek: usaha ? usaha.nomorInduk ?? usaha.nomorBiz : null,
+    catatanKaki: "Kwitansi sah bila ditandatangani penerima. Denda razia masuk Kas RW 03 untuk pemeliharaan jalan lingkungan.",
+  });
+}
+
+export async function buatPdfKwitansiPelanggaran(d: NonNullable<Awaited<ReturnType<typeof getDataKwitansiPelanggaran>>>) {
+  const { p, usaha } = d;
+  const tanggalBayar = p.tanggalBayar!;
+  const jenis = JENIS_PELANGGARAN_INFO[p.jenis as JenisPelanggaran]?.label ?? p.jenis;
+  return pdfKwitansi({
+    nomor: nomorKwitansiPelanggaran(p.id, tanggalBayar),
+    jumlah: p.denda,
+    tanggal: tanggalBayar,
+    dicatatOleh: p.diverifikasiOleh ?? p.dicatatOleh ?? "-",
+    baris: [
+      ["Telah terima dari", p.pembayarNama || (usaha ? `${usaha.pjNama} - ${usaha.namaUsaha}` : p.namaUsahaLain || "-")],
+      ...(usaha ? ([["Nomor Induk Usaha", usaha.nomorInduk ?? usaha.nomorBiz]] as [string, string][]) : []),
+      ["Uang sejumlah", rupiahTerbilang(p.denda)],
+      ["Untuk pembayaran", `Denda pelanggaran: ${jenis}, ${tgl(p.tanggalKejadian)}${p.lokasi ? ` di ${p.lokasi}` : ""}`],
+      ["Perhitungan", p.dendaRincian ?? "-"],
+      ["Disetor ke", `Kas RW 03 - kategori "${KATEGORI_KAS_DENDA_PELANGGARAN}"${p.kasRwId ? ` (ref. kas #${p.kasRwId})` : ""}`],
+    ],
+    nomorCek: usaha ? usaha.nomorInduk ?? usaha.nomorBiz : null,
+    catatanKaki: "Kwitansi sah bila ditandatangani penerima. Denda masuk Kas RW 03 dan dilaporkan terbuka di halaman RW3BIZ.",
+  });
+}
+
+async function pdfKwitansi(o: {
+  nomor: string;
+  jumlah: number;
+  tanggal: string;
+  dicatatOleh: string;
+  baris: [string, string][];
+  nomorCek: string | null;
+  catatanKaki: string;
+}) {
+  const nomor = o.nomor;
+  const L = new Lembar(`Kwitansi ${nomor}`, `Kwitansi ${nomor}`);
+  const tinggiSalinan = (H - 16) / 2;
+
+  const salinan = async (atas: number, untuk: string) => {
+    L.kop(atas, true);
+    const d0 = L.doc;
+    L.font("bold", 16);
+    d0.text("KWITANSI", ML, L.y);
+    L.font("normal", 9);
+    d0.setTextColor(110);
+    d0.text(bersihkan(untuk), W - MR, L.y - 4, { align: "right" });
+    d0.setTextColor(0);
+    L.font("bold", 10);
+    d0.text(bersihkan(`No. ${nomor}`), W - MR, L.y, { align: "right" });
+    L.y += 7;
+
+    L.labelNilai(o.baris, 38, 10.5, 5.4);
+    L.y += 3;
+
+    // Nominal + tanda tangan
+    const yBox = L.y;
+    d0.setDrawColor(...HIJAU);
+    d0.setLineWidth(0.7);
+    d0.roundedRect(ML, yBox, 70, 14, 2, 2);
+    d0.setDrawColor(0);
+    L.font("bold", 16);
+    d0.text(bersihkan(formatRp(o.jumlah)), ML + 35, yBox + 9.3, { align: "center" });
+    L.font("normal", 8.5);
+    d0.text(bersihkan(`Tanggal bayar: ${tgl(o.tanggal)}`), ML, yBox + 19);
+    d0.text(bersihkan(`Dicatat oleh: ${o.dicatatOleh}`), ML, yBox + 23);
+
+    const kx = ML + CW - 35;
+    L.font("normal", 10);
+    d0.text(bersihkan(`${IDENTITAS_RW.tempat}, ${tgl(o.tanggal)}`), kx, yBox + 2, { align: "center" });
+    d0.text("Penerima / Bendahara RW 03,", kx, yBox + 7, { align: "center" });
+    L.font("bold", 10);
+    d0.text("(..............................)", kx, yBox + 28, { align: "center" });
+
+    if (o.nomorCek) {
+      const urlCek = `${situs()}/rw3biz/status?nomor=${encodeURIComponent(o.nomorCek)}`;
+      try {
+        const gambar = await QRCode.toDataURL(urlCek, { margin: 0, width: 200 });
+        d0.addImage(gambar, "PNG", ML + 78, yBox, 18, 18);
+      } catch {
+        /* QR opsional */
+      }
+      L.font("italic", 7.5);
+      d0.text("Cek riwayat bayar", ML + 87, yBox + 21.5, { align: "center" });
+    }
+    L.y = yBox + 32;
+    L.font("italic", 8);
+    d0.setTextColor(110);
+    d0.text(bersihkan(o.catatanKaki), ML, L.y, { maxWidth: CW });
+    d0.setTextColor(0);
+  };
+
+  await salinan(8, "Lembar untuk pembayar");
+  const yPotong = 8 + tinggiSalinan;
+  L.doc.setLineDashPattern([2, 1.5], 0);
+  L.doc.setDrawColor(150);
+  L.doc.line(6, yPotong, W - 6, yPotong);
+  L.doc.setLineDashPattern([], 0);
+  L.doc.setDrawColor(0);
+  L.font("italic", 7.5);
+  L.doc.setTextColor(150);
+  L.doc.text("gunting di sini", W / 2, yPotong - 1.2, { align: "center" });
+  L.doc.setTextColor(0);
+  await salinan(yPotong + 6, "Lembar arsip Kas RW");
+
+  return { buffer: L.buffer(), nama: `Kwitansi-${nomor.replace(/\//g, "-")}.pdf` };
+}

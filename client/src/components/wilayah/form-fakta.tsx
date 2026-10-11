@@ -57,7 +57,7 @@ export function FormFakta({
     return (
       <div>
         {adaDraft && d.i === 0 && <div className="mb-4"><Pesan jenis="info">Melanjutkan isian yang belum selesai.</Pesan></div>}
-        <Langkah langkah={d.i + 1} total={total} judul={s.judul} onKembali={d.i === 0 ? batal : () => set({ i: d.i - 1 })} onLanjut={() => set({ i: d.i + 1 })}>
+        <Langkah lengket="admin" langkah={d.i + 1} total={total} judul={s.judul} onKembali={d.i === 0 ? batal : () => set({ i: d.i - 1 })} onLanjut={() => set({ i: d.i + 1 })}>
           {s.sub && <p className="-mt-2 mb-4 text-base text-gray-600">{s.sub}</p>}
           {s.kunci.map((kunci) => (
             <PilihFakta key={kunci} kunci={kunci} nilai={d.jawab[k(s, kunci)] ?? null}
@@ -69,7 +69,7 @@ export function FormFakta({
   }
 
   return (
-    <Langkah langkah={total} total={total} judul="Periksa sebelum menyimpan" onKembali={() => set({ i: d.i - 1 })}
+    <Langkah lengket="admin" langkah={total} total={total} judul="Periksa sebelum menyimpan" onKembali={() => set({ i: d.i - 1 })}
       labelLanjut={perubahan.length ? "Simpan" : "Selesai"} memuat={mengirim}
       onLanjut={async () => {
         if (!perubahan.length) { hapus(); return selesai(0); }

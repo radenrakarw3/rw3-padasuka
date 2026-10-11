@@ -1,4 +1,4 @@
-import { Headphones, QrCode } from "lucide-react";
+import { Headphones, QrCode, Wallet } from "lucide-react";
 import { PublicKioskLayout } from "@/components/public-kiosk-layout";
 import { ServiceCard } from "@/components/gov/service-card";
 import { FeatureExplain } from "@/components/gov/feature-explain";
@@ -22,6 +22,9 @@ export default function PublicLanding() {
           <li>
             <strong>RW3BIZ</strong> — izin berjualan / usaha di wilayah RW.
           </li>
+          <li>
+            <strong>Kas RW</strong> — lihat saldo, pemasukan, dan pengeluaran kas RW secara terbuka.
+          </li>
         </ul>
       </FeatureExplain>
       <ServiceCard
@@ -43,6 +46,14 @@ export default function PublicLanding() {
       />
       <Visitrw3VisaCard />
       <Rw3bizCard />
+      <ServiceCard
+        href="/kas-rw"
+        icon={Wallet}
+        eyebrow="Transparansi"
+        title="Kas RW 03"
+        description="Saldo, pemasukan, dan pengeluaran kas RW — terbuka untuk semua warga"
+        variant="glass"
+      />
     </PublicKioskLayout>
   );
 }

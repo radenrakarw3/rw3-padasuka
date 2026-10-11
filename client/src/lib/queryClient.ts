@@ -33,7 +33,7 @@ export function getApiErrorMessage(error: unknown, fallback = "Terjadi kesalahan
 
 const DEFAULT_FETCH_TIMEOUT_MS = 15_000;
 
-/** Fetch dengan cookie session + timeout (Blusukan / auth). */
+/** Fetch dengan cookie session + timeout (auth / data besar). */
 export async function fetchWithTimeout(
   url: string,
   init: RequestInit = {},

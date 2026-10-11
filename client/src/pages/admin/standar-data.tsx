@@ -7,6 +7,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { wil } from "@/lib/wilayah-api";
 import { useStandar } from "@/lib/standar";
 import { KELOMPOK_STANDAR, LABEL_TIPE, TIPE_FAKTA, kelompokkan, type DefinisiFakta, type TipeFakta } from "@shared/wilayah";
@@ -85,13 +88,13 @@ function Editor({ awal, kelompokAda, tutup }: { awal: Isian; kelompokAda: string
 
   return (
     <Dialog open onOpenChange={(o) => !o && tutup()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="sm:max-h-[90vh] sm:max-w-2xl sm:overflow-y-auto">
         <DialogHeader><DialogTitle>{f.id ? "Ubah pertanyaan" : "Tambah pertanyaan"}</DialogTitle></DialogHeader>
         <div className="space-y-4 text-sm">
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1 block font-medium">Ditanyakan untuk</span>
-              <select className="h-9 w-full rounded-md border bg-background px-2 disabled:opacity-60" value={f.subjek} disabled={!!f.id} onChange={(e) => set({ subjek: e.target.value as Subjek })}>
+              <select className="min-h-12 w-full rounded-xl border bg-background px-3 text-base sm:h-9 sm:min-h-0 sm:rounded-md sm:px-2 sm:text-sm disabled:opacity-60" value={f.subjek} disabled={!!f.id} onChange={(e) => set({ subjek: e.target.value as Subjek })}>
                 <option value="kk">Keluarga (sekali per KK)</option>
                 <option value="warga">Setiap anggota keluarga</option>
               </select>
@@ -104,7 +107,7 @@ function Editor({ awal, kelompokAda, tutup }: { awal: Isian; kelompokAda: string
                   <Button type="button" variant="ghost" size="sm" onClick={() => { setKelompokBaru(false); set({ kelompok: kelompokAda[0] }); }}>Batal</Button>
                 </div>
               ) : (
-                <select className="h-9 w-full rounded-md border bg-background px-2" value={f.kelompok}
+                <select className="min-h-12 w-full rounded-xl border bg-background px-3 text-base sm:h-9 sm:min-h-0 sm:rounded-md sm:px-2 sm:text-sm" value={f.kelompok}
                   onChange={(e) => (e.target.value === "__baru" ? (setKelompokBaru(true), set({ kelompok: "" })) : set({ kelompok: e.target.value }))}>
                   {kelompokAda.map((k) => <option key={k} value={k}>{k}</option>)}
                   <option value="__baru">+ Kelompok baru…</option>
@@ -127,7 +130,7 @@ function Editor({ awal, kelompokAda, tutup }: { awal: Isian; kelompokAda: string
           </label>
           <label className="block">
             <span className="mb-1 block font-medium">Jenis jawaban</span>
-            <select className="h-9 w-full rounded-md border bg-background px-2" value={f.tipe} onChange={(e) => set({ tipe: e.target.value as TipeFakta })}>
+            <select className="min-h-12 w-full rounded-xl border bg-background px-3 text-base sm:h-9 sm:min-h-0 sm:rounded-md sm:px-2 sm:text-sm" value={f.tipe} onChange={(e) => set({ tipe: e.target.value as TipeFakta })}>
               {TIPE_FAKTA.map((t) => <option key={t} value={t}>{LABEL_TIPE[t]}</option>)}
             </select>
             {f.id && <span className="text-xs text-muted-foreground">Jenis jawaban hanya bisa diganti bila belum ada jawaban tersimpan.</span>}
@@ -139,12 +142,14 @@ function Editor({ awal, kelompokAda, tutup }: { awal: Isian; kelompokAda: string
               <p className="mb-2 text-xs text-muted-foreground">Centang “Perlu perhatian” pada jawaban yang menandakan keluarga butuh bantuan/tindak lanjut. Pilihan yang sudah dipakai jawaban warga tidak bisa dihapus, hanya diganti namanya.</p>
               <div className="space-y-2">
                 {f.pilihan.map((p, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <Input value={p.label} maxLength={100} onChange={(e) => ubahPilihan(i, { label: e.target.value })} placeholder={`Pilihan ${i + 1}`} />
-                    <label className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1.5 text-xs ${p.perhatian ? "border-rose-300 bg-rose-50 text-rose-800" : ""}`}>
-                      <input type="checkbox" checked={p.perhatian} onChange={(e) => ubahPilihan(i, { perhatian: e.target.checked })} />Perlu perhatian
+                  <div key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed p-2 sm:flex-nowrap sm:border-0 sm:p-0">
+                    <div className="min-w-0 basis-full sm:basis-auto sm:flex-1">
+                      <Input value={p.label} maxLength={100} onChange={(e) => ubahPilihan(i, { label: e.target.value })} placeholder={`Pilihan ${i + 1}`} />
+                    </div>
+                    <label className={`flex min-h-10 shrink-0 cursor-pointer items-center gap-2 rounded-md border px-3 text-sm sm:min-h-0 sm:gap-1.5 sm:px-2 sm:py-1.5 sm:text-xs ${p.perhatian ? "border-rose-300 bg-rose-50 text-rose-800" : ""}`}>
+                      <input type="checkbox" className="h-4 w-4" checked={p.perhatian} onChange={(e) => ubahPilihan(i, { perhatian: e.target.checked })} />Perlu perhatian
                     </label>
-                    <Button type="button" variant="ghost" size="icon" disabled={f.pilihan.length <= 2} onClick={() => set({ pilihan: f.pilihan.filter((_, n) => n !== i) })}><Trash2 className="h-4 w-4" /></Button>
+                    <Button type="button" variant="ghost" size="icon" className="ml-auto sm:ml-0" aria-label={`Hapus pilihan ${i + 1}`} disabled={f.pilihan.length <= 2} onClick={() => set({ pilihan: f.pilihan.filter((_, n) => n !== i) })}><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 ))}
               </div>
@@ -156,7 +161,7 @@ function Editor({ awal, kelompokAda, tutup }: { awal: Isian; kelompokAda: string
               <p className="mb-1 font-medium">Jawaban yang perlu perhatian</p>
               <div className="flex gap-2">
                 {["ya", "tidak"].map((v) => (
-                  <label key={v} className={`flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-1.5 ${f.perhatianYaTidak.includes(v) ? "border-rose-300 bg-rose-50 text-rose-800" : ""}`}>
+                  <label key={v} className={`flex min-h-10 cursor-pointer items-center gap-2 rounded-md border px-4 sm:min-h-0 sm:gap-1.5 sm:px-3 sm:py-1.5 ${f.perhatianYaTidak.includes(v) ? "border-rose-300 bg-rose-50 text-rose-800" : ""}`}>
                     <input type="checkbox" checked={f.perhatianYaTidak.includes(v)}
                       onChange={(e) => set({ perhatianYaTidak: e.target.checked ? [...f.perhatianYaTidak, v] : f.perhatianYaTidak.filter((x) => x !== v) })} />
                     {v === "ya" ? "Ya" : "Tidak"}
@@ -205,20 +210,14 @@ function BarisPertanyaan({ d, naik, turun, ubah, arsip, pulihkan }: {
     d.diQr === false ? "Hanya pengurus" : "Formulir QR",
   ].filter(Boolean);
   return (
-    <li className="flex gap-3 rounded-xl border border-gray-200 bg-white p-3 transition-shadow hover:shadow-sm">
-      {(naik || turun) && (
-        <div className="flex flex-col gap-1">
-          <Button size="icon" variant="ghost" className="h-7 w-7" disabled={!naik} onClick={naik} aria-label="Naikkan"><ArrowUp className="h-4 w-4" /></Button>
-          <Button size="icon" variant="ghost" className="h-7 w-7" disabled={!turun} onClick={turun} aria-label="Turunkan"><ArrowDown className="h-4 w-4" /></Button>
-        </div>
-      )}
-      <div className="min-w-0 flex-1">
+    <li className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-3 transition-shadow hover:shadow-sm sm:flex-row">
+      <div className="min-w-0 flex-1 sm:order-2">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="font-semibold">{d.label}</p>
+          <p className="min-w-0 break-words font-semibold">{d.label}</p>
           <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600">{LABEL_TIPE[d.tipe]}</span>
           {syarat.map((s) => <span key={s} className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] text-sky-800">{s}</span>)}
         </div>
-        <p className="mt-0.5 text-sm text-gray-600">{d.pertanyaan}</p>
+        <p className="mt-0.5 break-words text-sm text-gray-600">{d.pertanyaan}</p>
         {pilihan.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
             {pilihan.map((p) => (
@@ -227,10 +226,18 @@ function BarisPertanyaan({ d, naik, turun, ubah, arsip, pulihkan }: {
           </div>
         )}
       </div>
-      <div className="flex shrink-0 flex-col gap-1 sm:flex-row sm:items-start">
-        {ubah && <Button size="sm" variant="outline" onClick={ubah}><Pencil className="mr-1 h-3.5 w-3.5" />Ubah</Button>}
-        {arsip && <Button size="sm" variant="ghost" className="text-rose-700 hover:bg-rose-50" onClick={arsip}><Archive className="mr-1 h-3.5 w-3.5" />Hapus</Button>}
-        {pulihkan && <Button size="sm" variant="outline" onClick={pulihkan}><RotateCcw className="mr-1 h-3.5 w-3.5" />Pulihkan</Button>}
+      <div className="flex items-center gap-2 border-t border-gray-100 pt-2 sm:contents">
+        {(naik || turun) && (
+          <div className="flex gap-1 sm:order-1 sm:flex-col">
+            <Button size="icon" variant="outline" className="sm:h-7 sm:w-7 sm:border-0" disabled={!naik} onClick={naik} aria-label="Naikkan"><ArrowUp className="h-5 w-5 sm:h-4 sm:w-4" /></Button>
+            <Button size="icon" variant="outline" className="sm:h-7 sm:w-7 sm:border-0" disabled={!turun} onClick={turun} aria-label="Turunkan"><ArrowDown className="h-5 w-5 sm:h-4 sm:w-4" /></Button>
+          </div>
+        )}
+        <div className="ml-auto flex shrink-0 gap-2 sm:order-3 sm:ml-0 sm:flex-row sm:items-start sm:gap-1">
+          {ubah && <Button size="sm" variant="outline" onClick={ubah}><Pencil className="mr-1 h-3.5 w-3.5" />Ubah</Button>}
+          {arsip && <Button size="sm" variant="ghost" className="text-rose-700 hover:bg-rose-50" onClick={arsip}><Archive className="mr-1 h-3.5 w-3.5" />Hapus</Button>}
+          {pulihkan && <Button size="sm" variant="outline" onClick={pulihkan}><RotateCcw className="mr-1 h-3.5 w-3.5" />Pulihkan</Button>}
+        </div>
       </div>
     </li>
   );
@@ -241,6 +248,7 @@ export default function StandarData() {
   const { data, isLoading, error } = useStandar(true);
   const [edit, setEdit] = useState<Isian | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [hapus, setHapus] = useState<DefinisiFakta | null>(null);
   const segarkan = () => qc.invalidateQueries({ queryKey: ["/api/wilayah/standar"] });
   const aksi = async (fn: () => Promise<unknown>) => {
     setErr(null);
@@ -279,10 +287,7 @@ export default function StandarData() {
                   naik={i > 0 ? () => pindah(subjek, d.id!, -1) : undefined}
                   turun={i < g.daftar.length - 1 ? () => pindah(subjek, d.id!, 1) : undefined}
                   ubah={() => setEdit(dariDefinisi(d))}
-                  arsip={() => {
-                    if (!confirm(`Hapus pertanyaan “${d.label}”? Jawaban yang sudah ada tetap tersimpan dan pertanyaan bisa dipulihkan dari Arsip.`)) return;
-                    aksi(() => wil(`/api/wilayah/rw/standar/${d.id}`, { ...RW, method: "DELETE" }));
-                  }} />
+                  arsip={() => setHapus(d)} />
               ))}
             </ul>
           </section>
@@ -292,13 +297,13 @@ export default function StandarData() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4 p-4 md:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: HIJAU }}>Standar data warga</h1>
+    <div className="mx-auto max-w-4xl space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold sm:text-2xl" style={{ color: HIJAU }}>Standar data warga</h1>
           <p className="text-sm text-muted-foreground">Pertanyaan yang dipakai di formulir QR, isian pengurus, kartu KK, dan dashboard. Perubahan langsung berlaku.</p>
         </div>
-        <Button style={{ backgroundColor: HIJAU }} onClick={() => setEdit(isianBaru("kk"))}><Plus className="mr-2 h-4 w-4" />Tambah pertanyaan</Button>
+        <Button className="w-full sm:w-auto" style={{ backgroundColor: HIJAU }} onClick={() => setEdit(isianBaru("kk"))}><Plus className="mr-2 h-4 w-4" />Tambah pertanyaan</Button>
       </div>
       {err && <p className="rounded-md bg-red-50 p-2 text-sm text-red-700">{err}</p>}
       {isLoading && <p className="text-sm">Memuat…</p>}
@@ -322,6 +327,22 @@ export default function StandarData() {
         </Tabs>
       )}
       {edit && <Editor awal={edit} kelompokAda={kelompokAda} tutup={() => setEdit(null)} />}
+      <AlertDialog open={hapus != null} onOpenChange={(o) => !o && setHapus(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hapus pertanyaan “{hapus?.label}”?</AlertDialogTitle>
+            <AlertDialogDescription>Jawaban yang sudah ada tetap tersimpan dan pertanyaan bisa dipulihkan dari Arsip.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction className="bg-rose-700 hover:bg-rose-800" onClick={() => {
+              const d = hapus;
+              setHapus(null);
+              if (d) aksi(() => wil(`/api/wilayah/rw/standar/${d.id}`, { ...RW, method: "DELETE" }));
+            }}>Hapus</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

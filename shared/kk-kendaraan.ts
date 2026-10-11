@@ -1,4 +1,4 @@
-/** Kendaraan terdaftar per Kartu Keluarga (Blusukan RW). */
+/** Kendaraan terdaftar per Kartu Keluarga. */
 
 export type KendaraanKkItem = {
   jenis: string;

@@ -78,7 +78,7 @@ export function LencanaTindak({ status, terlambat }: { status: string; terlambat
 /** Pratinjau HTML dari blok yang sama dengan PDF (PDF tetap acuan resmi). */
 export function PratinjauBloks({ bloks, draft }: { bloks: Blok[]; draft?: boolean }) {
   return (
-    <div className="relative bg-white border rounded-lg p-4 sm:p-8 font-serif text-[13px] leading-relaxed text-stone-900 overflow-hidden">
+    <div className="relative bg-white border rounded-lg p-3 sm:p-8 font-serif text-[13px] leading-relaxed text-stone-900 overflow-hidden [overflow-wrap:anywhere]">
       {draft && <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center text-5xl font-bold text-stone-900/5 -rotate-12">DRAF</div>}
       <div className="text-center border-b-2 border-stone-800 pb-2 mb-4">
         <p className="font-bold">RUKUN WARGA 03 KELURAHAN PADASUKA</p>
@@ -113,7 +113,7 @@ function BlokHtml({ b }: { b: Blok }) {
     case "tabel":
       return (
         <div className="overflow-x-auto mb-2">
-          <table className="w-full border-collapse text-xs">
+          <table className="w-full min-w-[28rem] border-collapse text-xs [overflow-wrap:normal] sm:min-w-0">
             <thead><tr>{b.kolom.map((k, i) => <th key={i} className="border border-stone-500 px-1 py-0.5 bg-stone-100">{k}</th>)}</tr></thead>
             <tbody>
               {b.baris.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j} className="border border-stone-400 px-1 py-0.5 align-top">{c || "\u00a0"}</td>)}</tr>)}
@@ -126,7 +126,7 @@ function BlokHtml({ b }: { b: Blok }) {
       return (
         <div className="mt-4">
           {b.tempatTanggal && <p className="text-right mb-1">{b.tempatTanggal}</p>}
-          <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${Math.min(b.kolom.length, 3)}, minmax(0, 1fr))` }}>
+          <div className="grid gap-2 sm:gap-4" style={{ gridTemplateColumns: `repeat(${Math.min(b.kolom.length, 3)}, minmax(0, 1fr))` }}>
             {b.kolom.map((k, i) => (
               <div key={i} className="text-center">
                 <p>{k.atas}</p>

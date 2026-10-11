@@ -1,4 +1,4 @@
-import { Store, BookOpen, RefreshCw, Search, FileText } from "lucide-react";
+import { Store, BookOpen, RefreshCw, Search, FileText, Megaphone } from "lucide-react";
 import { Rw3bizShell } from "@/components/rw3biz-shell";
 import { FeatureExplain } from "@/components/gov/feature-explain";
 import { FeatureMenuBlock } from "@/components/gov/feature-menu-block";
@@ -28,21 +28,30 @@ export default function Rw3bizHub() {
           variant="solid"
         />
         <FeatureMenuBlock
-          explainTitle="Sudah punya nomor?"
-          explain={<>Perpanjang masa berlaku izin usaha Anda.</>}
+          explainTitle="Sudah punya Nomor Induk Usaha?"
+          explain={<>Perbarui surat izin sebelum habis sekaligus perbarui data pegawai dan kendaraan operasional.</>}
           href={RW3BIZ_ROUTES.perpanjang}
           icon={RefreshCw}
-          title="Perpanjang izin"
-          description="Perpanjang masa usaha"
+          title="Perbarui izin"
+          description="Perpanjang surat & perbarui data"
           variant="outline"
         />
         <FeatureMenuBlock
           explainTitle="Cek status"
-          explain={<>Pantau pengajuan — menunggu survey, disetujui, atau ditolak.</>}
+          explain={<>Pantau pengajuan, cetak surat izin dan formulir, lihat tagihan serta kwitansi pembayaran.</>}
           href={RW3BIZ_ROUTES.status}
           icon={Search}
-          title="Cek status"
-          description="Lacak nomor pengajuan"
+          title="Cek status & surat"
+          description="Pakai NIU atau nomor BIZ"
+          variant="outline"
+        />
+        <FeatureMenuBlock
+          explainTitle="Warga terganggu usaha?"
+          explain={<>Sampah tercecer, bising, parkir menutup jalan, limbah/bau, dll. Identitas pelapor dirahasiakan.</>}
+          href={RW3BIZ_ROUTES.aduan}
+          icon={Megaphone}
+          title="Adukan usaha"
+          description="Dicek pengurus, terbukti = teguran / denda"
           variant="outline"
         />
         <FeatureMenuBlock

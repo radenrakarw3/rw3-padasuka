@@ -10,8 +10,7 @@ import express from "express";
 import { storage } from "./storage";
 import { pool } from "./db";
 import { cache, CacheKey, TTL, invalidateWarga, invalidateKk, invalidateVisitrw3Dashboard } from "./cache";
-import { insertKkSchema, patchKkSchema, insertWargaSchema, insertSuratRwSchema, insertWargaSinggahSchema, insertUsahaSchema } from "@shared/schema";
-import { getBlusukanDashboard } from "./blusukan";
+import { insertKkSchema, patchKkSchema, insertWargaSchema, insertSuratRwSchema, insertWargaSinggahSchema, insertUsahaSchema, insertKasRwSchema } from "@shared/schema";
 import { z } from "zod";
 import { isActiveRt, assertKkInPemukimanScope } from "@shared/rt";
 import {
@@ -24,7 +23,9 @@ import {
   startVisitrw3ReminderScheduler,
 } from "./wa-notify";
 import { buildKependudukanStats } from "./kependudukan-stats";
-import { statistikWarga } from "./statistik-warga";
+import { daftarStatistikWarga, statistikWarga } from "./statistik-warga";
+import { isKategoriDaftar, perluNilai } from "@shared/statistik-warga";
+import { ACTIVE_RT_NUMBERS } from "@shared/rt";
 
 function resolveAppVersion() {
   const productionIndexPath = path.resolve(process.cwd(), "dist", "public", "index.html");
@@ -47,8 +48,6 @@ declare module "express-session" {
     adminId?: number;
     adminUsername?: string;
     adminNama?: string;
-    blusukanAuth?: boolean;
-    blusukanLoginAt?: number;
   }
 }
 
@@ -117,13 +116,12 @@ export async function registerRoutes(
   await ensureWaNotifikasiSchema().catch((error) => {
     console.error("WA notifikasi schema init error:", error);
   });
+  /** Modul Blusukan RW sudah dihapus; data warga tetap di tabel `warga` / `kartu_keluarga`. */
+  await pool.query("DROP TABLE IF EXISTS blusukan_quest, blusukan_kunjungan").catch((error) => {
+    console.error("Hapus tabel Blusukan gagal:", error);
+  });
   logWaStartupStatus();
   startVisitrw3ReminderScheduler();
-
-  /** Tanpa session — cek server hidup (Blusukan RW tidak stuck di "Memuat…"). */
-  app.get("/api/blusukan/ping", (_req, res) => {
-    res.json({ ok: true, ts: Date.now() });
-  });
 
   const isProduction = process.env.NODE_ENV === "production";
   if (isProduction) {
@@ -157,8 +155,6 @@ export async function registerRoutes(
   const { registerWilayahRoutes } = await import("./wilayah-routes");
   registerWilayahRoutes(app);
 
-  const { registerBlusukanRoutes } = await import("./blusukan-routes");
-  await registerBlusukanRoutes(app);
   const pdfTempPublicDir = path.join(uploadsDir, "pdf-temp");
   fs.mkdirSync(pdfTempPublicDir, { recursive: true });
   const pdfTempTokens = new Map<string, { filePath: string; expires: number }>();
@@ -303,6 +299,22 @@ export async function registerRoutes(
     } catch (error: unknown) {
       console.error("[statistik-warga] error:", error);
       res.status(500).json({ message: "Gagal memuat statistik warga" });
+    }
+  });
+
+  app.get("/api/statistik-warga/daftar", requireAdmin, async (req, res) => {
+    const kategori = req.query.kategori;
+    if (!isKategoriDaftar(kategori)) return res.status(400).json({ message: "Kategori tidak dikenal" });
+    const rtAngka = req.query.rt ? parseInt(String(req.query.rt), 10) : NaN;
+    const rt = (ACTIVE_RT_NUMBERS as readonly number[]).includes(rtAngka) ? rtAngka : null;
+    const nilai = typeof req.query.nilai === "string" ? req.query.nilai.slice(0, 100) : null;
+    if (perluNilai(kategori) && !nilai) return res.status(400).json({ message: "Nilai kategori wajib diisi" });
+    try {
+      res.setHeader("Cache-Control", "private, no-store");
+      res.json(await daftarStatistikWarga(kategori, rt, nilai));
+    } catch (error: unknown) {
+      console.error("[statistik-warga/daftar] error:", error);
+      res.status(500).json({ message: "Gagal memuat daftar warga" });
     }
   });
 
@@ -661,6 +673,123 @@ dokumen sah bila ditandatangani basah oleh pejabat yang tercantum. Isi dokumen t
     }
   });
 
+  // === Kas RW ===
+  const KAS_OTOMATIS = new Set(["sistem", "iuran-sistem", "rw3biz-sistem"]);
+
+  app.get("/api/kas-rw/summary", requireAuth, async (_req, res) => {
+    try {
+      res.json(await storage.getKasRwSummary());
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/kas-rw/laporan", requireAuth, async (_req, res) => {
+    try {
+      const transaksi = await storage.getAllKasRw();
+      const summary = await storage.getKasRwSummary();
+      res.json({ transaksi, summary });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Keterangan entri otomatis memuat No. KK, nama warga, plat — jangan pernah dikirim ke publik.
+  app.get("/api/public/kas-rw", async (_req, res) => {
+    try {
+      const semua = await storage.getAllKasRw();
+      let totalPemasukan = 0;
+      let totalPengeluaran = 0;
+      const transaksi = semua.map((t) => {
+        const jumlah = Number(t.jumlah);
+        if (t.tipe === "pemasukan") totalPemasukan += jumlah;
+        else totalPengeluaran += jumlah;
+        const otomatis = KAS_OTOMATIS.has(t.createdBy) || (t.createdBy ?? "").startsWith("rwcoin-");
+        return {
+          id: t.id,
+          tipe: t.tipe === "pemasukan" ? "pemasukan" : "pengeluaran",
+          kategori: t.kategori,
+          jumlah,
+          keterangan: otomatis ? `${t.kategori} — tercatat otomatis oleh sistem` : t.keterangan,
+          tanggal: t.tanggal,
+          otomatis,
+        };
+      });
+      const terakhir = semua.reduce<Date | null>((max, t) => {
+        const d = t.createdAt ? new Date(t.createdAt) : null;
+        return d && (!max || d > max) ? d : max;
+      }, null);
+      res.set("Cache-Control", "public, max-age=60");
+      res.json({
+        summary: { totalPemasukan, totalPengeluaran, saldo: totalPemasukan - totalPengeluaran },
+        transaksi,
+        diperbarui: terakhir?.toISOString() ?? null,
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: "Gagal memuat laporan kas RW" });
+    }
+  });
+
+  app.get("/api/kas-rw", requireAdmin, async (_req, res) => {
+    try {
+      res.json(await storage.getAllKasRw());
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/kas-rw", requireAdmin, async (req, res) => {
+    try {
+      const parsed = insertKasRwSchema.parse(req.body);
+      const result = await storage.createKasRw({ ...parsed, createdBy: req.session.adminUsername || "admin" });
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.put("/api/kas-rw/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id as string);
+      const existing = await storage.getKasRwById(id);
+      if (!existing) return res.status(404).json({ message: "Transaksi tidak ditemukan" });
+      if (KAS_OTOMATIS.has(existing.createdBy)) {
+        return res.status(403).json({ message: "Transaksi otomatis tidak bisa diedit manual" });
+      }
+      const parsed = insertKasRwSchema.partial().parse(req.body);
+      res.json(await storage.updateKasRw(id, parsed));
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/kas-rw/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id as string);
+      const existing = await storage.getKasRwById(id);
+      if (!existing) return res.status(404).json({ message: "Transaksi tidak ditemukan" });
+      if (KAS_OTOMATIS.has(existing.createdBy)) {
+        return res.status(403).json({ message: "Transaksi otomatis tidak bisa dihapus manual" });
+      }
+      await storage.deleteKasRw(id);
+      res.json({ message: "Transaksi berhasil dihapus" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/kas-rw/reset", requireAdmin, async (req, res) => {
+    try {
+      if (req.body?.confirm !== "RESET") {
+        return res.status(400).json({ message: 'Ketik konfirmasi "RESET" untuk mengosongkan semua transaksi Kas RW' });
+      }
+      const result = await storage.resetAllKasRw();
+      res.json({ message: "Kas RW direset ke nol", ...result });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // === Iuran Routes ===
 
   // === Pemilik Kost Routes (dihapus dari produk — arsip API) ===
@@ -951,17 +1080,6 @@ dokumen sah bila ditandatangani basah oleh pejabat yang tercantum. Isi dokumen t
         });
       }
       res.json({ message: "Stiker berhasil diperpanjang", nomorStiker: result.nomorStiker, tanggalExpired: result.tanggalExpired });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/admin/blusukan-summary", requireAdmin, async (req, res) => {
-    try {
-      const rtParam = req.query.rt ? parseInt(req.query.rt as string) : undefined;
-      const rtFilter = rtParam && !isNaN(rtParam) ? rtParam : undefined;
-      const data = await getBlusukanDashboard(rtFilter);
-      res.json(data);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

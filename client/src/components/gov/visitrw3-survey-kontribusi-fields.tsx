@@ -89,7 +89,7 @@ export function Visitrw3SurveyKontribusiFields({
             value={kontribusiSatuan}
             onValueChange={(v) => onChange({ kontribusiSatuan: v as KontribusiSatuan })}
           >
-            <SelectTrigger className="h-10">
+            <SelectTrigger className="sm:h-10">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -111,7 +111,7 @@ export function Visitrw3SurveyKontribusiFields({
       <div className="space-y-1.5">
         <Label className="text-xs text-muted-foreground">Catatan untuk Kas RW (opsional)</Label>
         <Input
-          className="h-9 text-sm"
+          className="sm:h-9 sm:text-sm"
           value={keteranganKas}
           onChange={(e) => onChange({ keteranganKas: e.target.value })}
           placeholder="Contoh: Kontribusi Visit RW3 — VRW3-..."
@@ -121,7 +121,7 @@ export function Visitrw3SurveyKontribusiFields({
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">Catatan survey (opsional)</Label>
           <Textarea
-            className="min-h-[52px] text-sm"
+            className="sm:min-h-[52px] sm:text-sm"
             value={catatanSurvey}
             onChange={(e) => onChange({ catatanSurvey: e.target.value })}
             rows={2}

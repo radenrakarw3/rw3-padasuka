@@ -1,9 +1,13 @@
 import { useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Home, Pencil, QrCode, RefreshCw, Truck, UserPlus, XCircle } from "lucide-react";
+import { CheckCircle2, Home, IdCard, MessageCircle, Pencil, QrCode, RefreshCw, Trash2, Truck, UserPlus, XCircle } from "lucide-react";
+import { toWaMeUrl } from "@/lib/wa";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useDraft, useKirimSekali, wil } from "@/lib/wilayah-api";
-import { BarisRingkas, IsianTeks, Judul, KartuMenu, Langkah, Memuat, Pesan, PilihTombol, TombolBesar } from "@/components/wilayah/ui";
+import { BarisRingkas, HIJAU, IsianTeks, Judul, KartuMenu, Langkah, Memuat, Pesan, PilihTombol } from "@/components/wilayah/ui";
 import { FormFakta, kunciAwal, type LangkahFakta } from "@/components/wilayah/form-fakta";
 import { berlakuUntukWarga, kelompokkan, labelNilaiFakta, type DefinisiFakta } from "@shared/wilayah";
 import { defStandar, useStandar } from "@/lib/standar";
@@ -39,11 +43,15 @@ function langkahKeluarga(d: Detail, standar: DefinisiFakta[]): LangkahFakta[] {
 
 function DataDasar({ a, kkId, selesai, batal }: { a: Anggota; kkId: number; selesai: () => void; batal: () => void }) {
   const { nilai: d, setNilai, hapus } = useDraft(`dasar:${a.id}`, {
+    nama: a.nama, jenisKelamin: a.jenisKelamin,
     status: a.status, tanggalLahir: a.tanggalLahir ?? "", nomorHp: a.nomorHp ?? "", statusPerkawinan: a.statusPerkawinan, kedudukan: a.kedudukan,
   });
   const set = (p: Partial<typeof d>) => setNilai({ ...d, ...p });
   const { kirim, mengirim, error } = useKirimSekali(async () => {
     const body: Record<string, unknown> = {};
+    const nama = (d.nama ?? a.nama).trim();
+    if (nama && nama !== a.nama) body.nama = nama;
+    if (d.jenisKelamin && d.jenisKelamin !== a.jenisKelamin) body.jenisKelamin = d.jenisKelamin;
     if (d.status !== a.status) body.status = d.status;
     if ((d.tanggalLahir || null) !== (a.tanggalLahir || null)) body.tanggalLahir = d.tanggalLahir || null;
     if ((d.nomorHp || null) !== (a.nomorHp || null)) body.nomorHp = d.nomorHp || null;
@@ -54,8 +62,11 @@ function DataDasar({ a, kkId, selesai, batal }: { a: Anggota; kkId: number; sele
     return true;
   });
   return (
-    <Langkah langkah={1} total={1} judul={`Data dasar: ${a.nama}`} onKembali={batal} labelLanjut="Simpan" memuat={mengirim}
-      onLanjut={async () => { if (await kirim()) selesai(); }}>
+    <Langkah lengket="admin" langkah={1} total={1} judul={`Data dasar: ${a.nama}`} onKembali={batal} labelLanjut="Simpan" memuat={mengirim}
+      onLanjut={async () => { if (await kirim()) selesai(); }} bisaLanjut={(d.nama ?? a.nama).trim().length >= 2}>
+      <IsianTeks label="Nama lengkap" nilai={d.nama ?? a.nama} onChange={(v) => set({ nama: v })} />
+      <PilihTombol label="Jenis kelamin" belumTahu={false} nilai={d.jenisKelamin ?? a.jenisKelamin} onChange={(v) => v && set({ jenisKelamin: v })}
+        pilihan={[{ nilai: "Laki-laki", label: "Laki-laki" }, { nilai: "Perempuan", label: "Perempuan" }]} />
       <PilihTombol label="Status" belumTahu={false} nilai={d.status} onChange={(v) => v && set({ status: v })}
         pilihan={[{ nilai: "Aktif", label: "Masih tinggal di sini" }, { nilai: "Pindah", label: "Sudah pindah" }, { nilai: "Meninggal", label: "Meninggal" }]} kolom={1} />
       {d.status === "Pindah" && <Pesan jenis="info">Bila pindah ke RT lain di RW 03, gunakan menu “Pindah RT” agar datanya ikut pindah.</Pesan>}
@@ -84,7 +95,7 @@ function AnggotaBaru({ kkId, selesai, batal }: { kkId: number; selesai: () => vo
   });
   if (d.i === 1) {
     return (
-      <Langkah langkah={1} total={3} judul="Nama & NIK" onKembali={batal} onLanjut={() => set({ i: 2 })} bisaLanjut={d.nama.trim().length >= 2 && /^\d{16}$/.test(d.nik)}>
+      <Langkah lengket="admin" langkah={1} total={3} judul="Nama & NIK" onKembali={batal} onLanjut={() => set({ i: 2 })} bisaLanjut={d.nama.trim().length >= 2 && /^\d{16}$/.test(d.nik)}>
         <IsianTeks label="Nama lengkap" nilai={d.nama} onChange={(v) => set({ nama: v })} />
         <IsianTeks label="NIK (16 angka)" inputMode="numeric" maks={16} nilai={d.nik} onChange={(v) => set({ nik: v.replace(/\D/g, "") })} />
       </Langkah>
@@ -92,7 +103,7 @@ function AnggotaBaru({ kkId, selesai, batal }: { kkId: number; selesai: () => vo
   }
   if (d.i === 2) {
     return (
-      <Langkah langkah={2} total={3} judul="Data diri" onKembali={() => set({ i: 1 })} onLanjut={() => set({ i: 3 })} bisaLanjut={!!d.jenisKelamin}>
+      <Langkah lengket="admin" langkah={2} total={3} judul="Data diri" onKembali={() => set({ i: 1 })} onLanjut={() => set({ i: 3 })} bisaLanjut={!!d.jenisKelamin}>
         <PilihTombol label="Jenis kelamin" belumTahu={false} nilai={d.jenisKelamin || null} onChange={(v) => set({ jenisKelamin: v ?? "" })}
           pilihan={[{ nilai: "Laki-laki", label: "Laki-laki" }, { nilai: "Perempuan", label: "Perempuan" }]} />
         <IsianTeks label="Tanggal lahir" tipe="date" nilai={d.tanggalLahir} onChange={(v) => set({ tanggalLahir: v })} bantuan="Kosongkan bila belum tahu." />
@@ -103,7 +114,7 @@ function AnggotaBaru({ kkId, selesai, batal }: { kkId: number; selesai: () => vo
     );
   }
   return (
-    <Langkah langkah={3} total={3} judul="Periksa sebelum menyimpan" onKembali={() => set({ i: 2 })} labelLanjut="Simpan" memuat={mengirim}
+    <Langkah lengket="admin" langkah={3} total={3} judul="Periksa sebelum menyimpan" onKembali={() => set({ i: 2 })} labelLanjut="Simpan" memuat={mengirim}
       onLanjut={async () => { if (await kirim()) selesai(); }}>
       <BarisRingkas label="Nama" nilai={d.nama} />
       <BarisRingkas label="NIK" nilai={d.nik} />
@@ -127,7 +138,7 @@ function PilihRumah({ d, selesai, batal }: { d: Detail; selesai: () => void; bat
     return true;
   });
   return (
-    <Langkah langkah={1} total={1} judul="Keluarga ini tinggal di rumah mana?" onKembali={batal} labelLanjut="Simpan" bisaLanjut={pilih != null} memuat={mengirim}
+    <Langkah lengket="admin" langkah={1} total={1} judul="Keluarga ini tinggal di rumah mana?" onKembali={batal} labelLanjut="Simpan" bisaLanjut={pilih != null} memuat={mengirim}
       onLanjut={async () => { if (await kirim()) selesai(); }}>
       <p className="text-base text-gray-600 mb-3">Bila satu rumah dihuni beberapa KK, pilih rumah yang sama agar rumah dihitung satu.</p>
       {isLoading && <Memuat />}
@@ -150,6 +161,10 @@ export default function Keluarga({ id }: { id: number }) {
   const [mode, setMode] = useState<Mode>(params.get("langkah") === "anggota" ? { m: "anggota" } : { m: "lihat" });
   const [info, setInfo] = useState<string | null>(null);
   const [aksiErr, setAksiErr] = useState<string | null>(null);
+  const [tanyaQr, setTanyaQr] = useState(false);
+  const [hapusOrang, setHapusOrang] = useState<Anggota | null>(null);
+  const [hapusKk, setHapusKk] = useState(false);
+  const [menghapus, setMenghapus] = useState(false);
   const key = [`/api/wilayah/keluarga/${id}`];
   const { data: d, isLoading, error } = useQuery<Detail>({ queryKey: key, queryFn: async () => {
     const x = await wil<Detail>(`/api/wilayah/keluarga/${id}`);
@@ -208,7 +223,7 @@ export default function Keluarga({ id }: { id: number }) {
     }
   };
   const gantiQr = async () => {
-    if (!confirm("Ganti QR? Kartu lama tidak akan bisa dipakai lagi.")) return;
+    setTanyaQr(false);
     setAksiErr(null);
     try {
       await wil("/api/wilayah/rt/qr/cetak", { body: { kkIds: [d.kk.id], ganti: true } });
@@ -218,45 +233,77 @@ export default function Keluarga({ id }: { id: number }) {
     }
   };
 
+  const lakukanHapusOrang = async () => {
+    if (!hapusOrang) return;
+    setMenghapus(true);
+    setAksiErr(null);
+    try {
+      await wil(`/api/warga/${hapusOrang.id}`, { method: "DELETE" });
+      setHapusOrang(null);
+      await segarkan(`${hapusOrang.nama} dihapus dari data warga.`);
+    } catch (e) {
+      setAksiErr((e as Error).message);
+      setHapusOrang(null);
+    } finally {
+      setMenghapus(false);
+    }
+  };
+  const lakukanHapusKk = async () => {
+    setMenghapus(true);
+    setAksiErr(null);
+    try {
+      await wil(`/api/kk/${d.kk.id}`, { method: "DELETE" });
+      qc.removeQueries({ queryKey: key });
+      await qc.invalidateQueries({ queryKey: ["/api/wilayah/keluarga"] });
+      go("/warga");
+    } catch (e) {
+      setAksiErr((e as Error).message);
+      setHapusKk(false);
+    } finally {
+      setMenghapus(false);
+    }
+  };
+
+  const tombolKecil = "inline-flex h-8 items-center gap-1 rounded-lg border px-2 text-xs font-medium";
+  const judulBagian = "text-xs font-semibold uppercase tracking-wide text-gray-500";
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <Judul kembali={() => go("/warga")} sub={`${d.kk.alamat}${d.kk.noUnit ? ` No. ${d.kk.noUnit}` : ""}`}>{kepala}</Judul>
       {info && <Pesan jenis="sukses">{info}</Pesan>}
       {aksiErr && <Pesan jenis="error">{aksiErr}</Pesan>}
 
-      <section className="bg-white rounded-2xl border-2 border-gray-200 p-4">
-        <div className="flex items-center justify-between text-base">
-          <span className="font-semibold">Kelengkapan data</span>
-          <span className="text-gray-600">{d.ringkas.terjawab}/{d.ringkas.pertanyaan} terjawab · {persen}%</span>
+      <section className="rounded-xl border border-gray-200 bg-white px-3 py-2.5">
+        <div className="flex items-center justify-between gap-3 text-xs">
+          <span className="font-semibold text-gray-700">Kelengkapan data</span>
+          <span className="text-gray-500">{d.ringkas.terjawab}/{d.ringkas.pertanyaan} · <b className="text-gray-800">{persen}%</b></span>
         </div>
-        <div className="mt-2 h-2.5 rounded-full bg-gray-100 overflow-hidden">
+        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-gray-100">
           <div className="h-full rounded-full" style={{ width: `${persen}%`, backgroundColor: persen >= 80 ? "hsl(163,55%,32%)" : persen >= 40 ? "hsl(40,70%,50%)" : "hsl(0,65%,55%)" }} />
         </div>
         {d.ringkas.perhatian.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-2 flex flex-wrap gap-1">
             {d.ringkas.perhatian.map((p) => (
-              <span key={p.kunci} className="rounded-full bg-rose-50 border border-rose-200 px-3 py-1 text-sm text-rose-800">{p.label}: {p.detail}</span>
+              <span key={p.kunci} className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] text-rose-800">{p.label}: {p.detail}</span>
             ))}
           </div>
         )}
       </section>
 
       {d.usulan.some((u) => u.status === "menunggu") && (
-        <KartuMenu ikon={<CheckCircle2 className="w-7 h-7" />} judul="Ada isian baru dari keluarga" sub="Periksa dan putuskan" onClick={() => go(`/usulan/${d.usulan.find((u) => u.status === "menunggu")!.id}`)} />
+        <KartuMenu ikon={<CheckCircle2 />} judul="Ada isian baru dari keluarga" sub="Periksa dan putuskan" onClick={() => go(`/usulan/${d.usulan.find((u) => u.status === "menunggu")!.id}`)} />
       )}
 
       {perluCek.length > 0 && (
-        <section className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4">
-          <h2 className="text-xl font-bold mb-2">Data lama perlu dicek</h2>
+        <section className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2">
+          <h2 className="mb-1 text-sm font-semibold text-amber-900">Data lama perlu dicek</h2>
           {perluCek.map((f) => {
             const def = defStandar(f.kunci);
             return (
-              <div key={f.id} className="py-3 border-b border-amber-200 last:border-0">
-                <p className="text-lg">{def?.label ?? f.kunci}: <b>{labelNilaiFakta(def, f.nilai)}</b></p>
-                <div className="grid grid-cols-2 gap-2 mt-2">
-                  <TombolBesar ikon={<CheckCircle2 className="w-6 h-6" />} onClick={() => putuskan(f, true)}>Benar</TombolBesar>
-                  <TombolBesar varian="bahaya" ikon={<XCircle className="w-6 h-6" />} onClick={() => putuskan(f, false)}>Salah</TombolBesar>
-                </div>
+              <div key={f.id} className="flex items-center gap-2 border-b border-amber-200 py-1.5 last:border-0">
+                <p className="min-w-0 flex-1 text-sm">{def?.label ?? f.kunci}: <b>{labelNilaiFakta(def, f.nilai)}</b></p>
+                <button type="button" onClick={() => putuskan(f, true)} className={`${tombolKecil} border-emerald-600 bg-emerald-600 text-white`}><CheckCircle2 className="h-3.5 w-3.5" />Benar</button>
+                <button type="button" onClick={() => putuskan(f, false)} className={`${tombolKecil} border-red-300 bg-white text-red-700`}><XCircle className="h-3.5 w-3.5" />Salah</button>
               </div>
             );
           })}
@@ -264,36 +311,104 @@ export default function Keluarga({ id }: { id: number }) {
       )}
 
       <section>
-        <h2 className="text-xl font-bold mb-2">Anggota keluarga</h2>
-        <ul className="bg-white rounded-2xl border-2 border-gray-200 divide-y-2 divide-gray-100">
+        <div className="mb-1.5 flex items-center justify-between">
+          <h2 className={judulBagian}>Anggota keluarga · {d.anggota.length}</h2>
+          <button type="button" onClick={() => setMode({ m: "anggota" })} className={`${tombolKecil} border-transparent text-white`} style={{ backgroundColor: HIJAU }}>
+            <UserPlus className="h-3.5 w-3.5" />Tambah
+          </button>
+        </div>
+        <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white">
           {d.anggota.map((a) => (
-            <li key={a.id} className="p-4">
-              <p className="text-lg font-semibold">{a.nama} {a.status !== "Aktif" && <span className="text-base text-red-700">({a.status})</span>}</p>
-              <p className="text-base text-gray-600">{a.kedudukan} · {a.jenisKelamin} · {a.umur != null ? `${a.umur} th` : "umur belum diketahui"}</p>
-              <div className="grid grid-cols-2 gap-2 mt-3">
-                <TombolBesar varian="kedua" ikon={<Pencil className="w-5 h-5" />} onClick={() => setMode({ m: "orang", a })}>Kondisi</TombolBesar>
-                <TombolBesar varian="kedua" onClick={() => setMode({ m: "dasar", a })}>Data dasar</TombolBesar>
+            <li key={a.id} className="px-3 py-2">
+              <div className="flex items-start gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="break-words text-sm font-semibold">
+                    {a.nama} {a.status !== "Aktif" && <span className="text-xs font-normal text-red-700">({a.status})</span>}
+                  </p>
+                  <p className="text-xs text-gray-500">{a.kedudukan} · {a.jenisKelamin === "Laki-laki" ? "L" : a.jenisKelamin === "Perempuan" ? "P" : "-"} · {a.umur != null ? `${a.umur} th` : "umur ?"}{a.nomorHp ? ` · ${a.nomorHp}` : ""}</p>
+                </div>
+                {a.nomorHp && !a.nomorHpPerluCek && (
+                  <a href={toWaMeUrl(a.nomorHp, `Assalamu'alaikum, ${a.nama}. Kami dari pengurus RW 03 Padasuka.`)} target="_blank" rel="noopener noreferrer"
+                    aria-label={`WhatsApp ${a.nama}`} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#25D366] text-white">
+                    <MessageCircle className="h-4 w-4" />
+                  </a>
+                )}
+              </div>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                <button type="button" onClick={() => setMode({ m: "dasar", a })} className={`${tombolKecil} border-gray-300 bg-white text-gray-800 hover:border-emerald-400`}><IdCard className="h-3.5 w-3.5" />Ubah data</button>
+                <button type="button" onClick={() => setMode({ m: "orang", a })} className={`${tombolKecil} border-gray-300 bg-white text-gray-800 hover:border-emerald-400`}><Pencil className="h-3.5 w-3.5" />Kondisi</button>
+                <button type="button" onClick={() => setHapusOrang(a)} className={`${tombolKecil} ml-auto border-red-200 bg-white text-red-700 hover:bg-red-50`}><Trash2 className="h-3.5 w-3.5" />Hapus</button>
               </div>
             </li>
           ))}
+          {d.anggota.length === 0 && <li className="px-3 py-3 text-sm text-gray-500">Belum ada anggota.</li>}
         </ul>
-        <div className="mt-3"><TombolBesar varian="kedua" ikon={<UserPlus className="w-6 h-6" />} onClick={() => setMode({ m: "anggota" })}>Tambah anggota</TombolBesar></div>
       </section>
 
-      <section className="space-y-3">
-        <h2 className="text-xl font-bold">Keluarga & rumah</h2>
-        <KartuMenu ikon={<Pencil className="w-7 h-7" />} judul="Kondisi keluarga" sub="Tempat tinggal, rumah, ekonomi, kerentanan" onClick={() => setMode({ m: "keluarga" })} />
-        <KartuMenu ikon={<Home className="w-7 h-7" />} judul={d.rumah ? `Rumah: ${d.rumah.alamat}${d.rumah.noUnit ? ` No. ${d.rumah.noUnit}` : ""}` : "Belum terhubung ke rumah"}
+      <section className="space-y-1.5">
+        <h2 className={judulBagian}>Keluarga & rumah</h2>
+        <KartuMenu ikon={<Pencil />} judul="Kondisi keluarga" sub="Tempat tinggal, rumah, ekonomi, kerentanan" onClick={() => setMode({ m: "keluarga" })} />
+        <KartuMenu ikon={<Home />} judul={d.rumah ? `Rumah: ${d.rumah.alamat}${d.rumah.noUnit ? ` No. ${d.rumah.noUnit}` : ""}` : "Belum terhubung ke rumah"}
           sub={d.rumah ? `${d.rumah.jumlahKk} KK di rumah ini · ketuk untuk ganti` : "Ketuk untuk menghubungkan"} onClick={() => setMode({ m: "rumah" })} />
       </section>
 
-      <section className="space-y-3">
-        <h2 className="text-xl font-bold">QR pemberitahuan</h2>
-        <p className="text-lg">{d.qr ? `Kode kartu ${d.qr.kodeKartu} · berlaku sampai ${new Date(d.qr.berlakuSampai).toLocaleDateString("id-ID")}` : "Belum dibuat."}</p>
-        <TombolBesar ikon={<QrCode className="w-6 h-6" />} onClick={() => go(`/cetak?kk=${d.kk.id}`)}>Cetak satu</TombolBesar>
-        {d.qr && <TombolBesar varian="kedua" ikon={<RefreshCw className="w-6 h-6" />} onClick={gantiQr}>Ganti QR (kartu hilang)</TombolBesar>}
-        <TombolBesar varian="kedua" ikon={<Truck className="w-6 h-6" />} onClick={() => go(`/pindah?kk=${d.kk.id}`)}>Pindah ke RT lain</TombolBesar>
+      <section className="space-y-1.5">
+        <h2 className={judulBagian}>QR & lainnya</h2>
+        <p className="text-xs text-gray-600">{d.qr ? `Kode kartu ${d.qr.kodeKartu} · berlaku sampai ${new Date(d.qr.berlakuSampai).toLocaleDateString("id-ID")}` : "QR belum dibuat."}</p>
+        <div className="flex flex-wrap gap-1.5">
+          <button type="button" onClick={() => go(`/cetak?kk=${d.kk.id}`)} className={`${tombolKecil} border-transparent text-white`} style={{ backgroundColor: HIJAU }}><QrCode className="h-3.5 w-3.5" />Cetak QR</button>
+          {d.qr && <button type="button" onClick={() => setTanyaQr(true)} className={`${tombolKecil} border-gray-300 bg-white text-gray-800`}><RefreshCw className="h-3.5 w-3.5" />Ganti QR</button>}
+          <button type="button" onClick={() => go(`/pindah?kk=${d.kk.id}`)} className={`${tombolKecil} border-gray-300 bg-white text-gray-800`}><Truck className="h-3.5 w-3.5" />Pindah RT</button>
+          <button type="button" onClick={() => setHapusKk(true)} className={`${tombolKecil} ml-auto border-red-200 bg-white text-red-700 hover:bg-red-50`}><Trash2 className="h-3.5 w-3.5" />Hapus KK</button>
+        </div>
       </section>
+
+      <AlertDialog open={hapusOrang != null} onOpenChange={(o) => { if (!o && !menghapus) setHapusOrang(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hapus {hapusOrang?.nama}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Data warga ini dihapus permanen dan tidak bisa dikembalikan. Bila warga pindah atau meninggal, lebih baik ubah statusnya lewat “Ubah data” agar riwayat tetap tercatat.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={menghapus}>Batal</AlertDialogCancel>
+            <AlertDialogAction disabled={menghapus} onClick={(e) => { e.preventDefault(); lakukanHapusOrang(); }} className="bg-red-600 hover:bg-red-700">
+              {menghapus ? "Menghapus…" : "Hapus permanen"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={hapusKk} onOpenChange={(o) => { if (!menghapus) setHapusKk(o); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hapus KK {kepala}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Kartu keluarga beserta {d.anggota.length} anggotanya dan semua data terkait dihapus permanen. Tindakan ini tidak bisa dibatalkan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={menghapus}>Batal</AlertDialogCancel>
+            <AlertDialogAction disabled={menghapus} onClick={(e) => { e.preventDefault(); lakukanHapusKk(); }} className="bg-red-600 hover:bg-red-700">
+              {menghapus ? "Menghapus…" : "Hapus KK"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={tanyaQr} onOpenChange={setTanyaQr}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ganti QR?</AlertDialogTitle>
+            <AlertDialogDescription>Kartu lama tidak akan bisa dipakai lagi.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction onClick={gantiQr}>Ganti QR</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

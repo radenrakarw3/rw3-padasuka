@@ -14,6 +14,7 @@
     "db:migrate": "drizzle-kit migrate",
     "test:wilayah": "tsx script/wilayah-smoke.ts",
     "test:surat": "tsx script/surat-sakti-smoke.ts",
+    "test:rw3biz": "tsx script/rw3biz-kontribusi-smoke.ts",
     "wilayah:migrate": "tsx script/wilayah-migrate.ts"
   },
   "dependencies": {

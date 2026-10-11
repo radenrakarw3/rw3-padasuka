@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, getApiErrorMessage, readJsonSafely } from "@/lib/queryClient";
 import { Loader2 } from "lucide-react";
 import { SuccessPanel } from "@/components/gov/success-panel";
-import { Visitrw3SyaratPanel } from "@/components/gov/visitrw3-syarat-panel";
+import { KontribusiTinggalInfo, Visitrw3SyaratPanel } from "@/components/gov/visitrw3-syarat-panel";
 import { FeatureExplain } from "@/components/gov/feature-explain";
 import { settingsRowsToMap } from "@/lib/visitrw3-kontribusi";
 
@@ -30,6 +30,7 @@ export default function Visitrw3Perpanjang() {
   const [previewSampai, setPreviewSampai] = useState("");
   const [setujuTataTertib, setSetujuTataTertib] = useState(false);
   const [keperluan, setKeperluan] = useState<"tinggal" | "bisnis" | "">("");
+  const [jenisWarga, setJenisWarga] = useState("");
   const [result, setResult] = useState<{ nomorVisitrw3: string; nomorLama: string } | null>(null);
 
   const { data: settingsRows = [], isLoading: settingsLoading } = useQuery({
@@ -47,6 +48,7 @@ export default function Visitrw3Perpanjang() {
     const nomor = nomorLama.trim().toUpperCase();
     if (nomor.length < 8) {
       setKeperluan("");
+      setJenisWarga("");
       return;
     }
     let cancelled = false;
@@ -55,6 +57,7 @@ export default function Visitrw3Perpanjang() {
       .then((data) => {
         if (cancelled || !data?.pengajuan) return;
         setKeperluan(data.pengajuan.keperluanPengajuan);
+        setJenisWarga(data.pengajuan.jenisWarga ?? "");
       })
       .catch(() => {});
     return () => {
@@ -98,6 +101,10 @@ export default function Visitrw3Perpanjang() {
   useEffect(() => {
     void updatePreview();
   }, [tanggalBayar, terminBulan]);
+
+  useEffect(() => {
+    setSetujuTataTertib(false);
+  }, [terminBulan, jenisWarga]);
 
   if (result) {
     return (
@@ -209,6 +216,15 @@ export default function Visitrw3Perpanjang() {
           <Visitrw3SyaratPanel
             tataMasyarakat={settingsMap.tata_tertib_masyarakat ?? ""}
             tataKhusus={settingsMap.tata_tertib_penyewa ?? ""}
+            kontribusi={
+              jenisWarga === "kost" || jenisWarga === "kontrak" ? (
+                <KontribusiTinggalInfo
+                  jenis={jenisWarga}
+                  settingsRows={settingsRows}
+                  terminBulan={parseInt(terminBulan, 10)}
+                />
+              ) : null
+            }
             setuju={setujuTataTertib}
             onSetuju={setSetujuTataTertib}
             loading={settingsLoading}

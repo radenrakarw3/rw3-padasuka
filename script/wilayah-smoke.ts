@@ -180,10 +180,6 @@ async function main() {
     pastikan(auth.includes("isAdmin") && auth.includes("x-wilayah-rt") && auth.includes("isWilayahRt(rt)") && !/req\.(body|query)/.test(auth), "aktor kelola RT tidak aman");
     pastikan(!auth.includes("rtjuaraRt"), "login PIN RT masih dipakai");
   });
-  await uji("tidak ada PIN/kredensial ter-hardcode di Blusukan", () => {
-    pastikan(!baca("server/blusukan-routes.ts").includes("664599"), "PIN lama masih ada");
-  });
-
   if (DB_UJI) await ujiDatabase();
   else console.log("\n[Integrasi DB] dilewati — set WILAYAH_TEST_DATABASE_URL ke database UJI yang sudah dimigrasi.");
 

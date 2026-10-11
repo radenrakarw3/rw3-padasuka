@@ -404,7 +404,6 @@ export function WargaFormFields({
   kkList,
   kkIdLocked,
   showVerifikasiAdmin = false,
-  variant = "default",
   showPindahKk = false,
 }: {
   formData: WargaFormValues;
@@ -421,12 +420,9 @@ export function WargaFormFields({
   /** @deprecated Gunakan showVerifikasiAdmin */
   verifikasiTitle?: string;
   showVerifikasiAdmin?: boolean;
-  /** Form lapangan Blusukan RW — status sosial di bagian tambahan. */
-  variant?: "default" | "blusukan";
-  /** Pindah ke KK lain (mode blusukan). */
+  /** Pindah ke KK lain (di bagian data tambahan). */
   showPindahKk?: boolean;
 }) {
-  const isBlusukan = variant === "blusukan";
   const showAdmin = showVerifikasiAdmin ?? false;
   const [tambahanOpen, setTambahanOpen] = useState(false);
   const age = useMemo(() => getWargaAge(formData.tanggalLahir), [formData.tanggalLahir]);
@@ -484,19 +480,19 @@ export function WargaFormFields({
   );
 
   return (
-    <div className={isBlusukan ? "space-y-6" : "mx-auto max-w-md space-y-8"}>
-      {!kkIdLocked && !isBlusukan && (
+    <div className="mx-auto max-w-md space-y-8">
+      {!kkIdLocked && (
       <div className="space-y-1 relative" ref={pickerRef}>
         <Label className="text-sm">Kartu Keluarga</Label>
         {selectedKk ? (
-          <div className="flex items-center gap-2 rounded-md border p-2 h-10">
+          <div className="flex items-center gap-2 rounded-md border p-2 min-h-12 sm:min-h-10">
             <span className="text-sm flex-1 truncate">
               {selectedKk.nomorKk} - RT {selectedKk.rt}
             </span>
             <Button
               size="icon"
               variant="ghost"
-              className="h-6 w-6"
+             
               onClick={() => {
                 setFormData({ ...formData, kkId: "" });
                 setSearchVal("");
@@ -517,14 +513,14 @@ export function WargaFormFields({
               }}
               onFocus={() => setDropdownOpen(true)}
               placeholder="Cari nomor KK, alamat, atau RT..."
-              className="h-10 pl-9"
+              className="pl-9"
               data-testid={`input-search-kk-${testIdPrefix}`}
             />
           </div>
         )}
 
         {dropdownOpen && !selectedKk && (
-          <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-48 overflow-y-auto">
+          <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-64 overflow-y-auto sm:max-h-48">
             {filteredKkList.length === 0 ? (
               <p className="text-sm text-muted-foreground p-3">Tidak ditemukan</p>
             ) : (
@@ -532,7 +528,7 @@ export function WargaFormFields({
                 <button
                   key={kk.id}
                   type="button"
-                  className="w-full text-left px-3 py-2 hover:bg-accent text-sm border-b last:border-b-0"
+                  className="w-full min-h-12 text-left px-3 py-2 hover:bg-accent text-sm border-b last:border-b-0 sm:min-h-0"
                   onClick={() => {
                     setFormData({ ...formData, kkId: kk.id.toString() });
                     setDropdownOpen(false);
@@ -603,17 +599,15 @@ export function WargaFormFields({
         </div>
       </section>
 
-      {!isBlusukan && (
-        <section className="space-y-4 border-t pt-6">
-          <div>
-            <h3 className="text-base font-semibold">Status sosial</h3>
-            <p className="text-sm text-muted-foreground">Opsional jika sudah sesuai default (WNI, Islam, dll.).</p>
-          </div>
-          <div className="space-y-4">{statusSosialFields}</div>
-        </section>
-      )}
+      <section className="space-y-4 border-t pt-6">
+        <div>
+          <h3 className="text-base font-semibold">Status sosial</h3>
+          <p className="text-sm text-muted-foreground">Opsional jika sudah sesuai default (WNI, Islam, dll.).</p>
+        </div>
+        <div className="space-y-4">{statusSosialFields}</div>
+      </section>
 
-      <section className={`space-y-4 ${isBlusukan ? "" : "border-t pt-6"}`}>
+      <section className="space-y-4 border-t pt-6">
         <div>
           <h3 className="text-base font-semibold">Kontak & aktivitas</h3>
           <p className="text-sm text-muted-foreground">
@@ -625,7 +619,7 @@ export function WargaFormFields({
           {showWhatsappField(age) && (
             <div className="space-y-1.5">
               <Label>{waLabel}</Label>
-              <Input value={formData.nomorWhatsapp} onChange={(e) => updateField("nomorWhatsapp", e.target.value)} data-testid={`input-wa-${testIdPrefix}`} />
+              <Input type="tel" inputMode="tel" autoComplete="tel" value={formData.nomorWhatsapp} onChange={(e) => updateField("nomorWhatsapp", e.target.value)} data-testid={`input-wa-${testIdPrefix}`} />
               {renderError("nomorWhatsapp")}
             </div>
           )}
@@ -645,7 +639,7 @@ export function WargaFormFields({
               </div>
               <div className="space-y-1.5">
                 <Label>Nomor kontak darurat *</Label>
-                <Input value={formData.nomorKontakDarurat} onChange={(e) => updateField("nomorKontakDarurat", e.target.value)} />
+                <Input type="tel" inputMode="tel" value={formData.nomorKontakDarurat} onChange={(e) => updateField("nomorKontakDarurat", e.target.value)} />
                 {renderError("nomorKontakDarurat")}
               </div>
             </>
@@ -680,16 +674,16 @@ export function WargaFormFields({
             <div className="space-y-3 rounded-lg border border-[hsl(163,55%,32%)]/30 bg-[hsl(163,55%,22%)]/5 p-3">
               <p className="text-sm font-medium">Registrasi sipil (CRVS)</p>
               <p className="text-xs text-muted-foreground">Wajib dicek untuk usia di bawah 18 tahun.</p>
-              <div className="flex items-center gap-2">
-                <Checkbox
+              <div className="flex min-h-11 items-center gap-3 sm:min-h-0 sm:gap-2">
+                <Checkbox className="h-5 w-5 sm:h-4 sm:w-4"
                   id={`akta-inti-${testIdPrefix}`}
                   checked={formData.punyaAktaLahir}
                   onCheckedChange={(checked) => updateField("punyaAktaLahir", checked === true)}
                 />
                 <Label htmlFor={`akta-inti-${testIdPrefix}`} className="font-normal">Punya akta kelahiran</Label>
               </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
+              <div className="flex min-h-11 items-center gap-3 sm:min-h-0 sm:gap-2">
+                <Checkbox className="h-5 w-5 sm:h-4 sm:w-4"
                   id={`kia-inti-${testIdPrefix}`}
                   checked={formData.punyaKia}
                   onCheckedChange={(checked) => updateField("punyaKia", checked === true)}
@@ -803,7 +797,7 @@ export function WargaFormFields({
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="h-6 w-6"
+                   
                     onClick={() => {
                       setFormData({ ...formData, kkId: "" });
                       setSearchVal("");
@@ -833,7 +827,7 @@ export function WargaFormFields({
                     <button
                       key={kk.id}
                       type="button"
-                      className="w-full text-left px-3 py-2 hover:bg-accent text-sm border-b last:border-b-0"
+                      className="w-full min-h-12 text-left px-3 py-2 hover:bg-accent text-sm border-b last:border-b-0 sm:min-h-0"
                       onClick={() => {
                         setFormData({ ...formData, kkId: kk.id.toString() });
                         setDropdownOpen(false);
@@ -850,39 +844,33 @@ export function WargaFormFields({
             </div>
         </div>
       )}
-      {isBlusukan && (
-        <div className="space-y-4">
-          <p className="text-sm font-medium text-muted-foreground">Status sosial</p>
-          {statusSosialFields}
-        </div>
-      )}
       <div className="space-y-4">
         <p className="text-sm font-medium text-muted-foreground">Identitas & kontak lain</p>
         <div className="space-y-4">
-          <div className="space-y-1"><Label className="text-sm">Nama Alias</Label><Input value={formData.namaAlias} onChange={(e) => updateField("namaAlias", e.target.value)} className="h-10" /></div>
-          <div className="space-y-1"><Label className="text-sm">No. KK di KTP</Label><Input value={formData.noKkDiKtp} onChange={(e) => updateField("noKkDiKtp", e.target.value)} className="h-10" /></div>
-          <div className="space-y-1"><Label className="text-sm">Golongan Darah</Label><Select value={formData.golonganDarah} onValueChange={(value) => updateField("golonganDarah", value)}><SelectTrigger className="h-10"><SelectValue /></SelectTrigger><SelectContent>{golonganDarahOptions.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div>
-          <div className="space-y-1"><Label className="text-sm">Suku</Label><Input value={formData.suku} onChange={(e) => updateField("suku", e.target.value)} className="h-10" /></div>
+          <div className="space-y-1"><Label className="text-sm">Nama Alias</Label><Input value={formData.namaAlias} onChange={(e) => updateField("namaAlias", e.target.value)} /></div>
+          <div className="space-y-1"><Label className="text-sm">No. KK di KTP</Label><Input inputMode="numeric" value={formData.noKkDiKtp} onChange={(e) => updateField("noKkDiKtp", e.target.value)} /></div>
+          <div className="space-y-1"><Label className="text-sm">Golongan Darah</Label><Select value={formData.golonganDarah} onValueChange={(value) => updateField("golonganDarah", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{golonganDarahOptions.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div>
+          <div className="space-y-1"><Label className="text-sm">Suku</Label><Input value={formData.suku} onChange={(e) => updateField("suku", e.target.value)} /></div>
         </div>
       </div>
 
       <div className="space-y-4">
         <p className="text-sm font-medium text-muted-foreground">Kesehatan & program</p>
         <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Checkbox id={`bpjs-${testIdPrefix}`} checked={formData.punyaBpjsKesehatan} onCheckedChange={(checked) => updateField("punyaBpjsKesehatan", checked === true)} />
+          <div className="flex min-h-11 items-center gap-3 sm:min-h-0 sm:gap-2">
+            <Checkbox className="h-5 w-5 sm:h-4 sm:w-4" id={`bpjs-${testIdPrefix}`} checked={formData.punyaBpjsKesehatan} onCheckedChange={(checked) => updateField("punyaBpjsKesehatan", checked === true)} />
             <Label htmlFor={`bpjs-${testIdPrefix}`}>Punya BPJS Kesehatan</Label>
           </div>
           {formData.punyaBpjsKesehatan && (
             <div className="space-y-1.5">
               <Label>Nomor BPJS</Label>
-              <Input value={formData.nomorBpjsKesehatan} onChange={(e) => updateField("nomorBpjsKesehatan", e.target.value)} />
+              <Input inputMode="numeric" value={formData.nomorBpjsKesehatan} onChange={(e) => updateField("nomorBpjsKesehatan", e.target.value)} />
               {renderError("nomorBpjsKesehatan")}
             </div>
           )}
           {showIbuHamil(formData.jenisKelamin, age) && (
-            <div className="flex items-center gap-2">
-              <Checkbox id={`ibuHamil-${testIdPrefix}`} checked={formData.ibuHamil} onCheckedChange={(checked) => updateField("ibuHamil", checked === true)} />
+            <div className="flex min-h-11 items-center gap-3 sm:min-h-0 sm:gap-2">
+              <Checkbox className="h-5 w-5 sm:h-4 sm:w-4" id={`ibuHamil-${testIdPrefix}`} checked={formData.ibuHamil} onCheckedChange={(checked) => updateField("ibuHamil", checked === true)} />
               <Label htmlFor={`ibuHamil-${testIdPrefix}`}>Sedang hamil</Label>
             </div>
           )}
@@ -891,8 +879,8 @@ export function WargaFormFields({
 
       <div className="space-y-4">
         <div className="space-y-4">
-          <div className="space-y-1"><Label className="text-sm">No. WhatsApp Alternatif</Label><Input value={formData.nomorWhatsappAlternatif} onChange={(e) => updateField("nomorWhatsappAlternatif", e.target.value)} className="h-10" />{renderError("nomorWhatsappAlternatif")}</div>
-          <div className="space-y-1"><Label className="text-sm">Email</Label><Input value={formData.email} onChange={(e) => updateField("email", e.target.value)} className="h-10" />{renderError("email")}</div>
+          <div className="space-y-1"><Label className="text-sm">No. WhatsApp Alternatif</Label><Input type="tel" inputMode="tel" value={formData.nomorWhatsappAlternatif} onChange={(e) => updateField("nomorWhatsappAlternatif", e.target.value)} />{renderError("nomorWhatsappAlternatif")}</div>
+          <div className="space-y-1"><Label className="text-sm">Email</Label><Input inputMode="email" autoComplete="email" value={formData.email} onChange={(e) => updateField("email", e.target.value)} />{renderError("email")}</div>
           <div className="space-y-1 sm:col-span-2"><Label className="text-sm">Alamat Domisili (jika beda dari KK)</Label><Textarea value={formData.alamatDomisili} onChange={(e) => updateField("alamatDomisili", e.target.value)} rows={2} /></div>
         </div>
       </div>
@@ -900,22 +888,22 @@ export function WargaFormFields({
       <div className="space-y-4">
         <p className="text-sm font-medium text-muted-foreground">Dokumen kependudukan</p>
         <div className="space-y-4">
-          <div className="space-y-1"><Label className="text-sm">Status e-KTP</Label><Select value={formData.statusEktp} onValueChange={(value) => updateField("statusEktp", value)}><SelectTrigger className="h-10"><SelectValue /></SelectTrigger><SelectContent>{statusEktpOptions.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select>{renderError("statusEktp")}</div>
-          <div className="space-y-1"><Label className="text-sm">No. Akta Lahir</Label><Input value={formData.noAktaLahir} onChange={(e) => updateField("noAktaLahir", e.target.value)} className="h-10" />{renderError("noAktaLahir")}</div>
+          <div className="space-y-1"><Label className="text-sm">Status e-KTP</Label><Select value={formData.statusEktp} onValueChange={(value) => updateField("statusEktp", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{statusEktpOptions.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select>{renderError("statusEktp")}</div>
+          <div className="space-y-1"><Label className="text-sm">No. Akta Lahir</Label><Input value={formData.noAktaLahir} onChange={(e) => updateField("noAktaLahir", e.target.value)} />{renderError("noAktaLahir")}</div>
         </div>
         <div className="grid gap-2 sm:grid-cols-2">
           {!needsCrvsDocuments(age) && (
-            <div className="flex items-center gap-2">
-              <Checkbox id={`akta-${testIdPrefix}`} checked={formData.punyaAktaLahir} onCheckedChange={(checked) => updateField("punyaAktaLahir", checked === true)} />
+            <div className="flex min-h-11 items-center gap-3 sm:min-h-0 sm:gap-2">
+              <Checkbox className="h-5 w-5 sm:h-4 sm:w-4" id={`akta-${testIdPrefix}`} checked={formData.punyaAktaLahir} onCheckedChange={(checked) => updateField("punyaAktaLahir", checked === true)} />
               <Label htmlFor={`akta-${testIdPrefix}`}>Punya Akta Lahir</Label>
             </div>
           )}
-          <div className="flex items-center gap-2"><Checkbox id={`npwp-${testIdPrefix}`} checked={formData.punyaNpwp} onCheckedChange={(checked) => updateField("punyaNpwp", checked === true)} /><Label htmlFor={`npwp-${testIdPrefix}`}>Punya NPWP</Label></div>
-          <div className="flex items-center gap-2"><Checkbox id={`paspor-${testIdPrefix}`} checked={formData.punyaPaspor} onCheckedChange={(checked) => updateField("punyaPaspor", checked === true)} /><Label htmlFor={`paspor-${testIdPrefix}`}>Punya Paspor</Label></div>
-          <div className="flex items-center gap-2"><Checkbox id={`sim-${testIdPrefix}`} checked={formData.punyaSim} onCheckedChange={(checked) => updateField("punyaSim", checked === true)} /><Label htmlFor={`sim-${testIdPrefix}`}>Punya SIM</Label></div>
+          <div className="flex min-h-11 items-center gap-3 sm:min-h-0 sm:gap-2"><Checkbox className="h-5 w-5 sm:h-4 sm:w-4" id={`npwp-${testIdPrefix}`} checked={formData.punyaNpwp} onCheckedChange={(checked) => updateField("punyaNpwp", checked === true)} /><Label htmlFor={`npwp-${testIdPrefix}`}>Punya NPWP</Label></div>
+          <div className="flex min-h-11 items-center gap-3 sm:min-h-0 sm:gap-2"><Checkbox className="h-5 w-5 sm:h-4 sm:w-4" id={`paspor-${testIdPrefix}`} checked={formData.punyaPaspor} onCheckedChange={(checked) => updateField("punyaPaspor", checked === true)} /><Label htmlFor={`paspor-${testIdPrefix}`}>Punya Paspor</Label></div>
+          <div className="flex min-h-11 items-center gap-3 sm:min-h-0 sm:gap-2"><Checkbox className="h-5 w-5 sm:h-4 sm:w-4" id={`sim-${testIdPrefix}`} checked={formData.punyaSim} onCheckedChange={(checked) => updateField("punyaSim", checked === true)} /><Label htmlFor={`sim-${testIdPrefix}`}>Punya SIM</Label></div>
         </div>
         {formData.punyaSim && (
-          <div className="space-y-1"><Label className="text-sm">Jenis SIM</Label><Select value={formData.jenisSim} onValueChange={(value) => updateField("jenisSim", value)}><SelectTrigger className="h-10"><SelectValue placeholder="Pilih jenis SIM" /></SelectTrigger><SelectContent>{jenisSimOptions.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select>{renderError("jenisSim")}</div>
+          <div className="space-y-1"><Label className="text-sm">Jenis SIM</Label><Select value={formData.jenisSim} onValueChange={(value) => updateField("jenisSim", value)}><SelectTrigger><SelectValue placeholder="Pilih jenis SIM" /></SelectTrigger><SelectContent>{jenisSimOptions.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select>{renderError("jenisSim")}</div>
         )}
       </div>
 
@@ -925,20 +913,20 @@ export function WargaFormFields({
           <Label>Keahlian</Label>
           <Input value={formData.keahlian} onChange={(e) => updateField("keahlian", e.target.value)} />
         </div>
-        <div className="flex items-center gap-2"><Checkbox id={`sekolah-${testIdPrefix}`} checked={formData.sedangSekolah} onCheckedChange={(checked) => updateField("sedangSekolah", checked === true)} /><Label htmlFor={`sekolah-${testIdPrefix}`}>Sedang Sekolah</Label></div>
+        <div className="flex min-h-11 items-center gap-3 sm:min-h-0 sm:gap-2"><Checkbox className="h-5 w-5 sm:h-4 sm:w-4" id={`sekolah-${testIdPrefix}`} checked={formData.sedangSekolah} onCheckedChange={(checked) => updateField("sedangSekolah", checked === true)} /><Label htmlFor={`sekolah-${testIdPrefix}`}>Sedang Sekolah</Label></div>
         {formData.sedangSekolah && (
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1 sm:col-span-2"><Label className="text-sm">Nama Sekolah</Label><Input value={formData.namaSekolah} onChange={(e) => updateField("namaSekolah", e.target.value)} className="h-10" />{renderError("namaSekolah")}</div>
-            <div className="space-y-1"><Label className="text-sm">Jenjang Sekolah</Label><Select value={formData.jenjangSekolah} onValueChange={(value) => updateField("jenjangSekolah", value)}><SelectTrigger className="h-10"><SelectValue placeholder="Pilih jenjang" /></SelectTrigger><SelectContent>{jenjangSekolahOptions.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select>{renderError("jenjangSekolah")}</div>
-            <div className="space-y-1"><Label className="text-sm">Kelas</Label><Input value={formData.kelas} onChange={(e) => updateField("kelas", e.target.value)} className="h-10" /></div>
-            <div className="space-y-1 sm:col-span-2"><Label className="text-sm">Jurusan</Label><Input value={formData.jurusan} onChange={(e) => updateField("jurusan", e.target.value)} className="h-10" /></div>
+            <div className="space-y-1 sm:col-span-2"><Label className="text-sm">Nama Sekolah</Label><Input value={formData.namaSekolah} onChange={(e) => updateField("namaSekolah", e.target.value)} />{renderError("namaSekolah")}</div>
+            <div className="space-y-1"><Label className="text-sm">Jenjang Sekolah</Label><Select value={formData.jenjangSekolah} onValueChange={(value) => updateField("jenjangSekolah", value)}><SelectTrigger><SelectValue placeholder="Pilih jenjang" /></SelectTrigger><SelectContent>{jenjangSekolahOptions.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select>{renderError("jenjangSekolah")}</div>
+            <div className="space-y-1"><Label className="text-sm">Kelas</Label><Input value={formData.kelas} onChange={(e) => updateField("kelas", e.target.value)} /></div>
+            <div className="space-y-1 sm:col-span-2"><Label className="text-sm">Jurusan</Label><Input value={formData.jurusan} onChange={(e) => updateField("jurusan", e.target.value)} /></div>
           </div>
         )}
-        <div className="flex items-center gap-2"><Checkbox id={`kuliah-${testIdPrefix}`} checked={formData.sedangKuliah} onCheckedChange={(checked) => updateField("sedangKuliah", checked === true)} /><Label htmlFor={`kuliah-${testIdPrefix}`}>Sedang Kuliah</Label></div>
+        <div className="flex min-h-11 items-center gap-3 sm:min-h-0 sm:gap-2"><Checkbox className="h-5 w-5 sm:h-4 sm:w-4" id={`kuliah-${testIdPrefix}`} checked={formData.sedangKuliah} onCheckedChange={(checked) => updateField("sedangKuliah", checked === true)} /><Label htmlFor={`kuliah-${testIdPrefix}`}>Sedang Kuliah</Label></div>
         {formData.sedangKuliah && (
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1 sm:col-span-2"><Label className="text-sm">Nama Kampus</Label><Input value={formData.namaKampus} onChange={(e) => updateField("namaKampus", e.target.value)} className="h-10" />{renderError("namaKampus")}</div>
-            <div className="space-y-1"><Label className="text-sm">Semester</Label><Select value={formData.semester} onValueChange={(value) => updateField("semester", value)}><SelectTrigger className="h-10"><SelectValue placeholder="Pilih semester" /></SelectTrigger><SelectContent>{semesterOptions.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select>{renderError("semester")}</div>
+            <div className="space-y-1 sm:col-span-2"><Label className="text-sm">Nama Kampus</Label><Input value={formData.namaKampus} onChange={(e) => updateField("namaKampus", e.target.value)} />{renderError("namaKampus")}</div>
+            <div className="space-y-1"><Label className="text-sm">Semester</Label><Select value={formData.semester} onValueChange={(value) => updateField("semester", value)}><SelectTrigger><SelectValue placeholder="Pilih semester" /></SelectTrigger><SelectContent>{semesterOptions.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select>{renderError("semester")}</div>
           </div>
         )}
       </div>
@@ -946,47 +934,47 @@ export function WargaFormFields({
       <div className="space-y-4">
         <div className="space-y-4">
           <div className="space-y-1.5"><Label>Status pekerjaan</Label><Select value={formData.statusPekerjaan} onValueChange={(value) => updateField("statusPekerjaan", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{statusPekerjaanOptions.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select>{renderError("statusPekerjaan")}</div>
-          <div className="space-y-1"><Label className="text-sm">Penghasilan Pribadi</Label><Select value={formData.penghasilanPribadi} onValueChange={(value) => updateField("penghasilanPribadi", value)}><SelectTrigger className="h-10"><SelectValue /></SelectTrigger><SelectContent>{penghasilanPribadiOptions.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div>
-          <div className="space-y-1"><Label className="text-sm">Sumber Penghasilan</Label><Input value={formData.sumberPenghasilan} onChange={(e) => updateField("sumberPenghasilan", e.target.value)} className="h-10" /></div>
-          <div className="space-y-1"><Label className="text-sm">Nama Tempat Kerja</Label><Input value={formData.namaTempatKerja} onChange={(e) => updateField("namaTempatKerja", e.target.value)} className="h-10" />{renderError("namaTempatKerja")}</div>
-          <div className="space-y-1"><Label className="text-sm">Alamat Tempat Kerja</Label><Input value={formData.alamatTempatKerja} onChange={(e) => updateField("alamatTempatKerja", e.target.value)} className="h-10" /></div>
+          <div className="space-y-1"><Label className="text-sm">Penghasilan Pribadi</Label><Select value={formData.penghasilanPribadi} onValueChange={(value) => updateField("penghasilanPribadi", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{penghasilanPribadiOptions.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div>
+          <div className="space-y-1"><Label className="text-sm">Sumber Penghasilan</Label><Input value={formData.sumberPenghasilan} onChange={(e) => updateField("sumberPenghasilan", e.target.value)} /></div>
+          <div className="space-y-1"><Label className="text-sm">Nama Tempat Kerja</Label><Input value={formData.namaTempatKerja} onChange={(e) => updateField("namaTempatKerja", e.target.value)} />{renderError("namaTempatKerja")}</div>
+          <div className="space-y-1"><Label className="text-sm">Alamat Tempat Kerja</Label><Input value={formData.alamatTempatKerja} onChange={(e) => updateField("alamatTempatKerja", e.target.value)} /></div>
         </div>
-        <div className="flex items-center gap-2"><Checkbox id={`usaha-${testIdPrefix}`} checked={formData.punyaUsaha} onCheckedChange={(checked) => updateField("punyaUsaha", checked === true)} /><Label htmlFor={`usaha-${testIdPrefix}`}>Punya Usaha</Label></div>
+        <div className="flex min-h-11 items-center gap-3 sm:min-h-0 sm:gap-2"><Checkbox className="h-5 w-5 sm:h-4 sm:w-4" id={`usaha-${testIdPrefix}`} checked={formData.punyaUsaha} onCheckedChange={(checked) => updateField("punyaUsaha", checked === true)} /><Label htmlFor={`usaha-${testIdPrefix}`}>Punya Usaha</Label></div>
         {formData.punyaUsaha && (
-          <div className="space-y-1"><Label className="text-sm">Nama Usaha</Label><Input value={formData.namaUsaha} onChange={(e) => updateField("namaUsaha", e.target.value)} className="h-10" />{renderError("namaUsaha")}</div>
+          <div className="space-y-1"><Label className="text-sm">Nama Usaha</Label><Input value={formData.namaUsaha} onChange={(e) => updateField("namaUsaha", e.target.value)} />{renderError("namaUsaha")}</div>
         )}
       </div>
 
       <div className="space-y-4">
         <p className="text-sm font-medium text-muted-foreground">Kesehatan lanjutan</p>
         <div className="grid gap-2 sm:grid-cols-2">
-          <div className="flex items-center gap-2"><Checkbox id={`kronis-${testIdPrefix}`} checked={formData.punyaPenyakitKronis} onCheckedChange={(checked) => updateField("punyaPenyakitKronis", checked === true)} /><Label htmlFor={`kronis-${testIdPrefix}`}>Penyakit kronis</Label></div>
-          <div className="flex items-center gap-2"><Checkbox id={`damping-${testIdPrefix}`} checked={formData.butuhPendampinganKesehatan} onCheckedChange={(checked) => updateField("butuhPendampinganKesehatan", checked === true)} /><Label htmlFor={`damping-${testIdPrefix}`}>Butuh pendampingan</Label></div>
+          <div className="flex min-h-11 items-center gap-3 sm:min-h-0 sm:gap-2"><Checkbox className="h-5 w-5 sm:h-4 sm:w-4" id={`kronis-${testIdPrefix}`} checked={formData.punyaPenyakitKronis} onCheckedChange={(checked) => updateField("punyaPenyakitKronis", checked === true)} /><Label htmlFor={`kronis-${testIdPrefix}`}>Penyakit kronis</Label></div>
+          <div className="flex min-h-11 items-center gap-3 sm:min-h-0 sm:gap-2"><Checkbox className="h-5 w-5 sm:h-4 sm:w-4" id={`damping-${testIdPrefix}`} checked={formData.butuhPendampinganKesehatan} onCheckedChange={(checked) => updateField("butuhPendampinganKesehatan", checked === true)} /><Label htmlFor={`damping-${testIdPrefix}`}>Butuh pendampingan</Label></div>
         </div>
-        {formData.punyaPenyakitKronis && <div className="space-y-1"><Label className="text-sm">Penyakit Kronis</Label><Input value={formData.penyakitKronis} onChange={(e) => updateField("penyakitKronis", e.target.value)} className="h-10" />{renderError("penyakitKronis")}</div>}
+        {formData.punyaPenyakitKronis && <div className="space-y-1"><Label className="text-sm">Penyakit Kronis</Label><Input value={formData.penyakitKronis} onChange={(e) => updateField("penyakitKronis", e.target.value)} />{renderError("penyakitKronis")}</div>}
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1"><Label className="text-sm">Alergi</Label><Input value={formData.alergi} onChange={(e) => updateField("alergi", e.target.value)} className="h-10" /></div>
-          <div className="space-y-1"><Label className="text-sm">Riwayat Rawat Inap</Label><Input value={formData.riwayatRawatInap} onChange={(e) => updateField("riwayatRawatInap", e.target.value)} className="h-10" /></div>
+          <div className="space-y-1"><Label className="text-sm">Alergi</Label><Input value={formData.alergi} onChange={(e) => updateField("alergi", e.target.value)} /></div>
+          <div className="space-y-1"><Label className="text-sm">Riwayat Rawat Inap</Label><Input value={formData.riwayatRawatInap} onChange={(e) => updateField("riwayatRawatInap", e.target.value)} /></div>
         </div>
       </div>
 
       <div className="space-y-4">
         <div className="space-y-4">
-          <div className="space-y-1"><Label className="text-sm">Status Bansos Individu</Label><Select value={formData.statusBansosIndividu} onValueChange={(value) => updateField("statusBansosIndividu", value)}><SelectTrigger className="h-10"><SelectValue /></SelectTrigger><SelectContent>{statusBansosIndividuOptions.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select>{renderError("statusBansosIndividu")}</div>
-          {formData.statusBansosIndividu === "Penerima" && <div className="space-y-1"><Label className="text-sm">Jenis Bansos Individu</Label><Select value={formData.jenisBansosIndividu} onValueChange={(value) => updateField("jenisBansosIndividu", value)}><SelectTrigger className="h-10"><SelectValue placeholder="Pilih jenis bansos" /></SelectTrigger><SelectContent>{jenisBansosIndividuOptions.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select>{renderError("jenisBansosIndividu")}</div>}
+          <div className="space-y-1"><Label className="text-sm">Status Bansos Individu</Label><Select value={formData.statusBansosIndividu} onValueChange={(value) => updateField("statusBansosIndividu", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{statusBansosIndividuOptions.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select>{renderError("statusBansosIndividu")}</div>
+          {formData.statusBansosIndividu === "Penerima" && <div className="space-y-1"><Label className="text-sm">Jenis Bansos Individu</Label><Select value={formData.jenisBansosIndividu} onValueChange={(value) => updateField("jenisBansosIndividu", value)}><SelectTrigger><SelectValue placeholder="Pilih jenis bansos" /></SelectTrigger><SelectContent>{jenisBansosIndividuOptions.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select>{renderError("jenisBansosIndividu")}</div>}
         </div>
         <div className="grid gap-2 sm:grid-cols-2">
-          <div className="flex items-center gap-2"><Checkbox id={`yatim-${testIdPrefix}`} checked={formData.anakYatimPiatu} onCheckedChange={(checked) => updateField("anakYatimPiatu", checked === true)} /><Label htmlFor={`yatim-${testIdPrefix}`}>Anak Yatim/Piatu</Label></div>
-          <div className="flex items-center gap-2"><Checkbox id={`bantuan-${testIdPrefix}`} checked={formData.perluBantuanKhusus} onCheckedChange={(checked) => updateField("perluBantuanKhusus", checked === true)} /><Label htmlFor={`bantuan-${testIdPrefix}`}>Perlu Bantuan Khusus</Label></div>
+          <div className="flex min-h-11 items-center gap-3 sm:min-h-0 sm:gap-2"><Checkbox className="h-5 w-5 sm:h-4 sm:w-4" id={`yatim-${testIdPrefix}`} checked={formData.anakYatimPiatu} onCheckedChange={(checked) => updateField("anakYatimPiatu", checked === true)} /><Label htmlFor={`yatim-${testIdPrefix}`}>Anak Yatim/Piatu</Label></div>
+          <div className="flex min-h-11 items-center gap-3 sm:min-h-0 sm:gap-2"><Checkbox className="h-5 w-5 sm:h-4 sm:w-4" id={`bantuan-${testIdPrefix}`} checked={formData.perluBantuanKhusus} onCheckedChange={(checked) => updateField("perluBantuanKhusus", checked === true)} /><Label htmlFor={`bantuan-${testIdPrefix}`}>Perlu Bantuan Khusus</Label></div>
         </div>
         {age !== null && age >= 60 && (
           <p className="text-xs text-muted-foreground">Status lansia dihitung otomatis dari tanggal lahir (≥60 tahun).</p>
         )}
         <div className="space-y-1"><Label className="text-sm">Catatan Kerentanan</Label><Textarea value={formData.catatanKerentanan} onChange={(e) => updateField("catatanKerentanan", e.target.value)} rows={2} /></div>
-        <div className="flex items-center gap-2"><Checkbox id={`aktifrw-${testIdPrefix}`} checked={formData.aktifKegiatanRw} onCheckedChange={(checked) => updateField("aktifKegiatanRw", checked === true)} /><Label htmlFor={`aktifrw-${testIdPrefix}`}>Aktif kegiatan RW</Label></div>
-        {formData.aktifKegiatanRw && <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1"><Label className="text-sm">Bidang Partisipasi</Label><Select value={formData.bidangPartisipasi} onValueChange={(value) => updateField("bidangPartisipasi", value)}><SelectTrigger className="h-10"><SelectValue placeholder="Pilih bidang" /></SelectTrigger><SelectContent>{bidangPartisipasiOptions.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select>{renderError("bidangPartisipasi")}</div><div className="space-y-1"><Label className="text-sm">Jabatan Komunitas</Label><Input value={formData.jabatanKomunitas} onChange={(e) => updateField("jabatanKomunitas", e.target.value)} className="h-10" /></div></div>}
-        <div className="flex items-center gap-2"><Checkbox id={`kendaraan-${testIdPrefix}`} checked={formData.punyaKendaraan} onCheckedChange={(checked) => updateField("punyaKendaraan", checked === true)} /><Label htmlFor={`kendaraan-${testIdPrefix}`}>Punya kendaraan</Label></div>
-        {formData.punyaKendaraan && <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1"><Label className="text-sm">Jenis Kendaraan</Label><Select value={formData.jenisKendaraan} onValueChange={(value) => updateField("jenisKendaraan", value)}><SelectTrigger className="h-10"><SelectValue placeholder="Pilih jenis" /></SelectTrigger><SelectContent>{jenisKendaraanOptions.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select>{renderError("jenisKendaraan")}</div><div className="space-y-1"><Label className="text-sm">Jumlah</Label><Input type="number" min="0" value={formData.jumlahKendaraan} onChange={(e) => updateField("jumlahKendaraan", e.target.value)} className="h-10" />{renderError("jumlahKendaraan")}</div></div>}
+        <div className="flex min-h-11 items-center gap-3 sm:min-h-0 sm:gap-2"><Checkbox className="h-5 w-5 sm:h-4 sm:w-4" id={`aktifrw-${testIdPrefix}`} checked={formData.aktifKegiatanRw} onCheckedChange={(checked) => updateField("aktifKegiatanRw", checked === true)} /><Label htmlFor={`aktifrw-${testIdPrefix}`}>Aktif kegiatan RW</Label></div>
+        {formData.aktifKegiatanRw && <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1"><Label className="text-sm">Bidang Partisipasi</Label><Select value={formData.bidangPartisipasi} onValueChange={(value) => updateField("bidangPartisipasi", value)}><SelectTrigger><SelectValue placeholder="Pilih bidang" /></SelectTrigger><SelectContent>{bidangPartisipasiOptions.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select>{renderError("bidangPartisipasi")}</div><div className="space-y-1"><Label className="text-sm">Jabatan Komunitas</Label><Input value={formData.jabatanKomunitas} onChange={(e) => updateField("jabatanKomunitas", e.target.value)} /></div></div>}
+        <div className="flex min-h-11 items-center gap-3 sm:min-h-0 sm:gap-2"><Checkbox className="h-5 w-5 sm:h-4 sm:w-4" id={`kendaraan-${testIdPrefix}`} checked={formData.punyaKendaraan} onCheckedChange={(checked) => updateField("punyaKendaraan", checked === true)} /><Label htmlFor={`kendaraan-${testIdPrefix}`}>Punya kendaraan</Label></div>
+        {formData.punyaKendaraan && <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1"><Label className="text-sm">Jenis Kendaraan</Label><Select value={formData.jenisKendaraan} onValueChange={(value) => updateField("jenisKendaraan", value)}><SelectTrigger><SelectValue placeholder="Pilih jenis" /></SelectTrigger><SelectContent>{jenisKendaraanOptions.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select>{renderError("jenisKendaraan")}</div><div className="space-y-1"><Label className="text-sm">Jumlah</Label><Input type="number" inputMode="numeric" min="0" value={formData.jumlahKendaraan} onChange={(e) => updateField("jumlahKendaraan", e.target.value)} />{renderError("jumlahKendaraan")}</div></div>}
       </div>
         </CollapsibleContent>
       </Collapsible>
@@ -995,7 +983,7 @@ export function WargaFormFields({
         <section className="space-y-4 border-t pt-6">
           <div>
             <h3 className="text-base font-semibold">Verifikasi petugas</h3>
-            <p className="text-sm text-muted-foreground">Hanya admin / Blusukan RW.</p>
+            <p className="text-sm text-muted-foreground">Hanya admin RW.</p>
           </div>
           <div className="space-y-4">
             <div className="space-y-1.5">

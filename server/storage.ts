@@ -13,7 +13,7 @@ import { db, pool } from "./db";
 import {
   kartuKeluarga, warga, rtData, laporan, laporanKekeringan, suratWarga, suratRw,
   profileEditRequest, adminUser, waBlast, waBlastRecipient, pengajuanBansos, donasiCampaign, donasi, kasRw,
-  pemilikKost, wargaSinggah, riwayatKontrak, visitrw3Pengajuan, blusukanKunjungan, blusukanQuest,
+  pemilikKost, wargaSinggah, riwayatKontrak, visitrw3Pengajuan,
   usaha, karyawanUsaha, izinTetangga, surveyUsaha, riwayatStiker, monthlySnapshot,
   programRw, pesertaProgram, proyekInfrastruktur, umkmMakeover,
   mitra, rwcoinWallet, rwcoinTransaksi, mitraVoucher, mitraDiskon, rwcoinWithdraw, rwcoinOtp, rwcoinPendingTransaksi, kasRwcoin, rwcoinTopupRequest, wargaSavedLogin, curhatWarga, tripayTransaction,
@@ -49,8 +49,6 @@ import {
   type MitraVoucher, type MitraDiskon, type RwcoinWithdraw, type RwcoinOtp, type RwcoinPendingTransaksi,
   type RwcoinTopupRequest, type CurhatWarga,
   type IuranKk, type IuranSetting, type RwcoinSettings,
-  type BlusukanKunjungan, type InsertBlusukanKunjungan,
-  type BlusukanQuest, type InsertBlusukanQuest,
 } from "@shared/schema";
 
 function normalizeStoredPhone(phone?: string | null): string | null {
@@ -176,15 +174,6 @@ export interface IStorage {
   getAllWargaWithKk(): Promise<(Warga & { nomorKk: string; rt: number; alamat: string })[]>;
   /** Warga + KK, hanya RT 01–04 (pemukiman). */
   getAllWargaWithKkPemukiman(): Promise<(Warga & { nomorKk: string; rt: number; alamat: string })[]>;
-
-  getLatestKunjunganByKkIds(kkIds: number[]): Promise<Map<number, BlusukanKunjungan>>;
-  getBlusukanKunjunganByKkId(kkId: number, limit?: number): Promise<BlusukanKunjungan[]>;
-  createBlusukanKunjungan(data: InsertBlusukanKunjungan): Promise<BlusukanKunjungan>;
-
-  getBlusukanQuests(status?: "aktif" | "selesai"): Promise<BlusukanQuest[]>;
-  getBlusukanQuestById(id: number): Promise<BlusukanQuest | undefined>;
-  createBlusukanQuest(data: InsertBlusukanQuest): Promise<BlusukanQuest>;
-  updateBlusukanQuest(id: number, data: Partial<InsertBlusukanQuest>): Promise<BlusukanQuest | undefined>;
 
   getAdminByUsername(username: string): Promise<AdminUser | undefined>;
   getAllAdmins(): Promise<AdminUser[]>;
@@ -568,7 +557,6 @@ export class DatabaseStorage implements IStorage {
       await this.deleteWargaRelatedInTx(tx, wargaIds);
       await tx.delete(profileEditRequest).where(eq(profileEditRequest.kkId, id));
       await tx.delete(laporan).where(eq(laporan.kkId, id));
-      await tx.delete(blusukanKunjungan).where(eq(blusukanKunjungan.kkId, id));
       await tx.delete(pesertaProgram).where(eq(pesertaProgram.kkId, id));
       await tx.delete(warga).where(eq(warga.kkId, id));
       await tx.delete(donasi).where(eq(donasi.kkId, id));
@@ -1685,6 +1673,10 @@ export class DatabaseStorage implements IStorage {
         .set({ kasRwId: null, status: "belum", tanggalBayar: null, updatedAt: new Date() });
       await tx.update(visitrw3Pengajuan).set({ kasRwId: null });
       await tx.update(pemilikKost).set({ kasRwId: null });
+      await tx.execute(sql`DELETE FROM rw3biz_pembayaran`);
+      await tx.execute(
+        sql`UPDATE rw3biz_tagihan SET terbayar = 0, tanggal_bayar = NULL, status = CASE WHEN status = 'dibebaskan' THEN status ELSE 'belum' END`,
+      );
       const deleted = await tx.delete(kasRw).returning({ id: kasRw.id });
       return { deleted: deleted.length };
     });
@@ -3476,63 +3468,6 @@ export class DatabaseStorage implements IStorage {
       .limit(limit);
   }
 
-  async getLatestKunjunganByKkIds(kkIds: number[]): Promise<Map<number, BlusukanKunjungan>> {
-    const map = new Map<number, BlusukanKunjungan>();
-    if (kkIds.length === 0) return map;
-    const rows = await db
-      .select()
-      .from(blusukanKunjungan)
-      .where(inArray(blusukanKunjungan.kkId, kkIds))
-      .orderBy(desc(blusukanKunjungan.createdAt));
-    for (const row of rows) {
-      if (!map.has(row.kkId)) map.set(row.kkId, row);
-    }
-    return map;
-  }
-
-  async getBlusukanKunjunganByKkId(kkId: number, limit = 10): Promise<BlusukanKunjungan[]> {
-    return db
-      .select()
-      .from(blusukanKunjungan)
-      .where(eq(blusukanKunjungan.kkId, kkId))
-      .orderBy(desc(blusukanKunjungan.createdAt))
-      .limit(limit);
-  }
-
-  async createBlusukanKunjungan(data: InsertBlusukanKunjungan): Promise<BlusukanKunjungan> {
-    const [row] = await db.insert(blusukanKunjungan).values(data).returning();
-    return row;
-  }
-
-  async getBlusukanQuests(status?: "aktif" | "selesai"): Promise<BlusukanQuest[]> {
-    if (status) {
-      return db
-        .select()
-        .from(blusukanQuest)
-        .where(eq(blusukanQuest.status, status))
-        .orderBy(asc(blusukanQuest.deadline), desc(blusukanQuest.createdAt));
-    }
-    return db.select().from(blusukanQuest).orderBy(desc(blusukanQuest.createdAt));
-  }
-
-  async getBlusukanQuestById(id: number): Promise<BlusukanQuest | undefined> {
-    const [row] = await db.select().from(blusukanQuest).where(eq(blusukanQuest.id, id));
-    return row;
-  }
-
-  async createBlusukanQuest(data: InsertBlusukanQuest): Promise<BlusukanQuest> {
-    const [row] = await db.insert(blusukanQuest).values(data).returning();
-    return row;
-  }
-
-  async updateBlusukanQuest(id: number, data: Partial<InsertBlusukanQuest>): Promise<BlusukanQuest | undefined> {
-    const patch: Partial<InsertBlusukanQuest> & { selesaiAt?: Date | null } = { ...data };
-    if (data.status === "selesai" && !patch.selesaiAt) {
-      patch.selesaiAt = new Date();
-    }
-    const [row] = await db.update(blusukanQuest).set(patch).where(eq(blusukanQuest.id, id)).returning();
-    return row;
-  }
 }
 
 export const storage = new DatabaseStorage();

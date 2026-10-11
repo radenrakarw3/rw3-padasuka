@@ -15,9 +15,9 @@ export function TombolIsiPetugas({ product }: { product: "visit" | "rw3biz" }) {
     <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-sm">
       <span className="inline-flex items-center gap-1 text-muted-foreground"><PenLine className="h-4 w-4" /> Isi atas nama warga:</span>
       {TAUTAN[product].map((t) => (
-        <a key={t.href} href={t.href} target="_blank" rel="noreferrer" className="rounded-md border bg-white px-2.5 py-1 font-medium hover:bg-muted">{t.label}</a>
+        <a key={t.href} href={t.href} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center rounded-md border bg-white px-3 font-medium hover:bg-muted sm:min-h-0 sm:px-2.5 sm:py-1">{t.label}</a>
       ))}
-      <Link href={`/admin/pusat-cetak?item=${product === "rw3biz" ? "form-usaha" : "form-kost"}`} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-muted-foreground hover:underline">
+      <Link href={`/admin/pusat-cetak?item=${product === "rw3biz" ? "form-usaha" : "form-kost"}`} className="inline-flex min-h-10 items-center gap-1 rounded-md px-2 text-muted-foreground hover:underline sm:min-h-0 sm:py-1">
         <Printer className="h-4 w-4" /> Cetak formulir kosong
       </Link>
     </div>

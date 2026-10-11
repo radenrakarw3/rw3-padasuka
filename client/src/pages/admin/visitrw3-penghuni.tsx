@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, getApiErrorMessage, getQueryFn, readJsonSafely } from "@/lib/queryClient";
 import { invalidateVisitrw3Queries } from "@/lib/visitrw3-invalidate";
@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { pekerjaanLegacyOptions, keperluanTinggalOptions, rtOptions } from "@/lib/constants";
 import { Visitrw3AdminNav } from "@/components/admin/visitrw3-admin-nav";
 import {
@@ -62,6 +62,9 @@ function displayRt(item: WargaSinggahItem): number {
   return item.rt ?? item.rtKost ?? 0;
 }
 
+const aksiKartuClass =
+  "h-auto min-h-12 w-full flex-col gap-0.5 px-1 py-1.5 sm:h-8 sm:min-h-0 sm:w-8 sm:p-0";
+
 function displayAlamat(item: WargaSinggahItem): string {
   return item.alamat?.trim() || item.namaKost || "—";
 }
@@ -109,6 +112,11 @@ export default function AdminVisitrw3Penghuni() {
     const target = wargaList.find((w) => w.id === id);
     if (target) setPerpanjangTarget(target);
   }, [wargaList]);
+
+  const formRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (showForm) formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [showForm, editData]);
 
   const { data: riwayatList } = useQuery<RiwayatKontrak[]>({
     queryKey: ["/api/warga-singgah", riwayatTarget, "riwayat"],
@@ -258,7 +266,7 @@ export default function AdminVisitrw3Penghuni() {
         title="Warga singgah aktif"
         description={`Kontrak izin Visit RW3 yang sudah disetujui · ${wargaList?.length || 0} warga aktif`}
         actions={
-          <Button size="sm" onClick={() => { resetForm(); setShowForm(true); }} data-testid="button-tambah-warga-singgah">
+          <Button size="sm" className="flex-1 sm:flex-none" onClick={() => { resetForm(); setShowForm(true); }} data-testid="button-tambah-warga-singgah">
             <Plus className="w-4 h-4 mr-1" /> Tambah warga
           </Button>
         }
@@ -269,8 +277,9 @@ export default function AdminVisitrw3Penghuni() {
         onSearchChange={setSearchTerm}
         searchPlaceholder="Cari nama/NIK/alamat..."
       >
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
         <Select value={filterJenisWarga} onValueChange={setFilterJenisWarga}>
-          <SelectTrigger className="w-36 h-9" data-testid="select-filter-jenis-singgah">
+          <SelectTrigger className="col-span-2 sm:w-36 sm:h-9" data-testid="select-filter-jenis-singgah">
             <SelectValue placeholder="Jenis" />
           </SelectTrigger>
           <SelectContent>
@@ -281,7 +290,7 @@ export default function AdminVisitrw3Penghuni() {
           </SelectContent>
         </Select>
         <Select value={filterRt} onValueChange={setFilterRt}>
-          <SelectTrigger className="w-28 h-9" data-testid="select-filter-rt-singgah">
+          <SelectTrigger className="sm:w-28 sm:h-9" data-testid="select-filter-rt-singgah">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -292,7 +301,7 @@ export default function AdminVisitrw3Penghuni() {
           </SelectContent>
         </Select>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-36 h-9" data-testid="select-filter-status-singgah">
+          <SelectTrigger className="sm:w-36 sm:h-9" data-testid="select-filter-status-singgah">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -302,12 +311,20 @@ export default function AdminVisitrw3Penghuni() {
             <SelectItem value="habis">Habis</SelectItem>
           </SelectContent>
         </Select>
+        </div>
       </Visitrw3Toolbar>
 
+      {!isLoading && (searchTerm || filterRt !== "semua" || filterStatus !== "semua" || filterJenisWarga !== "semua") && (
+        <p className="text-xs text-muted-foreground" aria-live="polite">
+          {filtered.length} hasil sesuai filter
+        </p>
+      )}
+
       {showForm && (
+        <div ref={formRef} className="scroll-mt-20">
         <Visitrw3FormCard title={editData ? "Edit kontrak penghuni" : "Tambah kontrak penghuni"} onClose={resetForm}>
             <form onSubmit={handleSubmit} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <Label className="text-xs">Jenis warga</Label>
                   <Select value={formData.jenisWarga} onValueChange={(v) => setFormData({ ...formData, jenisWarga: v })}>
@@ -345,17 +362,17 @@ export default function AdminVisitrw3Penghuni() {
                 <Label className="text-xs">Nama Lengkap</Label>
                 <Input value={formData.namaLengkap} onChange={(e) => setFormData({ ...formData, namaLengkap: e.target.value })} required data-testid="input-nama-singgah" />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <Label className="text-xs">NIK</Label>
-                  <Input value={formData.nik} onChange={(e) => setFormData({ ...formData, nik: e.target.value })} required maxLength={16} data-testid="input-nik-singgah" />
+                  <Input value={formData.nik} onChange={(e) => setFormData({ ...formData, nik: e.target.value })} required maxLength={16} inputMode="numeric" autoComplete="off" data-testid="input-nik-singgah" />
                 </div>
                 <div>
                   <Label className="text-xs">No WA</Label>
-                  <Input value={formData.nomorWhatsapp} onChange={(e) => setFormData({ ...formData, nomorWhatsapp: e.target.value })} required placeholder="08xxx" data-testid="input-wa-singgah" />
+                  <Input value={formData.nomorWhatsapp} onChange={(e) => setFormData({ ...formData, nomorWhatsapp: e.target.value })} required type="tel" inputMode="tel" placeholder="08xxx" data-testid="input-wa-singgah" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <Label className="text-xs">Pekerjaan</Label>
                   <SearchableSelect
@@ -379,7 +396,7 @@ export default function AdminVisitrw3Penghuni() {
                   </Select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <Label className="text-xs">Tanggal Mulai Kontrak</Label>
                   <Input type="date" value={formData.tanggalMulaiKontrak} onChange={(e) => setFormData({ ...formData, tanggalMulaiKontrak: e.target.value })} required data-testid="input-mulai-kontrak" />
@@ -391,13 +408,14 @@ export default function AdminVisitrw3Penghuni() {
               </div>
               <div>
                 <Label className="text-xs">Jumlah Penghuni</Label>
-                <Input type="number" min="1" value={formData.jumlahPenghuni} onChange={(e) => setFormData({ ...formData, jumlahPenghuni: e.target.value })} required data-testid="input-jumlah-penghuni-singgah" />
+                <Input type="number" min="1" inputMode="numeric" value={formData.jumlahPenghuni} onChange={(e) => setFormData({ ...formData, jumlahPenghuni: e.target.value })} required data-testid="input-jumlah-penghuni-singgah" />
               </div>
               <Button type="submit" className="w-full" disabled={createMutation.isPending || updateMutation.isPending || !formData.rt} data-testid="button-submit-warga-singgah">
                 {(createMutation.isPending || updateMutation.isPending) ? "Menyimpan..." : editData ? "Perbarui" : "Simpan"}
               </Button>
             </form>
         </Visitrw3FormCard>
+        </div>
       )}
 
       {isLoading ? (
@@ -429,25 +447,29 @@ export default function AdminVisitrw3Penghuni() {
                 testId={`card-warga-singgah-${item.id}`}
                 accent={accent}
                 actions={
-                  <div className="flex gap-0.5">
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleEdit(item)} data-testid={`button-edit-singgah-${item.id}`}>
+                  <div className="grid w-full grid-cols-4 gap-1 border-t pt-2 sm:flex sm:w-auto sm:gap-0.5 sm:border-t-0 sm:pt-0">
+                    <Button size="icon" variant="ghost" className={aksiKartuClass} onClick={() => handleEdit(item)} aria-label="Edit" title="Edit" data-testid={`button-edit-singgah-${item.id}`}>
                       <Pencil className="w-4 h-4" />
+                      <span className="text-xs sm:sr-only">Edit</span>
                     </Button>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-blue-600" onClick={() => { setPerpanjangTarget(item); setPerpanjangData({ tanggalMulaiBaru: item.tanggalHabisKontrak, tanggalHabisBaru: "" }); }} data-testid={`button-perpanjang-${item.id}`}>
+                    <Button size="icon" variant="ghost" className={`${aksiKartuClass} text-blue-600`} onClick={() => { setPerpanjangTarget(item); setPerpanjangData({ tanggalMulaiBaru: item.tanggalHabisKontrak, tanggalHabisBaru: "" }); }} aria-label="Perpanjang" title="Perpanjang" data-testid={`button-perpanjang-${item.id}`}>
                       <RefreshCw className="w-4 h-4" />
+                      <span className="text-xs sm:sr-only">Perpanjang</span>
                     </Button>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-purple-600" onClick={() => setRiwayatTarget(item.id)} data-testid={`button-riwayat-${item.id}`}>
+                    <Button size="icon" variant="ghost" className={`${aksiKartuClass} text-purple-600`} onClick={() => setRiwayatTarget(item.id)} aria-label="Riwayat" title="Riwayat" data-testid={`button-riwayat-${item.id}`}>
                       <History className="w-4 h-4" />
+                      <span className="text-xs sm:sr-only">Riwayat</span>
                     </Button>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-red-500" onClick={() => setDeleteTarget(item)} data-testid={`button-delete-singgah-${item.id}`}>
+                    <Button size="icon" variant="ghost" className={`${aksiKartuClass} text-red-500`} onClick={() => setDeleteTarget(item)} aria-label="Hapus" title="Hapus" data-testid={`button-delete-singgah-${item.id}`}>
                       <Trash2 className="w-4 h-4" />
+                      <span className="text-xs sm:sr-only">Hapus</span>
                     </Button>
                   </div>
                 }
               >
                 <div className="flex flex-wrap items-center gap-2 mb-1">
                   <User className="w-4 h-4 text-[hsl(163,55%,22%)] shrink-0" />
-                  <span className="font-semibold text-sm" data-testid={`text-nama-singgah-${item.id}`}>{item.namaLengkap}</span>
+                  <span className="min-w-0 break-words font-semibold text-sm" data-testid={`text-nama-singgah-${item.id}`}>{item.namaLengkap}</span>
                   <Badge variant={status.variant} className="text-[10px]" data-testid={`badge-status-${item.id}`}>{status.label}</Badge>
                   <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[hsl(163,55%,22%)]/10 text-[hsl(163,55%,22%)]">
                     {labelJenisWarga(item.jenisWarga)}
@@ -456,22 +478,22 @@ export default function AdminVisitrw3Penghuni() {
                 </div>
                 <p className="text-xs text-muted-foreground font-mono">{item.nik}</p>
                 <p className="text-xs text-muted-foreground flex items-start gap-1 mt-0.5">
-                  <MapPin className="w-3 h-3 shrink-0 mt-0.5" />
-                  <span className="break-words">{displayAlamat(item)}</span>
+                  <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <span className="min-w-0 break-words">{displayAlamat(item)}</span>
                 </p>
-                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mt-1.5">
-                  <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{item.nomorWhatsapp}</span>
-                  <span className="flex items-center gap-1"><Briefcase className="w-3 h-3" />{item.pekerjaan}</span>
-                  <span className="flex items-center gap-1"><UsersIcon className="w-3 h-3" />{item.jumlahPenghuni} orang</span>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mt-1.5">
+                  <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" />{item.nomorWhatsapp}</span>
+                  <span className="flex min-w-0 items-center gap-1"><Briefcase className="w-3.5 h-3.5 shrink-0" /><span className="break-words">{item.pekerjaan}</span></span>
+                  <span className="flex items-center gap-1"><UsersIcon className="w-3.5 h-3.5" />{item.jumlahPenghuni} orang</span>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-1">
-                  <Calendar className="w-3 h-3 shrink-0" />
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground mt-1">
+                  <Calendar className="w-3.5 h-3.5 shrink-0" />
                   <span>{item.tanggalMulaiKontrak} — {item.tanggalHabisKontrak}</span>
                   <span className="font-medium text-foreground">
                     {daysLeft > 0 ? `${daysLeft} hari lagi` : daysLeft === 0 ? "Hari ini" : `${Math.abs(daysLeft)} hari lewat`}
                   </span>
                 </div>
-                <p className="text-[11px] text-muted-foreground mt-0.5">Keperluan: {item.keperluanTinggal}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Keperluan: {item.keperluanTinggal}</p>
               </Visitrw3ListItem>
             );
           })}
@@ -502,7 +524,7 @@ export default function AdminVisitrw3Penghuni() {
           </DialogHeader>
           <p className="text-sm text-muted-foreground">Perpanjang kontrak untuk: <strong>{perpanjangTarget?.namaLengkap}</strong></p>
           <p className="text-xs text-muted-foreground">Kontrak sebelumnya: {perpanjangTarget?.tanggalMulaiKontrak} — {perpanjangTarget?.tanggalHabisKontrak}</p>
-          <div className="space-y-3 mt-2">
+          <div className="space-y-3">
             <div>
               <Label className="text-xs">Tanggal Mulai Baru</Label>
               <Input type="date" value={perpanjangData.tanggalMulaiBaru} onChange={(e) => setPerpanjangData({ ...perpanjangData, tanggalMulaiBaru: e.target.value })} data-testid="input-perpanjang-mulai" />
@@ -511,6 +533,8 @@ export default function AdminVisitrw3Penghuni() {
               <Label className="text-xs">Tanggal Habis Baru</Label>
               <Input type="date" value={perpanjangData.tanggalHabisBaru} onChange={(e) => setPerpanjangData({ ...perpanjangData, tanggalHabisBaru: e.target.value })} data-testid="input-perpanjang-habis" />
             </div>
+          </div>
+          <DialogFooter>
             <Button
               className="w-full"
               disabled={perpanjangMutation.isPending || !perpanjangData.tanggalMulaiBaru || !perpanjangData.tanggalHabisBaru}
@@ -519,7 +543,7 @@ export default function AdminVisitrw3Penghuni() {
             >
               {perpanjangMutation.isPending ? "Memproses..." : "Perpanjang Kontrak"}
             </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -531,7 +555,7 @@ export default function AdminVisitrw3Penghuni() {
           {!riwayatList || riwayatList.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">Belum ada riwayat perpanjangan</p>
           ) : (
-            <div className="space-y-2 max-h-60 overflow-y-auto">
+            <div className="space-y-2 sm:max-h-60 sm:overflow-y-auto">
               {riwayatList.map((r) => (
                 <Card key={r.id}>
                   <CardContent className="py-2 px-3 text-xs">

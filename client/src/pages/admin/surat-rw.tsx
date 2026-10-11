@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, ScrollText, Download, Loader2 } from "lucide-react";
 import type { SuratRw } from "@shared/schema";
@@ -505,15 +505,15 @@ export default function AdminSuratRw() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xl font-bold" data-testid="text-surat-rw-title">Surat Sakti RW</h2>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h2 className="text-xl font-bold sm:text-2xl" data-testid="text-surat-rw-title">Surat Sakti RW</h2>
         <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
           <DialogTrigger asChild>
-            <Button className="gap-1.5" data-testid="button-buat-surat-rw">
+            <Button className="w-full gap-1.5 sm:w-auto" data-testid="button-buat-surat-rw">
               <Plus className="w-4 h-4" /> Buat Surat
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Buat Surat RW</DialogTitle>
             </DialogHeader>
@@ -521,7 +521,7 @@ export default function AdminSuratRw() {
               <div className="space-y-1">
                 <Label className="text-sm font-medium">Jenis Surat</Label>
                 <Select value={jenisSurat} onValueChange={v => { setJenisSurat(v); setExtraFields({}); setPerihal(""); }}>
-                  <SelectTrigger className="h-10" data-testid="select-jenis-surat-rw"><SelectValue placeholder="Pilih jenis surat" /></SelectTrigger>
+                  <SelectTrigger className="sm:h-10" data-testid="select-jenis-surat-rw"><SelectValue placeholder="Pilih jenis surat" /></SelectTrigger>
                   <SelectContent>
                     {jenisSuratConfigs.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
                   </SelectContent>
@@ -538,7 +538,7 @@ export default function AdminSuratRw() {
                       value={perihal}
                       onChange={e => setPerihal(e.target.value)}
                       placeholder={selectedConfig.perihalPlaceholder}
-                      className="h-10"
+                      className="sm:h-10"
                       data-testid="input-perihal-surat-rw"
                     />
                   </div>
@@ -554,7 +554,7 @@ export default function AdminSuratRw() {
                           onChange={e => setExtraFields({ ...extraFields, [field.key]: e.target.value })}
                           placeholder={field.placeholder}
                           rows={field.key === "latarBelakang" ? 5 : 3}
-                          className="text-sm"
+                          className="sm:text-sm"
                           data-testid={`input-${field.key}`}
                         />
                       ) : (
@@ -563,25 +563,27 @@ export default function AdminSuratRw() {
                           value={extraFields[field.key] || ""}
                           onChange={e => setExtraFields({ ...extraFields, [field.key]: e.target.value })}
                           placeholder={field.placeholder}
-                          className="h-10"
+                          className="sm:h-10"
                           data-testid={`input-${field.key}`}
                         />
                       )}
                     </div>
                   ))}
 
-                  <Button
-                    className="w-full h-10"
-                    onClick={() => createMutation.mutate()}
-                    disabled={createMutation.isPending || !isFormValid}
-                    data-testid="button-generate-surat-rw"
-                  >
-                    {createMutation.isPending ? (
-                      <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Menyimpan surat...</>
-                    ) : (
-                      "Buat Surat"
-                    )}
-                  </Button>
+                  <DialogFooter>
+                    <Button
+                      className="w-full"
+                      onClick={() => createMutation.mutate()}
+                      disabled={createMutation.isPending || !isFormValid}
+                      data-testid="button-generate-surat-rw"
+                    >
+                      {createMutation.isPending ? (
+                        <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Menyimpan surat...</>
+                      ) : (
+                        "Buat Surat"
+                      )}
+                    </Button>
+                  </DialogFooter>
                 </>
               )}
             </div>
@@ -603,19 +605,19 @@ export default function AdminSuratRw() {
           <Card key={s.id} data-testid={`card-surat-rw-${s.id}`}>
             <CardContent className="p-4 space-y-2">
               <div className="flex items-start justify-between gap-2">
-                <div>
+                <div className="min-w-0">
                   <p className="font-semibold text-sm">{s.jenisSurat}</p>
-                  <p className="text-xs text-muted-foreground">{s.perihal}</p>
-                  {s.tujuan && <p className="text-xs text-muted-foreground">Kepada: {s.tujuan}</p>}
-                  {s.nomorSurat && <p className="text-xs font-medium text-primary">No: {s.nomorSurat}</p>}
+                  <p className="text-sm text-muted-foreground break-words sm:text-xs">{s.perihal}</p>
+                  {s.tujuan && <p className="text-xs text-muted-foreground break-words">Kepada: {s.tujuan}</p>}
+                  {s.nomorSurat && <p className="text-xs font-medium text-primary break-all">No: {s.nomorSurat}</p>}
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button size="sm" variant="outline" className="gap-1" onClick={() => handleDownload(s)} data-testid={`button-download-rw-${s.id}`}>
-                  <Download className="w-3 h-3" /> Download
+                <Button size="sm" variant="outline" className="w-full gap-1 sm:w-auto" onClick={() => handleDownload(s)} data-testid={`button-download-rw-${s.id}`}>
+                  <Download className="w-4 h-4 sm:w-3 sm:h-3" /> Download
                 </Button>
               </div>
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 {s.createdAt ? new Date(s.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }) : ""}
               </p>
             </CardContent>

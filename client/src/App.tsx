@@ -8,6 +8,8 @@ import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 
 import { Toaster } from "@/components/ui/toaster";
 
+import { PersetujuanCookie } from "@/components/persetujuan-cookie";
+
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 import { AdminPageSkeleton } from "@/components/admin/admin-page-skeleton";
@@ -18,6 +20,7 @@ import { AuthProvider, useAuth } from "@/lib/auth";
 const PublicLanding = lazy(() => import("@/pages/public/landing"));
 
 const PublicPelayanan = lazy(() => import("@/pages/public/pelayanan"));
+const PublicKasRw = lazy(() => import("@/pages/public/kas-rw"));
 
 const Visitrw3Hub = lazy(() => import("@/pages/visitrw3/hub"));
 const Visitrw3HubPemilik = lazy(() => import("@/pages/visitrw3/hub-pemilik"));
@@ -56,14 +59,14 @@ const AdminVisitrw3Penghuni = lazy(() => import("@/pages/admin/visitrw3-penghuni
 const AdminRw3bizLanding = lazy(() => import("@/pages/admin/rw3biz-landing"));
 const AdminRw3bizAntrian = lazy(() => import("@/pages/admin/rw3biz-antrian"));
 const AdminRw3bizDashboard = lazy(() => import("@/pages/admin/rw3biz-dashboard"));
-import BlusukanrwLogin from "@/pages/blusukanrw/login";
-import BlusukanrwQuest from "@/pages/blusukanrw/quest";
-import BlusukanrwCari from "@/pages/blusukanrw/cari";
-import BlusukanrwKkDetail from "@/pages/blusukanrw/kk-detail";
+const AdminRw3bizTagihan = lazy(() => import("@/pages/admin/rw3biz-tagihan"));
+const AdminRw3bizTarif = lazy(() => import("@/pages/admin/rw3biz-tarif"));
+const AdminRw3bizRazia = lazy(() => import("@/pages/admin/rw3biz-razia"));
+const AdminRw3bizPelanggaran = lazy(() => import("@/pages/admin/rw3biz-pelanggaran"));
+const Rw3bizAduan = lazy(() => import("@/pages/rw3biz/aduan"));
+const AdminKeuangan = lazy(() => import("@/pages/admin/keuangan"));
 
 import goldLogo from "@assets/RW3-Cimahi-Logo-Gold.webp";
-import { BlusukanAuthProvider, useBlusukanAuth } from "@/lib/blusukan-auth";
-import { BlusukanrwLayout } from "@/components/blusukanrw-layout";
 import emblemSvg from "@assets/rw03-emblem.svg";
 
 
@@ -316,6 +319,11 @@ function AdminRoutes() {
 
         <Route path="/admin/rw3biz/antrian" component={AdminRw3bizAntrian} />
         <Route path="/admin/rw3biz/dashboard" component={AdminRw3bizDashboard} />
+        <Route path="/admin/rw3biz/tagihan" component={AdminRw3bizTagihan} />
+        <Route path="/admin/rw3biz/tarif" component={AdminRw3bizTarif} />
+        <Route path="/admin/rw3biz/razia" component={AdminRw3bizRazia} />
+        <Route path="/admin/rw3biz/pelanggaran" component={AdminRw3bizPelanggaran} />
+        <Route path="/admin/keuangan" component={AdminKeuangan} />
         <Route path="/admin/rw3biz" component={AdminRw3bizLanding} />
         <Route path="/admin/visitrw3/properti" component={AdminVisitrw3Properti} />
         <Route path="/admin/visitrw3/penghuni" component={AdminVisitrw3Penghuni} />
@@ -360,47 +368,6 @@ function AdminApp() {
 
 
 
-function BlusukanrwRoutes() {
-  const { authenticated, loading, bootError } = useBlusukanAuth();
-
-  if (loading) return <PageLoader />;
-
-  if (!authenticated) {
-    return (
-      <Switch>
-        <Route path="/blusukanrw">
-          {() => <BlusukanrwLogin bootError={bootError} />}
-        </Route>
-        <Route path="/blusukanrw/">{() => <Redirect to="/blusukanrw" />}</Route>
-        <Route path="/blusukanrw/:rest*">{() => <Redirect to="/blusukanrw" />}</Route>
-      </Switch>
-    );
-  }
-
-  return (
-    <BlusukanrwLayout>
-      <Switch>
-        <Route path="/blusukanrw/quest" component={BlusukanrwQuest} />
-        <Route path="/blusukanrw/cari" component={BlusukanrwCari} />
-        <Route path="/blusukanrw/kk/:id" component={BlusukanrwKkDetail} />
-        <Route path="/blusukanrw/dashboard">{() => <Redirect to="/blusukanrw/quest" />}</Route>
-        <Route path="/blusukanrw/kunjungan">{() => <Redirect to="/blusukanrw/quest" />}</Route>
-        <Route path="/blusukanrw/laporan">{() => <Redirect to="/blusukanrw/quest" />}</Route>
-        <Route path="/blusukanrw/">{() => <Redirect to="/blusukanrw/quest" />}</Route>
-        <Route path="/blusukanrw">{() => <Redirect to="/blusukanrw/quest" />}</Route>
-      </Switch>
-    </BlusukanrwLayout>
-  );
-}
-
-function BlusukanrwApp() {
-  return (
-    <BlusukanAuthProvider>
-      <BlusukanrwRoutes />
-    </BlusukanAuthProvider>
-  );
-}
-
 function PublicRoutes() {
 
   return (
@@ -413,6 +380,8 @@ function PublicRoutes() {
       <Route path="/program">{() => <Redirect to="/" />}</Route>
       <Route path="/kampung-umkm">{() => <Redirect to="/" />}</Route>
       <Route path="/pelayanan" component={PublicPelayanan} />
+      <Route path="/kas-rw" component={PublicKasRw} />
+      <Route path="/kas">{() => <Redirect to="/kas-rw" />}</Route>
 
       {/* QR pendataan keluarga — token tidak pernah membuka data lama */}
       <Route path="/isi/status">{() => <PublicIsi status />}</Route>
@@ -423,6 +392,7 @@ function PublicRoutes() {
       <Route path="/rw3biz/pengajuan" component={Rw3bizPengajuan} />
       <Route path="/rw3biz/perpanjang" component={Rw3bizPerpanjang} />
       <Route path="/rw3biz/status" component={Rw3bizStatus} />
+      <Route path="/rw3biz/aduan" component={Rw3bizAduan} />
       <Route path="/rw3biz/panduan" component={Rw3bizPanduan} />
       <Route path="/rw3biz" component={Rw3bizHub} />
 
@@ -498,16 +468,12 @@ function AppContent() {
 
   }
 
-  if (location.startsWith("/blusukanrw")) {
-    return <BlusukanrwApp />;
-  }
-
-  if (location.startsWith("/rtjuara") || location === "/rt" || location.startsWith("/rt/")) {
+  if (location.startsWith("/blusukanrw") || location.startsWith("/rtjuara") || location === "/rt" || location.startsWith("/rt/")) {
     return <Redirect to="/" />;
   }
 
   // Admin juga memakai form publik ini (mode petugas: input dari formulir kertas).
-  const layananPublik = ["/isi", "/visitrw3", "/rw3biz"].some(
+  const layananPublik = ["/isi", "/visitrw3", "/rw3biz", "/kas-rw"].some(
     (p) => location === p || location.startsWith(`${p}/`),
   );
   if (layananPublik) {
@@ -677,6 +643,8 @@ function App() {
         <AuthProvider>
 
           <Toaster />
+
+          <PersetujuanCookie />
 
           <AppUpdateGate>
 

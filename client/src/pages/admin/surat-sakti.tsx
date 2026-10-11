@@ -37,9 +37,9 @@ function DaftarSurat({ bagian, cari, buka }: { bagian: string; cari?: string; bu
       <ul className="divide-y border rounded-lg bg-white">
         {data?.map((s) => (
           <li key={s.id}>
-            <button type="button" onClick={() => buka(s.id)} className="w-full text-left p-3 hover:bg-muted/40 space-y-1">
-              <p className="font-medium">{s.perihal}</p>
-              <p className="text-xs text-muted-foreground">
+            <button type="button" onClick={() => buka(s.id)} className="w-full min-h-12 text-left p-3 hover:bg-muted/40 space-y-1">
+              <p className="font-medium break-words">{s.perihal}</p>
+              <p className="text-xs text-muted-foreground break-words">
                 {s.nomorSurat ?? "Draft"} · {PETA_JENIS[s.kodeJenis ?? ""]?.label ?? s.jenisSurat}{s.tujuan ? ` · ${s.tujuan}` : ""} · {tanggalId(s.tanggalSurat)}
                 {!s.kodeJenis && s.status === "draft" ? " · format lama" : ""}
               </p>
@@ -57,7 +57,7 @@ function DaftarSurat({ bagian, cari, buka }: { bagian: string; cari?: string; bu
 
 function Kartu({ label, n, warna, klik }: { label: string; n: number | undefined; warna?: string; klik?: () => void }) {
   return (
-    <button type="button" onClick={klik} className="rounded-lg border bg-white p-3 text-left hover:border-[hsl(163,55%,22%)]">
+    <button type="button" onClick={klik} className="min-w-0 rounded-lg border bg-white p-3 text-left hover:border-[hsl(163,55%,22%)]">
       <p className={`text-2xl font-bold ${warna ?? ""}`}>{n ?? "–"}</p>
       <p className="text-xs text-muted-foreground leading-tight">{label}</p>
     </button>
@@ -91,9 +91,9 @@ export default function SuratSakti() {
   const buka = (id: number) => setLayar({ t: "detail", id });
 
   return (
-    <div className="p-4 md:p-6 space-y-4 max-w-6xl">
+    <div className="space-y-4 max-w-6xl">
       <div>
-        <h1 className="text-2xl font-bold text-[hsl(163,55%,22%)]">Surat Sakti RW 03</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-[hsl(163,55%,22%)]">Surat Sakti RW 03</h1>
         <p className="text-sm text-muted-foreground">Pilih jenis surat, isi, periksa pratinjau, lalu terbitkan. Tiap surat berdiri sendiri. Tidak ada pengiriman otomatis.</p>
       </div>
 
@@ -104,9 +104,9 @@ export default function SuratSakti() {
         <>
           {lokal && (lokal.perihal || lokal.kode) && (
             <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm flex flex-wrap items-center gap-2">
-              <span className="flex-1">Ada isian belum selesai: <b>{PETA_JENIS[lokal.kode]?.label ?? "dokumen"}{lokal.perihal ? ` — ${lokal.perihal}` : ""}</b></span>
-              <Button size="sm" onClick={() => setLayar({ t: "wizard", s: lokal })}>Lanjutkan</Button>
-              <Button size="sm" variant="ghost" onClick={() => { if (confirm("Buang isian yang belum tersimpan di perangkat ini? Draft di server tidak terhapus.")) { hapusEditorLokal(); setLokal(null); } }}>Buang</Button>
+              <span className="w-full min-w-0 break-words sm:w-auto sm:flex-1">Ada isian belum selesai: <b>{PETA_JENIS[lokal.kode]?.label ?? "dokumen"}{lokal.perihal ? ` — ${lokal.perihal}` : ""}</b></span>
+              <Button size="sm" className="flex-1 sm:flex-none" onClick={() => setLayar({ t: "wizard", s: lokal })}>Lanjutkan</Button>
+              <Button size="sm" variant="ghost" className="flex-1 sm:flex-none" onClick={() => { if (confirm("Buang isian yang belum tersimpan di perangkat ini? Draft di server tidak terhapus.")) { hapusEditorLokal(); setLokal(null); } }}>Buang</Button>
             </div>
           )}
 
@@ -114,8 +114,8 @@ export default function SuratSakti() {
             {TOMBOL.map(({ t, ikon: Ikon }) => (
               <button key={t} type="button"
                 onClick={() => bukaWizard(t === "kustom" ? editorBaru({ tujuan: t, kode: "f_kustom" }) : editorBaru({ tujuan: t }))}
-                className={`rounded-xl border-2 bg-white p-4 text-left hover:border-[hsl(163,55%,22%)] hover:bg-emerald-50/40 ${t === "kustom" ? "border-[hsl(40,45%,55%)]" : "border-[hsl(163,55%,22%)]/20"}`}>
-                <Ikon className="w-6 h-6 text-[hsl(163,55%,22%)] mb-2" />
+                className={`min-w-0 rounded-xl border-2 bg-white p-3 sm:p-4 text-left hover:border-[hsl(163,55%,22%)] hover:bg-emerald-50/40 ${t === "kustom" ? "border-[hsl(40,45%,55%)]" : "border-[hsl(163,55%,22%)]/20"}`}>
+                <Ikon className="w-6 h-6 text-[hsl(163,55%,22%)] mb-1.5 sm:mb-2" />
                 <p className="font-semibold leading-tight">{LABEL_TUJUAN[t].judul}</p>
                 <p className="text-xs text-muted-foreground mt-1">{LABEL_TUJUAN[t].ket}</p>
               </button>
@@ -133,15 +133,15 @@ export default function SuratSakti() {
           </div>
 
           <div className="relative max-w-lg">
-            <Search className="absolute left-2 top-3 w-4 h-4 text-muted-foreground" />
-            <Input className="pl-8" placeholder="Cari nomor, perihal, penerima, atau jenis…" value={cari} onChange={(e) => setCari(e.target.value)} />
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input className="pl-9" type="search" placeholder="Cari nomor, perihal, penerima, atau jenis…" value={cari} onChange={(e) => setCari(e.target.value)} />
           </div>
 
           {cari.trim().length >= 2 ? (
             <DaftarSurat bagian="semua" cari={cari.trim()} buka={buka} />
           ) : (
             <Tabs value={tab} onValueChange={setTab}>
-              <TabsList className="flex-wrap h-auto">
+              <TabsList className="sm:h-auto sm:flex-wrap">
                 <TabsTrigger value="draft">Draft</TabsTrigger>
                 <TabsTrigger value="arsip">Arsip</TabsTrigger>
                 <TabsTrigger value="distribusi">Belum diserahkan</TabsTrigger>
@@ -153,7 +153,7 @@ export default function SuratSakti() {
               <TabsContent value="tindak"><DaftarTindak peran="rw" bukaSurat={buka} /></TabsContent>
             </Tabs>
           )}
-          <button type="button" className="text-xs underline text-muted-foreground" onClick={() => toast({ title: "Arsip lama", description: "Surat sebelum Surat Sakti tetap ada di tab Arsip dengan nomor aslinya. PDF-nya dibentuk dari teks tersimpan." })}>
+          <button type="button" className="min-h-10 text-sm underline text-muted-foreground sm:min-h-0 sm:text-xs" onClick={() => toast({ title: "Arsip lama", description: "Surat sebelum Surat Sakti tetap ada di tab Arsip dengan nomor aslinya. PDF-nya dibentuk dari teks tersimpan." })}>
             Tentang arsip lama
           </button>
         </>

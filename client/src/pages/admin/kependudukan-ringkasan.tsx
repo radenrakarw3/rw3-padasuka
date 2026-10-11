@@ -1,13 +1,12 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Home, RefreshCw, Users, ClipboardList } from "lucide-react";
-import { Link } from "wouter";
-import { KategoriUmurPanel, PekerjaanPanel, formatNumber } from "@/components/admin/kependudukan-stats-ui";
+import { RefreshCw } from "lucide-react";
 import {
-  GovStatistic,
-  GovStatisticRow,
-  GovStatisticSection,
-} from "@/components/gov/statistic";
+  KategoriUmurPanel,
+  PekerjaanPanel,
+  formatNumber,
+} from "@/components/admin/kependudukan-stats-ui";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -21,9 +20,10 @@ import {
 import { KependudukanDataIssues } from "@/components/admin/kependudukan-data-issues";
 import { KependudukanCariWarga } from "@/components/admin/kependudukan-cari-warga";
 import { StatistikSatuPintu, useStatistikWarga } from "@/components/admin/statistik-satu-pintu";
+import { GrafikWarga } from "@/components/admin/grafik-warga";
 import { ACTIVE_RT_NUMBERS } from "@shared/rt";
 import { isWargaTerhitung } from "@shared/statistik-warga";
-import type { WargaIssueSlice } from "@shared/warga-data-issues";
+import { buildWargaDataIssueReport, type WargaIssueSlice } from "@shared/warga-data-issues";
 import { fetchPublicJson, getApiErrorMessage } from "@/lib/queryClient";
 
 type WargaWithKk = WargaIssueSlice & {
@@ -37,25 +37,20 @@ type WargaWithKk = WargaIssueSlice & {
   statusKependudukan?: string | null;
 };
 
+type BagianId = "cari" | "umur" | "pekerjaan" | "verifikasi";
+const SEMUA_BAGIAN: BagianId[] = ["cari", "umur", "pekerjaan", "verifikasi"];
+
+/** Di laptop semua bagian terbuka seperti semula; di HP hanya pencarian agar halaman tidak memanjang. */
+function bagianAwal(): string[] {
+  if (typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches) return SEMUA_BAGIAN;
+  return ["cari"];
+}
+
 export default function KependudukanRingkasan() {
   const [rtFilter, setRtFilter] = useState("semua");
+  const [terbuka, setTerbuka] = useState<string[]>(bagianAwal);
   const rtFilterNum = rtFilter === "semua" ? undefined : Number(rtFilter);
   const statistik = useStatistikWarga();
-
-  const { data: blusukanSummary } = useQuery<{
-    avgKelengkapan: number;
-    perluKunjungan: number;
-    percentLengkap: number;
-    totalKk: number;
-  }>({
-    queryKey: ["/api/admin/blusukan-summary", rtFilter],
-    queryFn: async () => {
-      const q = rtFilterNum ? `?rt=${rtFilterNum}` : "";
-      const res = await fetch(`/api/admin/blusukan-summary${q}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Gagal memuat data Blusukan");
-      return res.json();
-    },
-  });
 
   const {
     data: wargaList,
@@ -77,6 +72,10 @@ export default function KependudukanRingkasan() {
   }, [wargaList, rtFilterNum]);
 
   const wargaAktif = useMemo(() => wargaFiltered.filter(isWargaTerhitung), [wargaFiltered]);
+  const jumlahPerluVerifikasi = useMemo(
+    () => buildWargaDataIssueReport(wargaFiltered).totalBermasalah,
+    [wargaFiltered],
+  );
 
   const refetchAll = () => {
     statistik.refetch();
@@ -100,15 +99,15 @@ export default function KependudukanRingkasan() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-bold tracking-tight">Statistik Kependudukan</h1>
+          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Statistik Kependudukan</h1>
           <p className="text-sm text-muted-foreground">RT 01–04 — data warga pemukiman RW 03</p>
         </div>
         <div className="flex items-center gap-2">
           <Select value={rtFilter} onValueChange={setRtFilter}>
-            <SelectTrigger className="w-[140px]">
+            <SelectTrigger className="min-w-0 flex-1 sm:w-[140px] sm:flex-none" aria-label="Filter RT">
               <SelectValue placeholder="Filter RT" />
             </SelectTrigger>
             <SelectContent>
@@ -120,7 +119,7 @@ export default function KependudukanRingkasan() {
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" onClick={refetchAll} disabled={isFetching}>
+          <Button variant="outline" className="h-12 shrink-0 sm:h-auto" size="sm" onClick={refetchAll} disabled={isFetching}>
             <RefreshCw className={`w-4 h-4 mr-1 ${isFetching ? "animate-spin" : ""}`} />
             Refresh
           </Button>
@@ -143,53 +142,58 @@ export default function KependudukanRingkasan() {
         rt={rtFilterNum}
         onPilihRt={(rt) => setRtFilter(rt == null ? "semua" : String(rt))}
       />
+      <GrafikWarga rt={rtFilterNum} onPilihRt={(rt) => setRtFilter(rt == null ? "semua" : String(rt))} />
 
-      <KependudukanCariWarga wargaList={wargaFiltered} />
+      <Accordion type="multiple" value={terbuka} onValueChange={setTerbuka} className="space-y-3">
+        <BagianLipat value="cari" judul="Cari warga" ringkas="Nama, NIK, nomor KK, atau alamat">
+          <KependudukanCariWarga wargaList={wargaFiltered} polos />
+        </BagianLipat>
 
-      <KategoriUmurPanel warga={wargaAktif} />
+        <BagianLipat value="umur" judul="Kategori umur" ringkas={`${formatNumber(wargaAktif.length)} warga aktif`}>
+          <KategoriUmurPanel warga={wargaAktif} polos />
+        </BagianLipat>
 
-      <PekerjaanPanel warga={wargaAktif} />
+        <BagianLipat value="pekerjaan" judul="Pekerjaan" ringkas="Angkatan kerja, pelajar, pengangguran">
+          <PekerjaanPanel warga={wargaAktif} polos />
+        </BagianLipat>
 
-      {blusukanSummary && (
-        <GovStatisticSection
-          title="Sensus lapangan (Blusukan RW)"
-          description="Kelengkapan data kependudukan — operasional lapangan"
+        <BagianLipat
+          value="verifikasi"
+          judul="Verifikasi data"
+          ringkas={jumlahPerluVerifikasi > 0 ? `${formatNumber(jumlahPerluVerifikasi)} warga perlu dicek` : "Semua data selaras"}
+          sorot={jumlahPerluVerifikasi > 0}
         >
-          <GovStatisticRow cols={4}>
-            <GovStatistic
-              label="Kelengkapan rata-rata"
-              value={`${blusukanSummary.avgKelengkapan}%`}
-              description="Form sensus per KK"
-              icon={ClipboardList}
-              tone="info"
-            />
-            <GovStatistic
-              label="KK lengkap"
-              value={`${blusukanSummary.percentLengkap}%`}
-              description="Dari total KK pemukiman"
-              icon={Home}
-            />
-            <GovStatistic
-              label="Perlu kunjungan"
-              value={formatNumber(blusukanSummary.perluKunjungan)}
-              description="KK belum dikunjungi"
-              icon={Users}
-              tone="warning"
-            />
-            <GovStatistic
-              label="Total KK"
-              value={formatNumber(blusukanSummary.totalKk)}
-              description="RT 01–04"
-              icon={Home}
-            />
-          </GovStatisticRow>
-          <Link href="/blusukanrw/quest" className="text-sm text-primary underline mt-2 inline-block">
-            Buka Blusukan RW untuk operasional lapangan →
-          </Link>
-        </GovStatisticSection>
-      )}
-
-      <KependudukanDataIssues warga={wargaFiltered} />
+          <KependudukanDataIssues warga={wargaFiltered} polos />
+        </BagianLipat>
+      </Accordion>
     </div>
+  );
+}
+
+function BagianLipat({
+  value,
+  judul,
+  ringkas,
+  sorot,
+  children,
+}: {
+  value: BagianId;
+  judul: string;
+  ringkas?: string;
+  sorot?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <AccordionItem value={value} className="rounded-2xl border bg-card/60 px-3 sm:px-4">
+      <AccordionTrigger className="min-h-14 gap-3 py-3 text-left hover:no-underline">
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold uppercase tracking-wide text-brand">{judul}</span>
+          {ringkas && (
+            <span className={`mt-0.5 block text-sm font-normal ${sorot ? "text-amber-700" : "text-muted-foreground"}`}>{ringkas}</span>
+          )}
+        </span>
+      </AccordionTrigger>
+      <AccordionContent className="pt-1">{children}</AccordionContent>
+    </AccordionItem>
   );
 }

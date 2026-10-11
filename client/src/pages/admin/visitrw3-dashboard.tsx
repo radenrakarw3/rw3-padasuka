@@ -10,6 +10,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +21,6 @@ import {
   AreaTrendBlock,
   BarBlock,
   ChartCard,
-  DashboardSection,
   DonutBlock,
   FunnelBlock,
   HistogramBlock,
@@ -49,8 +49,32 @@ function formatNumber(n: number) {
   return n.toLocaleString("id-ID");
 }
 
+const SEMUA_SECTION = ["pengajuan", "penghuni"];
+
+function defaultOpenSections(): string[] {
+  if (typeof window === "undefined") return SEMUA_SECTION;
+  return window.matchMedia("(min-width: 1024px)").matches ? SEMUA_SECTION : [];
+}
+
+function SectionTrigger({ title, description, count }: { title: string; description: string; count: number }) {
+  return (
+    <AccordionTrigger className="min-h-14 gap-3 rounded-2xl border border-border/60 bg-card/90 px-4 py-3 text-left shadow-sm hover:no-underline data-[state=open]:border-[hsl(163,55%,22%)]/30">
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-2">
+          <span className="text-base font-bold tracking-tight">{title}</span>
+          <span className="rounded-full bg-[hsl(163,55%,22%)]/10 px-2 py-0.5 text-[11px] font-semibold text-[hsl(163,55%,22%)]">
+            {count} grafik
+          </span>
+        </span>
+        <span className="mt-0.5 block text-xs font-normal text-muted-foreground">{description}</span>
+      </span>
+    </AccordionTrigger>
+  );
+}
+
 export default function AdminVisitrw3Dashboard() {
   const [rtFilter, setRtFilter] = useState("semua");
+  const [openSections, setOpenSections] = useState<string[]>(defaultOpenSections);
 
   const { data, isLoading, isFetching, isError, error, refetch } = useQuery<Visitrw3DashboardStats>({
     queryKey: ["/api/admin/visitrw3/dashboard-stats", rtFilter],
@@ -201,7 +225,7 @@ export default function AdminVisitrw3Dashboard() {
       )}
 
       {isLoading ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-28 rounded-xl" />
           ))}
@@ -219,18 +243,18 @@ export default function AdminVisitrw3Dashboard() {
           )}
 
           <div className="flex flex-wrap gap-2">
-            <span className="rounded-full border border-border/60 bg-card/80 px-3 py-1.5 text-sm shadow-sm">
+            <span className="rounded-full border border-border/60 bg-card/80 px-3 py-1.5 text-xs shadow-sm sm:text-sm">
               Pengajuan baru: <strong>{formatNumber(pengajuanBaru)}</strong>
             </span>
-            <span className="rounded-full border border-border/60 bg-card/80 px-3 py-1.5 text-sm shadow-sm">
+            <span className="rounded-full border border-border/60 bg-card/80 px-3 py-1.5 text-xs shadow-sm sm:text-sm">
               Perpanjang: <strong>{formatNumber(pengajuanPerpanjang)}</strong>
             </span>
-            <span className="rounded-full border border-border/60 bg-card/80 px-3 py-1.5 text-sm shadow-sm">
+            <span className="rounded-full border border-border/60 bg-card/80 px-3 py-1.5 text-xs shadow-sm sm:text-sm">
               Catatan pemohon: <strong>{formatNumber(data.pengajuan.denganCatatanPemohon)}</strong>
             </span>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 [&>*:first-child]:col-span-2 lg:[&>*:first-child]:col-span-1">
             <Visitrw3StatCard title="Menunggu survey" value={formatNumber(data.ringkasan.menungguSurvey)} description="Belum diproses admin" icon={Clock} tone="warning" href="/admin/visitrw3/antrian?view=belum" />
             <Visitrw3StatCard title="Disetujui" value={formatNumber(data.ringkasan.disetujui)} description={`Dari ${formatNumber(data.ringkasan.totalPengajuan)} pengajuan`} icon={CheckCircle2} tone="success" href="/admin/visitrw3/antrian?view=sudah" />
             <Visitrw3StatCard title="Warga singgah aktif" value={formatNumber(data.ringkasan.penghuniAktif)} description="Kontrak aktif di wilayah" icon={Users} href="/admin/visitrw3/penghuni" />
@@ -238,7 +262,10 @@ export default function AdminVisitrw3Dashboard() {
             <Visitrw3StatCard title="Total pengajuan" value={formatNumber(data.ringkasan.totalPengajuan)} description="Semua pengajuan VRW3" icon={UserRound} href="/admin/visitrw3/antrian?view=belum" />
           </div>
 
-          <DashboardSection title="Form pengajuan" description="Alur, jenis warga, tren, status, tipe, RT, dan termin" />
+          <Accordion type="multiple" value={openSections} onValueChange={setOpenSections} className="space-y-3">
+          <AccordionItem value="pengajuan" className="border-b-0">
+          <SectionTrigger title="Form pengajuan" description="Alur, jenis warga, tren, status, tipe, RT, dan termin" count={13} />
+          <AccordionContent className="pt-3 pb-0">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <ChartCard title="Alur pengajuan" description="Corong dari masuk hingga keputusan admin">
               <FunnelBlock stages={funnelPengajuan} empty="Belum ada pengajuan" />
@@ -295,8 +322,12 @@ export default function AdminVisitrw3Dashboard() {
               <RankedBarBlock data={jumlahPenghuniRanked} empty="Belum ada data" />
             </ChartCard>
           </div>
+          </AccordionContent>
+          </AccordionItem>
 
-          <DashboardSection title="Form penghuni" description="Demografi, pekerjaan, kendaraan, dan kelengkapan dokumen" />
+          <AccordionItem value="penghuni" className="border-b-0">
+          <SectionTrigger title="Form penghuni" description="Demografi, pekerjaan, kendaraan, dan kelengkapan dokumen" count={10} />
+          <AccordionContent className="pt-3 pb-0">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <ChartCard title="Anak vs dewasa" description="Bar 100% — komposisi penghuni form">
               <StackedPercentBlock segments={anakSegments} empty="Belum ada data penghuni" />
@@ -335,6 +366,9 @@ export default function AdminVisitrw3Dashboard() {
               <RankedBarBlock data={tempatKerjaRanked} empty="Belum ada data" maxItems={6} />
             </ChartCard>
           </div>
+          </AccordionContent>
+          </AccordionItem>
+          </Accordion>
 
           <Visitrw3Panel
             title="Pengajuan terbaru"
@@ -351,7 +385,7 @@ export default function AdminVisitrw3Dashboard() {
               <div className="space-y-2">
                 {data.pengajuanTerbaru.map((p) => (
                   <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/50 bg-muted/20 px-3 py-2.5 text-sm">
-                    <div>
+                    <div className="min-w-0">
                       <p className="font-mono font-semibold text-[hsl(163,55%,22%)]">{p.nomorVisitrw3}</p>
                       <p className="text-xs text-muted-foreground">
                         RT {String(p.rt).padStart(2, "0")} · {visitrw3KeperluanLabels[p.keperluanPengajuan] ?? p.keperluanPengajuan}
@@ -378,7 +412,7 @@ export default function AdminVisitrw3Dashboard() {
           <Visitrw3Panel>
             <p className="py-4 text-center text-sm text-muted-foreground">
               Data dashboard tidak tersedia.{" "}
-              <button type="button" className="underline text-primary" onClick={() => refetch()}>
+              <button type="button" className="inline-flex min-h-10 items-center px-1 underline text-primary sm:min-h-0" onClick={() => refetch()}>
                 Muat ulang
               </button>
             </p>

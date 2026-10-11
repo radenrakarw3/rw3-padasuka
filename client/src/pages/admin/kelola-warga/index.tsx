@@ -42,14 +42,13 @@ export default function KelolaWarga() {
   };
 
   return (
-    <div className="max-w-2xl text-lg text-gray-900">
-      <div className="mb-5 rounded-2xl border bg-white p-4 print:hidden">
-        <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Kependudukan · Kelola data warga</p>
-        <p className="mt-1 text-base text-gray-700">Pilih RT yang datanya ingin diubah. Setiap perubahan tercatat atas nama admin RW.</p>
-        <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Pilih RT">
+    <div className="max-w-3xl text-sm text-gray-900">
+      <div className="mb-3 flex items-center gap-2 print:hidden">
+        <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Kelola RT</span>
+        <div className="grid flex-1 grid-cols-4 gap-1 rounded-xl border bg-white p-1 sm:flex-none" role="group" aria-label="Pilih RT">
           {WILAYAH_RT_NUMBERS.map((n) => (
             <button key={n} type="button" onClick={() => pilih(n)} aria-pressed={rt === n}
-              className={`min-h-[44px] min-w-[76px] rounded-xl border-2 px-3 text-base font-bold ${rt === n ? "text-white" : "bg-white border-gray-300"}`}
+              className={`h-8 min-w-0 rounded-lg px-2 text-xs font-bold sm:min-w-[64px] ${rt === n ? "text-white" : "text-gray-700 hover:bg-gray-100"}`}
               style={rt === n ? { backgroundColor: HIJAU, borderColor: HIJAU } : undefined}>
               {rt2(n)}
             </button>

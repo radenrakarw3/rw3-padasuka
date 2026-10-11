@@ -60,7 +60,11 @@ export function registerVisitrw3Routes(app: Express) {
       const rows = await loadVisitrw3SettingsRows();
       res.json(
         rows
-          .filter((r) => !r.key.startsWith("fee_") && !r.key.startsWith("tier_pintu_"))
+          .filter(
+            (r) =>
+              /^fee_(kost|kontrakan)_(kecil|sedang|besar)_per_unit_bulan$/.test(r.key) ||
+              !r.key.startsWith("fee_"),
+          )
           .map((r) => ({
             key: r.key,
             value: r.value,

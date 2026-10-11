@@ -1,14 +1,21 @@
 import { useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, Home, Inbox, Plus, QrCode } from "lucide-react";
+import { ChevronRight, ClipboardPen, Home, Inbox, Plus, Printer, QrCode, Search, Truck } from "lucide-react";
 import { useDraft, useKirimSekali, wil } from "@/lib/wilayah-api";
-import { BarisRingkas, HIJAU, IsianTeks, Judul, Langkah, Memuat, Pesan, TombolBesar } from "@/components/wilayah/ui";
+import { BarisRingkas, HIJAU, IsianTeks, Judul, Langkah, Memuat, Pesan } from "@/components/wilayah/ui";
 
 interface Keluarga {
   id: number; kepala: string | null; alamat: string; noUnit: string | null; anggota: number;
   kelengkapan: number; punyaRumah: boolean; punyaQr: boolean; usulanMenunggu: number;
 }
+
+const PINTASAN = [
+  { ke: "/usulan", label: "Isian QR warga", Ikon: Inbox },
+  { ke: "/input-kertas", label: "Input dari kertas", Ikon: ClipboardPen },
+  { ke: "/cetak", label: "Cetak", Ikon: Printer },
+  { ke: "/pindah", label: "Pindah RT", Ikon: Truck },
+];
 
 function inisial(nama: string | null) {
   return (nama ?? "?").split(/\s+/).filter(Boolean).slice(0, 2).map((s) => s[0]).join("").toUpperCase();
@@ -26,7 +33,7 @@ export function KeluargaBaru({ selesai, awal, draftKey = "kk-baru" }: { selesai:
   const set = (p: Partial<typeof nilai>) => setNilai({ ...nilai, ...p });
   if (nilai.langkah === 1) {
     return (
-      <Langkah langkah={1} total={3} judul="Alamat rumah" onLanjut={() => set({ langkah: 2 })} bisaLanjut={nilai.alamat.trim().length >= 3}>
+      <Langkah lengket="admin" langkah={1} total={3} judul="Alamat rumah" onLanjut={() => set({ langkah: 2 })} bisaLanjut={nilai.alamat.trim().length >= 3}>
         <IsianTeks label="Alamat (jalan / gang)" nilai={nilai.alamat} onChange={(v) => set({ alamat: v })} placeholder="Contoh: Jl. Padasuka Gg. Melati" />
         <IsianTeks label="Nomor rumah (bila ada)" nilai={nilai.noUnit} onChange={(v) => set({ noUnit: v })} />
       </Langkah>
@@ -34,13 +41,13 @@ export function KeluargaBaru({ selesai, awal, draftKey = "kk-baru" }: { selesai:
   }
   if (nilai.langkah === 2) {
     return (
-      <Langkah langkah={2} total={3} judul="Nomor Kartu Keluarga" onKembali={() => set({ langkah: 1 })} onLanjut={() => set({ langkah: 3 })} bisaLanjut={/^\d{16}$/.test(nilai.nomorKk)}>
+      <Langkah lengket="admin" langkah={2} total={3} judul="Nomor Kartu Keluarga" onKembali={() => set({ langkah: 1 })} onLanjut={() => set({ langkah: 3 })} bisaLanjut={/^\d{16}$/.test(nilai.nomorKk)}>
         <IsianTeks label="Nomor KK (16 angka)" inputMode="numeric" maks={16} nilai={nilai.nomorKk} onChange={(v) => set({ nomorKk: v.replace(/\D/g, "") })} bantuan="Lihat di bagian atas Kartu Keluarga." />
       </Langkah>
     );
   }
   return (
-    <Langkah langkah={3} total={3} judul="Periksa sebelum menyimpan" onKembali={() => set({ langkah: 2 })} labelLanjut="Simpan" memuat={mengirim}
+    <Langkah lengket="admin" langkah={3} total={3} judul="Periksa sebelum menyimpan" onKembali={() => set({ langkah: 2 })} labelLanjut="Simpan" memuat={mengirim}
       onLanjut={async () => { const r = await kirim(); if (r) selesai(r.id); }}>
       <BarisRingkas label="Alamat" nilai={`${nilai.alamat}${nilai.noUnit ? ` No. ${nilai.noUnit}` : ""}`} />
       <BarisRingkas label="Nomor KK" nilai={nilai.nomorKk} />
@@ -84,28 +91,44 @@ export default function Warga() {
       <Judul sub={aksi === "catat" ? "Pilih keluarga yang berubah" : perlu === "rumah" ? "Keluarga yang belum dihubungkan ke rumah" : perlu === "cek" ? "Buka keluarga untuk mengecek data lama" : undefined}>
         Data warga & KK
       </Judul>
-      <input value={cari} onChange={(e) => setCari(e.target.value)} placeholder="Cari nama kepala keluarga atau alamat…"
-        className="w-full min-h-[56px] rounded-2xl border-2 border-gray-300 px-4 text-lg bg-white mb-3" aria-label="Cari" />
-      <div className="mb-4"><TombolBesar varian="kedua" ikon={<Plus className="w-6 h-6" />} onClick={() => setTambah(true)}>Tambah keluarga baru</TombolBesar></div>
+      <div className="mb-2 flex gap-2">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden />
+          <input type="search" enterKeyHint="search" value={cari} onChange={(e) => setCari(e.target.value)} placeholder="Cari kepala keluarga / alamat…"
+            className="h-10 w-full rounded-xl border border-gray-300 bg-white pl-9 pr-3 text-base focus:border-[hsl(163,55%,22%)] focus:outline-none" aria-label="Cari" />
+        </div>
+        <button type="button" onClick={() => setTambah(true)} aria-label="Tambah keluarga baru"
+          className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl px-3 text-sm font-semibold text-white" style={{ backgroundColor: HIJAU }}>
+          <Plus className="h-4 w-4" /><span className="hidden sm:inline">Keluarga baru</span><span className="sm:hidden">KK</span>
+        </button>
+      </div>
+      <nav aria-label="Menu kelola warga" className="no-scrollbar -mx-3 mb-3 flex gap-1.5 overflow-x-auto px-3 sm:mx-0 sm:flex-wrap sm:px-0">
+        {PINTASAN.map(({ ke, label, Ikon }) => (
+          <button key={ke} type="button" onClick={() => go(ke)}
+            className="flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-gray-300 bg-white px-3 text-xs font-medium text-gray-800 active:bg-gray-50 hover:border-emerald-300">
+            <Ikon className="h-3.5 w-3.5" style={{ color: HIJAU }} />{label}
+          </button>
+        ))}
+      </nav>
       {isLoading && <Memuat />}
       {error && <Pesan jenis="error">{(error as Error).message}</Pesan>}
-      {data && <p className="text-base text-gray-600 mb-2">{daftar.length} keluarga</p>}
-      <ul className="bg-white rounded-2xl border-2 border-gray-200 divide-y-2 divide-gray-100">
+      {data && <p className="mb-1.5 text-xs text-gray-500">{daftar.length} keluarga</p>}
+      <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white">
         {daftar.map((k) => (
           <li key={k.id}>
-            <button type="button" onClick={() => go(`/keluarga/${k.id}`)} className="w-full min-h-[76px] px-4 py-3 flex items-center gap-3 text-left active:bg-gray-50">
-              <span className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold text-white shrink-0" style={{ backgroundColor: HIJAU }}>{inisial(k.kepala)}</span>
-              <span className="flex-1 min-w-0">
-                <span className="block text-lg font-semibold truncate">{k.kepala ?? "Kepala keluarga belum dicatat"}</span>
-                <span className="block text-base text-gray-600 truncate">{k.alamat}{k.noUnit ? ` No. ${k.noUnit}` : ""} · {k.anggota} orang</span>
-                <span className="flex gap-3 mt-1 text-base">
-                  <span className={k.kelengkapan >= 1 ? "text-green-700" : "text-amber-700"}>Data {Math.round(k.kelengkapan * 100)}%</span>
-                  {!k.punyaRumah && <span className="text-amber-700 flex items-center gap-1"><Home className="w-4 h-4" /> rumah</span>}
-                  {k.punyaQr && <span className="text-gray-600 flex items-center gap-1"><QrCode className="w-4 h-4" /> QR</span>}
-                  {k.usulanMenunggu > 0 && <span className="text-red-700 flex items-center gap-1"><Inbox className="w-4 h-4" /> isian baru</span>}
-                </span>
+            <button type="button" onClick={() => go(`/keluarga/${k.id}`)} className="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-gray-50 active:bg-gray-100">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ backgroundColor: HIJAU }}>{inisial(k.kepala)}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold">{k.kepala ?? "Kepala keluarga belum dicatat"}</span>
+                <span className="block truncate text-xs text-gray-500">{k.alamat}{k.noUnit ? ` No. ${k.noUnit}` : ""} · {k.anggota} orang</span>
               </span>
-              <ChevronRight className="w-6 h-6 text-gray-400" />
+              <span className="flex shrink-0 items-center gap-1.5 text-[11px]">
+                {k.usulanMenunggu > 0 && <Inbox className="h-3.5 w-3.5 text-red-600" aria-label="Ada isian baru" />}
+                {!k.punyaRumah && <Home className="h-3.5 w-3.5 text-amber-600" aria-label="Belum terhubung ke rumah" />}
+                {k.punyaQr && <QrCode className="h-3.5 w-3.5 text-gray-400" aria-label="Punya QR" />}
+                <span className={`rounded-full px-1.5 py-0.5 font-semibold ${k.kelengkapan >= 1 ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>{Math.round(k.kelengkapan * 100)}%</span>
+              </span>
+              <ChevronRight className="h-4 w-4 shrink-0 text-gray-300" />
             </button>
           </li>
         ))}

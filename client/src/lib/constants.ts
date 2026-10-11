@@ -482,7 +482,7 @@ export const statusProgramOptions = [
   "dibatalkan",
 ];
 
-/** Label internal KK — hanya petugas/ketua RW (Blusukan). */
+/** Label internal KK — hanya petugas/ketua RW. */
 export const kkLabelRwSuggestions = [
   "Prioritas bansos",
   "Perlu kunjungan ulang",

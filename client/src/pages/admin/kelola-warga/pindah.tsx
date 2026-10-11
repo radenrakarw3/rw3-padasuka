@@ -25,7 +25,7 @@ function Ajukan({ kkId, selesai, batal }: { kkId: number; selesai: () => void; b
   });
   if (i === 1) {
     return (
-      <Langkah langkah={1} total={2} judul="Siapa yang pindah?" onKembali={batal} onLanjut={() => setI(2)} bisaLanjut={!!rtTujuan && (jenis === "kk" || !!wargaId)}>
+      <Langkah lengket="admin" langkah={1} total={2} judul="Siapa yang pindah?" onKembali={batal} onLanjut={() => setI(2)} bisaLanjut={!!rtTujuan && (jenis === "kk" || !!wargaId)}>
         <PilihTombol label="Yang pindah" belumTahu={false} kolom={1} nilai={jenis} onChange={(v) => v && setJenis(v as "kk" | "warga")}
           pilihan={[{ nilai: "kk", label: "Seluruh keluarga (satu KK)" }, { nilai: "warga", label: "Satu orang saja" }]} />
         {jenis === "warga" && (
@@ -39,7 +39,7 @@ function Ajukan({ kkId, selesai, batal }: { kkId: number; selesai: () => void; b
     );
   }
   return (
-    <Langkah langkah={2} total={2} judul="Periksa sebelum mengajukan" onKembali={() => setI(1)} labelLanjut="Ajukan" memuat={mengirim} onLanjut={async () => { if (await kirim()) selesai(); }}>
+    <Langkah lengket="admin" langkah={2} total={2} judul="Periksa sebelum mengajukan" onKembali={() => setI(1)} labelLanjut="Ajukan" memuat={mengirim} onLanjut={async () => { if (await kirim()) selesai(); }}>
       <BarisRingkas label="Yang pindah" nilai={jenis === "kk" ? "Seluruh keluarga" : data?.anggota.find((a) => a.id === wargaId)?.nama} />
       <BarisRingkas label="Ke" nilai={rt2(rtTujuan)} />
       <p className="text-base text-gray-600 mt-2">Data baru pindah setelah Ketua {rt2(rtTujuan)} menerima. Tidak ada data ganda.</p>

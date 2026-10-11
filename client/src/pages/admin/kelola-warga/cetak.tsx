@@ -132,17 +132,17 @@ export default function Cetak() {
       <GayaCetakF4 />
       <div className="print:hidden space-y-4">
         <Judul kembali={() => go("/warga")} sub={`${rt2(rtKelola)} · kertas F4`}>Cetak untuk warga</Judul>
-        <PilihTombol label="Yang dicetak" belumTahu={false} nilai={mode} onChange={(v) => v && setMode(v as Mode)} pilihan={MODE} />
+        <PilihTombol label="Yang dicetak" belumTahu={false} nilai={mode} onChange={(v) => v && setMode(v as Mode)} pilihan={MODE} kolom={1} />
         <Pesan>{KETERANGAN[mode]}</Pesan>
         {mode === "paket" && (
-          <div className="grid gap-3 rounded-2xl border bg-white p-4 text-base sm:grid-cols-2">
-            <label className="space-y-1">
-              <span className="text-sm font-semibold">Kembalikan formulir paling lambat</span>
-              <input type="date" value={batas} onChange={(e) => setBatas(e.target.value)} className="w-full rounded-xl border px-3 py-2" />
+          <div className="grid grid-cols-1 gap-3 rounded-2xl border bg-white p-3 text-base sm:grid-cols-2 sm:p-4">
+            <label className="block space-y-1">
+              <span className="block text-sm font-semibold">Kembalikan formulir paling lambat</span>
+              <input type="date" value={batas} onChange={(e) => setBatas(e.target.value)} className="min-h-12 w-full rounded-xl border px-3 py-2 sm:min-h-0" />
             </label>
-            <label className="space-y-1">
-              <span className="text-sm font-semibold">Kontak bantuan (boleh kosong)</span>
-              <input value={kontak} onChange={(e) => setKontak(e.target.value)} placeholder="mis. Pak RT 0812-xxxx-xxxx" className="w-full rounded-xl border px-3 py-2" />
+            <label className="block space-y-1">
+              <span className="block text-sm font-semibold">Kontak bantuan (boleh kosong)</span>
+              <input value={kontak} onChange={(e) => setKontak(e.target.value)} placeholder="mis. Pak RT 0812-xxxx-xxxx" className="min-h-12 w-full rounded-xl border px-3 py-2 sm:min-h-0" />
             </label>
           </div>
         )}

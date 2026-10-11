@@ -39,7 +39,7 @@ export function log(message: string, source = "express") {
 }
 
 /** Body respons jalur ini berisi data warga atau token QR — jangan pernah masuk log. */
-const LOG_TANPA_BODY = ["/api/wilayah", "/api/isi", "/api/warga", "/api/kk", "/api/blusukan"];
+const LOG_TANPA_BODY = ["/api/wilayah", "/api/isi", "/api/warga", "/api/kk"];
 
 app.use((req, res, next) => {
   const start = Date.now();

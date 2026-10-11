@@ -20,7 +20,6 @@ import {
   keperluanTinggalOptions,
   pekerjaanLegacyOptions,
   jenisKendaraanOptions,
-  visitrw3JenisTempatUsahaOptions,
   visitrw3KategoriUsahaOptions,
   visitrw3JenjangAnakOptions,
   JAM_24H_OPTIONS,
@@ -53,7 +52,6 @@ import { aturanKeperluan, barisKeperluan, type DetailKeperluan } from "@shared/v
 import { joinPlatNomor } from "@/lib/visitrw3-plat";
 import {
   validateStepBayar,
-  validateStepSyarat,
   validateJumlahByJenis,
   validateSinglePenghuni,
   validateLokasiWargaSinggah,
@@ -62,7 +60,7 @@ import {
 import { PlatNomorInput } from "@/components/gov/plat-nomor-input";
 import { FormStepper } from "@/components/gov/form-stepper";
 import { SuccessPanel } from "@/components/gov/success-panel";
-import { Visitrw3SyaratPanel } from "@/components/gov/visitrw3-syarat-panel";
+import { KontribusiTinggalInfo, Visitrw3SyaratPanel } from "@/components/gov/visitrw3-syarat-panel";
 import { FeatureExplain } from "@/components/gov/feature-explain";
 import { settingsRowsToMap } from "@/lib/visitrw3-kontribusi";
 import { buildKategoriUsahaPayload } from "@shared/visitrw3-kategori-usaha";
@@ -80,6 +78,24 @@ import {
 import { isVisitRw3Jenis } from "@shared/visitrw3-produk";
 import { aturanFotoKk, getVisitrw3FormProfile } from "@shared/visitrw3-form-by-jenis";
 import type { PengajuanProduct } from "@/lib/visitrw3-produk-ui";
+import {
+  EstimasiKontribusiCard,
+  JENIS_TEMPAT_BIZ_OPTIONS,
+  OrangKontribusiFields,
+  UsahaKontribusiFields,
+  bizKontribusiPayload,
+  emptyBizKontribusi,
+  validateBizKontribusi,
+  validateOrangKontribusi,
+  type BizKontribusiForm,
+} from "@/components/rw3biz/kontribusi-form";
+
+import {
+  ASAL_ORANG_BIZ_LABEL,
+  PERAN_ORANG_BIZ_LABEL,
+  type AsalOrangBiz,
+  type PeranOrangBiz,
+} from "@shared/rw3biz-kontribusi";
 
 type StepDef = { id: string; label: string };
 export type { PengajuanProduct };
@@ -107,22 +123,19 @@ const JENIS_CHOICES_VISIT: {
   },
 ];
 
-const JENIS_TEMPAT_USAHA = visitrw3JenisTempatUsahaOptions.filter((o) => o.value !== "usaha_rumahan");
-
 function buildPengajuanSteps(jenis: JenisWarga): StepDef[] {
   const steps: StepDef[] = [{ id: "lokasi", label: "Lokasi" }];
   if (jenis === "jualan") steps.push({ id: "usaha", label: "Usaha" });
   steps.push(
     {
       id: "jumlah",
-      label: jenis === "jualan" ? "Orang" : jenis === "kost" ? "Isi kamar" : "Keluarga",
+      label: jenis === "jualan" ? "Pegawai" : jenis === "kost" ? "Isi kamar" : "Keluarga",
     },
     {
       id: "penghuni",
-      label: jenis === "jualan" ? "Data orang" : "Data diri",
+      label: jenis === "jualan" ? "Data pegawai" : "Data diri",
     },
-    { id: "syarat", label: "Syarat" },
-    { id: "bayar", label: "Berlaku" },
+    { id: "bayar", label: "Berlaku & setuju" },
   );
   return steps;
 }
@@ -181,7 +194,20 @@ function JumlahStepper({
         >
           <Minus className="w-5 h-5" />
         </Button>
-        <span className="text-3xl font-bold tabular-nums w-10">{value}</span>
+        {max > 12 ? (
+          <Input
+            className="h-12 w-20 text-center text-2xl font-bold tabular-nums"
+            inputMode="numeric"
+            aria-label={label}
+            value={String(value)}
+            onChange={(e) => {
+              const n = parseInt(e.target.value.replace(/\D/g, "").slice(0, String(max).length), 10);
+              onChange(Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : min);
+            }}
+          />
+        ) : (
+          <span className="text-3xl font-bold tabular-nums w-10">{value}</span>
+        )}
         <Button
           type="button"
           variant="outline"
@@ -221,7 +247,25 @@ type PenghuniForm = {
   punyaKendaraan: "" | "ya" | "tidak";
   kendaraanList: KendaraanRow[];
   fotoKtpPath: string;
+  /** RW3BIZ: peran & asal pekerja. */
+  peran: string;
+  asal: string;
+  domisili: string;
 };
+
+function pegawaiBiasa(p: PenghuniForm) {
+  return p.peran === "pekerja_tetap" || p.peran === "pekerja_harian";
+}
+
+/** Anak tidak dihitung sebagai pekerja; nilai bawaan hanya untuk lolos skema. */
+function orangKontribusiPayload(p: PenghuniForm) {
+  if (p.isAnak) return { peran: "pekerja_harian", asal: "rw3", domisili: null };
+  return {
+    peran: p.peran,
+    asal: p.asal,
+    domisili: p.asal === "luar" ? p.domisili.trim() || null : null,
+  };
+}
 
 function emptyPenghuni(isAnak = false): PenghuniForm {
   return {
@@ -239,6 +283,9 @@ function emptyPenghuni(isAnak = false): PenghuniForm {
     punyaKendaraan: "",
     kendaraanList: [],
     fotoKtpPath: "",
+    peran: "",
+    asal: "",
+    domisili: "",
   };
 }
 
@@ -621,6 +668,7 @@ type DraftPengajuan = {
   catatan: string;
   setujuTataTertib: boolean;
   fotoKk?: string;
+  bizKontribusi?: BizKontribusiForm;
 };
 
 function bacaDraft(key: string): DraftPengajuan | null {
@@ -844,6 +892,9 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
   const [galat, setGalat] = useState<{ pesan: string; step: number; idx: number } | null>(null);
   const [fotoDiproses, setFotoDiproses] = useState<number | null>(null);
   const [fotoKk, setFotoKk] = useState("");
+  const [bizKontribusi, setBizKontribusi] = useState<BizKontribusiForm>(emptyBizKontribusi);
+  const ubahBizKontribusi = (patch: Partial<BizKontribusiForm>) =>
+    setBizKontribusi((prev) => ({ ...prev, ...patch }));
   const [kkDiproses, setKkDiproses] = useState(false);
   const [draftDipulihkan, setDraftDipulihkan] = useState(false);
   const previewSampai = useMemo(
@@ -913,8 +964,9 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
     setTanggalBayar(d?.tanggalBayar || hariIniLokal());
     if (d?.terminBulan) setTerminBulan(d.terminBulan);
     setCatatan(d?.catatan ?? "");
-    setSetujuTataTertib(d?.setujuTataTertib ?? false);
+    setSetujuTataTertib(false);
     setFotoKk(d?.fotoKk ?? "");
+    setBizKontribusi({ ...emptyBizKontribusi(), ...(d?.bizKontribusi ?? {}) });
   }
 
   // Dideklarasikan setelah efek formProfile agar nilai draf menimpa nilai bawaan.
@@ -958,6 +1010,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
         catatan,
         setujuTataTertib,
         fotoKk,
+        bizKontribusi,
       });
     }, 400);
     return () => window.clearTimeout(t);
@@ -965,7 +1018,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
     draftKey, draftSiapKey, nomorHasil, step, ktpRw3, rt, alamat, nomorUnit, namaUsaha,
     jenisTempatUsaha, jenisTempatUsahaLain, kategoriUsaha, kategoriUsahaLain, penanggungJawab,
     jamBuka, jamTutup, alamatUsaha, jumlahDewasa, jumlahAnak, penghuni, penghuniIndex,
-    tanggalBayar, terminBulan, catatan, setujuTataTertib, fotoKk,
+    tanggalBayar, terminBulan, catatan, setujuTataTertib, fotoKk, bizKontribusi,
   ]);
 
   function mulaiUlang() {
@@ -1108,6 +1161,65 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
     [penghuni, formProfile?.requireKeperluanTinggal],
   );
 
+  function opsiValidasiOrang(p: PenghuniForm) {
+    return {
+      keperluan,
+      requireKeperluanTinggal: formProfile?.requireKeperluanTinggal ?? false,
+      requirePekerjaan: formProfile?.requirePekerjaan ?? true,
+      requireTempatKerja: formProfile?.requireTempatKerja ?? true,
+      tempatKerjaLabel: formProfile?.tempatKerjaLabel,
+      dataUsaha: product === "rw3biz",
+      pegawaiRingan: product === "rw3biz" && pegawaiBiasa(p),
+    };
+  }
+
+  function validatePjAda(): string | null {
+    const ada = penghuni.some(
+      (x) => !x.isAnak && (x.peran === "pemilik" || x.peran === "penanggung_jawab") && x.nomorWhatsapp.trim(),
+    );
+    return ada ? null : "Minimal satu orang berperan Pemilik atau Penanggung jawab, lengkap dengan nomor WhatsApp";
+  }
+
+  /** Perkiraan sejak langkah Usaha: orang yang belum diisi dianggap pegawai dari luar RW 03. */
+  const previewSementaraPayload = useMemo(() => {
+    if (product !== "rw3biz" || !jenisTempatUsaha) return null;
+    if (validateBizKontribusi(bizKontribusi, jenisTempatUsaha)) return null;
+    const orang = penghuni
+      .filter((p) => !p.isAnak)
+      .map((p, idx) => ({
+        isAnak: false,
+        peran: p.peran || (idx === 0 ? "pemilik" : "pekerja_harian"),
+        asal: p.asal || "luar",
+        domisili: null,
+      }));
+    return {
+      jenisTempatUsaha,
+      ...bizKontribusiPayload(bizKontribusi, jamBuka, jamTutup),
+      jamBuka: jamBuka || null,
+      jamTutup: jamTutup || null,
+      orang: orang.length ? orang : [{ isAnak: false, peran: "pemilik", asal: "luar", domisili: null }],
+    };
+  }, [product, jenisTempatUsaha, bizKontribusi, penghuni, jamBuka, jamTutup]);
+
+  const previewKontribusiPayload = useMemo(() => {
+    if (product !== "rw3biz" || !jenisTempatUsaha) return null;
+    if (validateBizKontribusi(bizKontribusi, jenisTempatUsaha)) return null;
+    const orang = penghuni.map((p) => ({ isAnak: p.isAnak, ...orangKontribusiPayload(p) }));
+    if (orang.some((o) => !o.isAnak && (!o.peran || !o.asal))) return null;
+    return {
+      jenisTempatUsaha,
+      ...bizKontribusiPayload(bizKontribusi, jamBuka, jamTutup),
+      jamBuka: jamBuka || null,
+      jamTutup: jamTutup || null,
+      orang: orang.filter((o) => !o.isAnak),
+    };
+  }, [product, jenisTempatUsaha, bizKontribusi, penghuni, jamBuka, jamTutup]);
+
+  const kunciKontribusi = `${terminBulan}|${JSON.stringify(previewKontribusiPayload)}`;
+  useEffect(() => {
+    setSetujuTataTertib(false);
+  }, [kunciKontribusi]);
+
   const mutation = useMutation({
     mutationFn: async () => {
       if (!jenisWarga || !formProfile) throw new Error("Pilih jenis warga dulu");
@@ -1134,6 +1246,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
             punyaKendaraan: p.punyaKendaraan,
             jenisKendaraan: p.jenisKendaraan,
             platNomor: p.platNomor,
+            ...orangKontribusiPayload(penghuni[idx]),
           };
         });
         if (!orang.some((o) => o.isPenanggungJawab && !o.isAnak)) {
@@ -1151,6 +1264,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
           kategoriUsaha: buildKategoriUsahaPayload(kategoriUsaha, kategoriUsahaLain),
           jamBuka: jamBuka.trim(),
           jamTutup: jamTutup.trim(),
+          ...bizKontribusiPayload(bizKontribusi, jamBuka, jamTutup),
           alamatUsaha: alamatUsaha.trim() || null,
           pjSetujuNotifikasi: true,
           jumlahOrang: jumlah,
@@ -1316,9 +1430,12 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
           nextSteps={[
             "Simpan nomor ini untuk cek status dan perpanjang nanti.",
             "Admin RW akan melakukan survey kelengkapan data.",
-            product === "rw3biz"
-              ? "Anda akan dihubungi lewat WhatsApp jika diperlukan klarifikasi."
-              : "Setelah disetujui, Surat Izin Tinggal Sementara terbit — bisa dilihat & dicetak dari halaman cek status.",
+            ...(product === "rw3biz"
+              ? [
+                  "Anda akan dihubungi lewat WhatsApp jika diperlukan klarifikasi.",
+                  "Kontribusi bulanan final ditetapkan setelah survey dan tampil di halaman cek status, lengkap dengan rinciannya.",
+                ]
+              : ["Setelah disetujui, Surat Izin Tinggal Sementara terbit — bisa dilihat & dicetak dari halaman cek status."]),
           ]}
           primaryAction={{
             label: "Cek status",
@@ -1555,7 +1672,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                 <SelectValue placeholder="Pilih jenis" />
               </SelectTrigger>
               <SelectContent>
-                {JENIS_TEMPAT_USAHA.map((o) => (
+                {JENIS_TEMPAT_BIZ_OPTIONS.map((o) => (
                   <SelectItem key={o.value} value={o.value}>
                     {o.label}
                   </SelectItem>
@@ -1639,6 +1756,21 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
           <p className="text-xs text-muted-foreground -mt-2">
             Format 24 jam (00:00–23:59), tanpa AM/PM. Petugas survey menyesuaikan kunjungan dengan jam buka.
           </p>
+          {product === "rw3biz" && (
+            <>
+              <UsahaKontribusiFields
+                value={bizKontribusi}
+                onChange={ubahBizKontribusi}
+                jenisTempat={jenisTempatUsaha}
+                jamBuka={jamBuka}
+                jamTutup={jamTutup}
+              />
+              <EstimasiKontribusiCard
+                payload={previewSementaraPayload}
+                sementara="Sementara dihitung tanpa pegawai. Angka berubah setelah jumlah, peran, dan asal pegawai diisi."
+              />
+            </>
+          )}
           <div className="space-y-2">
             <Label>Alamat usaha (jika berbeda dari lokasi sebelumnya)</Label>
             <Textarea
@@ -1678,6 +1810,10 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                   requireJamOperasional: true,
                 });
                 if (err) return showErr(err);
+                if (product === "rw3biz") {
+                  const errBiz = validateBizKontribusi(bizKontribusi, jenisTempatUsaha);
+                  if (errBiz) return showErr(errBiz);
+                }
                 goStep(1);
               }}
             >
@@ -1716,6 +1852,12 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
           <p className="text-sm font-medium text-center text-brand">
             Total {jumlah} {formProfile.orangLabel}
           </p>
+          {product === "rw3biz" && (
+            <EstimasiKontribusiCard
+              payload={previewSementaraPayload}
+              sementara={`Orang pertama dianggap pemilik, sisanya pegawai dari luar RW 03 sampai datanya diisi. Pegawai warga RW 03 memberi potongan.`}
+            />
+          )}
           {aturanKk !== "tidak" && (
             <div className="rounded-xl border bg-card p-3">
               <FotoDokumenPicker
@@ -1777,7 +1919,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                   p.isAnak
                     ? "Anak cukup nama, tanggal lahir, dan jenjang sekolah."
                     : jenisWarga === "jualan"
-                      ? "Data diri pekerja / penanggung jawab di lokasi usaha."
+                      ? "Pegawai cukup nama, NIK, tanggal lahir, dan asal. WhatsApp & foto KTP wajib untuk pemilik/PJ."
                       : jenisWarga === "kost"
                         ? "Data diri penghuni kamar (KTP & WhatsApp wajib)."
                         : "Data diri penghuni kontrakan — isi satu per satu."
@@ -1831,6 +1973,14 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                   </div>
                 ) : (
                   <>
+                    {product === "rw3biz" && (
+                      <OrangKontribusiFields
+                        peran={p.peran}
+                        asal={p.asal}
+                        domisili={p.domisili}
+                        onChange={(patch) => updatePenghuni(i, patch)}
+                      />
+                    )}
                     <div className="space-y-2">
                       <div className="flex items-baseline justify-between">
                         <Label>NIK (16 digit)</Label>
@@ -1853,7 +2003,10 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Nomor WhatsApp aktif</Label>
+                      <Label>
+                        Nomor WhatsApp aktif
+                        {product === "rw3biz" && pegawaiBiasa(p) ? " (opsional untuk pegawai)" : ""}
+                      </Label>
                       <Input
                         className="h-12"
                         type="tel"
@@ -1923,7 +2076,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                         onTempat={(v) => updatePenghuni(i, { namaTempatKerja: v })}
                         onDetail={(patch) => updateDetailKeperluan(i, patch)}
                       />
-                    ) : (
+                    ) : product === "rw3biz" ? null : (
                     <div className="space-y-2">
                       <Label>{formProfile?.tempatKerjaLabel ?? "Tempat kerja"} *</Label>
                       <Input
@@ -1956,7 +2109,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                       )}
                     </div>
                     )}
-                    {umurFromDate(p.tanggalLahir) < 21 && (
+                    {product !== "rw3biz" && umurFromDate(p.tanggalLahir) < 21 && (
                       <div className="space-y-2">
                         <Label>Nama sekolah (usia di bawah 21)</Label>
                         <Input
@@ -1967,16 +2120,19 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                         />
                       </div>
                     )}
-                    <KendaraanFields
-                      idPrefix={`kendaraan-${i}`}
-                      penghuni={p}
-                      onPunya={(punya) => setPunyaKendaraan(i, punya)}
-                      onUbah={(ki, patch) => updateKendaraan(i, ki, patch)}
-                      onTambah={() => addKendaraan(i)}
-                      onHapus={(ki) => removeKendaraan(i, ki)}
-                    />
+                    {product !== "rw3biz" && (
+                      <KendaraanFields
+                        idPrefix={`kendaraan-${i}`}
+                        penghuni={p}
+                        onPunya={(punya) => setPunyaKendaraan(i, punya)}
+                        onUbah={(ki, patch) => updateKendaraan(i, ki, patch)}
+                        onTambah={() => addKendaraan(i)}
+                        onHapus={(ki) => removeKendaraan(i, ki)}
+                      />
+                    )}
                     <FotoDokumenPicker
                       jenis="ktp"
+                      {...(product === "rw3biz" && pegawaiBiasa(p) ? { label: "Foto KTP (opsional untuk pegawai)" } : {})}
                       foto={p.fotoKtpPath}
                       diproses={fotoDiproses === i}
                       onPilih={(f) =>
@@ -1990,6 +2146,12 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                   </>
                 )}
               </div>
+              {product === "rw3biz" && (
+                <EstimasiKontribusiCard
+                  payload={previewSementaraPayload}
+                  sementara="Ikut berubah saat peran dan asal setiap orang diisi."
+                />
+              )}
               <PesanGalat pesan={errMsg} />
               <div className="flex gap-2">
                 <Button
@@ -2005,14 +2167,16 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                 <Button
                   className="flex-1 touch-target"
                   onClick={() => {
-                    const err = validateSinglePenghuni(p, {
-                      keperluan,
-                      requireKeperluanTinggal: formProfile?.requireKeperluanTinggal ?? false,
-                      requirePekerjaan: formProfile?.requirePekerjaan ?? true,
-                      requireTempatKerja: formProfile?.requireTempatKerja ?? true,
-                      tempatKerjaLabel: formProfile?.tempatKerjaLabel,
-                    });
+                    if (product === "rw3biz" && !p.isAnak) {
+                      const errOrang = validateOrangKontribusi(p);
+                      if (errOrang) return showErr(errOrang);
+                    }
+                    const err = validateSinglePenghuni(p, opsiValidasiOrang(p));
                     if (err) return showErr(err);
+                    if (product === "rw3biz" && penghuniIndex === penghuni.length - 1) {
+                      const errPj = validatePjAda();
+                      if (errPj) return showErr(errPj);
+                    }
                     if (fotoDiproses !== null) return showErr("Tunggu foto KTP selesai diproses");
                     if (!p.isAnak) {
                       const kembar = penghuni.findIndex(
@@ -2046,34 +2210,6 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
             </div>
           );
         })()}
-
-      {stepId === "syarat" && (
-        <div className="space-y-4">
-          <Visitrw3SyaratPanel
-            tataMasyarakat={settingsMap.tata_tertib_masyarakat ?? ""}
-            tataKhusus={settingsMap.tata_tertib_penyewa ?? ""}
-            setuju={setujuTataTertib}
-            onSetuju={setSetujuTataTertib}
-            loading={settingsLoading}
-          />
-          <PesanGalat pesan={errMsg} />
-          <div className="flex gap-2 sticky bottom-0 bg-background pt-2">
-            <Button variant="outline" onClick={() => goStep(-1)}>
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            <Button
-              className="flex-1 touch-target"
-              onClick={() => {
-                const err = validateStepSyarat(setujuTataTertib);
-                if (err) return showErr(err);
-                goStep(1);
-              }}
-            >
-              Lanjut ke masa berlaku <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
-        </div>
-      )}
 
       {stepId === "bayar" && (
         <div className="space-y-4">
@@ -2158,10 +2294,22 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                     <p className="truncate">
                       {x.namaLengkap.trim() || penghuniHeading(x, xi)}
                       <span className="text-muted-foreground">
-                        {x.isAnak ? " · anak" : x.fotoKtpPath ? " · KTP ✓" : " · KTP belum ada"}
+                        {x.isAnak
+                          ? " · anak"
+                          : x.fotoKtpPath
+                            ? " · KTP ✓"
+                            : product === "rw3biz" && pegawaiBiasa(x)
+                              ? ""
+                              : " · KTP belum ada"}
                       </span>
                     </p>
-                    {!x.isAnak && (
+                    {!x.isAnak && product === "rw3biz" && (
+                      <p className="text-xs text-muted-foreground">
+                        {PERAN_ORANG_BIZ_LABEL[x.peran as PeranOrangBiz] ?? "Peran belum dipilih"} ·{" "}
+                        {ASAL_ORANG_BIZ_LABEL[x.asal as AsalOrangBiz] ?? "asal belum dipilih"}
+                      </p>
+                    )}
+                    {!x.isAnak && product !== "rw3biz" && (
                       <RingkasanPenghuni penghuni={x} pakaiKeperluan={Boolean(formProfile?.requireKeperluanTinggal)} />
                     )}
                   </div>
@@ -2194,6 +2342,28 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
               </div>
             )}
           </div>
+          <Visitrw3SyaratPanel
+            tataMasyarakat={settingsMap.tata_tertib_masyarakat ?? ""}
+            tataKhusus={settingsMap.tata_tertib_penyewa ?? ""}
+            kontribusi={
+              product === "rw3biz" ? (
+                <EstimasiKontribusiCard
+                  payload={previewKontribusiPayload}
+                  terminBulan={parseInt(terminBulan, 10)}
+                  usahaBaru={bizKontribusi.usahaBaru === "ya"}
+                />
+              ) : jenisWarga === "kost" || jenisWarga === "kontrak" ? (
+                <KontribusiTinggalInfo
+                  jenis={jenisWarga}
+                  settingsRows={settingsRows}
+                  terminBulan={parseInt(terminBulan, 10)}
+                />
+              ) : null
+            }
+            setuju={setujuTataTertib}
+            onSetuju={setSetujuTataTertib}
+            loading={settingsLoading}
+          />
           <PesanGalat pesan={errMsg} />
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => goStep(-1)}>
@@ -2217,15 +2387,8 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                   lompatKe("lokasi");
                   return showErr(errLokasi, { step: indeksLangkah("lokasi") });
                 }
-                const opsiPenghuni = {
-                  keperluan,
-                  requireKeperluanTinggal: formProfile?.requireKeperluanTinggal ?? false,
-                  requirePekerjaan: formProfile?.requirePekerjaan ?? true,
-                  requireTempatKerja: formProfile?.requireTempatKerja ?? true,
-                  tempatKerjaLabel: formProfile?.tempatKerjaLabel,
-                };
                 for (let xi = 0; xi < penghuni.length; xi++) {
-                  const errP = validateSinglePenghuni(penghuni[xi], opsiPenghuni);
+                  const errP = validateSinglePenghuni(penghuni[xi], opsiValidasiOrang(penghuni[xi]));
                   if (errP) {
                     setPenghuniIndex(xi);
                     lompatKe("penghuni");
@@ -2233,6 +2396,30 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                       `${penghuni[xi].namaLengkap.trim() || penghuniHeading(penghuni[xi], xi)}: ${errP}`,
                       { step: indeksLangkah("penghuni"), idx: xi },
                     );
+                  }
+                  if (product === "rw3biz" && !penghuni[xi].isAnak) {
+                    const errOrang = validateOrangKontribusi(penghuni[xi]);
+                    if (errOrang) {
+                      setPenghuniIndex(xi);
+                      lompatKe("penghuni");
+                      return showErr(
+                        `${penghuni[xi].namaLengkap.trim() || penghuniHeading(penghuni[xi], xi)}: ${errOrang}`,
+                        { step: indeksLangkah("penghuni"), idx: xi },
+                      );
+                    }
+                  }
+                }
+                if (product === "rw3biz") {
+                  const errPj = validatePjAda();
+                  if (errPj) {
+                    setPenghuniIndex(0);
+                    lompatKe("penghuni");
+                    return showErr(errPj, { step: indeksLangkah("penghuni"), idx: 0 });
+                  }
+                  const errBiz = validateBizKontribusi(bizKontribusi, jenisTempatUsaha);
+                  if (errBiz) {
+                    lompatKe("usaha");
+                    return showErr(errBiz, { step: indeksLangkah("usaha") });
                   }
                 }
                 if (aturanKk === "wajib" && !fotoKk) {

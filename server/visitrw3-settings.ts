@@ -70,14 +70,14 @@ const SEED_DEFAULTS: { key: Visitrw3SettingKey; value: string; label: string; ke
   { key: "fee_bisnis_kiosk_per_hari", value: "5000", label: "Bisnis kiosk — per hari" },
   { key: "fee_bisnis_lain_per_hari", value: "8000", label: "Bisnis lainnya — per hari" },
   { key: "fee_bisnis_per_hari", value: "5000", label: "(Legacy) Bisnis per hari", keterangan: "Cadangan jika tarif tier belum diisi" },
-  { key: "fee_kost_kecil_per_unit_bulan", value: "8000", label: "Kost kecil — per unit/bulan" },
-  { key: "fee_kost_sedang_per_unit_bulan", value: "10000", label: "Kost sedang — per unit/bulan" },
-  { key: "fee_kost_besar_per_unit_bulan", value: "12000", label: "Kost besar — per unit/bulan" },
-  { key: "fee_kost_per_unit_bulan", value: "10000", label: "(Legacy) Kost per unit/bulan" },
-  { key: "fee_kontrakan_kecil_per_unit_bulan", value: "12000", label: "Kontrakan kecil — per unit/bulan" },
-  { key: "fee_kontrakan_sedang_per_unit_bulan", value: "15000", label: "Kontrakan sedang — per unit/bulan" },
-  { key: "fee_kontrakan_besar_per_unit_bulan", value: "18000", label: "Kontrakan besar — per unit/bulan" },
-  { key: "fee_kontrakan_per_unit_bulan", value: "15000", label: "(Legacy) Kontrakan per unit/bulan" },
+  { key: "fee_kost_kecil_per_unit_bulan", value: "5000", label: "Kost kecil — per unit/bulan" },
+  { key: "fee_kost_sedang_per_unit_bulan", value: "6000", label: "Kost sedang — per unit/bulan" },
+  { key: "fee_kost_besar_per_unit_bulan", value: "7000", label: "Kost besar — per unit/bulan" },
+  { key: "fee_kost_per_unit_bulan", value: "6000", label: "(Legacy) Kost per unit/bulan" },
+  { key: "fee_kontrakan_kecil_per_unit_bulan", value: "8000", label: "Kontrakan kecil — per unit/bulan" },
+  { key: "fee_kontrakan_sedang_per_unit_bulan", value: "9000", label: "Kontrakan sedang — per unit/bulan" },
+  { key: "fee_kontrakan_besar_per_unit_bulan", value: "10000", label: "Kontrakan besar — per unit/bulan" },
+  { key: "fee_kontrakan_per_unit_bulan", value: "9000", label: "(Legacy) Kontrakan per unit/bulan" },
   { key: "fee_pemilik_lapak_per_bulan", value: "30000", label: "Pemilik lapak — per bulan" },
   { key: "fee_pemilik_kiosk_per_bulan", value: "35000", label: "Pemilik kiosk — per bulan" },
   { key: "fee_pemilik_kost_kecil_per_bulan", value: "40000", label: "Pemilik kost kecil — per bulan" },
@@ -92,6 +92,18 @@ const SEED_DEFAULTS: { key: Visitrw3SettingKey; value: string; label: string; ke
   { key: "tata_tertib_pemilik", value: DEFAULT_TATA_PEMILIK, label: "Tata tertib pemilik properti" },
 ];
 
+/** Tarif penyewa sebelum Rp5.000–10.000; hanya diganti bila admin belum mengubahnya. */
+const TARIF_PENYEWA_LAMA: Partial<Record<Visitrw3SettingKey, string>> = {
+  fee_kost_kecil_per_unit_bulan: "8000",
+  fee_kost_sedang_per_unit_bulan: "10000",
+  fee_kost_besar_per_unit_bulan: "12000",
+  fee_kost_per_unit_bulan: "10000",
+  fee_kontrakan_kecil_per_unit_bulan: "12000",
+  fee_kontrakan_sedang_per_unit_bulan: "15000",
+  fee_kontrakan_besar_per_unit_bulan: "18000",
+  fee_kontrakan_per_unit_bulan: "15000",
+};
+
 export async function seedVisitrw3Settings() {
   for (const s of SEED_DEFAULTS) {
     await pool.query(
@@ -99,6 +111,13 @@ export async function seedVisitrw3Settings() {
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (key) DO NOTHING`,
       [s.key, s.value, s.label, s.keterangan ?? null],
+    );
+  }
+  for (const [key, lama] of Object.entries(TARIF_PENYEWA_LAMA)) {
+    const baru = SEED_DEFAULTS.find((s) => s.key === key)!.value;
+    await pool.query(
+      `UPDATE visitrw3_settings SET value = $2, updated_at = now() WHERE key = $1 AND value = $3`,
+      [key, baru, lama],
     );
   }
 }

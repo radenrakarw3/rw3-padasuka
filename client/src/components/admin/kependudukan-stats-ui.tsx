@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -15,11 +15,8 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import {
-  GovStatistic,
-  GovStatisticRow,
-  GovStatisticSection,
-} from "@/components/gov/statistic";
+import { GovStatisticSection, type GovStatisticTone } from "@/components/gov/statistic";
+import { cn } from "@/lib/utils";
 import {
   buildKategoriUmurDisplayItems,
   type KategoriUmurId,
@@ -53,6 +50,97 @@ export function formatNumber(n: number) {
   return n.toLocaleString("id-ID");
 }
 
+const TONE_IKON: Record<GovStatisticTone, string> = {
+  default: "bg-brand/10 text-brand",
+  success: "bg-success/15 text-success",
+  warning: "bg-warning/15 text-warning",
+  info: "bg-info/15 text-info",
+};
+
+const KOLOM_BARIS = {
+  3: "lg:grid-cols-3",
+  4: "lg:grid-cols-4",
+  5: "lg:grid-cols-3 xl:grid-cols-5",
+} as const;
+
+/** Grid angka: 2 kolom di HP agar tidak memanjang. */
+export function StatBaris({ cols = 4, children }: { cols?: 3 | 4 | 5; children: React.ReactNode }) {
+  return <div className={cn("grid grid-cols-2 gap-2 sm:gap-3", KOLOM_BARIS[cols])}>{children}</div>;
+}
+
+/** Setara `GovStatistic`, tetapi ringkas di HP (ikon kecil sebaris label) supaya muat 2 kolom. */
+export function StatKartu({
+  label,
+  value,
+  description,
+  icon: Icon,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  description?: string;
+  icon?: LucideIcon;
+  tone?: GovStatisticTone;
+}) {
+  return (
+    <div className="relative min-w-0 overflow-hidden rounded-2xl border border-border/60 bg-card/90 shadow-sm">
+      <div className="flex items-start justify-between gap-3 p-3 sm:p-5">
+        <div className="min-w-0 space-y-1">
+          <p className="flex items-start gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground break-words">
+            {Icon && (
+              <span className={cn("mt-px shrink-0 rounded-md p-0.5 sm:hidden", TONE_IKON[tone])}>
+                <Icon className="h-3.5 w-3.5" aria-hidden />
+              </span>
+            )}
+            <span className="min-w-0">{label}</span>
+          </p>
+          <p className="text-xl font-bold tabular-nums tracking-tight text-foreground sm:text-2xl">{value}</p>
+          {description && <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>}
+        </div>
+        {Icon && (
+          <div className={cn("hidden shrink-0 rounded-xl p-3 sm:block", TONE_IKON[tone])}>
+            <Icon className="h-5 w-5" aria-hidden />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** `GovStatisticSection`; dengan `polos` judul disembunyikan karena sudah tampil di pemicu Accordion. */
+export function BagianStat({
+  title,
+  description,
+  polos,
+  children,
+}: {
+  title: string;
+  description?: string;
+  polos?: boolean;
+  children: React.ReactNode;
+}) {
+  if (!polos) {
+    return <GovStatisticSection title={title} description={description}>{children}</GovStatisticSection>;
+  }
+  return (
+    <section className="space-y-3" aria-label={title}>
+      {description && <p className="text-xs text-muted-foreground">{description}</p>}
+      {children}
+    </section>
+  );
+}
+
+function useLayarSempit() {
+  const [sempit, setSempit] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches);
+  useEffect(() => {
+    const mql = window.matchMedia("(max-width: 639px)");
+    const ubah = () => setSempit(mql.matches);
+    mql.addEventListener("change", ubah);
+    return () => mql.removeEventListener("change", ubah);
+  }, []);
+  return sempit;
+}
+
 export function MetricCard({
   title,
   value,
@@ -73,7 +161,7 @@ export function MetricCard({
       } ${selected ? "ring-2 ring-[hsl(163,55%,28%)] border-[hsl(163,55%,28%)]/40" : ""}`}
       onClick={onClick}
     >
-      <CardContent className="p-5 space-y-1">
+      <CardContent className="p-4 space-y-1 sm:p-5">
         <p className="text-sm font-medium text-muted-foreground">{title}</p>
         <p className="text-2xl font-bold tracking-tight">{value}</p>
         <p className="text-xs text-muted-foreground">{description}</p>
@@ -95,15 +183,16 @@ export function BarBlock({
   height?: number;
   onBarClick?: (label: string) => void;
 }) {
+  const sempit = useLayarSempit();
   if (data.length === 0) {
     return <p className="text-sm text-muted-foreground py-8 text-center">{empty}</p>;
   }
   return (
-    <ChartContainer config={barConfig} className="w-full" style={{ height }}>
-      <BarChart data={data} layout="vertical" margin={{ left: 8, right: 8 }}>
+    <ChartContainer config={barConfig} className="w-full min-w-0" style={{ height }}>
+      <BarChart data={data} layout="vertical" margin={{ left: sempit ? 0 : 8, right: 8 }}>
         <CartesianGrid horizontal={false} />
-        <XAxis type="number" />
-        <YAxis type="category" dataKey="label" width={labelWidth} tick={{ fontSize: 11 }} />
+        <XAxis type="number" allowDecimals={false} />
+        <YAxis type="category" dataKey="label" width={sempit ? Math.min(labelWidth, 116) : labelWidth} tick={{ fontSize: 11 }} />
         <ChartTooltip content={<ChartTooltipContent />} />
         <Bar
           dataKey="count"
@@ -135,14 +224,14 @@ function PekerjaanWargaListDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
+      <DialogContent className="max-w-lg flex flex-col sm:max-h-[85vh]">
         <DialogHeader>
           <DialogTitle>{chartLabel ?? "Daftar warga"}</DialogTitle>
           <DialogDescription>
             {formatNumber(rows.length)} warga · klik Hubungi WA untuk konfirmasi data pekerjaan
           </DialogDescription>
         </DialogHeader>
-        <ul className="flex-1 overflow-y-auto space-y-2 pr-1 -mr-1">
+        <ul className="space-y-2 sm:flex-1 sm:overflow-y-auto sm:pr-1 sm:-mr-1">
           {rows.map((row) => {
             const wa = resolveWaVerifikasi(row, allWarga);
             const waUrl = wa
@@ -158,25 +247,25 @@ function PekerjaanWargaListDialog({
                     <span className="font-mono text-xs text-muted-foreground">
                       RT {String(row.rt).padStart(2, "0")}
                     </span>
-                    <span className="font-medium text-sm leading-tight">{row.namaLengkap}</span>
+                    <span className="font-medium text-sm leading-tight break-words">{row.namaLengkap}</span>
                   </div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground break-words">
                     NIK {row.nik}
                     {row.pekerjaan?.trim() ? ` · ${row.pekerjaan.trim()}` : " · pekerjaan kosong"}
                   </p>
                   {wa?.via === "kepala_keluarga" && (
-                    <p className="text-[11px] text-muted-foreground">WA via kepala keluarga</p>
+                    <p className="text-xs text-muted-foreground">WA via kepala keluarga</p>
                   )}
                 </div>
                 {waUrl ? (
-                  <Button variant="outline" size="sm" className="shrink-0" asChild>
+                  <Button variant="outline" size="sm" className="w-full shrink-0 sm:w-auto" asChild>
                     <a href={waUrl} target="_blank" rel="noopener noreferrer">
                       <MessageCircle className="w-4 h-4 mr-1.5" />
                       Hubungi WA
                     </a>
                   </Button>
                 ) : (
-                  <Badge variant="secondary" className="text-xs font-normal shrink-0">
+                  <Badge variant="secondary" className="justify-center self-start text-xs font-normal shrink-0 sm:self-auto">
                     Tanpa WA
                   </Badge>
                 )}
@@ -218,7 +307,7 @@ type PekerjaanWargaSlice = WargaKategoriSlice &
   WargaIssueSlice &
   PekerjaanRingkasanInput;
 
-export function PekerjaanPanel({ warga }: { warga: PekerjaanWargaSlice[] }) {
+export function PekerjaanPanel({ warga, polos }: { warga: PekerjaanWargaSlice[]; polos?: boolean }) {
   const [chartLabel, setChartLabel] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -238,65 +327,66 @@ export function PekerjaanPanel({ warga }: { warga: PekerjaanWargaSlice[] }) {
   };
 
   return (
-    <GovStatisticSection
+    <BagianStat
+      polos={polos}
       title="Pekerjaan"
       description="Status di luar angkatan kerja — 0–6 «Bimbingan Orang Tua», 7–18 «Pelajar», 65+ «Pensiunan»"
     >
       <div className="space-y-6">
-        <GovStatisticRow cols={5}>
-          <GovStatistic
+        <StatBaris cols={5}>
+          <StatKartu
             label="Bimbingan Orang Tua"
             value={formatNumber(summary.bimbinganOrangTua)}
             description="Usia 0–6 tahun"
             icon={HeartHandshake}
             tone="info"
           />
-          <GovStatistic
+          <StatKartu
             label="Pelajar"
             value={formatNumber(summary.pelajar)}
             description="Usia 7–18 tahun"
             icon={GraduationCap}
             tone="info"
           />
-          <GovStatistic
+          <StatKartu
             label="Angkatan kerja"
             value={formatNumber(summary.jabatan)}
             description="Jabatan/pekerjaan aktif"
             icon={Briefcase}
           />
-          <GovStatistic
+          <StatKartu
             label="Pengangguran"
             value={formatNumber(summary.pengangguran)}
             description={PENGANGGURAN_KETERANGAN}
             icon={UserX}
             tone="warning"
           />
-          <GovStatistic
+          <StatKartu
             label="Belum diisi"
             value={formatNumber(summary.belumDiisi)}
             description="Kolom pekerjaan kosong"
             icon={Users}
             tone={summary.belumDiisi > 0 ? "warning" : "default"}
           />
-        </GovStatisticRow>
+        </StatBaris>
 
         {(summary.irt > 0 || summary.pensiun > 0) && (
-          <GovStatisticRow cols={4}>
+          <StatBaris cols={4}>
             {summary.irt > 0 && (
-              <GovStatistic
+              <StatKartu
                 label="Ibu Rumah Tangga"
                 value={formatNumber(summary.irt)}
                 description="Di luar angkatan kerja (ILO)"
               />
             )}
             {summary.pensiun > 0 && (
-              <GovStatistic
+              <StatKartu
                 label="Pensiun"
                 value={formatNumber(summary.pensiun)}
                 description="Di luar angkatan kerja (ILO)"
               />
             )}
-          </GovStatisticRow>
+          </StatBaris>
         )}
 
         <div className="space-y-2">
@@ -331,11 +421,11 @@ export function PekerjaanPanel({ warga }: { warga: PekerjaanWargaSlice[] }) {
         rows={selectedWarga}
         allWarga={warga}
       />
-    </GovStatisticSection>
+    </BagianStat>
   );
 }
 
-export function KategoriUmurPanel({ warga }: { warga: WargaKategoriSlice[] }) {
+export function KategoriUmurPanel({ warga, polos }: { warga: WargaKategoriSlice[]; polos?: boolean }) {
   const items = useMemo(() => buildKategoriUmurDisplayItems(warga), [warga]);
   const chartData = useMemo(
     () =>
@@ -348,7 +438,8 @@ export function KategoriUmurPanel({ warga }: { warga: WargaKategoriSlice[] }) {
   const pelajar = items.find((i) => i.id === "7-18");
 
   return (
-    <GovStatisticSection
+    <BagianStat
+      polos={polos}
       title="Kategori Umur"
       description="0–6 = Bimbingan Orang Tua · 7–18 = Pelajar · 65+ = Pensiunan · dihitung dari tanggal lahir"
     >
@@ -363,11 +454,11 @@ export function KategoriUmurPanel({ warga }: { warga: WargaKategoriSlice[] }) {
           </div>
         )}
 
-        <GovStatisticRow cols={5}>
+        <StatBaris cols={5}>
           {items
             .filter((item) => item.id !== "belum_diisi")
             .map((item) => (
-              <GovStatistic
+              <StatKartu
                 key={item.id}
                 label={item.label}
                 value={formatNumber(item.count)}
@@ -376,11 +467,11 @@ export function KategoriUmurPanel({ warga }: { warga: WargaKategoriSlice[] }) {
                 tone={item.isPelajar ? "info" : "default"}
               />
             ))}
-        </GovStatisticRow>
+        </StatBaris>
 
         {items.some((i) => i.id === "belum_diisi" && i.count > 0) && (
           <div className="max-w-xs">
-            <GovStatistic
+            <StatKartu
               label="Usia belum diisi"
               value={formatNumber(items.find((i) => i.id === "belum_diisi")?.count ?? 0)}
               description="Lengkapi tanggal lahir"
@@ -396,6 +487,6 @@ export function KategoriUmurPanel({ warga }: { warga: WargaKategoriSlice[] }) {
           height={Math.max(220, chartData.length * 40)}
         />
       </div>
-    </GovStatisticSection>
+    </BagianStat>
   );
 }

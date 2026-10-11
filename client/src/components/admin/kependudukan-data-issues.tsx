@@ -10,8 +10,7 @@ import {
   type WargaIssueSlice,
 } from "@shared/warga-data-issues";
 import { WargaDataIssueEditDialog } from "@/components/admin/warga-data-issue-edit-dialog";
-import { formatNumber } from "@/components/admin/kependudukan-stats-ui";
-import { GovStatistic, GovStatisticRow, GovStatisticSection } from "@/components/gov/statistic";
+import { BagianStat, StatBaris, StatKartu, formatNumber } from "@/components/admin/kependudukan-stats-ui";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -19,11 +18,21 @@ import { toWaMeUrl } from "@/lib/wa";
 
 type Props = {
   warga: WargaIssueSlice[];
+  polos?: boolean;
 };
 
-export function KependudukanDataIssues({ warga }: Props) {
+const KELAS_CHIP =
+  "shrink-0 rounded-full min-h-10 px-4 text-sm font-medium border transition-colors sm:min-h-0 sm:px-3 sm:py-1 sm:text-xs";
+const PER_HALAMAN = 20;
+
+export function KependudukanDataIssues({ warga, polos }: Props) {
   const [issueFilter, setIssueFilter] = useState<WargaDataIssueId | "semua">("semua");
   const [editRow, setEditRow] = useState<WargaIssueSlice | null>(null);
+  const [batasTampil, setBatasTampil] = useState(PER_HALAMAN);
+  const pilihFilter = (f: WargaDataIssueId | "semua") => {
+    setIssueFilter(f);
+    setBatasTampil(PER_HALAMAN);
+  };
 
   const report = useMemo(() => buildWargaDataIssueReport(warga), [warga]);
 
@@ -33,25 +42,26 @@ export function KependudukanDataIssues({ warga }: Props) {
   }, [issueFilter, report.rows]);
 
   return (
-    <GovStatisticSection
+    <BagianStat
+      polos={polos}
       title="Verifikasi Data"
       description="Data yang perlu dikonfirmasi — hubungi warga via WhatsApp atau perbaiki langsung"
     >
       <div className="space-y-4">
-        <GovStatisticRow cols={3}>
-          <GovStatistic
+        <StatBaris cols={3}>
+          <StatKartu
             label="Perlu verifikasi"
             value={formatNumber(report.totalBermasalah)}
             description="Warga dengan data belum lengkap/selaras"
           />
-          <GovStatistic
+          <StatKartu
             label="Bisa dihubungi WA"
             value={formatNumber(
               report.rows.filter((r) => resolveWaVerifikasi(r, warga) !== null).length,
             )}
             description="Punya nomor sendiri atau via kepala keluarga"
           />
-          <GovStatistic
+          <StatKartu
             label="Tanpa kontak WA"
             value={formatNumber(
               report.rows.filter((r) => resolveWaVerifikasi(r, warga) === null).length,
@@ -59,15 +69,15 @@ export function KependudukanDataIssues({ warga }: Props) {
             description="Perlu kunjungan atau input manual"
             tone="warning"
           />
-        </GovStatisticRow>
+        </StatBaris>
 
         {report.totalBermasalah > 0 && (
-          <div className="flex flex-wrap gap-2">
+          <div className="no-scrollbar -mx-3 flex gap-2 overflow-x-auto px-3 sm:mx-0 sm:flex-wrap sm:px-0">
             <button
               type="button"
-              onClick={() => setIssueFilter("semua")}
+              onClick={() => pilihFilter("semua")}
               className={cn(
-                "rounded-full px-3 py-1 text-xs font-medium border transition-colors",
+                KELAS_CHIP,
                 issueFilter === "semua"
                   ? "bg-brand text-brand-foreground border-brand"
                   : "bg-muted/40 text-muted-foreground border-border hover:border-brand/40",
@@ -82,9 +92,9 @@ export function KependudukanDataIssues({ warga }: Props) {
                 <button
                   key={def.id}
                   type="button"
-                  onClick={() => setIssueFilter(issueFilter === def.id ? "semua" : def.id)}
+                  onClick={() => pilihFilter(issueFilter === def.id ? "semua" : def.id)}
                   className={cn(
-                    "rounded-full px-3 py-1 text-xs font-medium border transition-colors",
+                    KELAS_CHIP,
                     issueFilter === def.id
                       ? "bg-brand text-brand-foreground border-brand"
                       : "bg-muted/40 text-muted-foreground border-border hover:border-brand/40",
@@ -102,8 +112,9 @@ export function KependudukanDataIssues({ warga }: Props) {
             Semua data warga sudah selaras untuk filter RT ini.
           </p>
         ) : (
+          <>
           <ul className="space-y-2">
-            {filteredRows.map((row) => {
+            {filteredRows.slice(0, batasTampil).map((row) => {
               const wa = resolveWaVerifikasi(row, warga);
               const waUrl = wa
                 ? toWaMeUrl(wa.phone, buildVerifikasiDataWaMessage(row, row.issues))
@@ -112,22 +123,22 @@ export function KependudukanDataIssues({ warga }: Props) {
               return (
                 <li
                   key={row.id}
-                  className="flex flex-col gap-3 rounded-xl border border-border/70 bg-card/80 p-4 sm:flex-row sm:items-center"
+                  className="flex flex-col gap-3 rounded-xl border border-border/70 bg-card/80 p-3 sm:flex-row sm:items-center sm:p-4"
                 >
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-xs text-muted-foreground">
                         RT {String(row.rt).padStart(2, "0")}
                       </span>
-                      <span className="font-semibold leading-tight">{row.namaLengkap}</span>
+                      <span className="font-semibold leading-tight break-words">{row.namaLengkap}</span>
                     </div>
-                    <p className="text-xs text-muted-foreground">{summarizeWargaIssues(row.issues)}</p>
+                    <p className="text-sm text-muted-foreground sm:text-xs">{summarizeWargaIssues(row.issues)}</p>
                     {wa?.via === "kepala_keluarga" && (
-                      <p className="text-[11px] text-muted-foreground">WA via kepala keluarga</p>
+                      <p className="text-xs text-muted-foreground">WA via kepala keluarga</p>
                     )}
                   </div>
 
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="grid shrink-0 grid-cols-2 gap-2 sm:flex sm:items-center">
                     {waUrl ? (
                       <Button variant="outline" size="sm" className="touch-target" asChild>
                         <a href={waUrl} target="_blank" rel="noopener noreferrer">
@@ -136,7 +147,7 @@ export function KependudukanDataIssues({ warga }: Props) {
                         </a>
                       </Button>
                     ) : (
-                      <Badge variant="secondary" className="font-normal text-xs">
+                      <Badge variant="secondary" className="justify-center font-normal text-xs">
                         Tanpa WA
                       </Badge>
                     )}
@@ -149,6 +160,20 @@ export function KependudukanDataIssues({ warga }: Props) {
               );
             })}
           </ul>
+          {filteredRows.length > batasTampil && (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => setBatasTampil((n) => n + PER_HALAMAN)}
+            >
+              Tampilkan {formatNumber(Math.min(PER_HALAMAN, filteredRows.length - batasTampil))} lagi
+              <span className="ml-1 text-muted-foreground">
+                ({formatNumber(batasTampil)} dari {formatNumber(filteredRows.length)})
+              </span>
+            </Button>
+          )}
+          </>
         )}
       </div>
 
@@ -159,6 +184,6 @@ export function KependudukanDataIssues({ warga }: Props) {
           if (!open) setEditRow(null);
         }}
       />
-    </GovStatisticSection>
+    </BagianStat>
   );
 }

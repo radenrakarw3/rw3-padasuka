@@ -6,6 +6,8 @@ type PengajuanRow = { status: string };
 export type Visitrw3AdminCounts = {
   propertiMenunggu: number;
   surveyMenunggu: number;
+  keberatanMenunggu: number;
+  aduanMenunggu: number;
   isLoading: boolean;
 };
 
@@ -27,9 +29,33 @@ export function useVisitrw3AdminCounts(
     staleTime: 30_000,
   });
 
+  const { data: keberatan = [] } = useQuery<PengajuanRow[]>({
+    queryKey: ["/api/admin/rw3biz/keberatan", "menunggu"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/rw3biz/keberatan?status=menunggu", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: isBiz,
+    staleTime: 30_000,
+  });
+
+  const { data: aduan = [] } = useQuery<PengajuanRow[]>({
+    queryKey: ["/api/admin/rw3biz/pelanggaran", "menunggu"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/rw3biz/pelanggaran?status=menunggu_verifikasi", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: isBiz,
+    staleTime: 30_000,
+  });
+
   return {
     propertiMenunggu: 0,
     surveyMenunggu: pengajuan.length,
+    keberatanMenunggu: isBiz ? keberatan.length : 0,
+    aduanMenunggu: isBiz ? aduan.length : 0,
     isLoading,
   };
 }

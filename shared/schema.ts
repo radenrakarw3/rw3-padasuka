@@ -10,7 +10,7 @@ export const kartuKeluarga = pgTable("kartu_keluarga", {
   id: serial("id").primaryKey(),
   nomorKk: text("nomor_kk").notNull().unique(),
   rt: integer("rt").notNull(),
-  /** Nomor unit/rumah di RT (Blusukan RW). */
+  /** Nomor unit/rumah di RT. */
   noUnit: text("no_unit"),
   alamat: text("alamat").notNull(),
   statusRumah: text("status_rumah").notNull().default("Milik Sendiri"),
@@ -528,11 +528,46 @@ export const visitrw3Dokumen = pgTable(
 // Basis data terpisah dari Visit RW3. Visit RW3 hanya melayani kontrak/kost;
 // data jualan/usaha hidup di tabel rw3biz_* agar bisa dipakai WA blast ke PJ/pemilik usaha.
 
+/** Data penentu kontribusi bulanan — sama di pengajuan & usaha (lihat shared/rw3biz-kontribusi.ts). */
+function rw3bizKontribusiKolom() {
+  return {
+    statusTempat: text("status_tempat"),
+    luasM2: integer("luas_m2"),
+    hariOperasional: integer("hari_operasional"),
+    rentangOmzet: text("rentang_omzet"),
+    /** tidak | malam | 24jam */
+    operasionalMalam: text("operasional_malam"),
+    sampahKantongHari: integer("sampah_kantong_hari"),
+    pakaiBahuJalan: boolean("pakai_bahu_jalan").notNull().default(false),
+    kendaraanMotor: integer("kendaraan_motor").notNull().default(0),
+    kendaraanMobil: integer("kendaraan_mobil").notNull().default(0),
+    kendaraanKolbak: integer("kendaraan_kolbak").notNull().default(0),
+    kendaraanTruk: integer("kendaraan_truk").notNull().default(0),
+    kendaraanTrukBesar: integer("kendaraan_truk_besar").notNull().default(0),
+    /** Kendaraan berat charter: rata-rata kedatangan per minggu. */
+    charterKolbak: integer("charter_kolbak").notNull().default(0),
+    charterTruk: integer("charter_truk").notNull().default(0),
+    charterTrukBesar: integer("charter_truk_besar").notNull().default(0),
+    /** Nama penyedia/rental charter (opsional). */
+    charterPenyedia: text("charter_penyedia"),
+    /** JSON array plat nomor kendaraan operasional. */
+    kendaraanOperasional: text("kendaraan_operasional"),
+    /** Usaha baru buka (< 3 bulan) — dapat bulan pertama gratis. */
+    usahaBaru: boolean("usaha_baru").notNull().default(false),
+    kontribusiBulanan: integer("kontribusi_bulanan"),
+    /** JSON { input, hasil } — hasil hitungKontribusiRw3biz saat ditetapkan. */
+    rincianKontribusi: text("rincian_kontribusi"),
+    persenPekerjaRw3: integer("persen_pekerja_rw3"),
+  };
+}
+
 /** Usaha aktif RW3BIZ (dibuat setelah pengajuan disetujui). */
 export const rw3bizUsaha = pgTable("rw3biz_usaha", {
   id: serial("id").primaryKey(),
-  /** Format BIZ-YYYY-#### */
+  /** Format BIZ-YYYY-#### — berganti setiap perpanjang. */
   nomorBiz: text("nomor_biz").notNull().unique(),
+  /** Nomor Induk Usaha RW3 (NIU-RW3-####) — tetap seumur usaha, dipakai cek status. */
+  nomorInduk: text("nomor_induk").unique(),
   rt: integer("rt").notNull(),
   alamat: text("alamat").notNull(),
   nomorLokasi: text("nomor_lokasi"),
@@ -554,6 +589,16 @@ export const rw3bizUsaha = pgTable("rw3biz_usaha", {
   tanggalHabis: text("tanggal_habis").notNull(),
   terminBulan: integer("termin_bulan"),
   pengajuanId: integer("pengajuan_id"),
+  ...rw3bizKontribusiKolom(),
+  /** Periode (YYYY-MM) tagihan pertama. */
+  periodeTagihanMulai: text("periode_tagihan_mulai"),
+  /** Periode acuan masa transisi (YYYY-MM); null = tanpa transisi. */
+  tahapTransisiMulai: text("tahap_transisi_mulai"),
+  keringananJenis: text("keringanan_jenis"),
+  keringananPersen: integer("keringanan_persen"),
+  /** YYYY-MM-DD — keringanan berlaku sampai periode yang memuat tanggal ini. */
+  keringananSampai: text("keringanan_sampai"),
+  keringananAlasan: text("keringanan_alasan"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -589,6 +634,7 @@ export const rw3bizPengajuan = pgTable("rw3biz_pengajuan", {
   reviewedAt: timestamp("reviewed_at"),
   reviewedBy: text("reviewed_by"),
   setujuTataTertib: boolean("setuju_tata_tertib").notNull().default(false),
+  ...rw3bizKontribusiKolom(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -612,7 +658,159 @@ export const rw3bizOrang = pgTable("rw3biz_orang", {
   fotoKtpPath: text("foto_ktp_path"),
   fotoKtpData: text("foto_ktp_data"),
   urutan: integer("urutan").notNull().default(0),
+  /** pemilik | penanggung_jawab | pekerja_tetap | pekerja_harian */
+  peran: text("peran"),
+  /** rw3 | luar */
+  asal: text("asal"),
+  domisili: text("domisili"),
+  /** Hasil pencocokan NIK ke tabel warga (RT aktif). */
+  wargaId: integer("warga_id"),
 });
+
+/** Tagihan kontribusi bulanan per usaha. */
+export const rw3bizTagihan = pgTable(
+  "rw3biz_tagihan",
+  {
+    id: serial("id").primaryKey(),
+    usahaId: integer("usaha_id").notNull().references(() => rw3bizUsaha.id, { onDelete: "cascade" }),
+    /** YYYY-MM */
+    periode: text("periode").notNull(),
+    kontribusiBulanan: integer("kontribusi_bulanan").notNull(),
+    jumlah: integer("jumlah").notNull(),
+    terbayar: integer("terbayar").notNull().default(0),
+    /** belum | sebagian | lunas | dibebaskan */
+    status: text("status").notNull().default("belum"),
+    /** JSON string[] — penjelasan potongan (transisi, keringanan, termin). */
+    catatan: text("catatan"),
+    tanggalBayar: text("tanggal_bayar"),
+    dicatatOleh: text("dicatat_oleh"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("rw3biz_tagihan_usaha_periode_idx").on(t.usahaId, t.periode),
+    index("rw3biz_tagihan_periode_idx").on(t.periode),
+  ],
+);
+
+/** Setiap pembayaran (termasuk cicilan) = satu baris kas_rw. */
+export const rw3bizPembayaran = pgTable(
+  "rw3biz_pembayaran",
+  {
+    id: serial("id").primaryKey(),
+    tagihanId: integer("tagihan_id").notNull().references(() => rw3bizTagihan.id, { onDelete: "cascade" }),
+    jumlah: integer("jumlah").notNull(),
+    tanggal: text("tanggal").notNull(),
+    kasRwId: integer("kas_rw_id").references(() => kasRw.id, { onDelete: "set null" }),
+    dicatatOleh: text("dicatat_oleh").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => [index("rw3biz_pembayaran_tagihan_idx").on(t.tagihanId)],
+);
+
+/** Pengajuan peninjauan tarif oleh pengusaha. */
+export const rw3bizKeberatan = pgTable("rw3biz_keberatan", {
+  id: serial("id").primaryKey(),
+  usahaId: integer("usaha_id").notNull().references(() => rw3bizUsaha.id, { onDelete: "cascade" }),
+  alasan: text("alasan").notNull(),
+  /** menunggu | diterima | ditolak */
+  status: text("status").notNull().default("menunggu"),
+  tanggapanAdmin: text("tanggapan_admin"),
+  ditinjauOleh: text("ditinjau_oleh"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+/** Temuan razia kendaraan di wilayah RW 03 — dicocokkan dengan kendaraan/charter terdaftar. */
+export const rw3bizRazia = pgTable(
+  "rw3biz_razia",
+  {
+    id: serial("id").primaryKey(),
+    tanggal: text("tanggal").notNull(),
+    jam: text("jam"),
+    lokasi: text("lokasi").notNull(),
+    plat: text("plat").notNull(),
+    /** Plat huruf besar tanpa spasi/tanda baca — kunci pencocokan. */
+    platNormal: text("plat_normal").notNull(),
+    /** KodeKendaraanBiz */
+    jenis: text("jenis").notNull(),
+    /** milik | charter | tidak_tahu */
+    kepemilikan: text("kepemilikan").notNull().default("tidak_tahu"),
+    usahaId: integer("usaha_id").references(() => rw3bizUsaha.id, { onDelete: "set null" }),
+    /** Tujuan bila bukan usaha terdaftar RW3BIZ. */
+    tujuanLain: text("tujuan_lain"),
+    namaSopir: text("nama_sopir"),
+    /** HasilRazia */
+    hasil: text("hasil").notNull(),
+    keteranganHasil: text("keterangan_hasil"),
+    denda: integer("denda").notNull().default(0),
+    /** tidak_ada | belum | lunas | dibebaskan */
+    dendaStatus: text("denda_status").notNull().default("tidak_ada"),
+    tanggalBayar: text("tanggal_bayar"),
+    pembayarNama: text("pembayar_nama"),
+    kasRwId: integer("kas_rw_id").references(() => kasRw.id, { onDelete: "set null" }),
+    alasanBebas: text("alasan_bebas"),
+    /** Usaha sudah memperbarui data kendaraan setelah temuan ini. */
+    selesai: boolean("selesai").notNull().default(false),
+    catatan: text("catatan"),
+    dicatatOleh: text("dicatat_oleh").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => [
+    index("rw3biz_razia_tanggal_idx").on(t.tanggal),
+    index("rw3biz_razia_plat_idx").on(t.platNormal),
+    index("rw3biz_razia_usaha_idx").on(t.usahaId),
+  ],
+);
+export type Rw3bizRazia = typeof rw3bizRazia.$inferSelect;
+
+export const rw3bizPelanggaran = pgTable(
+  "rw3biz_pelanggaran",
+  {
+    id: serial("id").primaryKey(),
+    usahaId: integer("usaha_id").references(() => rw3bizUsaha.id, { onDelete: "set null" }),
+    /** Nama usaha yang diadukan bila belum terdaftar RW3BIZ / tidak dipilih pelapor. */
+    namaUsahaLain: text("nama_usaha_lain"),
+    /** JenisPelanggaran */
+    jenis: text("jenis").notNull(),
+    /** TingkatPelanggaran */
+    tingkat: text("tingkat").notNull().default("sedang"),
+    /** aduan_warga | temuan_petugas */
+    sumber: text("sumber").notNull(),
+    tanggalKejadian: text("tanggal_kejadian").notNull(),
+    lokasi: text("lokasi"),
+    uraian: text("uraian").notNull(),
+    fotoData: text("foto_data"),
+    pelaporNama: text("pelapor_nama"),
+    pelaporWa: text("pelapor_wa"),
+    pelaporRt: integer("pelapor_rt"),
+    /** menunggu_verifikasi | terbukti | tidak_terbukti */
+    status: text("status").notNull().default("menunggu_verifikasi"),
+    /** Pelanggaran ke-n usaha ini dalam 12 bulan (saat diverifikasi). */
+    keBerapa: integer("ke_berapa").notNull().default(1),
+    denda: integer("denda").notNull().default(0),
+    dendaRincian: text("denda_rincian"),
+    /** tidak_ada | belum | lunas | dibebaskan */
+    dendaStatus: text("denda_status").notNull().default("tidak_ada"),
+    tanggalBayar: text("tanggal_bayar"),
+    pembayarNama: text("pembayar_nama"),
+    kasRwId: integer("kas_rw_id").references(() => kasRw.id, { onDelete: "set null" }),
+    alasanBebas: text("alasan_bebas"),
+    catatanVerifikasi: text("catatan_verifikasi"),
+    diverifikasiOleh: text("diverifikasi_oleh"),
+    diverifikasiAt: timestamp("diverifikasi_at"),
+    dicatatOleh: text("dicatat_oleh"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => [
+    index("rw3biz_pelanggaran_usaha_idx").on(t.usahaId),
+    index("rw3biz_pelanggaran_status_idx").on(t.status),
+    index("rw3biz_pelanggaran_tanggal_idx").on(t.tanggalKejadian),
+  ],
+);
+export type Rw3bizPelanggaran = typeof rw3bizPelanggaran.$inferSelect;
+
+export type Rw3bizTagihan = typeof rw3bizTagihan.$inferSelect;
+export type Rw3bizPembayaran = typeof rw3bizPembayaran.$inferSelect;
+export type Rw3bizKeberatan = typeof rw3bizKeberatan.$inferSelect;
 
 /** Pengaturan key/value RW3BIZ (setara visitrw3_settings). */
 export const rw3bizSettings = pgTable("rw3biz_settings", {
@@ -676,67 +874,6 @@ export const riwayatKontrak = pgTable("riwayat_kontrak", {
   tanggalMulaiBaru: text("tanggal_mulai_baru").notNull(),
   tanggalHabisBaru: text("tanggal_habis_baru").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const BLUSUKAN_HASIL = ["selesai", "perlu_ulang", "tidak_ada"] as const;
-export type BlusukanHasil = (typeof BLUSUKAN_HASIL)[number];
-
-export const blusukanKunjungan = pgTable("blusukan_kunjungan", {
-  id: serial("id").primaryKey(),
-  kkId: integer("kk_id").notNull().references(() => kartuKeluarga.id),
-  hasil: text("hasil").notNull(),
-  catatan: text("catatan"),
-  petugasLabel: text("petugas_label"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const insertBlusukanKunjunganSchema = createInsertSchema(blusukanKunjungan).omit({
-  id: true,
-  createdAt: true,
-}).extend({
-  hasil: z.enum(BLUSUKAN_HASIL),
-  catatan: z.string().nullable().optional(),
-  petugasLabel: z.string().nullable().optional(),
-});
-
-export const BLUSUKAN_QUEST_STATUS = ["aktif", "selesai"] as const;
-export type BlusukanQuestStatus = (typeof BLUSUKAN_QUEST_STATUS)[number];
-
-export const blusukanQuest = pgTable("blusukan_quest", {
-  id: serial("id").primaryKey(),
-  judul: text("judul").notNull(),
-  perihal: text("perihal").notNull(),
-  targetWargaId: integer("target_warga_id").references(() => warga.id),
-  targetWargaNama: text("target_warga_nama"),
-  targetKkId: integer("target_kk_id").references(() => kartuKeluarga.id),
-  deadline: text("deadline").notNull(),
-  progres: integer("progres").notNull().default(0),
-  catatan: text("catatan"),
-  status: text("status").notNull().default("aktif"),
-  catatanSelesai: text("catatan_selesai"),
-  selesaiAt: timestamp("selesai_at"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const insertBlusukanQuestSchema = createInsertSchema(blusukanQuest).omit({
-  id: true,
-  createdAt: true,
-  selesaiAt: true,
-}).extend({
-  judul: z.string().min(1, "Judul quest wajib diisi"),
-  perihal: z.string().min(1, "Perihal quest wajib diisi"),
-  targetWargaId: z.number().int().positive().nullable().optional(),
-  targetWargaNama: z.string().nullable().optional(),
-  targetKkId: z.number().int().positive().nullable().optional(),
-  deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format deadline: YYYY-MM-DD"),
-  progres: z.number().int().min(0).max(100).optional(),
-  catatan: z.string().nullable().optional(),
-  status: z.enum(BLUSUKAN_QUEST_STATUS).optional(),
-  catatanSelesai: z.string().nullable().optional(),
-});
-
-export const patchBlusukanQuestSchema = insertBlusukanQuestSchema.partial().extend({
-  status: z.enum(BLUSUKAN_QUEST_STATUS).optional(),
 });
 
 const insertKkBaseSchema = createInsertSchema(kartuKeluarga).omit({ id: true, createdAt: true });
@@ -1521,10 +1658,6 @@ export type WargaSinggah = typeof wargaSinggah.$inferSelect;
 export type InsertWargaSinggah = z.infer<typeof insertWargaSinggahSchema>;
 export type RiwayatKontrak = typeof riwayatKontrak.$inferSelect;
 export type InsertRiwayatKontrak = z.infer<typeof insertRiwayatKontrakSchema>;
-export type BlusukanKunjungan = typeof blusukanKunjungan.$inferSelect;
-export type InsertBlusukanKunjungan = z.infer<typeof insertBlusukanKunjunganSchema>;
-export type BlusukanQuest = typeof blusukanQuest.$inferSelect;
-export type InsertBlusukanQuest = z.infer<typeof insertBlusukanQuestSchema>;
 export type Visitrw3Pengajuan = typeof visitrw3Pengajuan.$inferSelect;
 export type Visitrw3Settings = typeof visitrw3Settings.$inferSelect;
 export type Visitrw3Penghuni = typeof visitrw3Penghuni.$inferSelect;

@@ -1,4 +1,5 @@
 import type { JenisWarga } from "./schema";
+import { MAKS_ANAK_BIZ, MAKS_ORANG_BIZ } from "./rw3biz-kontribusi";
 
 /**
  * Profil field & salinan form pengajuan Visit RW3 per karakter jenis warga.
@@ -117,20 +118,21 @@ export const VISITRW3_FORM_BY_JENIS: Record<JenisWarga, Visitrw3FormProfile> = {
     nomorUnitHint: "Misalnya nomor lapak atau posisi gerobak.",
     nomorUnitPlaceholder: "Contoh: Lapak 4, depan Alfamart",
     showAnak: true,
-    maxDewasa: 8,
-    maxAnak: 4,
-    maxTotal: 12,
-    jumlahTitle: "Berapa orang yang terlibat di usaha?",
-    jumlahHint: "Pemilik/PJ dan pekerja yang rutin di lokasi (bukan pelanggan).",
-    dewasaLabel: "Dewasa (PJ & pekerja)",
-    dewasaHint: "Minimal 1 — biasanya penanggung jawab",
-    anakHint: "Anak yang ikut membantu / tinggal di lokasi (opsional)",
+    maxDewasa: MAKS_ORANG_BIZ,
+    maxAnak: MAKS_ANAK_BIZ,
+    maxTotal: MAKS_ORANG_BIZ + MAKS_ANAK_BIZ,
+    jumlahTitle: "Berapa orang yang bekerja di usaha ini?",
+    jumlahHint:
+      "Semua pemilik, penanggung jawab, dan pegawai (tetap maupun harian) wajib didata. Jumlah pegawai ikut menentukan kontribusi.",
+    dewasaLabel: "Pemilik, PJ & pegawai",
+    dewasaHint: "Hitung semua yang bekerja rutin di lokasi, termasuk Anda sendiri",
+    anakHint: "Anak yang ikut membantu / tinggal di lokasi (opsional, tidak dihitung pegawai)",
     requireKeperluanTinggal: false,
     keperluanTinggalOptions: [],
     requirePekerjaan: false,
     tempatKerjaLabel: "Nama usaha / tempat kerja",
     tempatKerjaPlaceholder: "Samakan dengan nama usaha jika memungkinkan",
-    requireTempatKerja: true,
+    requireTempatKerja: false,
     requireJamOperasional: true,
     defaultTerminBulan: "3",
     bayarHint: "Masa berlaku izin berjualan / usaha di RW 03.",

@@ -33,7 +33,7 @@ const sekarangLokal = () => {
 function Bagian({ judul, children, aksi }: { judul: string; children: React.ReactNode; aksi?: React.ReactNode }) {
   return (
     <section className="rounded-lg border bg-white p-3 sm:p-4 space-y-2">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="font-semibold text-[hsl(163,55%,22%)]">{judul}</h3>
         {aksi}
       </div>
@@ -44,7 +44,7 @@ function Bagian({ judul, children, aksi }: { judul: string; children: React.Reac
 
 function BuktiInput({ nilai, ubah, setErr, label = "Bukti" }: { nilai: string; ubah: (v: string) => void; setErr: (e: unknown) => void; label?: string }) {
   return (
-    <div className="grid sm:grid-cols-2 gap-2">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
       <Input placeholder={`${label}: keterangan (mis. diterima Bu Ani, staf TU)`} value={nilai.startsWith("data:") ? "(berkas terpilih)" : nilai}
         onChange={(e) => ubah(e.target.value)} />
       <Input type="file" accept="image/png,image/jpeg,image/webp,application/pdf"
@@ -98,11 +98,11 @@ export function DetailSurat({ id, tutup, ubahDraft }: { id: number; tutup: () =>
   const final = s.status !== "draft";
 
   return (
-    <div className="space-y-4 pb-10">
+    <div className="space-y-4 pb-4 sm:pb-10">
       <div className="flex items-start gap-2">
-        <Button variant="ghost" size="sm" onClick={tutup}><ArrowLeft className="w-4 h-4 mr-1" /> Kembali</Button>
+        <Button variant="ghost" size="sm" className="shrink-0" onClick={tutup}><ArrowLeft className="w-4 h-4 mr-1" /> Kembali</Button>
         <div className="min-w-0 flex-1">
-          <h2 className="text-lg font-bold leading-tight">{s.perihal}</h2>
+          <h2 className="text-lg font-bold leading-tight break-words">{s.perihal}</h2>
           <p className="text-sm text-muted-foreground">{s.nomorSurat ?? "Draft — belum bernomor"} · {j?.label ?? s.jenisSurat} · {tanggalId(s.tanggalSurat)}</p>
           <div className="mt-1"><TigaStatus s={s} /></div>
         </div>
@@ -112,7 +112,7 @@ export function DetailSurat({ id, tutup, ubahDraft }: { id: number; tutup: () =>
       {!j && draft && <p className="text-sm rounded border border-amber-300 bg-amber-50 p-2">Draft format lama. Pilih jenis dokumen di formulir baru sebelum terbit.</p>}
 
       <PanduanPrinter />
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-1 gap-2 min-[400px]:grid-cols-2 sm:flex sm:flex-wrap">
         {draft && <Button onClick={() => ubahDraft(editorDariSurat(s))}><PencilLine className="w-4 h-4 mr-1" /> Lanjutkan isi & terbitkan</Button>}
         {draft && <Button variant="outline" onClick={() => bukaBerkas(`/api/wilayah/rw/surat/${s.id}/pratinjau.pdf`, "rw").catch(setErr)}><Eye className="w-4 h-4 mr-1" /> PDF draf</Button>}
         {final && <Button onClick={() => bukaBerkas(`/api/wilayah/surat/${s.id}/pdf`, "rw").catch(setErr)}><Eye className="w-4 h-4 mr-1" /> Lihat PDF</Button>}
@@ -140,12 +140,12 @@ export function DetailSurat({ id, tutup, ubahDraft }: { id: number; tutup: () =>
           <ul className="text-sm space-y-1">
             {s.kirim.map((k) => (
               <li key={k.id} className="flex flex-wrap items-center gap-2">
-                <span>{tanggalId(k.dikirim_pada, true)} · {k.kanal} · {k.penerima}</span>
+                <span className="min-w-0 break-words">{tanggalId(k.dikirim_pada, true)} · {k.kanal} · {k.penerima}</span>
                 <TigaStatus s={{ statusDokumen: "terbit", statusDistribusi: k.status as any, statusPekerjaan: "tidak_diperlukan", terlambat: 0 }} />
                 {k.bukti_teks && <span className="text-muted-foreground">bukti: {k.bukti_teks}</span>}
-                {k.ada_bukti && !k.bukti_teks && <button type="button" className="underline text-xs" onClick={() => bukaBerkas(`/api/wilayah/rw/surat-kirim/${k.id}/bukti`, "rw").catch(setErr)}>lihat bukti</button>}
+                {k.ada_bukti && !k.bukti_teks && <button type="button" className="min-h-10 rounded-md border px-3 text-sm sm:min-h-0 sm:border-0 sm:px-0 sm:text-xs sm:underline" onClick={() => bukaBerkas(`/api/wilayah/rw/surat-kirim/${k.id}/bukti`, "rw").catch(setErr)}>lihat bukti</button>}
                 {k.catatan && <span className="text-muted-foreground">({k.catatan})</span>}
-                {k.status === "diserahkan" && <button type="button" className="underline text-xs" onClick={() => setTerima({ id: k.id, bukti: "", waktu: sekarangLokal() })}>konfirmasi diterima</button>}
+                {k.status === "diserahkan" && <button type="button" className="min-h-10 rounded-md border px-3 text-sm sm:min-h-0 sm:border-0 sm:px-0 sm:text-xs sm:underline" onClick={() => setTerima({ id: k.id, bukti: "", waktu: sekarangLokal() })}>konfirmasi diterima</button>}
               </li>
             ))}
           </ul>
@@ -154,7 +154,7 @@ export function DetailSurat({ id, tutup, ubahDraft }: { id: number; tutup: () =>
               <Label>Konfirmasi penerimaan</Label>
               <Input type="datetime-local" value={terima.waktu} onChange={(e) => setTerima({ ...terima, waktu: e.target.value })} />
               <BuktiInput nilai={terima.bukti} ubah={(b) => setTerima({ ...terima, bukti: b })} setErr={setErr} label="Bukti terima" />
-              <div className="flex gap-2">
+              <div className="flex gap-2 [&>button]:flex-1 sm:[&>button]:flex-none">
                 <Button size="sm" disabled={sibuk || terima.bukti.trim().length < 3} onClick={async () => {
                   if (await jalankan(() => wil(`/api/wilayah/rw/surat-kirim/${terima.id}/terima`, { ...RW, body: { diterimaPada: new Date(terima.waktu).toISOString(), bukti: terima.bukti } }), "Penerimaan dicatat")) setTerima(null);
                 }}>Simpan</Button>
@@ -164,11 +164,11 @@ export function DetailSurat({ id, tutup, ubahDraft }: { id: number; tutup: () =>
           )}
           {form === "kirim" && (
             <div className="rounded border p-2 space-y-2 bg-stone-50">
-              <div className="grid sm:grid-cols-3 gap-2">
-                <select className="h-10 border rounded-md px-2 bg-white" value={kirim.kanal} onChange={(e) => setKirim({ ...kirim, kanal: e.target.value })}>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <select className="h-12 min-w-0 border rounded-md px-2 bg-white text-base sm:h-10 sm:text-sm" value={kirim.kanal} onChange={(e) => setKirim({ ...kirim, kanal: e.target.value })}>
                   {["Diantar langsung", "WhatsApp", "Email", "Pos", "Lainnya"].map((k) => <option key={k}>{k}</option>)}
                 </select>
-                <select className="h-10 border rounded-md px-2 bg-white" value={kirim.status} onChange={(e) => setKirim({ ...kirim, status: e.target.value })}>
+                <select className="h-12 min-w-0 border rounded-md px-2 bg-white text-base sm:h-10 sm:text-sm" value={kirim.status} onChange={(e) => setKirim({ ...kirim, status: e.target.value })}>
                   <option value="diserahkan">Sudah diserahkan/dikirim</option>
                   <option value="diterima">Diterima (ada konfirmasi)</option>
                   <option value="gagal">Gagal dikirim</option>
@@ -197,7 +197,7 @@ export function DetailSurat({ id, tutup, ubahDraft }: { id: number; tutup: () =>
             {s.tindak.map((t) => (
               <li key={t.id} className="rounded border p-2 text-sm space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{t.tindakan}</span>
+                  <span className="min-w-0 break-words font-medium">{t.tindakan}</span>
                   <LencanaTindak status={t.status} terlambat={!!t.tenggat && t.tenggat < isoHariIni() && (t.status === "menunggu" || t.status === "berjalan")} />
                 </div>
                 <p className="text-xs text-muted-foreground">PIC: {t.pic_nama ?? "-"}{t.pic_rt ? ` (${rt2(t.pic_rt)} dapat melapor)` : ""} · tenggat {t.tenggat ?? "-"} · progres {t.progres ?? 0}%</p>
@@ -211,24 +211,24 @@ export function DetailSurat({ id, tutup, ubahDraft }: { id: number; tutup: () =>
                 )}
                 {t.evaluasi && <p className="text-xs"><b>Evaluasi:</b> {t.evaluasi}</p>}
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" className="underline text-xs" onClick={() => setUpd({ id: t.id, catatan: "", progres: String(t.progres ?? 0), status: t.status, bukti: "", dariPihakLuar: false })}>perbarui</button>
-                  {t.status === "selesai" && !t.evaluasi && <button type="button" className="underline text-xs" onClick={async () => {
+                  <button type="button" className="min-h-10 rounded-md border px-3 text-sm sm:min-h-0 sm:border-0 sm:px-0 sm:text-xs sm:underline" onClick={() => setUpd({ id: t.id, catatan: "", progres: String(t.progres ?? 0), status: t.status, bukti: "", dariPihakLuar: false })}>perbarui</button>
+                  {t.status === "selesai" && !t.evaluasi && <button type="button" className="min-h-10 rounded-md border px-3 text-sm sm:min-h-0 sm:border-0 sm:px-0 sm:text-xs sm:underline" onClick={async () => {
                     const e = prompt("Evaluasi singkat hasil pekerjaan:");
                     if (e) await jalankan(() => wil(`/api/wilayah/rw/surat-tindak/${t.id}/evaluasi`, { ...RW, body: { evaluasi: e } }), "Evaluasi dicatat");
                   }}>evaluasi</button>}
                 </div>
                 {upd?.id === t.id && (
                   <div className="rounded border p-2 space-y-2 bg-stone-50">
-                    <div className="grid sm:grid-cols-2 gap-2">
-                      <select className="h-10 border rounded-md px-2 bg-white" value={upd.status} onChange={(e) => setUpd({ ...upd, status: e.target.value })}>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <select className="h-12 min-w-0 border rounded-md px-2 bg-white text-base sm:h-10 sm:text-sm" value={upd.status} onChange={(e) => setUpd({ ...upd, status: e.target.value })}>
                         <option value="menunggu">Menunggu</option><option value="berjalan">Berjalan</option><option value="selesai">Selesai</option><option value="tidak_diperlukan">Tidak diperlukan</option>
                       </select>
                       <Input inputMode="numeric" placeholder="Progres %" value={upd.progres} onChange={(e) => setUpd({ ...upd, progres: e.target.value.replace(/\D/g, "").slice(0, 3) })} />
                     </div>
                     <Textarea rows={2} placeholder="Catatan progres (apa yang sudah dikerjakan)" value={upd.catatan} onChange={(e) => setUpd({ ...upd, catatan: e.target.value })} />
                     <BuktiInput nilai={upd.bukti} ubah={(b) => setUpd({ ...upd, bukti: b })} setErr={setErr} />
-                    <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={upd.dariPihakLuar} onChange={(e) => setUpd({ ...upd, dariPihakLuar: e.target.checked })} /> Laporan ini dari pihak luar/pengurus tanpa akun (dicatat RW)</label>
-                    <div className="flex gap-2">
+                    <label className="flex min-h-10 items-center gap-2 text-sm sm:min-h-0 sm:text-xs"><input type="checkbox" className="h-5 w-5 shrink-0 sm:h-4 sm:w-4" checked={upd.dariPihakLuar} onChange={(e) => setUpd({ ...upd, dariPihakLuar: e.target.checked })} /> Laporan ini dari pihak luar/pengurus tanpa akun (dicatat RW)</label>
+                    <div className="flex gap-2 [&>button]:flex-1 sm:[&>button]:flex-none">
                       <Button size="sm" disabled={sibuk || upd.catatan.trim().length < 3} onClick={async () => {
                         const ok = await jalankan(() => wil(`/api/wilayah/surat-tindak/${upd.id}/update`, {
                           ...RW, body: { catatan: upd.catatan, status: upd.status, progres: Math.min(100, Number(upd.progres) || 0), bukti: upd.bukti || null, dariPihakLuar: upd.dariPihakLuar },
@@ -245,9 +245,9 @@ export function DetailSurat({ id, tutup, ubahDraft }: { id: number; tutup: () =>
           {form === "tindak" && (
             <div className="rounded border p-2 space-y-2 bg-stone-50">
               <Input placeholder="Tindakan (mis. Tanyakan jadwal survei ke Dinas PUPR)" value={tindak.tindakan} onChange={(e) => setTindak({ ...tindak, tindakan: e.target.value })} />
-              <div className="grid sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <Input placeholder="PIC (nama/jabatan)" value={tindak.picNama} onChange={(e) => setTindak({ ...tindak, picNama: e.target.value })} />
-                <select className="h-10 border rounded-md px-2 bg-white" value={tindak.picRt} onChange={(e) => setTindak({ ...tindak, picRt: e.target.value })}>
+                <select className="h-12 min-w-0 border rounded-md px-2 bg-white text-base sm:h-10 sm:text-sm" value={tindak.picRt} onChange={(e) => setTindak({ ...tindak, picRt: e.target.value })}>
                   <option value="">PIC bukan Ketua RT</option>
                   {[1, 2, 3, 4, 5, 6, 7].map((n) => <option key={n} value={n}>Ketua {rt2(n)} (melapor dari akun RT)</option>)}
                 </select>
@@ -274,8 +274,8 @@ export function DetailSurat({ id, tutup, ubahDraft }: { id: number; tutup: () =>
           </ul>
           {form === "bantuan" && (
             <div className="rounded border p-2 space-y-2 bg-stone-50">
-              <div className="grid sm:grid-cols-3 gap-2">
-                <select className="h-10 border rounded-md px-2 bg-white" value={bantuan.tahap} onChange={(e) => setBantuan({ ...bantuan, tahap: e.target.value })}>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <select className="h-12 min-w-0 border rounded-md px-2 bg-white text-base sm:h-10 sm:text-sm" value={bantuan.tahap} onChange={(e) => setBantuan({ ...bantuan, tahap: e.target.value })}>
                   <option value="dimohonkan">Dimohonkan</option><option value="dijanjikan">Dijanjikan</option><option value="diterima">Diterima</option><option value="digunakan">Digunakan</option>
                 </select>
                 <Input type="date" value={bantuan.tanggal} onChange={(e) => setBantuan({ ...bantuan, tanggal: e.target.value })} />
@@ -283,10 +283,10 @@ export function DetailSurat({ id, tutup, ubahDraft }: { id: number; tutup: () =>
               </div>
               <Input list="bentuk-bantuan" placeholder="Uraian (mis. Paving bekas 200 buah)" value={bantuan.uraian} onChange={(e) => setBantuan({ ...bantuan, uraian: e.target.value })} />
               <datalist id="bentuk-bantuan">{BENTUK_BANTUAN.map((b) => <option key={b} value={b} />)}</datalist>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 <Input inputMode="decimal" placeholder="Jumlah" value={bantuan.jumlah} onChange={(e) => setBantuan({ ...bantuan, jumlah: e.target.value.replace(/[^\d.]/g, "") })} />
                 <Input placeholder="Satuan" value={bantuan.satuan} onChange={(e) => setBantuan({ ...bantuan, satuan: e.target.value })} />
-                <Input inputMode="numeric" placeholder="Nominal Rp (bila pasti)" value={bantuan.nominal} onChange={(e) => setBantuan({ ...bantuan, nominal: e.target.value.replace(/\D/g, "") })} />
+                <Input inputMode="numeric" className="col-span-2 sm:col-span-1" placeholder="Nominal Rp (bila pasti)" value={bantuan.nominal} onChange={(e) => setBantuan({ ...bantuan, nominal: e.target.value.replace(/\D/g, "") })} />
               </div>
               {(bantuan.tahap === "diterima" || bantuan.tahap === "digunakan") && <BuktiInput nilai={bantuan.bukti} ubah={(b) => setBantuan({ ...bantuan, bukti: b })} setErr={setErr} label="Bukti (BA/tanda terima/nota)" />}
               <Button size="sm" disabled={sibuk || bantuan.uraian.trim().length < 3} onClick={async () => {
@@ -307,9 +307,9 @@ export function DetailSurat({ id, tutup, ubahDraft }: { id: number; tutup: () =>
         <ul className="text-sm space-y-1">
           {s.lampiran.map((l) => (
             <li key={l.id} className="flex items-center gap-2">
-              <Paperclip className="w-4 h-4" />
-              <button type="button" className="underline" onClick={() => bukaBerkas(`/api/wilayah/surat-lampiran/${l.id}`, "rw").catch(setErr)}>{l.nama}</button>
-              {draft && <button type="button" aria-label="Hapus lampiran" className="text-red-600" onClick={() => jalankan(() => wil(`/api/wilayah/rw/surat-lampiran/${l.id}`, { ...RW, method: "DELETE" }))}><Trash2 className="w-4 h-4" /></button>}
+              <Paperclip className="w-4 h-4 shrink-0" />
+              <button type="button" className="min-h-10 min-w-0 flex-1 break-all text-left underline sm:min-h-0 sm:flex-none" onClick={() => bukaBerkas(`/api/wilayah/surat-lampiran/${l.id}`, "rw").catch(setErr)}>{l.nama}</button>
+              {draft && <button type="button" aria-label="Hapus lampiran" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-red-600 hover:bg-red-50 sm:h-8 sm:w-8" onClick={() => jalankan(() => wil(`/api/wilayah/rw/surat-lampiran/${l.id}`, { ...RW, method: "DELETE" }))}><Trash2 className="w-4 h-4" /></button>}
             </li>
           ))}
         </ul>
@@ -341,7 +341,7 @@ export function DetailSurat({ id, tutup, ubahDraft }: { id: number; tutup: () =>
               }}><FilePlus2 className="w-4 h-4 mr-1" /> Salin jadi draft baru</Button>
             )}
             {terbit && (
-              <div className="flex flex-1 min-w-[16rem] gap-2">
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-1 sm:min-w-[16rem] sm:flex-row">
                 <Input placeholder="Alasan pembatalan" value={alasan} onChange={(e) => setAlasan(e.target.value)} />
                 <Button variant="outline" className="text-red-700" disabled={sibuk || alasan.trim().length < 5} onClick={async () => {
                   if (!confirm("Batalkan dokumen ini? Nomor dan arsip tetap tersimpan.")) return;
@@ -356,8 +356,8 @@ export function DetailSurat({ id, tutup, ubahDraft }: { id: number; tutup: () =>
       {s.peringatanTerbit.length > 0 && <p className="text-xs text-amber-800">Peringatan saat terbit: {s.peringatanTerbit.join("; ")}</p>}
       {s.pratinjau && (
         <details className="rounded-lg border bg-white">
-          <summary className="cursor-pointer p-3 text-sm font-medium">Isi dokumen{final ? " (snapshot final)" : " (pratinjau draf)"}</summary>
-          <div className="p-2"><PratinjauBloks bloks={s.pratinjau} draft={draft} /></div>
+          <summary className="min-h-12 cursor-pointer p-3 text-sm font-medium">Isi dokumen{final ? " (snapshot final)" : " (pratinjau draf)"}</summary>
+          <div className="p-1 sm:p-2"><PratinjauBloks bloks={s.pratinjau} draft={draft} /></div>
         </details>
       )}
     </div>

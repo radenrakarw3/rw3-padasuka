@@ -7,7 +7,7 @@ type PlatNomorInputProps = {
   onChange: (parts: PlatParts) => void;
   idPrefix?: string;
   required?: boolean;
-  /** Input lebih besar untuk form mobile (Blusukan). */
+  /** Input lebih besar untuk form mobile. */
   large?: boolean;
 };
 

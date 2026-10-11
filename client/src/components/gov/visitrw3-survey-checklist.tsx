@@ -61,8 +61,8 @@ export function Visitrw3SurveyChecklist({
           />
           <div>
             <p className="text-sm font-semibold leading-tight">{title}</p>
-            <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">{subtitle}</p>
-            <p className="text-[10px] text-emerald-700 dark:text-emerald-400 mt-1 flex items-center gap-1">
+            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{subtitle}</p>
+            <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-1 flex items-center gap-1">
               <Leaf className="w-3 h-3 shrink-0" />
               Selaras SDGs — limbah, sanitasi, lingkungan & ketertiban warga
             </p>
@@ -85,12 +85,12 @@ export function Visitrw3SurveyChecklist({
         />
       </div>
 
-      <div className="space-y-4 max-h-[min(52vh,28rem)] overflow-y-auto pr-0.5">
+      <div className="space-y-4 sm:max-h-[min(52vh,28rem)] sm:overflow-y-auto sm:pr-0.5">
         {groups.map((group) => (
           <div key={group.kategori} className="space-y-2">
             <p
               className={cn(
-                "text-[11px] font-semibold uppercase tracking-wide px-1",
+                "text-xs font-semibold uppercase tracking-wide px-1 sm:text-[11px]",
                 group.kategori === "lingkungan"
                   ? "text-amber-800 dark:text-amber-300"
                   : "text-muted-foreground",
@@ -107,7 +107,7 @@ export function Visitrw3SurveyChecklist({
                   <label
                     key={item.id}
                     className={cn(
-                      "flex gap-3 rounded-lg border p-3 cursor-pointer transition-all hover:border-primary/30",
+                      "flex min-h-12 gap-3 rounded-lg border p-3 cursor-pointer transition-all hover:border-primary/30 active:bg-muted/40",
                       isChecked
                         ? "border-primary/35 bg-background shadow-sm"
                         : isLingkungan
@@ -116,7 +116,7 @@ export function Visitrw3SurveyChecklist({
                     )}
                   >
                     <Checkbox
-                      className="mt-0.5"
+                      className="mt-0.5 h-5 w-5 sm:h-4 sm:w-4"
                       checked={isChecked}
                       onCheckedChange={(v) => onChange(item.id, Boolean(v))}
                     />
@@ -126,7 +126,7 @@ export function Visitrw3SurveyChecklist({
                         {item.label}
                       </p>
                       {item.hint && (
-                        <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">{item.hint}</p>
+                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{item.hint}</p>
                       )}
                       <SdgPills item={item} />
                     </div>

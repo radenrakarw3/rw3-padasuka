@@ -103,9 +103,9 @@ function ChartLegend({ items }: { items: { label: string; value: number; fill: s
         <li key={item.label} className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-2 min-w-0">
             <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: item.fill }} />
-            <span className="truncate text-muted-foreground">{item.label}</span>
+            <span className="truncate text-muted-foreground" title={item.label}>{item.label}</span>
           </span>
-          <span className="font-semibold tabular-nums">
+          <span className="shrink-0 font-semibold tabular-nums">
             {item.value}
             {total > 0 && (
               <span className="ml-1 font-normal text-muted-foreground">
@@ -228,7 +228,7 @@ export function AreaTrendBlock({
   const chartData = data.map((d) => ({ ...d, bulan: formatBulanLabel(d.label) }));
   return (
     <ChartContainer config={areaConfig} className="w-full" style={{ height }}>
-      <AreaChart data={chartData} margin={{ left: 8, right: 12, top: 8 }}>
+      <AreaChart data={chartData} margin={{ left: 0, right: 8, top: 8 }}>
         <defs>
           <linearGradient id="visitrw3Area" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={BRAND} stopOpacity={0.35} />
@@ -236,7 +236,7 @@ export function AreaTrendBlock({
           </linearGradient>
         </defs>
         <CartesianGrid vertical={false} strokeDasharray="3 3" />
-        <XAxis dataKey="bulan" tickLine={false} axisLine={false} fontSize={11} />
+        <XAxis dataKey="bulan" tickLine={false} axisLine={false} fontSize={11} minTickGap={12} />
         <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={12} width={32} />
         <ChartTooltip content={<ChartTooltipContent labelKey="bulan" />} />
         <Area
@@ -277,7 +277,7 @@ export function FunnelBlock({
             </div>
             <div className="h-8 w-full rounded-lg bg-muted/40 overflow-hidden flex justify-center">
               <div
-                className="h-full rounded-lg transition-all flex items-center justify-center text-[10px] font-medium text-white"
+                className="h-full rounded-lg transition-all flex items-center justify-center text-[11px] font-semibold text-white"
                 style={{ width: `${pct}%`, backgroundColor: color, minWidth: stage.value > 0 ? "2.5rem" : 0 }}
               >
                 {pct >= 22 ? `${Math.round((stage.value / max) * 100)}%` : ""}
@@ -309,7 +309,7 @@ export function RadialBarBlock({
   ) satisfies ChartConfig;
 
   return (
-    <ChartContainer config={cfg} className="mx-auto aspect-square max-h-[240px]">
+    <ChartContainer config={cfg} className="mx-auto aspect-square max-h-[200px] sm:max-h-[240px]">
       <RadialBarChart
         data={radialData}
         innerRadius="18%"
@@ -393,7 +393,7 @@ export function RankedBarBlock({
       {rows.map((row, i) => (
         <li key={row.label}>
           <div className="flex justify-between text-xs mb-1 gap-2">
-            <span className="truncate text-muted-foreground" title={row.label}>
+            <span className="min-w-0 truncate text-muted-foreground" title={row.label}>
               {row.label}
             </span>
             <span className="font-semibold tabular-nums shrink-0">{row.count}</span>

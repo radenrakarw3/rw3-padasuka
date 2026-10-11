@@ -125,7 +125,7 @@ function KartuKeluarga({ k, buka, ubah }: { k: KeluargaRingkas; buka: () => void
           <p className="flex items-center gap-1 rounded-xl bg-emerald-50/70 p-2.5 text-xs text-emerald-800"><CheckCircle2 className="h-3.5 w-3.5" />Tidak ada tanda perlu perhatian</p>
         )}
 
-        <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500">
+        <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
           <span className="flex items-center gap-1"><QrCode className="h-3 w-3" />{k.punyaQr ? "QR aktif" : "Belum ada QR"}</span>
           {!k.punyaRumah && <span className="flex items-center gap-1"><Home className="h-3 w-3" />Rumah belum terhubung</span>}
           {k.diperbarui && <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{new Date(k.diperbarui).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span>}
@@ -133,8 +133,8 @@ function KartuKeluarga({ k, buka, ubah }: { k: KeluargaRingkas; buka: () => void
         </div>
       </div>
       <div className="grid grid-cols-2 border-t border-gray-100">
-        <button type="button" onClick={buka} className="py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50">Lihat detail</button>
-        <button type="button" onClick={ubah} className="flex items-center justify-center gap-1.5 border-l border-gray-100 py-2.5 text-sm font-semibold transition-colors hover:bg-emerald-50" style={{ color: HIJAU }}>
+        <button type="button" onClick={buka} className="min-h-12 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 active:bg-gray-100 sm:min-h-0">Lihat detail</button>
+        <button type="button" onClick={ubah} className="flex min-h-12 items-center justify-center gap-1.5 border-l border-gray-100 py-2.5 text-sm font-semibold transition-colors hover:bg-emerald-50 active:bg-emerald-100 sm:min-h-0" style={{ color: HIJAU }}>
           <Pencil className="h-3.5 w-3.5" />Ubah data
         </button>
       </div>
@@ -177,7 +177,7 @@ function PanelDetail({ id, tutup, ubah }: { id: number; tutup: () => void; ubah:
   const kepala = d?.anggota.find((a) => a.kedudukan === "Kepala Keluarga")?.nama ?? null;
   return (
     <Sheet open onOpenChange={(o) => !o && tutup()}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
+      <SheetContent className="w-full overflow-y-auto px-4 sm:max-w-xl sm:px-6">
         <SheetHeader>
           <SheetTitle className="text-left">{kepala ?? "Detail keluarga"}</SheetTitle>
         </SheetHeader>
@@ -213,11 +213,11 @@ function PanelDetail({ id, tutup, ubah }: { id: number; tutup: () => void; ubah:
                   const flag = a.fakta.some((f) => kenaPerhatian(defStandar(f.kunci), f.nilai));
                   return (
                     <li key={a.id} className="rounded-xl border border-gray-200">
-                      <button type="button" className="flex w-full items-center gap-3 p-3 text-left" onClick={() => setOrang(orang === a.id ? null : a.id)}>
+                      <button type="button" className="flex min-h-12 w-full items-center gap-3 p-3 text-left active:bg-gray-50" aria-expanded={orang === a.id} onClick={() => setOrang(orang === a.id ? null : a.id)}>
                         <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${a.jenisKelamin === "Perempuan" ? "bg-pink-100 text-pink-800" : "bg-sky-100 text-sky-800"}`}>{inisial(a.nama)}</span>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-medium">{a.nama} {a.status !== "Aktif" && <span className="text-xs text-red-700">({a.status})</span>}</span>
-                          <span className="block text-xs text-gray-500">{a.kedudukan} · {a.umur != null ? `${a.umur} th` : "umur ?"} · NIK {a.nik}</span>
+                          <span className="block break-words text-xs text-gray-500">{a.kedudukan} · {a.umur != null ? `${a.umur} th` : "umur ?"} · NIK {a.nik}</span>
                         </span>
                         {flag && <AlertTriangle className="h-4 w-4 shrink-0 text-rose-500" />}
                       </button>
@@ -235,7 +235,9 @@ function PanelDetail({ id, tutup, ubah }: { id: number; tutup: () => void; ubah:
               </section>
             )}
             <p className="text-xs text-gray-400">Membuka detail tercatat di log akses; NIK disamarkan.</p>
-            <Button className="w-full" style={{ backgroundColor: HIJAU }} onClick={() => ubah(d.kk.rt)}><Pencil className="mr-2 h-4 w-4" />Ubah data keluarga ini</Button>
+            <div className="sticky bottom-0 -mx-4 -mb-6 border-t bg-background/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur sm:-mx-6 sm:px-6">
+              <Button className="w-full" style={{ backgroundColor: HIJAU }} onClick={() => ubah(d.kk.rt)}><Pencil className="mr-2 h-4 w-4" />Ubah data keluarga ini</Button>
+            </div>
           </div>
         )}
       </SheetContent>
@@ -283,24 +285,26 @@ export default function DataWarga() {
     return list;
   }, [data, saring, urut]);
 
-  const pill = (aktif: boolean) => `rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${aktif ? "text-white shadow-sm" : "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50"}`;
+  const pill = (aktif: boolean) => `shrink-0 rounded-full min-h-10 px-4 text-sm font-medium transition-colors sm:min-h-0 sm:px-3.5 sm:py-1.5 ${aktif ? "text-white shadow-sm" : "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50"}`;
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <button type="button" className={pill(rt == null)} style={rt == null ? { backgroundColor: HIJAU } : undefined} onClick={() => setRt(null)}>Semua RT</button>
-        {WILAYAH_RT_NUMBERS.map((n) => (
-          <button key={n} type="button" className={pill(rt === n)} style={rt === n ? { backgroundColor: HIJAU } : undefined} onClick={() => setRt(n)}>{rt2(n)}</button>
-        ))}
-        <Button className="ml-auto" style={{ backgroundColor: HIJAU }} onClick={() => go(jalurKelolaRt(rt ?? 1, "/warga"))}><UserPlus className="mr-2 h-4 w-4" />Tambah keluarga</Button>
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="no-scrollbar -mx-3 flex gap-2 overflow-x-auto px-3 sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Pilih RT">
+          <button type="button" className={pill(rt == null)} style={rt == null ? { backgroundColor: HIJAU } : undefined} onClick={() => setRt(null)}>Semua RT</button>
+          {WILAYAH_RT_NUMBERS.map((n) => (
+            <button key={n} type="button" className={pill(rt === n)} style={rt === n ? { backgroundColor: HIJAU } : undefined} onClick={() => setRt(n)}>{rt2(n)}</button>
+          ))}
+        </div>
+        <Button className="w-full sm:ml-auto sm:w-auto" style={{ backgroundColor: HIJAU }} onClick={() => go(jalurKelolaRt(rt ?? 1, "/warga"))}><UserPlus className="mr-2 h-4 w-4" />Tambah keluarga</Button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <form className="relative min-w-[240px] flex-1" onSubmit={(e) => { e.preventDefault(); setCari(ketik.trim()); }}>
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <Input className="rounded-full pl-9" placeholder="Cari nama anggota atau alamat, lalu Enter" value={ketik} onChange={(e) => setKetik(e.target.value)} />
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+        <form className="relative min-w-0 sm:min-w-[240px] sm:flex-1" onSubmit={(e) => { e.preventDefault(); setCari(ketik.trim()); }}>
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <Input type="search" enterKeyHint="search" className="rounded-full pl-10" placeholder="Cari nama anggota atau alamat, lalu Enter" value={ketik} onChange={(e) => setKetik(e.target.value)} />
         </form>
-        <select className="h-9 rounded-full border border-gray-200 bg-white px-3 text-sm" value={urut} onChange={(e) => setUrut(e.target.value as Urut)}>
+        <select aria-label="Urutkan" className="min-h-12 rounded-full border border-gray-200 bg-white px-4 text-base sm:h-9 sm:min-h-0 sm:px-3 sm:text-sm" value={urut} onChange={(e) => setUrut(e.target.value as Urut)}>
           <option value="rt">Urut: RT</option>
           <option value="lengkap_rendah">Urut: data paling kurang</option>
           <option value="perhatian">Urut: paling perlu perhatian</option>
@@ -308,7 +312,7 @@ export default function DataWarga() {
         </select>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="no-scrollbar -mx-3 flex gap-2 overflow-x-auto px-3 sm:mx-0 sm:flex-wrap sm:px-0">
         {([
           ["semua", "Semua", hitung.semua],
           ["perhatian", "Perlu perhatian", hitung.perhatian],
@@ -316,7 +320,7 @@ export default function DataWarga() {
           ["qr", "Isian QR menunggu", hitung.qr],
         ] as [Saring, string, number][]).map(([v, label, n]) => (
           <button key={v} type="button" onClick={() => setSaring(v)}
-            className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-sm transition-colors ${saring === v ? "border-transparent text-white" : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"}`}
+            className={`flex min-h-10 shrink-0 items-center gap-2 rounded-xl border px-4 text-sm transition-colors sm:min-h-0 sm:px-3 sm:py-1.5 ${saring === v ? "border-transparent text-white" : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"}`}
             style={saring === v ? { backgroundColor: v === "perhatian" ? "hsl(350,70%,52%)" : HIJAU } : undefined}>
             {label}<span className={`rounded-md px-1.5 text-xs font-bold ${saring === v ? "bg-white/25" : "bg-gray-100"}`}>{n}</span>
           </button>

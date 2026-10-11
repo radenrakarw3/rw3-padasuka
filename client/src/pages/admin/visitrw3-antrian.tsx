@@ -14,7 +14,7 @@ import {
   validateSurveyChecklist,
 } from "@shared/visitrw3-survey-checklist";
 import { labelJenisWarga } from "@shared/visitrw3-jenis-warga";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Check, X, Eye, ClipboardList, MessageCircle, MapPin, Printer } from "lucide-react";
@@ -106,11 +106,11 @@ function WaChatButton({
     <Button
       size="sm"
       variant="outline"
-      className={`h-8 gap-1 text-green-700 border-green-200 hover:bg-green-50 ${className ?? ""}`}
+      className={`gap-1.5 text-green-700 border-green-200 hover:bg-green-50 sm:h-8 sm:gap-1 ${className ?? ""}`}
       asChild
     >
       <a href={url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
-        <MessageCircle className="w-3.5 h-3.5" />
+        <MessageCircle className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
         {label}
       </a>
     </Button>
@@ -325,20 +325,11 @@ export default function AdminVisitrw3Antrian({
               : "Antrian ngontrak / ngekost ber-KTP luar RW 03. Penyewa ber-KTP RW 03 didata di Kependudukan, bukan di sini."
             : "Riwayat pengajuan yang sudah disetujui atau ditolak."
         }
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Visitrw3ChipFilters options={lolosViewOptions} value={lolosView} onChange={switchLolosView} />
-            <TombolIsiPetugas product={product === "rw3biz" ? "rw3biz" : "visit"} />
-          </div>
-        }
+        actions={<TombolIsiPetugas product={product === "rw3biz" ? "rw3biz" : "visit"} />}
       />
 
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-        <p className="text-xs text-muted-foreground">
-          {lolosView === "belum"
-            ? "Pengajuan kontrak, kost, atau jualan — setujui setelah survey lapangan."
-            : "Pilih Disetujui atau Ditolak untuk melihat riwayat keputusan."}
-        </p>
+      <div className="space-y-2">
+        <Visitrw3ChipFilters options={lolosViewOptions} value={lolosView} onChange={switchLolosView} />
         {lolosView === "sudah" && (
           <Visitrw3ChipFilters
             options={hasilPengajuanOptions}
@@ -346,6 +337,11 @@ export default function AdminVisitrw3Antrian({
             onChange={switchHasilPengajuan}
           />
         )}
+        <p className="text-xs text-muted-foreground">
+          {lolosView === "belum"
+            ? "Pengajuan kontrak, kost, atau jualan — setujui setelah survey lapangan."
+            : "Pilih Disetujui atau Ditolak untuk melihat riwayat keputusan."}
+        </p>
       </div>
 
       {isLoading && list.length === 0 ? (
@@ -385,24 +381,30 @@ export default function AdminVisitrw3Antrian({
                     phone={row.kontakWhatsapp}
                     message={pesanWaPengajuan(row)}
                     label="Chat WA"
+                    className="flex-1 sm:flex-none"
                   />
                   {row.status === "disetujui" && row.jenisWarga !== "jualan" && (
-                    <a
-                      href={`/api/admin/visitrw3/pengajuan/${row.id}/surat`}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="flex-1 gap-1 sm:h-8 sm:flex-none"
+                      asChild
                     >
-                      <Button size="sm" variant="secondary" className="h-8 gap-1">
+                      <a
+                        href={`/api/admin/visitrw3/pengajuan/${row.id}/surat`}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <Printer className="w-4 h-4" />
                         Cetak surat
-                      </Button>
-                    </a>
+                      </a>
+                    </Button>
                   )}
                   <Button
                     size="sm"
                     variant="secondary"
-                    className="h-8 gap-1"
+                    className="flex-1 gap-1 sm:h-8 sm:flex-none"
                     onClick={(e) => {
                       e.stopPropagation();
                       openDetail(row.id);
@@ -422,18 +424,21 @@ export default function AdminVisitrw3Antrian({
                   {labelJenisWarga(row.jenisWarga)}
                 </span>
               </div>
+              {row.namaKontak?.trim() && (
+                <p className="text-sm font-semibold leading-snug break-words">{row.namaKontak.trim()}</p>
+              )}
               <p className="text-xs text-muted-foreground capitalize">
                 {row.tipe.replace(/_/g, " ")} · {labelJenisWarga(row.jenisWarga)} · {row.jumlahPenghuni}{" "}
                 orang
                 {row.namaUsaha ? ` · ${row.namaUsaha}` : ""}
               </p>
               {row.alamat?.trim() && (
-                <p className="text-[11px] text-muted-foreground mt-1 flex items-start gap-1">
-                  <MapPin className="w-3 h-3 shrink-0 mt-0.5" />
-                  <span className="break-words">{row.alamat.trim()}</span>
+                <p className="text-xs text-muted-foreground mt-1 flex items-start gap-1">
+                  <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <span className="min-w-0 break-words">{row.alamat.trim()}</span>
                 </p>
               )}
-              <p className="text-[11px] text-muted-foreground mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 Berlaku sampai {row.tanggalBerlakuSampai}
               </p>
             </Visitrw3ListItem>
@@ -442,7 +447,7 @@ export default function AdminVisitrw3Antrian({
       )}
 
       <Dialog open={detailId != null} onOpenChange={(o) => !o && setDetailId(null)}>
-        <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>Detail pengajuan</DialogTitle>
           </DialogHeader>
@@ -460,18 +465,18 @@ export default function AdminVisitrw3Antrian({
               </div>
 
               {p.status === "disetujui" && !isJualan && (
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[hsl(163,55%,22%)]/30 bg-[hsl(163,55%,22%)]/5 p-3">
-                  <div>
+                <div className="flex flex-col gap-2 rounded-lg border border-[hsl(163,55%,22%)]/30 bg-[hsl(163,55%,22%)]/5 p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
                     <p className="font-medium">Surat Izin Tinggal Sementara</p>
                     <p className="text-xs text-muted-foreground">
                       Berlaku sampai {p.tanggalBerlakuSampai} · cetak F4, tanda tangan basah Ketua RW
                     </p>
                   </div>
-                  <a href={`/api/admin/visitrw3/pengajuan/${p.id}/surat`} target="_blank" rel="noreferrer">
-                    <Button size="sm" className="gap-1">
+                  <Button size="sm" className="w-full gap-1 sm:w-auto sm:shrink-0" asChild>
+                    <a href={`/api/admin/visitrw3/pengajuan/${p.id}/surat`} target="_blank" rel="noreferrer">
                       <Printer className="w-4 h-4" /> Cetak surat
-                    </Button>
-                  </a>
+                    </a>
+                  </Button>
                 </div>
               )}
 
@@ -548,7 +553,7 @@ export default function AdminVisitrw3Antrian({
                         <p className="font-medium">Persetujuan tetangga</p>
                         <div className="grid grid-cols-2 gap-2">
                           {tetangga.map((t) => (
-                            <div key={`${t.posisi}-${t.slot}`} className="rounded border p-2 text-xs">
+                            <div key={`${t.posisi}-${t.slot}`} className="min-w-0 break-words rounded border p-2 text-xs">
                               <p className="font-medium capitalize">
                                 {t.posisi} {t.slot}
                               </p>
@@ -584,9 +589,9 @@ export default function AdminVisitrw3Antrian({
                     fotoKtpPath?: string | null;
                     hasFotoKtp?: boolean;
                   }) => (
-                    <div key={ph.id} className="rounded border p-2 space-y-1">
+                    <div key={ph.id} className="rounded-lg border p-3 space-y-1 sm:p-2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="font-medium">
+                        <p className="min-w-0 font-medium break-words">
                           {ph.namaLengkap} {ph.isAnak ? "(anak)" : ""}
                         </p>
                         {!ph.isAnak && ph.nomorWhatsapp && (
@@ -603,8 +608,9 @@ export default function AdminVisitrw3Antrian({
                         )}
                       </div>
                       {!ph.isAnak && (
-                        <p className="text-xs">
-                          NIK: {ph.nik} · WA: {ph.nomorWhatsapp}
+                        <p className="text-xs break-words">
+                          NIK: <span className="tabular-nums">{ph.nik}</span> · WA:{" "}
+                          <span className="tabular-nums">{ph.nomorWhatsapp}</span>
                         </p>
                       )}
                       {!ph.isAnak && ph.pekerjaan && <p className="text-xs">Pekerjaan: {ph.pekerjaan}</p>}
@@ -638,30 +644,37 @@ export default function AdminVisitrw3Antrian({
                       {(ph.hasFotoKtp || ph.fotoKtpPath) && (
                         <div className="pt-1 space-y-1">
                           <a
-                            className="text-xs text-primary underline"
+                            href={`/api/admin/visitrw3/penghuni/${ph.id}/ktp`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block"
+                          >
+                            <img
+                              src={`/api/admin/visitrw3/penghuni/${ph.id}/ktp`}
+                              alt={`KTP ${ph.namaLengkap}`}
+                              className="max-h-48 w-full rounded border object-contain bg-muted/40 sm:max-h-40 sm:w-auto"
+                              loading="lazy"
+                            />
+                          </a>
+                          <a
+                            className="inline-flex min-h-10 items-center text-sm text-primary underline sm:min-h-0 sm:text-xs"
                             href={`/api/admin/visitrw3/penghuni/${ph.id}/ktp`}
                             target="_blank"
                             rel="noreferrer"
                           >
-                            Lihat KTP
+                            Lihat KTP ukuran penuh
                           </a>
-                          <img
-                            src={`/api/admin/visitrw3/penghuni/${ph.id}/ktp`}
-                            alt={`KTP ${ph.namaLengkap}`}
-                            className="mt-1 max-h-40 rounded border object-contain bg-muted/40"
-                            loading="lazy"
-                          />
                         </div>
                       )}
                     </div>
                   ),
                 )}
                 {detail.hasFotoKk && (
-                  <div className="rounded border p-2 space-y-1">
+                  <div className="rounded-lg border p-3 space-y-1 sm:p-2">
                     <div className="flex items-center justify-between gap-2">
                       <p className="font-medium">Kartu Keluarga</p>
                       <a
-                        className="text-xs text-primary underline"
+                        className="inline-flex min-h-10 items-center text-sm text-primary underline sm:min-h-0 sm:text-xs"
                         href={`/api/admin/visitrw3/pengajuan/${p.id}/kk`}
                         target="_blank"
                         rel="noreferrer"
@@ -699,17 +712,15 @@ export default function AdminVisitrw3Antrian({
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Alasan tolak</Label>
-                    <Textarea value={alasanTolak} onChange={(e) => setAlasanTolak(e.target.value)} />
+                    <Label htmlFor="visitrw3-alasan-tolak">Alasan tolak</Label>
+                    <Textarea
+                      id="visitrw3-alasan-tolak"
+                      value={alasanTolak}
+                      onChange={(e) => setAlasanTolak(e.target.value)}
+                      placeholder="Wajib diisi bila menolak pengajuan…"
+                    />
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      className="flex-1 gap-1"
-                      onClick={() => approveMutation.mutate(p.id)}
-                      disabled={approveMutation.isPending}
-                    >
-                      <Check className="w-4 h-4" /> Setujui
-                    </Button>
+                  <DialogFooter className="max-sm:flex-row max-sm:[&>*]:w-auto sm:space-x-0 sm:gap-2">
                     <Button
                       variant="destructive"
                       className="flex-1 gap-1"
@@ -718,7 +729,14 @@ export default function AdminVisitrw3Antrian({
                     >
                       <X className="w-4 h-4" /> Tolak
                     </Button>
-                  </div>
+                    <Button
+                      className="flex-1 gap-1"
+                      onClick={() => approveMutation.mutate(p.id)}
+                      disabled={approveMutation.isPending}
+                    >
+                      <Check className="w-4 h-4" /> Setujui
+                    </Button>
+                  </DialogFooter>
                 </>
               )}
             </div>

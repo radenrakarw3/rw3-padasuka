@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Search, MessageCircle, Home, User } from "lucide-react";
 import { toWhatsappLink } from "@/components/kependudukan/warga-form";
 import { StatusKependudukanBadge } from "@/components/kependudukan/status-kependudukan-badge";
-import { GovStatisticSection } from "@/components/gov/statistic";
+import { BagianStat } from "@/components/admin/kependudukan-stats-ui";
 import { cn } from "@/lib/utils";
 
 export type WargaCariRow = {
@@ -82,8 +82,8 @@ function AnggotaCard({
             <User className="w-4 h-4 text-muted-foreground" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium leading-tight">{warga.namaLengkap}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">NIK {warga.nik}</p>
+            <p className="text-sm font-medium leading-tight break-words">{warga.namaLengkap}</p>
+            <p className="text-xs text-muted-foreground mt-0.5 break-all">NIK {warga.nik}</p>
             <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
               <Badge variant="secondary" className="text-[10px] font-normal">
                 {warga.kedudukanKeluarga}
@@ -99,14 +99,14 @@ function AnggotaCard({
         </div>
         <div className="pt-1 border-t">
           {warga.nomorWhatsapp ? (
-            <Button size="sm" variant="outline" className="text-xs h-8 text-green-700 w-full" asChild>
+            <Button size="sm" variant="outline" className="text-sm text-green-700 w-full sm:text-xs" asChild>
               <a href={toWhatsappLink(warga.nomorWhatsapp)} target="_blank" rel="noopener noreferrer">
-                <MessageCircle className="w-3 h-3 mr-1.5" />
+                <MessageCircle className="w-4 h-4 mr-1.5 sm:w-3 sm:h-3" />
                 WhatsApp
               </a>
             </Button>
           ) : (
-            <Badge variant="outline" className="text-[10px] w-full justify-center py-1.5">
+            <Badge variant="outline" className="text-xs w-full justify-center py-1.5 font-normal text-muted-foreground">
               Belum ada nomor WA
             </Badge>
           )}
@@ -116,7 +116,7 @@ function AnggotaCard({
   );
 }
 
-export function KependudukanCariWarga({ wargaList }: { wargaList: WargaCariRow[] }) {
+export function KependudukanCariWarga({ wargaList, polos }: { wargaList: WargaCariRow[]; polos?: boolean }) {
   const [q, setQ] = useState("");
   const [debounced, setDebounced] = useState("");
 
@@ -142,7 +142,8 @@ export function KependudukanCariWarga({ wargaList }: { wargaList: WargaCariRow[]
   const truncated = debounced.length >= 2 && groups.length >= MAX_KK;
 
   return (
-    <GovStatisticSection
+    <BagianStat
+      polos={polos}
       title="Cari Warga"
       description="Nama, NIK, nomor KK, atau alamat — menampilkan kartu keluarga beserta anggota"
     >
@@ -152,12 +153,15 @@ export function KependudukanCariWarga({ wargaList }: { wargaList: WargaCariRow[]
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Ketik untuk mencari warga..."
-          className="pl-9 h-10"
+          type="search"
+          enterKeyHint="search"
+          aria-label="Cari warga"
+          className="pl-9"
         />
       </div>
 
       {debounced.length > 0 && debounced.length < 2 && (
-        <p className="text-xs text-muted-foreground">Ketik minimal 2 karakter.</p>
+        <p className="text-sm text-muted-foreground">Ketik minimal 2 karakter.</p>
       )}
 
       {debounced.length >= 2 && groups.length === 0 && (
@@ -173,21 +177,21 @@ export function KependudukanCariWarga({ wargaList }: { wargaList: WargaCariRow[]
       <div className="space-y-4">
         {groups.map((kk) => (
           <Card key={kk.kkId} className="overflow-hidden">
-            <CardHeader className="pb-3 pt-4 px-4 bg-muted/30">
+            <CardHeader className="pb-3 pt-4 px-3 bg-muted/30 sm:px-4">
               <div className="flex items-start gap-3">
                 <div className="rounded-lg bg-brand/10 p-2 shrink-0">
                   <Home className="w-4 h-4 text-brand" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold">KK {kk.nomorKk}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{kk.alamat}</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">
+                  <p className="text-sm font-semibold break-all">KK {kk.nomorKk}</p>
+                  <p className="text-sm text-muted-foreground mt-0.5 break-words sm:text-xs">{kk.alamat}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
                     RT {String(kk.rt).padStart(2, "0")} · {kk.anggota.length} anggota
                   </p>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {kk.anggota.map((w) => (
                   <AnggotaCard
@@ -201,6 +205,6 @@ export function KependudukanCariWarga({ wargaList }: { wargaList: WargaCariRow[]
           </Card>
         ))}
       </div>
-    </GovStatisticSection>
+    </BagianStat>
   );
 }

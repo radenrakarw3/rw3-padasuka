@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
 import { useKirimSekali, wil } from "@/lib/wilayah-api";
-import { IsianPanjang, IsianTeks, Judul, Memuat, Pesan, PilihTombol, TombolBesar } from "@/components/wilayah/ui";
+import { BilahAksiAdmin, IsianPanjang, IsianTeks, Judul, Memuat, Pesan, PilihTombol, TombolBesar } from "@/components/wilayah/ui";
 import { KeluargaBaru } from "./warga";
 import { labelNilaiFakta, type IsiUsulan } from "@shared/wilayah";
 import { defStandar, useStandar } from "@/lib/standar";
@@ -30,7 +30,7 @@ function Centang({ aktif, onClick, children }: { aktif: boolean; onClick: () => 
     <button type="button" onClick={onClick} aria-pressed={aktif}
       className={`w-full min-h-[60px] rounded-xl border-2 px-3 py-2 text-left text-lg flex gap-3 items-center mb-2 ${aktif ? "bg-green-50 border-green-600" : "bg-white border-gray-300"}`}>
       <span className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center shrink-0 ${aktif ? "bg-green-600 border-green-600 text-white" : "border-gray-400"}`}>{aktif ? "✓" : ""}</span>
-      <span className="flex-1">{children}</span>
+      <span className="min-w-0 flex-1 break-words">{children}</span>
     </button>
   );
 }
@@ -150,8 +150,8 @@ function Periksa({ id }: { id: number }) {
                 <ul className="bg-white rounded-2xl border-2 border-gray-200 divide-y-2 divide-gray-100">
                   {cocokKk.map((k) => (
                     <li key={k.id}>
-                      <button type="button" onClick={() => setKkPilih(k.id)} className="w-full min-h-[64px] px-4 py-3 flex items-center gap-3 text-left">
-                        <span className="flex-1"><span className="block text-lg font-semibold">{k.kepala ?? "Tanpa kepala keluarga"}</span><span className="block text-base text-gray-600">{k.alamat}{k.noUnit ? ` No. ${k.noUnit}` : ""}</span></span>
+                      <button type="button" onClick={() => setKkPilih(k.id)} className="w-full min-h-[64px] px-3 py-3 flex items-center gap-3 text-left active:bg-gray-50 sm:px-4">
+                        <span className="min-w-0 flex-1 break-words"><span className="block text-lg font-semibold">{k.kepala ?? "Tanpa kepala keluarga"}</span><span className="block text-base text-gray-600">{k.alamat}{k.noUnit ? ` No. ${k.noUnit}` : ""}</span></span>
                         <ChevronRight className="w-6 h-6 text-gray-400" />
                       </button>
                     </li>
@@ -166,7 +166,9 @@ function Periksa({ id }: { id: number }) {
                   pilihan={[{ nilai: "klarifikasi", label: "Minta keluarga memperbaiki" }, { nilai: "tolak", label: "Tolak" }]} />
                 <IsianPanjang label="Pesan untuk keluarga (wajib)" nilai={catatan} onChange={setCatatan} />
                 {error && <Pesan jenis="error">{error}</Pesan>}
-                <TombolBesar memuat={mengirim} disabled={catatan.trim().length < 3} onClick={async () => { const r = await kirim(); if (r) go("/usulan"); }}>Simpan keputusan</TombolBesar>
+                <BilahAksiAdmin>
+                  <TombolBesar memuat={mengirim} disabled={catatan.trim().length < 3} onClick={async () => { const r = await kirim(); if (r) go("/usulan"); }}>Simpan keputusan</TombolBesar>
+                </BilahAksiAdmin>
               </>
             )}
           </>
@@ -183,7 +185,7 @@ function Periksa({ id }: { id: number }) {
       {keluargaBaru && (
         <Pesan jenis="peringatan">
           Isian dicocokkan ke KK yang dipilih/didaftarkan. Setelah diterima, tambahkan anggotanya (dengan NIK) di halaman keluarga.{" "}
-          <button type="button" className="underline" onClick={() => setKkPilih(null)}>Ganti KK</button>
+          <button type="button" className="inline-flex min-h-10 items-center font-semibold underline" onClick={() => setKkPilih(null)}>Ganti KK</button>
         </Pesan>
       )}
       <Pesan>Data resmi belum berubah. Centang jawaban yang benar, lalu tekan “Terima yang dicentang”.</Pesan>
@@ -217,10 +219,12 @@ function Periksa({ id }: { id: number }) {
             pilihan={[{ nilai: "terima", label: "Terima yang dicentang" }, { nilai: "klarifikasi", label: "Minta keluarga memperbaiki" }, { nilai: "tolak", label: "Tolak semua" }]} />
           <IsianPanjang label={aksi === "terima" ? "Catatan (boleh kosong)" : "Pesan untuk keluarga (wajib)"} nilai={catatan} onChange={setCatatan} />
           {error && <Pesan jenis="error">{error}</Pesan>}
-          <TombolBesar memuat={mengirim} disabled={aksi !== "terima" && catatan.trim().length < 3}
-            onClick={async () => { const r = await kirim(); if (r) go(aksi === "terima" ? `/keluarga/${kkTujuan}${keluargaBaru ? "?langkah=anggota" : ""}` : "/usulan"); }}>
-            Simpan keputusan
-          </TombolBesar>
+          <BilahAksiAdmin>
+            <TombolBesar memuat={mengirim} disabled={aksi !== "terima" && catatan.trim().length < 3}
+              onClick={async () => { const r = await kirim(); if (r) go(aksi === "terima" ? `/keluarga/${kkTujuan}${keluargaBaru ? "?langkah=anggota" : ""}` : "/usulan"); }}>
+              Simpan keputusan
+            </TombolBesar>
+          </BilahAksiAdmin>
         </>
       ) : <Pesan>Isian ini sudah diputus ({usulan.status}).</Pesan>}
     </div>
@@ -245,15 +249,15 @@ export default function Usulan({ id }: { id?: number }) {
       <ul className="bg-white rounded-2xl border-2 border-gray-200 divide-y-2 divide-gray-100">
         {data?.map((u) => (
           <li key={u.id}>
-            <button type="button" onClick={() => go(`/usulan/${u.id}`)} className="w-full min-h-[72px] px-4 py-3 flex items-center gap-3 text-left">
-              <span className="flex-1">
+            <button type="button" onClick={() => go(`/usulan/${u.id}`)} className="w-full min-h-[72px] px-3 py-3 flex items-center gap-3 text-left active:bg-gray-50 sm:px-4">
+              <span className="min-w-0 flex-1 break-words">
                 <span className="block text-lg font-semibold">
                   {u.keluarga_baru ? `Keluarga baru · ${u.alamat}` : u.kepala ?? "Keluarga"}
                   {u.sumber === "rw" && <span className="ml-2 text-sm font-semibold rounded-full px-2 py-0.5 bg-amber-100 text-amber-800 align-middle">dari RW</span>}
                 </span>
                 <span className="block text-base text-gray-600">Diisi {u.pengisi} · {new Date(u.created_at).toLocaleDateString("id-ID")} · {u.status}</span>
               </span>
-              <ChevronRight className="w-6 h-6 text-gray-400" />
+              <ChevronRight className="w-6 h-6 shrink-0 text-gray-400" />
             </button>
           </li>
         ))}

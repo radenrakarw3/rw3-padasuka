@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { format } from "date-fns";
@@ -149,27 +149,27 @@ function KontrakMonthGrid({
   const next = () => onMonthChange(new Date(year, monthIndex + 1, 1));
 
   return (
-    <div className="w-full max-w-[320px]" data-testid="kalender-kontrak-grid">
+    <div className="w-full max-w-[400px] lg:max-w-[320px]" data-testid="kalender-kontrak-grid">
       <div className="flex items-center justify-between mb-3 px-1">
         <button
           type="button"
           onClick={prev}
-          className="p-1.5 rounded-md border hover:bg-muted/50"
+          className="flex h-11 w-11 items-center justify-center rounded-md border hover:bg-muted/50 sm:h-8 sm:w-8"
           aria-label="Bulan sebelumnya"
         >
-          <ChevronLeft className="w-4 h-4" />
+          <ChevronLeft className="w-5 h-5 sm:w-4 sm:h-4" />
         </button>
-        <p className="text-sm font-semibold capitalize">{monthLabel}</p>
+        <p className="text-base font-semibold capitalize sm:text-sm">{monthLabel}</p>
         <button
           type="button"
           onClick={next}
-          className="p-1.5 rounded-md border hover:bg-muted/50"
+          className="flex h-11 w-11 items-center justify-center rounded-md border hover:bg-muted/50 sm:h-8 sm:w-8"
           aria-label="Bulan berikutnya"
         >
-          <ChevronRight className="w-4 h-4" />
+          <ChevronRight className="w-5 h-5 sm:w-4 sm:h-4" />
         </button>
       </div>
-      <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-medium text-muted-foreground mb-1">
+      <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-muted-foreground mb-1 sm:text-[10px]">
         {HARI_SINGKAT.map((h) => (
           <div key={h} className="py-1">
             {h}
@@ -179,7 +179,7 @@ function KontrakMonthGrid({
       <div className="grid grid-cols-7 gap-1">
         {cells.map((cell, idx) => {
           if (!cell) {
-            return <div key={`empty-${idx}`} className="h-9" />;
+            return <div key={`empty-${idx}`} className="h-11 sm:h-9" />;
           }
           const count = countByDate[cell.ymd] ?? 0;
           const tone = getDayTone(cell.ymd, count);
@@ -191,7 +191,7 @@ function KontrakMonthGrid({
               type="button"
               onClick={() => onSelect(parseKontrakDate(cell.ymd))}
               className={cn(
-                "relative h-9 rounded-md border text-xs transition-colors",
+                "relative h-11 rounded-md border text-sm transition-colors sm:h-9 sm:text-xs",
                 dayToneClass[tone],
                 isSelected && "ring-2 ring-[hsl(163,55%,22%)] ring-offset-1",
                 isToday && !isSelected && "underline decoration-2",
@@ -214,6 +214,7 @@ export default function AdminVisitrw3Kalender() {
   const [month, setMonth] = useState(() => new Date());
   const [selected, setSelected] = useState<Date | undefined>(() => new Date());
   const [filterRt, setFilterRt] = useState("semua");
+  const detailTanggalRef = useRef<HTMLDivElement>(null);
 
   const {
     data: kalender,
@@ -281,7 +282,7 @@ export default function AdminVisitrw3Kalender() {
         description="Lihat jatuh tempo izin warga singgah dan siapa yang perlu diingatkan untuk perpanjang"
         actions={
           <Select value={filterRt} onValueChange={setFilterRt}>
-            <SelectTrigger className="w-32 h-8 text-xs" data-testid="select-filter-rt-kalender">
+            <SelectTrigger className="w-36 sm:w-32 sm:h-8 sm:text-xs" data-testid="select-filter-rt-kalender">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -312,7 +313,7 @@ export default function AdminVisitrw3Kalender() {
       )}
 
       {isLoading ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
             <Skeleton key={i} className="h-24 rounded-2xl" />
           ))}
@@ -328,7 +329,8 @@ export default function AdminVisitrw3Kalender() {
         </div>
       )}
 
-      <div className="flex flex-wrap gap-3 text-[10px] text-muted-foreground">
+      <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground sm:text-[11px]">
         <span className="flex items-center gap-1">
           <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
           Sudah habis
@@ -360,11 +362,11 @@ export default function AdminVisitrw3Kalender() {
                 <p className="mt-2 text-xs">
                   Setujui pengajuan Visit RW3 atau tambah warga di tab Penghuni.
                 </p>
-                <Link href="/admin/visitrw3/penghuni">
-                  <Button size="sm" variant="outline" className="mt-3">
+                <Button asChild size="sm" variant="outline" className="mt-3">
+                  <Link href="/admin/visitrw3/penghuni">
                     Ke Penghuni
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               </div>
             ) : (
               <KontrakMonthGrid
@@ -379,7 +381,7 @@ export default function AdminVisitrw3Kalender() {
         </Card>
 
         <div className="space-y-4 min-w-0">
-          <Card>
+          <Card ref={detailTanggalRef} className="scroll-mt-20">
             <CardHeader className="pb-2 pt-4 px-4">
               <CardTitle className="text-sm">
                 {selected
@@ -424,11 +426,11 @@ export default function AdminVisitrw3Kalender() {
                                 {labelJenisWarga(w.jenisWarga)}
                               </span>
                             </div>
-                            <p className="text-[11px] text-muted-foreground mt-0.5">
+                            <p className="text-xs text-muted-foreground mt-0.5 break-words">
                               {displayLokasi(w)} · RT {String(w.rtKost).padStart(2, "0")}
                             </p>
                             {w.nomorVisitrw3 && (
-                              <p className="text-[10px] text-muted-foreground">{w.nomorVisitrw3}</p>
+                              <p className="text-xs font-mono text-muted-foreground sm:text-[11px]">{w.nomorVisitrw3}</p>
                             )}
                           </div>
                           <div className="text-right shrink-0">
@@ -444,16 +446,16 @@ export default function AdminVisitrw3Kalender() {
                           </div>
                         </div>
                         <div className="mt-2 flex gap-2">
-                          <Link href={`/admin/visitrw3/penghuni?perpanjang=${w.id}`}>
-                            <Button size="sm" variant="outline" className="h-7 text-xs">
-                              <RefreshCw className="w-3 h-3 mr-1" />
+                          <Link href={`/admin/visitrw3/penghuni?perpanjang=${w.id}`} className="flex-1 sm:flex-none">
+                            <Button size="sm" variant="outline" className="w-full gap-1 sm:h-7 sm:w-auto sm:text-xs">
+                              <RefreshCw className="w-4 h-4 sm:w-3 sm:h-3" />
                               Perpanjang
                             </Button>
                           </Link>
-                          <Link href="/admin/visitrw3/antrian?view=belum">
-                            <Button size="sm" variant="ghost" className="h-7 text-xs">
+                          <Link href="/admin/visitrw3/antrian?view=belum" className="flex-1 sm:flex-none">
+                            <Button size="sm" variant="ghost" className="w-full gap-0.5 sm:h-7 sm:w-auto sm:text-xs">
                               Antrian
-                              <ChevronRight className="w-3 h-3 ml-0.5" />
+                              <ChevronRight className="w-4 h-4 sm:w-3 sm:h-3" />
                             </Button>
                           </Link>
                         </div>
@@ -477,20 +479,20 @@ export default function AdminVisitrw3Kalender() {
                 {antrianPerpanjang.map((p) => (
                   <div
                     key={p.id}
-                    className="flex items-center justify-between rounded-lg border p-2.5 text-sm"
+                    className="flex flex-col gap-2 rounded-lg border p-3 text-sm sm:flex-row sm:items-center sm:justify-between sm:p-2.5"
                     data-testid={`antrian-perpanjang-${p.id}`}
                   >
-                    <div>
+                    <div className="min-w-0">
                       <p className="font-medium">{p.nomorVisitrw3}</p>
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-xs text-muted-foreground break-words">
                         {p.namaPenghuni ? `${p.namaPenghuni} · ` : ""}
                         {displayLokasi(p)} ·{" "}
                         {p.jenisWarga ? `${labelJenisWarga(p.jenisWarga)} · ` : ""}
                         RT {String(p.rt).padStart(2, "0")} · berlaku sampai {p.tanggalBerlakuSampai}
                       </p>
                     </div>
-                    <Link href="/admin/visitrw3/antrian?view=belum">
-                      <Button size="sm" variant="secondary" className="h-7 text-xs">
+                    <Link href="/admin/visitrw3/antrian?view=belum" className="sm:shrink-0">
+                      <Button size="sm" variant="secondary" className="w-full sm:h-7 sm:w-auto sm:text-xs">
                         Proses
                       </Button>
                     </Link>
@@ -502,7 +504,7 @@ export default function AdminVisitrw3Kalender() {
         </div>
       </div>
 
-      <Card>
+      <Card className="order-first lg:order-none">
         <CardHeader className="pb-2 pt-4 px-4">
           <CardTitle className="text-sm flex items-center gap-1.5">
             <AlertTriangle className="w-4 h-4 text-amber-600" />
@@ -525,7 +527,7 @@ export default function AdminVisitrw3Kalender() {
               Tidak ada kontrak yang habis dalam 30 hari ke depan.
             </p>
           ) : (
-            <div className="space-y-1.5 max-h-[320px] overflow-y-auto">
+            <div className="space-y-1.5 lg:max-h-[320px] lg:overflow-y-auto">
               {mendekatiList.map((w) => {
                 const st = getStatusKontrak(w.tanggalHabisKontrak);
                 const days = getDaysRemaining(w.tanggalHabisKontrak);
@@ -533,26 +535,31 @@ export default function AdminVisitrw3Kalender() {
                   <button
                     key={w.id}
                     type="button"
-                    className="w-full flex items-center justify-between rounded-lg border px-3 py-2 text-left hover:bg-muted/50 transition-colors"
+                    className="w-full min-h-12 flex items-center justify-between rounded-lg border px-3 py-2.5 text-left hover:bg-muted/50 active:bg-muted/60 transition-colors sm:py-2"
                     onClick={() => {
                       const d = parseKontrakDate(w.tanggalHabisKontrak);
                       setSelected(d);
                       setMonth(d);
+                      if (window.matchMedia("(max-width: 1023px)").matches) {
+                        requestAnimationFrame(() =>
+                          detailTanggalRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+                        );
+                      }
                     }}
                     data-testid={`mendekati-row-${w.id}`}
                   >
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <p className="text-sm font-medium truncate">{w.namaLengkap}</p>
+                        <p className="min-w-0 text-sm font-medium truncate">{w.namaLengkap}</p>
                         <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[hsl(163,55%,22%)]/10 text-[hsl(163,55%,22%)]">
                           {labelJenisWarga(w.jenisWarga)}
                         </span>
                       </div>
-                      <p className="text-[11px] text-muted-foreground truncate">
+                      <p className="text-xs text-muted-foreground line-clamp-2 sm:truncate">
                         {displayLokasi(w)} · {formatTanggal(w.tanggalHabisKontrak)}
                       </p>
                     </div>
-                    <Badge variant={st.variant} className="text-[10px] shrink-0 ml-2">
+                    <Badge variant={st.variant} className="text-[11px] shrink-0 ml-2">
                       {days < 0 ? `Lewat ${Math.abs(days)}h` : days === 0 ? "Hari ini" : `${days} hari`}
                     </Badge>
                   </button>
@@ -562,6 +569,7 @@ export default function AdminVisitrw3Kalender() {
           )}
         </CardContent>
       </Card>
+      </div>
     </Visitrw3AdminShell>
   );
 }

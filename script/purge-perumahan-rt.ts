@@ -17,7 +17,6 @@ import {
   profileEditRequest,
   donasi,
   pengajuanBansos,
-  blusukanKunjungan,
   iuranKk,
   pesertaProgram,
   pemilikKost,
@@ -151,7 +150,6 @@ async function purge() {
       const ids = wList.map((w) => w.id);
       await deleteWargaDeps(tx, ids);
       await tx.delete(laporan).where(eq(laporan.kkId, kkId));
-      await tx.delete(blusukanKunjungan).where(eq(blusukanKunjungan.kkId, kkId));
       await tx.delete(iuranKk).where(eq(iuranKk.kkId, kkId));
       await tx.delete(pesertaProgram).where(eq(pesertaProgram.kkId, kkId));
       await tx.delete(donasi).where(eq(donasi.kkId, kkId));

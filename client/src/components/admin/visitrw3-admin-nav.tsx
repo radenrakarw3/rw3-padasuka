@@ -28,13 +28,13 @@ export function Visitrw3AdminNav({ title, description, actions, product = "visit
           <h1 className="text-xl font-bold tracking-tight text-foreground">{title}</h1>
           {description ? <p className="text-sm text-muted-foreground mt-0.5">{description}</p> : null}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           {actions}
           <a
             href={publicHref}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted"
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted sm:min-h-0"
           >
             {publicLabel}
             <ExternalLink className="h-3.5 w-3.5" />

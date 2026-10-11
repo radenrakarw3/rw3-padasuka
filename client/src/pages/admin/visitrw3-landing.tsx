@@ -10,7 +10,13 @@ export default function AdminVisitrw3Landing() {
   if (isLoading) {
     return (
       <Visitrw3AdminShell>
-        <Skeleton className="h-32 w-full rounded-2xl" />
+        <div className="space-y-3" aria-busy="true" aria-label="Memuat antrian">
+          <Skeleton className="h-8 w-2/3 rounded-lg sm:w-1/3" />
+          <div className="flex gap-2 overflow-hidden">
+            {[0, 1, 2].map((i) => <Skeleton key={i} className="h-10 w-28 shrink-0 rounded-full" />)}
+          </div>
+          {[0, 1, 2].map((i) => <Skeleton key={i} className="h-24 w-full rounded-2xl sm:h-20" />)}
+        </div>
       </Visitrw3AdminShell>
     );
   }

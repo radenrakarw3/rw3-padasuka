@@ -56,7 +56,7 @@ export function GovStatistic({
         selected && "ring-2 ring-brand border-brand/40",
       )}
     >
-      <div className="flex items-start justify-between gap-3 p-4 sm:p-5">
+      <div className="flex items-start justify-between gap-2 p-3.5 sm:gap-3 sm:p-5">
         <div className="space-y-1 min-w-0">
           <p className="text-caption uppercase tracking-wide text-muted-foreground font-semibold">
             {label}
@@ -67,8 +67,8 @@ export function GovStatistic({
           )}
         </div>
         {Icon && (
-          <div className={cn("rounded-xl p-3 shrink-0", toneIconClass[tone])}>
-            <Icon className="h-5 w-5" aria-hidden />
+          <div className={cn("rounded-xl p-2 shrink-0 sm:p-3", toneIconClass[tone])}>
+            <Icon className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden />
           </div>
         )}
       </div>
@@ -86,7 +86,7 @@ export function GovStatisticRow({
   className?: string;
 }) {
   return (
-    <div className={cn("grid gap-3 grid-cols-1", colsClass[cols], className)}>{children}</div>
+    <div className={cn("grid gap-3 grid-cols-2", colsClass[cols], className)}>{children}</div>
   );
 }
 

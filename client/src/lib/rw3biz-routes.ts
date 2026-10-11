@@ -6,10 +6,16 @@ export const RW3BIZ_ROUTES = {
   pengajuan: "/rw3biz/pengajuan",
   perpanjang: "/rw3biz/perpanjang",
   status: "/rw3biz/status",
+  aduan: "/rw3biz/aduan",
   admin: {
     landing: "/admin/rw3biz",
     antrianSurvey: "/admin/rw3biz/antrian?view=belum",
     antrianSudah: "/admin/rw3biz/antrian?view=sudah",
     dashboard: "/admin/rw3biz/dashboard",
+    tagihan: "/admin/rw3biz/tagihan",
+    tarif: "/admin/rw3biz/tarif",
+    razia: "/admin/rw3biz/razia",
+    pelanggaran: "/admin/rw3biz/pelanggaran",
   },
+  kas: "/admin/keuangan",
 } as const;

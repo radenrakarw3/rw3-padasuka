@@ -134,24 +134,24 @@ function PilihJenis({ tujuan, setTujuan, kode, pilih }: { tujuan: TujuanUtama | 
     .filter((g) => g.item.length);
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap gap-1">
+      <div className="no-scrollbar -mx-3 flex gap-2 overflow-x-auto px-3 sm:mx-0 sm:flex-wrap sm:gap-1 sm:px-0">
         {(Object.keys(LABEL_TUJUAN) as TujuanUtama[]).map((t) => (
-          <Button key={t} type="button" size="sm" variant={tujuan === t && !q ? "default" : "outline"} onClick={() => { setTujuan(t); setCari(""); }}>
+          <Button key={t} type="button" size="sm" className="shrink-0" variant={tujuan === t && !q ? "default" : "outline"} onClick={() => { setTujuan(t); setCari(""); }}>
             {LABEL_TUJUAN[t].judul}
           </Button>
         ))}
       </div>
       <div className="relative max-w-md">
-        <Search className="absolute left-2 top-3 w-4 h-4 text-muted-foreground" />
-        <Input className="pl-8" placeholder="Cari jenis dokumen (mis. berita acara, undangan, material)…" value={cari} onChange={(e) => setCari(e.target.value)} />
+        <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input className="pl-9" type="search" placeholder="Cari jenis dokumen (mis. berita acara, undangan, material)…" value={cari} onChange={(e) => setCari(e.target.value)} />
       </div>
       {perKategori.map((g) => (
         <section key={g.k}>
           <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">{g.k}. {g.label}</h4>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {g.item.map((j) => (
               <button key={j.kode} type="button" onClick={() => pilih(j)}
-                className={cn("text-left rounded-lg border p-3 hover:border-[hsl(163,55%,22%)] hover:bg-emerald-50/40", kode === j.kode && "border-[hsl(163,55%,22%)] bg-emerald-50")}>
+                className={cn("min-h-12 text-left rounded-lg border bg-white p-3 hover:border-[hsl(163,55%,22%)] hover:bg-emerald-50/40", kode === j.kode && "border-[hsl(163,55%,22%)] bg-emerald-50")}>
                 <p className="font-medium">{j.label}</p>
                 <p className="text-xs text-muted-foreground">{j.ringkas}</p>
               </button>
@@ -282,31 +282,45 @@ export function Wizard({ awal, tutup }: { awal: StateEditor; tutup: (id: number 
   };
 
   return (
-    <div className="space-y-4 pb-24">
-      <div className="flex items-center gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={async () => {
+    <div className="space-y-4">
+      <div className="flex items-start gap-2">
+        <Button type="button" variant="ghost" size="sm" className="shrink-0" onClick={async () => {
           if (berubah.current && bisaSimpan) { const id = await simpan(); if (!id) return; }
           if (!berubah.current) hapusEditorLokal();
           tutup(sRef.current.id);
         }}>
           <ArrowLeft className="w-4 h-4 mr-1" /> Tutup
         </Button>
-        <div className="min-w-0">
-          <p className="font-semibold truncate">{j ? j.label : "Dokumen baru"}{s.perihal ? ` — ${s.perihal}` : ""}</p>
+        <div className="min-w-0 pt-1 sm:pt-0">
+          <p className="font-semibold break-words line-clamp-2 sm:truncate">{j ? j.label : "Dokumen baru"}{s.perihal ? ` — ${s.perihal}` : ""}</p>
           <p className="text-xs text-muted-foreground">{menyimpan ? "Menyimpan…" : tersimpan ?? "Perubahan tersimpan di perangkat ini; tersimpan ke server saat Lanjut/Simpan"}</p>
         </div>
       </div>
 
-      <ol className="flex flex-wrap gap-1 text-xs">
-        {LANGKAH.map((l, i) => (
-          <li key={l}>
-            <button type="button" disabled={(i > 0 && !j) || (i > 1 && !bisaSimpan)} onClick={() => ke(i)}
-              className={cn("rounded-full border px-2 py-1", i === s.langkah ? "bg-[hsl(163,55%,22%)] text-white border-transparent" : "bg-white", ((i > 0 && !j) || (i > 1 && !bisaSimpan)) && "opacity-40")}>
-              {i + 1}. {l}
-            </button>
-          </li>
-        ))}
-      </ol>
+      <div className="space-y-2">
+        <div className="sm:hidden">
+          <div className="flex items-baseline justify-between gap-2">
+            <p className="text-sm font-semibold text-[hsl(163,55%,22%)]">Langkah {s.langkah + 1} dari {LANGKAH.length}</p>
+            <p className="min-w-0 truncate text-sm text-muted-foreground">{LANGKAH[s.langkah]}</p>
+          </div>
+          <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden>
+            <div className="h-full rounded-full bg-[hsl(163,55%,22%)] transition-all" style={{ width: `${((s.langkah + 1) / LANGKAH.length) * 100}%` }} />
+          </div>
+        </div>
+        <ol className="no-scrollbar -mx-3 flex gap-2 overflow-x-auto px-3 sm:mx-0 sm:flex-wrap sm:gap-1 sm:px-0">
+          {LANGKAH.map((l, i) => {
+            const mati = (i > 0 && !j) || (i > 1 && !bisaSimpan);
+            return (
+              <li key={l} className="shrink-0">
+                <button type="button" disabled={mati} onClick={() => ke(i)} aria-current={i === s.langkah ? "step" : undefined}
+                  className={cn("min-h-10 whitespace-nowrap rounded-full border px-4 text-sm sm:min-h-0 sm:px-2 sm:py-1 sm:text-xs", i === s.langkah ? "bg-[hsl(163,55%,22%)] text-white border-transparent" : "bg-white", mati && "opacity-40")}>
+                  {i + 1}. {l}
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
 
       <Galat e={err} />
 
@@ -329,14 +343,14 @@ export function Wizard({ awal, tutup }: { awal: StateEditor; tutup: (id: number 
           </div>
           <div className="space-y-1">
             <Label htmlFor="tgl">Tanggal dokumen <span className="text-red-600">*</span></Label>
-            <Input id="tgl" type="date" className="max-w-[12rem]" value={s.tanggal} onChange={(e) => ubah({ tanggal: e.target.value })} />
+            <Input id="tgl" type="date" className="sm:max-w-[12rem]" value={s.tanggal} onChange={(e) => ubah({ tanggal: e.target.value })} />
           </div>
           <div className="space-y-2">
             <Label>Siapa yang boleh membaca setelah terbit</Label>
             <div className="grid gap-2 sm:grid-cols-3">
               {AKSES.map((a) => (
                 <button key={a.v} type="button" onClick={() => ubah({ akses: a.v })}
-                  className={cn("text-left rounded-lg border p-2 text-sm", s.akses === a.v && "border-[hsl(163,55%,22%)] bg-emerald-50")}>
+                  className={cn("text-left rounded-lg border bg-white p-3 text-sm sm:p-2", s.akses === a.v && "border-[hsl(163,55%,22%)] bg-emerald-50")}>
                   <p className="font-medium">{a.label}</p>
                   <p className="text-xs text-muted-foreground">{a.ket}</p>
                 </button>
@@ -399,7 +413,7 @@ export function Wizard({ awal, tutup }: { awal: StateEditor; tutup: (id: number 
               <ul className="list-disc pl-5 text-amber-900">{validasi.peringatan.map((g) => <li key={g}>{g}</li>)}</ul>
             </div>
           )}
-          <Button type="button" variant="outline" disabled={!bisaSimpan || menyimpan} onClick={async () => {
+          <Button type="button" variant="outline" className="w-full sm:w-auto" disabled={!bisaSimpan || menyimpan} onClick={async () => {
             const id = await simpan();
             if (id) bukaBerkas(`/api/wilayah/rw/surat/${id}/pratinjau.pdf`, "rw").catch(setErr);
           }}><FileText className="w-4 h-4 mr-1" /> Lihat PDF draf</Button>
@@ -408,17 +422,27 @@ export function Wizard({ awal, tutup }: { awal: StateEditor; tutup: (id: number 
         </div>
       )}
 
-      <div className="fixed bottom-0 inset-x-0 z-20 border-t bg-white/95 backdrop-blur px-4 py-2 flex flex-wrap items-center justify-end gap-2">
-        {s.langkah > 0 && <Button type="button" variant="ghost" onClick={() => ke(s.langkah - 1)}><ArrowLeft className="w-4 h-4 mr-1" /> Kembali</Button>}
-        {s.langkah >= 1 && <Button type="button" variant="outline" disabled={!bisaSimpan || menyimpan} onClick={() => simpan()}><Save className="w-4 h-4 mr-1" /> Simpan draft</Button>}
-        {s.langkah >= 1 && s.langkah < 4 && <Button type="button" disabled={!j || !bisaSimpan} onClick={() => ke(s.langkah + 1)}>Lanjut <ArrowRight className="w-4 h-4 ml-1" /></Button>}
-        {s.langkah === 4 && (
-          <Button type="button" className="bg-[hsl(163,55%,22%)] hover:bg-[hsl(163,55%,18%)]" disabled={!validasi || validasi.galat.length > 0 || !bisaSimpan || menerbitkan}
-            onClick={() => setKonfirmasi(true)}>
-            <BookOpen className="w-4 h-4 mr-1" /> Terbitkan
+      {s.langkah > 0 && (
+        <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 -mx-3 flex items-center gap-2 border-t bg-background/95 px-3 py-2 backdrop-blur sm:-mx-4 sm:justify-end sm:px-4 lg:bottom-0 lg:-mx-6 lg:px-6">
+          <Button type="button" variant="ghost" className="shrink-0 px-3 sm:px-4" onClick={() => ke(s.langkah - 1)} aria-label="Kembali">
+            <ArrowLeft className="w-4 h-4 sm:mr-1" /> <span className="hidden sm:inline">Kembali</span>
           </Button>
-        )}
-      </div>
+          <Button type="button" variant="outline" className="shrink-0 px-3 sm:px-4" disabled={!bisaSimpan || menyimpan} onClick={() => simpan()} aria-label="Simpan draft">
+            <Save className="w-4 h-4 sm:mr-1" /> <span className="hidden sm:inline">Simpan draft</span>
+          </Button>
+          {s.langkah < 4 && (
+            <Button type="button" className="min-h-12 flex-1 text-base sm:min-h-9 sm:flex-none sm:text-sm" disabled={!j || !bisaSimpan} onClick={() => ke(s.langkah + 1)}>
+              Lanjut <ArrowRight className="w-4 h-4 ml-1" />
+            </Button>
+          )}
+          {s.langkah === 4 && (
+            <Button type="button" className="min-h-12 flex-1 bg-[hsl(163,55%,22%)] text-base hover:bg-[hsl(163,55%,18%)] sm:min-h-9 sm:flex-none sm:text-sm" disabled={!validasi || validasi.galat.length > 0 || !bisaSimpan || menerbitkan}
+              onClick={() => setKonfirmasi(true)}>
+              <BookOpen className="w-4 h-4 mr-1" /> Terbitkan
+            </Button>
+          )}
+        </div>
+      )}
 
       <AlertDialog open={konfirmasi} onOpenChange={setKonfirmasi}>
         <AlertDialogContent>

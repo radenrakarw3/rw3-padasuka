@@ -69,8 +69,8 @@ export type Visitrw3Tarif = {
 export function parseKontribusiSettings(rows: { key: string; value: string }[]): KontribusiSettings {
   const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   const legacyBisnis = intVal(map, "fee_bisnis_per_hari", 5000);
-  const legacyKost = intVal(map, "fee_kost_per_unit_bulan", 10000);
-  const legacyKontrakan = intVal(map, "fee_kontrakan_per_unit_bulan", 15000);
+  const legacyKost = intVal(map, "fee_kost_per_unit_bulan", 6000);
+  const legacyKontrakan = intVal(map, "fee_kontrakan_per_unit_bulan", 9000);
   const legacyPemilik = intVal(map, "fee_pemilik_per_bulan", 50000);
 
   return {
@@ -79,12 +79,12 @@ export function parseKontribusiSettings(rows: { key: string; value: string }[]):
     feeBisnisLapakPerHari: intVal(map, "fee_bisnis_lapak_per_hari", 3000),
     feeBisnisKioskPerHari: intVal(map, "fee_bisnis_kiosk_per_hari", legacyBisnis),
     feeBisnisLainPerHari: intVal(map, "fee_bisnis_lain_per_hari", 8000),
-    feeKostKecilPerUnitBulan: intVal(map, "fee_kost_kecil_per_unit_bulan", Math.round(legacyKost * 0.8)),
+    feeKostKecilPerUnitBulan: intVal(map, "fee_kost_kecil_per_unit_bulan", legacyKost - 1000),
     feeKostSedangPerUnitBulan: intVal(map, "fee_kost_sedang_per_unit_bulan", legacyKost),
-    feeKostBesarPerUnitBulan: intVal(map, "fee_kost_besar_per_unit_bulan", Math.round(legacyKost * 1.2)),
-    feeKontrakanKecilPerUnitBulan: intVal(map, "fee_kontrakan_kecil_per_unit_bulan", Math.round(legacyKontrakan * 0.8)),
+    feeKostBesarPerUnitBulan: intVal(map, "fee_kost_besar_per_unit_bulan", legacyKost + 1000),
+    feeKontrakanKecilPerUnitBulan: intVal(map, "fee_kontrakan_kecil_per_unit_bulan", legacyKontrakan - 1000),
     feeKontrakanSedangPerUnitBulan: intVal(map, "fee_kontrakan_sedang_per_unit_bulan", legacyKontrakan),
-    feeKontrakanBesarPerUnitBulan: intVal(map, "fee_kontrakan_besar_per_unit_bulan", Math.round(legacyKontrakan * 1.2)),
+    feeKontrakanBesarPerUnitBulan: intVal(map, "fee_kontrakan_besar_per_unit_bulan", legacyKontrakan + 1000),
     feePemilikLapakPerBulan: intVal(map, "fee_pemilik_lapak_per_bulan", 30000),
     feePemilikKioskPerBulan: intVal(map, "fee_pemilik_kiosk_per_bulan", 35000),
     feePemilikKostKecilPerBulan: intVal(map, "fee_pemilik_kost_kecil_per_bulan", Math.round(legacyPemilik * 0.8)),
