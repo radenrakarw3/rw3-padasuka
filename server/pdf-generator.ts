@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import fs from "fs";
 import path from "path";
+import { F4 } from "@shared/kertas";
 
 const logoPath = path.join(process.cwd(), "attached_assets", "RW3-Cimahi-Logo-Green@16x_1772999415502.png");
 let logoBase64: string | null = null;
@@ -104,12 +105,12 @@ export function generateSuratPDFBuffer(options: {
   jenisSurat: string;
 }): Buffer {
   const { nomorSurat, isiSurat, jenisSurat } = options;
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const pageWidth = 210;
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [F4.w, F4.h] });
+  const pageWidth = F4.w;
   const marginLeft = 20;
   const marginRight = 20;
   const contentWidth = pageWidth - marginLeft - marginRight;
-  const pageHeight = 297;
+  const pageHeight = F4.h;
   const startY = 42;
   const bottomMargin = 12;
   const availableHeight = pageHeight - startY - bottomMargin;
