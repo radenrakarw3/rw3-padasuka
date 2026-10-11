@@ -52,6 +52,9 @@ function RingkasanRw() {
   const { data, isLoading, error } = useQuery<Ringkasan>({ queryKey: ["/api/wilayah/rw/ringkasan"], queryFn: () => wil("/api/wilayah/rw/ringkasan", RW) });
   if (isLoading) return <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-24 animate-pulse rounded-2xl bg-gray-100" />)}</div>;
   if (error || !data) return <p className="text-sm text-red-700">{(error as Error)?.message ?? "Gagal memuat"}</p>;
+  if (!Array.isArray(data.sebaran) || !Array.isArray(data.perhatian) || !data.total) {
+    return <p className="text-sm text-red-700">Server masih versi lama. Jalankan ulang server (atau tunggu deploy selesai), lalu muat ulang halaman.</p>;
+  }
   const t = data.total;
   const kelompokAda = Array.from(new Set(data.sebaran.map((s) => s.kelompok)));
   const aktifKelompok = kelompokAda.includes(kelompok) ? kelompok : kelompokAda[0];

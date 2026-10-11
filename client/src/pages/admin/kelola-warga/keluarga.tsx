@@ -150,7 +150,10 @@ export default function Keluarga({ id }: { id: number }) {
   const [info, setInfo] = useState<string | null>(null);
   const [aksiErr, setAksiErr] = useState<string | null>(null);
   const key = [`/api/wilayah/keluarga/${id}`];
-  const { data: d, isLoading, error } = useQuery<Detail>({ queryKey: key, queryFn: () => wil(`/api/wilayah/keluarga/${id}`) });
+  const { data: d, isLoading, error } = useQuery<Detail>({ queryKey: key, queryFn: async () => {
+    const x = await wil<Detail>(`/api/wilayah/keluarga/${id}`);
+    return { ...x, ringkas: x.ringkas ? { ...x.ringkas, perhatian: x.ringkas.perhatian ?? [] } : { kelengkapan: 0, terjawab: 0, pertanyaan: 0, perhatian: [] } };
+  } });
   const { data: standar, isLoading: memuatStandar } = useStandar();
   const segarkan = async (pesan?: string) => {
     await qc.invalidateQueries({ queryKey: key });

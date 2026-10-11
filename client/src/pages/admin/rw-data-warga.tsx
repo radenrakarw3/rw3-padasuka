@@ -168,7 +168,10 @@ function DaftarJawaban({ fakta, defs }: { fakta: FaktaView[]; defs: DefinisiFakt
 }
 
 function PanelDetail({ id, tutup, ubah }: { id: number; tutup: () => void; ubah: (rt: number) => void }) {
-  const { data: d, isLoading, error } = useQuery<DetailKeluarga>({ queryKey: [`/api/wilayah/keluarga/${id}`, "rw"], queryFn: () => wil(`/api/wilayah/keluarga/${id}`, RW) });
+  const { data: d, isLoading, error } = useQuery<DetailKeluarga>({ queryKey: [`/api/wilayah/keluarga/${id}`, "rw"], queryFn: async () => {
+    const x = await wil<DetailKeluarga>(`/api/wilayah/keluarga/${id}`, RW);
+    return { ...x, ringkas: x.ringkas ? { ...x.ringkas, perhatian: x.ringkas.perhatian ?? [] } : { kelengkapan: 0, terjawab: 0, pertanyaan: 0, perhatian: [] } };
+  } });
   const { data: standar } = useStandar();
   const [orang, setOrang] = useState<number | null>(null);
   const kepala = d?.anggota.find((a) => a.kedudukan === "Kepala Keluarga")?.nama ?? null;
@@ -252,7 +255,14 @@ export default function DataWarga() {
   useStandar();
   const { data, isLoading, error } = useQuery<KeluargaRingkas[]>({
     queryKey: ["/api/wilayah/keluarga", "rw", rt, cari],
-    queryFn: () => wil(`/api/wilayah/keluarga?batas=1000${rt ? `&rt=${rt}` : ""}${cari ? `&cari=${encodeURIComponent(cari)}` : ""}`, RW),
+    queryFn: async () => {
+      const list = await wil<Partial<KeluargaRingkas>[]>(`/api/wilayah/keluarga?batas=1000${rt ? `&rt=${rt}` : ""}${cari ? `&cari=${encodeURIComponent(cari)}` : ""}`, RW);
+      return list.map((k) => ({
+        lakiLaki: 0, perempuan: 0, balita: 0, anak: 0, lansia: 0, kelengkapan: 0, terjawab: 0, pertanyaan: 0, diperbarui: null, usulanMenunggu: 0,
+        ...k,
+        perhatian: Array.isArray(k.perhatian) ? k.perhatian : [],
+      }) as KeluargaRingkas);
+    },
   });
 
   const hitung = useMemo(() => ({
