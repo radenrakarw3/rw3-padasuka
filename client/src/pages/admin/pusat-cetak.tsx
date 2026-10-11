@@ -108,7 +108,6 @@ export default function PusatCetak() {
         <h1 className="text-2xl font-bold" style={{ color: HIJAU }}>Pusat cetak F4</h1>
         <p className="text-muted-foreground">Semua bahan cetak untuk warga dalam ukuran F4 (215 × 330 mm), hitam-putih hemat tinta, siap untuk Epson L3210. Untuk warga yang belum terbiasa HP: cetak, bagikan, lalu input formulir yang kembali.</p>
       </div>
-      <PanduanPrinter buka />
       {GRUP.map((g) => (
         <section key={g.judul}>
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">{g.judul}</h2>
@@ -126,16 +125,6 @@ export default function PusatCetak() {
           </div>
         </section>
       ))}
-      <section className="rounded-2xl border bg-white p-4 text-sm">
-        <p className="font-semibold">Alur kertas</p>
-        <ol className="mt-1 list-decimal space-y-1 pl-5 text-muted-foreground">
-          <li>Cetak <b>Paket per KK</b> dan <b>Rekap keliling</b> untuk RT yang dituju.</li>
-          <li>Pengurus mengantar paket, mencatat tanggal di rekap.</li>
-          <li>Warga mengisi lewat QR atau formulir kertas, lalu menyerahkan kembali.</li>
-          <li>Formulir yang kembali diinput di <button type="button" className="underline" onClick={() => go("/admin/kelola-warga/input-kertas")}>Input dari kertas</button> (cukup ketik kode kartu).</li>
-          <li>Warga kost/kontrakan/usaha yang mengisi kertas: input lewat tombol <b>Isi atas nama warga</b> di Survey hunian / Survey usaha.</li>
-        </ol>
-      </section>
     </div>
   );
 }
