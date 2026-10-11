@@ -1,33 +1,14 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { RTJUARA_API, RTJUARA_ROLE } from "@shared/rtjuara-api";
-import { bulanKey as toBulanKey, isBulanKey, isRtjuaraRt } from "@shared/rtjuara";
+import { isRtjuaraRt } from "@shared/rtjuara";
 import { rtjuaraLoginSchema } from "@shared/schema";
 import { visitrw3ApiErrorMessage } from "./visitrw3-api-error";
 import { saveSession } from "./session-save";
 import {
   ensureRtjuaraSchema,
-  createQuest,
-  createSubmission,
-  deleteQuest,
-  deleteSubmission,
-  getAdminDashboard,
-  getFoto,
-  getGaleriPublik,
-  getJuara,
-  getLeaderboard,
-  getRingkasanRt,
-  getSubmissionDetail,
   hapusAkun,
   listAkun,
-  listBulanJuara,
-  listQuestAdmin,
-  listQuestForRt,
   listRtLogin,
-  listSubmission,
-  reviewSubmission,
-  batalkanJuara,
-  tetapkanJuara,
-  updateQuest,
   upsertAkun,
   verifikasiLogin,
 } from "./rtjuara";
@@ -66,96 +47,20 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
-function parseBulanQuery(raw: unknown): string {
-  const value = String(raw ?? "").trim();
-  return isBulanKey(value) ? value : toBulanKey();
-}
-
 function parseRtQuery(raw: unknown): number | null {
   if (raw == null || raw === "" || raw === "semua") return null;
   const n = Number(raw);
   return Number.isFinite(n) && isRtjuaraRt(n) ? n : null;
 }
 
-function parseId(raw: unknown): number | null {
-  const n = parseInt(String(raw), 10);
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
-
-function adminLabel(req: Request): string {
-  return req.session.adminNama || req.session.adminUsername || "admin";
-}
-
+/** Login Ketua RT (portal /rt) dan pengelolaan akun/PIN oleh admin RW. */
 export async function registerRtjuaraRoutes(app: Express) {
   await ensureRtjuaraSchema().catch((error) => {
-    console.error("[RTJUARA] Schema init error:", error);
+    console.error("[AKUN RT] Schema init error:", error);
   });
-
-  // ===================== PUBLIK =====================
 
   app.get(RTJUARA_API.ping, (_req, res) => {
     res.json({ ok: true, ts: Date.now() });
-  });
-
-  app.get(RTJUARA_API.publik.leaderboard, async (req, res) => {
-    try {
-      const bulan = parseBulanQuery(req.query.bulan);
-      const [leaderboard, juara] = await Promise.all([getLeaderboard(bulan), getJuara(bulan)]);
-      res.json({ bulan, leaderboard, sudahDiumumkan: juara.length > 0 });
-    } catch (error: unknown) {
-      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat papan peringkat") });
-    }
-  });
-
-  app.get(RTJUARA_API.publik.juara, async (req, res) => {
-    try {
-      const bulanTersedia = await listBulanJuara();
-      const diminta = String(req.query.bulan ?? "").trim();
-      const bulan = isBulanKey(diminta) ? diminta : bulanTersedia[0] ?? toBulanKey();
-      const juara = await getJuara(bulan);
-      res.json({ bulan, juara, bulanTersedia });
-    } catch (error: unknown) {
-      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat pengumuman juara") });
-    }
-  });
-
-  app.get(RTJUARA_API.publik.galeri, async (req, res) => {
-    try {
-      const bulanRaw = String(req.query.bulan ?? "").trim();
-      const bulan = isBulanKey(bulanRaw) ? bulanRaw : null;
-      const galeri = await getGaleriPublik(bulan);
-      res.json(galeri);
-    } catch (error: unknown) {
-      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat galeri kegiatan") });
-    }
-  });
-
-  // Foto disetujui boleh dilihat publik; bukti menunggu/ditolak hanya admin atau RT pemiliknya.
-  app.get("/api/rtjuara/foto/:id", async (req, res) => {
-    try {
-      const id = parseId(req.params.id);
-      if (!id) return res.status(400).json({ message: "ID foto tidak valid" });
-      const foto = await getFoto(id);
-      if (!foto) return res.status(404).json({ message: "Foto tidak ditemukan" });
-
-      const boleh =
-        foto.status === "disetujui" ||
-        req.session?.isAdmin === true ||
-        req.session?.rtjuaraRt === foto.rt;
-      if (!boleh) return res.status(403).json({ message: "Foto ini belum bisa diakses" });
-
-      const commaIdx = foto.fotoData.indexOf(",");
-      if (commaIdx < 0) return res.status(415).json({ message: "Format foto tidak dikenali" });
-      const mimeType = foto.fotoData.substring(0, commaIdx).split(":")[1]?.split(";")[0] || "image/jpeg";
-      const buffer = Buffer.from(foto.fotoData.substring(commaIdx + 1), "base64");
-
-      res.setHeader("Content-Type", mimeType);
-      res.setHeader("Content-Length", String(buffer.length));
-      res.setHeader("Cache-Control", foto.status === "disetujui" ? "public, max-age=86400" : "private, no-store");
-      res.end(buffer);
-    } catch (error: unknown) {
-      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat foto") });
-    }
   });
 
   // ===================== AUTH KETUA RT =====================
@@ -209,147 +114,7 @@ export async function registerRtjuaraRoutes(app: Express) {
     });
   });
 
-  // ===================== PORTAL KETUA RT =====================
-
-  app.get(RTJUARA_API.quest, requireRt, async (req, res) => {
-    try {
-      res.json(await listQuestForRt(req.session.rtjuaraRt!));
-    } catch (error: unknown) {
-      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat quest") });
-    }
-  });
-
-  app.get(RTJUARA_API.submission, requireRt, async (req, res) => {
-    try {
-      const bulanRaw = String(req.query.bulan ?? "").trim();
-      const list = await listSubmission({
-        rt: req.session.rtjuaraRt!,
-        bulan: isBulanKey(bulanRaw) ? bulanRaw : null,
-      });
-      res.json(list);
-    } catch (error: unknown) {
-      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat riwayat bukti") });
-    }
-  });
-
-  app.post(RTJUARA_API.submission, requireRt, async (req, res) => {
-    try {
-      const created = await createSubmission(req.session.rtjuaraRt!, req.body);
-      res.json(created);
-    } catch (error: unknown) {
-      res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal mengirim bukti") });
-    }
-  });
-
-  app.get(RTJUARA_API.ringkasan, requireRt, async (req, res) => {
-    try {
-      res.json(await getRingkasanRt(req.session.rtjuaraRt!, parseBulanQuery(req.query.bulan)));
-    } catch (error: unknown) {
-      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat ringkasan RT") });
-    }
-  });
-
-  // ===================== ADMIN RW =====================
-
-  app.get(RTJUARA_API.admin.dashboard, requireAdmin, async (req, res) => {
-    try {
-      res.json(await getAdminDashboard(parseBulanQuery(req.query.bulan)));
-    } catch (error: unknown) {
-      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat dashboard RT JUARA") });
-    }
-  });
-
-  app.get(RTJUARA_API.admin.quest, requireAdmin, async (req, res) => {
-    try {
-      const aktifRaw = String(req.query.aktif ?? "").trim();
-      const list = await listQuestAdmin({
-        periode: req.query.periode ? String(req.query.periode) : null,
-        aktif: aktifRaw === "true" ? true : aktifRaw === "false" ? false : null,
-      });
-      res.json(list);
-    } catch (error: unknown) {
-      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat daftar quest") });
-    }
-  });
-
-  app.post(RTJUARA_API.admin.quest, requireAdmin, async (req, res) => {
-    try {
-      res.json(await createQuest(req.body, adminLabel(req)));
-    } catch (error: unknown) {
-      res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal membuat quest") });
-    }
-  });
-
-  app.patch("/api/admin/rtjuara/quest/:id", requireAdmin, async (req, res) => {
-    try {
-      const id = parseId(req.params.id);
-      if (!id) return res.status(400).json({ message: "ID quest tidak valid" });
-      res.json(await updateQuest(id, req.body));
-    } catch (error: unknown) {
-      res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal memperbarui quest") });
-    }
-  });
-
-  app.delete("/api/admin/rtjuara/quest/:id", requireAdmin, async (req, res) => {
-    try {
-      const id = parseId(req.params.id);
-      if (!id) return res.status(400).json({ message: "ID quest tidak valid" });
-      const ok = await deleteQuest(id);
-      if (!ok) return res.status(404).json({ message: "Quest tidak ditemukan" });
-      res.json({ ok: true });
-    } catch (error: unknown) {
-      res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal menghapus quest") });
-    }
-  });
-
-  app.get(RTJUARA_API.admin.submission, requireAdmin, async (req, res) => {
-    try {
-      const bulanRaw = String(req.query.bulan ?? "").trim();
-      const statusRaw = String(req.query.status ?? "").trim();
-      const list = await listSubmission({
-        rt: parseRtQuery(req.query.rt),
-        status: statusRaw && statusRaw !== "semua" ? statusRaw : null,
-        bulan: isBulanKey(bulanRaw) ? bulanRaw : null,
-      });
-      res.json(list);
-    } catch (error: unknown) {
-      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat antrian bukti") });
-    }
-  });
-
-  app.get("/api/admin/rtjuara/submission/:id", requireAdmin, async (req, res) => {
-    try {
-      const id = parseId(req.params.id);
-      if (!id) return res.status(400).json({ message: "ID bukti tidak valid" });
-      const detail = await getSubmissionDetail(id);
-      if (!detail) return res.status(404).json({ message: "Bukti tidak ditemukan" });
-      res.json(detail);
-    } catch (error: unknown) {
-      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat detail bukti") });
-    }
-  });
-
-  app.patch("/api/admin/rtjuara/submission/:id/review", requireAdmin, async (req, res) => {
-    try {
-      const id = parseId(req.params.id);
-      if (!id) return res.status(400).json({ message: "ID bukti tidak valid" });
-      res.json(await reviewSubmission(id, adminLabel(req), req.body));
-    } catch (error: unknown) {
-      res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal memverifikasi bukti") });
-    }
-  });
-
-  app.delete("/api/admin/rtjuara/submission/:id", requireAdmin, async (req, res) => {
-    try {
-      const id = parseId(req.params.id);
-      if (!id) return res.status(400).json({ message: "ID bukti tidak valid" });
-      const ok = await deleteSubmission(id);
-      if (!ok) return res.status(404).json({ message: "Bukti tidak ditemukan" });
-      res.json({ ok: true });
-    } catch (error: unknown) {
-      res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal menghapus bukti") });
-    }
-  });
+  // ===================== AKUN KETUA RT (ADMIN RW) =====================
 
   app.get(RTJUARA_API.admin.akun, requireAdmin, async (_req, res) => {
     try {
@@ -376,37 +141,6 @@ export async function registerRtjuaraRoutes(app: Express) {
       res.json({ ok: true });
     } catch (error: unknown) {
       res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal menghapus akun ketua RT") });
-    }
-  });
-
-  app.get(RTJUARA_API.admin.juara, requireAdmin, async (req, res) => {
-    try {
-      const bulan = parseBulanQuery(req.query.bulan);
-      const [juara, bulanTersedia] = await Promise.all([getJuara(bulan), listBulanJuara()]);
-      res.json({ bulan, juara, bulanTersedia });
-    } catch (error: unknown) {
-      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat pengumuman juara") });
-    }
-  });
-
-  app.post(RTJUARA_API.admin.juara, requireAdmin, async (req, res) => {
-    try {
-      const bulan = parseBulanQuery(req.body?.bulan);
-      const juara = await tetapkanJuara(bulan, adminLabel(req), req.body?.catatan ?? null);
-      res.json({ bulan, juara });
-    } catch (error: unknown) {
-      res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal mengumumkan juara") });
-    }
-  });
-
-  app.delete(RTJUARA_API.admin.juara, requireAdmin, async (req, res) => {
-    try {
-      const bulan = parseBulanQuery(req.query.bulan);
-      const ok = await batalkanJuara(bulan);
-      if (!ok) return res.status(404).json({ message: "Belum ada pengumuman untuk bulan ini" });
-      res.json({ ok: true });
-    } catch (error: unknown) {
-      res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal membatalkan pengumuman") });
     }
   });
 }

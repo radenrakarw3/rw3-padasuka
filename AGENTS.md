@@ -87,7 +87,7 @@ STARSENDER_DISABLED=true  # Set true untuk hentikan SEMUA kirim WA (mis. saat no
 PUBLIC_SITE_URL         # Default: https://rw3padasukacimahi.org (link di pesan WA)
 ```
 
-Notifikasi otomatis via StarSender: Visit RW3 (pengajuan, approve/reject, pengingat kontrak H-7/H-1/habis), laporan masalah, laporan kekeringan. Modul: `server/wa-notify.ts`, `server/starsender.ts`.
+Notifikasi otomatis via StarSender: Visit RW3 (pengajuan, approve/reject, pengingat kontrak H-7/H-1/habis), RW3BIZ (pendaftaran usaha). Modul: `server/wa-notify.ts`, `server/starsender.ts`.
 
 ---
 

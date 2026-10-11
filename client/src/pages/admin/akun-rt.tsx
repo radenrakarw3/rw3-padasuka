@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, Pencil, Trash2 } from "lucide-react";
-import { RtjuaraAdminNav } from "@/components/admin/rtjuara-admin-nav";
 import {
   Visitrw3AdminShell,
   Visitrw3FormCard,
@@ -30,7 +29,7 @@ import { rtLabel } from "@shared/rtjuara";
 import { rtjuaraApi, type AkunView } from "@/lib/rtjuara-api";
 import { getApiErrorMessage } from "@/lib/queryClient";
 
-export default function AdminRtjuaraAkun() {
+export default function AdminAkunRt() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [editRt, setEditRt] = useState<number | null>(null);
@@ -48,7 +47,6 @@ export default function AdminRtjuaraAkun() {
   const invalidate = () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: [RTJUARA_API.admin.akun] }),
-      queryClient.invalidateQueries({ queryKey: [RTJUARA_API.admin.dashboard] }),
     ]);
 
   const tutupForm = () => {
@@ -123,10 +121,13 @@ export default function AdminRtjuaraAkun() {
 
   return (
     <Visitrw3AdminShell>
-      <RtjuaraAdminNav
-        title="Akun Ketua RT"
-        description="Atur PIN login portal RT JUARA untuk tiap ketua RT 01-07."
-      />
+      <div>
+        <p className="text-[11px] font-bold uppercase tracking-wider text-[hsl(163,55%,22%)]">Kependudukan</p>
+        <h1 className="text-xl font-bold tracking-tight text-foreground">Akun & PIN Ketua RT</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Atur PIN login Portal Ketua RT (/rt) untuk tiap ketua RT. Ketua RT mengelola data warga dari portal itu.
+        </p>
+      </div>
 
       {editRt != null && (
         <Visitrw3FormCard title={`Akun ${rtLabel(editRt)}`} onClose={tutupForm}>
@@ -207,7 +208,7 @@ export default function AdminRtjuaraAkun() {
 
       <Visitrw3Panel
         title="Daftar RT"
-        description="RT 01-07 mengikuti kompetisi RT JUARA."
+        description="Satu akun login per RT."
         noPadding
       >
         {isLoading ? (
@@ -260,7 +261,7 @@ export default function AdminRtjuaraAkun() {
                             ? `login terakhir ${new Date(item.lastLoginAt).toLocaleDateString("id-ID")}`
                             : "belum pernah login"
                         }`
-                      : "Buat PIN supaya ketua RT bisa mengirim bukti quest."}
+                      : "Buat PIN supaya ketua RT bisa masuk ke Portal Ketua RT."}
                   </p>
                 </div>
               </Visitrw3ListItem>

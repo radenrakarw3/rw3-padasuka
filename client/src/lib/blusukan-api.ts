@@ -2,7 +2,7 @@
  * Client SSOT — panggilan API Blusukan RW (master data Ketua RW).
  */
 import { BLUSUKAN_API } from "@shared/blusukan-api";
-import type { BlusukanQuest, KartuKeluarga, Laporan, Warga } from "@shared/schema";
+import type { BlusukanQuest, KartuKeluarga, Warga } from "@shared/schema";
 import { fetchWithTimeout, readJsonSafely } from "./queryClient";
 
 const jsonOpts = (method: string, body?: unknown): RequestInit => ({
@@ -144,24 +144,5 @@ export const blusukanApi = {
       blusukanFetch<BlusukanQuest>(BLUSUKAN_API.quest, jsonOpts("POST", body)),
     patch: (id: number, body: Record<string, unknown>) =>
       blusukanFetch<BlusukanQuest>(BLUSUKAN_API.questItem(id), jsonOpts("PATCH", body)),
-  },
-
-  laporan: {
-    list: () =>
-      blusukanFetch<
-        (Laporan & {
-          pelaporNama: string | null;
-          pelaporRt: number | null;
-          pelaporAlamat: string | null;
-          pelaporWa: string | null;
-        })[]
-      >(BLUSUKAN_API.laporan),
-    updateStatus: (id: number, body: { status: string; tanggapan?: string }) =>
-      blusukanFetch<Laporan>(BLUSUKAN_API.laporanItem(id), jsonOpts("PATCH", body)),
-    delete: (id: number) =>
-      blusukanFetch<{ ok: boolean; message: string }>(BLUSUKAN_API.laporanItem(id), {
-        method: "DELETE",
-        credentials: "include",
-      }),
   },
 };

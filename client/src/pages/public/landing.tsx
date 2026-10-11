@@ -1,11 +1,9 @@
-import { Megaphone, Headphones, QrCode, UserCog } from "lucide-react";
+import { Headphones, QrCode, UserCog } from "lucide-react";
 import { PublicKioskLayout } from "@/components/public-kiosk-layout";
 import { ServiceCard } from "@/components/gov/service-card";
 import { FeatureExplain } from "@/components/gov/feature-explain";
 import { Visitrw3VisaCard } from "@/components/gov/visitrw3-visa-card";
 import { Rw3bizCard } from "@/components/gov/rw3biz-card";
-import { KarangtarunaCard } from "@/components/gov/karangtaruna-card";
-import { Rw3lawCard } from "@/components/gov/rw3law-card";
 
 export default function PublicLanding() {
   return (
@@ -16,9 +14,6 @@ export default function PublicLanding() {
             <strong>Isi data keluarga</strong> — pakai kode di kartu QR dari Ketua RT. Isian diperiksa RT dulu, data lama tidak ditampilkan.
           </li>
           <li>
-            <strong>Lapor warga</strong> — sampaikan keluhan lingkungan di wilayah RW.
-          </li>
-          <li>
             <strong>Hubungi ketua RT</strong> — konsultasi urusan warga per RT lewat WhatsApp.
           </li>
           <li>
@@ -26,12 +21,6 @@ export default function PublicLanding() {
           </li>
           <li>
             <strong>RW3BIZ</strong> — izin berjualan / usaha di wilayah RW.
-          </li>
-          <li>
-            <strong>Karang Taruna</strong> — daftar & ceritakan skill pemuda RW untuk difasilitasi.
-          </li>
-          <li>
-            <strong>RW3LAW</strong> — baca peraturan resmi lingkungan yang wajib dipatuhi warga.
           </li>
         </ul>
       </FeatureExplain>
@@ -45,13 +34,6 @@ export default function PublicLanding() {
         iconClassName="bg-accent"
       />
       <ServiceCard
-        href="/lapor"
-        icon={Megaphone}
-        title="Lapor warga"
-        description="Laporkan masalah lingkungan di wilayah RW"
-        variant="solid"
-      />
-      <ServiceCard
         href="/pelayanan"
         icon={Headphones}
         title="Hubungi ketua RT"
@@ -61,8 +43,6 @@ export default function PublicLanding() {
       />
       <Visitrw3VisaCard />
       <Rw3bizCard />
-      <KarangtarunaCard />
-      <Rw3lawCard />
       <ServiceCard
         href="/rt"
         icon={UserCog}

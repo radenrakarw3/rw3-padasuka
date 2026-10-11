@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, ExternalLink } from "lucide-react";
+import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -372,18 +372,6 @@ function LaporanKecamatan({ tahun, bulan }: { tahun: number; bulan: number }) {
   );
 }
 
-const MODUL_LAIN = [
-  { href: "/admin/keuangan", label: "Kas RW" },
-  { href: "/admin/rw3law", label: "RW3LAW (peraturan)" },
-  { href: "/admin/laporan", label: "Laporan warga" },
-  { href: "/admin/kependudukan", label: "Kependudukan (lama, baca)" },
-  { href: "/admin/visitrw3", label: "Visit RW3 (hunian)" },
-  { href: "/admin/rw3biz", label: "RW3BIZ (usaha)" },
-  { href: "/admin/karangtaruna", label: "Karang Taruna" },
-  { href: "/admin/rtjuara/akun", label: "Akun & PIN Ketua RT" },
-  { href: "/admin/rtjuara", label: "RT JUARA" },
-];
-
 export default function RwDashboard() {
   const now = new Date();
   const [tahun, setTahun] = useState(now.getFullYear());
@@ -411,12 +399,6 @@ export default function RwDashboard() {
         <TabsContent value="aksi"><Aksi tahun={tahun} bulan={bulan} /></TabsContent>
         <TabsContent value="laporan"><LaporanKecamatan tahun={tahun} bulan={bulan} /></TabsContent>
       </Tabs>
-      <details className="border rounded-lg p-3">
-        <summary className="cursor-pointer font-medium">Modul lain</summary>
-        <div className="flex flex-wrap gap-2 mt-2">
-          {MODUL_LAIN.map((m) => <Link key={m.href} href={m.href} className="text-sm border rounded-md px-3 py-1.5 hover:bg-muted inline-flex items-center gap-1">{m.label} <ExternalLink className="w-3 h-3" /></Link>)}
-        </div>
-      </details>
     </div>
   );
 }

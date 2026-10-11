@@ -7,29 +7,14 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import express from "express";
-import * as XLSX from "xlsx";
 import { storage } from "./storage";
 import { pool } from "./db";
 import { cache, CacheKey, TTL, invalidateWarga, invalidateKk, invalidateVisitrw3Dashboard } from "./cache";
-import { insertKkSchema, patchKkSchema, insertWargaSchema, insertLaporanSchema, insertSuratWargaSchema, insertSuratRwSchema, insertPengajuanBansosSchema, insertDonasiCampaignSchema, insertDonasiSchema, insertKasRwSchema, insertWargaSinggahSchema, insertUsahaSchema, insertKaryawanUsahaSchema, insertIzinTetanggaSchema, insertSurveyUsahaSchema } from "@shared/schema";
-import { formatLaporanRef, subJenisInfrastrukturOptions } from "@shared/program-kerja";
+import { insertKkSchema, patchKkSchema, insertWargaSchema, insertSuratRwSchema, insertWargaSinggahSchema, insertUsahaSchema } from "@shared/schema";
 import { getBlusukanDashboard } from "./blusukan";
 import { z } from "zod";
-import { ACTIVE_RT_NUMBERS, isActiveRt, assertKkInPemukimanScope } from "@shared/rt";
+import { isActiveRt, assertKkInPemukimanScope } from "@shared/rt";
 import {
-  formatLaporanAnonimIsi,
-  formatLaporanKioskIsi,
-  formatRtLabel,
-  parseLaporanPelaporMeta,
-} from "@shared/laporan-pelapor";
-import {
-  jenisLaporanMasalahLabel,
-  publicLaporanSchema,
-} from "@shared/laporan-public-form";
-import {
-  notifyLaporanBaruKeKetuaRt,
-  notifyLaporanDiterima,
-  notifyLaporanStatusForRecord,
   notifyUsahaDidaftar,
   notifyUsahaDisetujui,
   notifyUsahaDitolak,
@@ -38,9 +23,7 @@ import {
   logWaStartupStatus,
   startVisitrw3ReminderScheduler,
 } from "./wa-notify";
-import { generateWithGemini } from "./gemini";
 import { buildKependudukanStats } from "./kependudukan-stats";
-import { isFieldFilled } from "@shared/kependudukan-analytics";
 
 function resolveAppVersion() {
   const productionIndexPath = path.resolve(process.cwd(), "dist", "public", "index.html");
@@ -71,39 +54,7 @@ declare module "express-session" {
   }
 }
 
-const jenisSuratLabels: Record<string, string> = {
-  surat_keterangan_domisili: "Surat Keterangan Domisili",
-  surat_keterangan_tidak_mampu: "Surat Keterangan Tidak Mampu",
-  surat_keterangan_usaha: "Surat Keterangan Usaha",
-  surat_keterangan_belum_menikah: "Surat Keterangan Belum Menikah",
-  surat_keterangan_berkelakuan_baik: "Surat Keterangan Berkelakuan Baik",
-  surat_pengantar_rt: "Surat Pengantar RT",
-  surat_keterangan_pindah: "Surat Keterangan Pindah",
-  surat_keterangan_kematian: "Surat Keterangan Kematian",
-  surat_keterangan_lainnya: "Surat Keterangan Lainnya",
-};
-
-const jenisLaporanLabels: Record<string, string> = {
-  keamanan: "Keamanan",
-  kebersihan: "Kebersihan",
-  infrastruktur: "Infrastruktur",
-  ketertiban: "Ketertiban",
-  sosial: "Sosial",
-  umum: "Umum",
-  lainnya: "Lainnya",
-};
-
-function maskNama(nama: string): string {
-  const words = nama.trim().split(/\s+/);
-  return words.map((w, i) => {
-    if (w.length <= 2) return w;
-    const visible = i === 0 ? 2 : 1;
-    return w.slice(0, visible) + "*".repeat(w.length - visible);
-  }).join(" ");
-}
-
 const uploadsDir = path.join(process.cwd(), "uploads");
-fs.mkdirSync(path.join(uploadsDir, "surat"), { recursive: true });
 const pdfTempDir = path.join(uploadsDir, "pdf-temp");
 fs.mkdirSync(pdfTempDir, { recursive: true });
 
@@ -165,27 +116,11 @@ export async function registerRoutes(
   await ensureRw3bizSchema().catch((error) => {
     console.error("RW3BIZ schema init error:", error);
   });
-  // Daftarkan segera setelah schema — jangan tunda sampai akhir routes.ts
-  registerRw3bizRoutes(app);
-  console.log("[RW3BIZ] Route publik/admin terdaftar (termasuk /api/public/rw3biz/upload-ktp)");
-  const { ensureKarangtarunaSchema, registerKarangtarunaRoutes } = await import("./karangtaruna-routes");
-  await ensureKarangtarunaSchema().catch((error) => {
-    console.error("Karang Taruna schema init error:", error);
-  });
-  registerKarangtarunaRoutes(app);
-  console.log("[KARANGTARUNA] Route publik/admin terdaftar");
   await ensureWaNotifikasiSchema().catch((error) => {
     console.error("WA notifikasi schema init error:", error);
   });
   logWaStartupStatus();
   startVisitrw3ReminderScheduler();
-  const { initRw3law } = await import("./rw3law-routes");
-  await initRw3law().catch((error) => {
-    console.error(
-      "[RW3LAW] Startup init gagal — API akan mencoba membuat tabel saat request pertama:",
-      error,
-    );
-  });
 
   /** Tanpa session — cek server hidup (Blusukan RW tidak stuck di "Memuat…"). */
   app.get("/api/blusukan/ping", (_req, res) => {
@@ -216,6 +151,9 @@ export async function registerRoutes(
     })
   );
 
+  // Endpoint admin RW3BIZ membaca req.session — wajib didaftarkan setelah middleware session.
+  registerRw3bizRoutes(app);
+
   // Master warga/KK dikelola Ketua RT (portal /rt). Endpoint lama milik admin RW & Blusukan hanya baca.
   // IZINKAN_RW_EDIT_MASTER=true hanya untuk masa transisi darurat.
   const { tolakUbahMasterOlehRw } = await import("./wilayah-auth");
@@ -237,11 +175,6 @@ export async function registerRoutes(
 
   const { registerRtjuaraRoutes } = await import("./rtjuara-routes");
   await registerRtjuaraRoutes(app);
-  console.log("[RTJUARA] Route portal RT / admin / publik terdaftar");
-
-  const { registerRw3lawRoutes } = await import("./rw3law-routes");
-  registerRw3lawRoutes(app);
-
   const pdfTempPublicDir = path.join(uploadsDir, "pdf-temp");
   fs.mkdirSync(pdfTempPublicDir, { recursive: true });
   const pdfTempTokens = new Map<string, { filePath: string; expires: number }>();
@@ -378,77 +311,6 @@ export async function registerRoutes(
     req.session.destroy(() => {
       res.json({ message: "Logout berhasil" });
     });
-  });
-
-  app.get("/api/stats/dashboard", requireAdmin, async (req, res) => {
-    try {
-      const rtParam = req.query.rt ? parseInt(req.query.rt as string) : undefined;
-      const rtFilter = rtParam && !isNaN(rtParam) ? rtParam : undefined;
-      const key = CacheKey.dashboard(rtFilter);
-      const cached = cache.get(key);
-      if (cached) return res.json(cached);
-      const stats = await storage.getDashboardStats(rtFilter);
-      cache.set(key, stats, TTL.DASHBOARD);
-      res.json(stats);
-    } catch (error) {
-      res.status(500).json({ message: "Gagal mengambil statistik" });
-    }
-  });
-
-  app.post("/api/stats/dashboard/ai-insight", requireAdmin, async (req, res) => {
-    try {
-      const { section, data } = req.body;
-      if (!section || !data) {
-        return res.status(400).json({ message: "Section dan data diperlukan" });
-      }
-
-      const sanitizeData = (input: any): any => {
-        if (Array.isArray(input)) {
-          if (input.length > 0 && input[0]?.nama) {
-            return { totalOrang: input.length, catatan: "Daftar nama dihapus untuk privasi" };
-          }
-          return input.slice(0, 20).map(sanitizeData);
-        }
-        if (input && typeof input === "object") {
-          const sanitized: Record<string, any> = {};
-          for (const [key, val] of Object.entries(input)) {
-            if (["daftarNama", "nama", "namaLengkap", "nik", "nomorWhatsapp"].includes(key)) continue;
-            sanitized[key] = sanitizeData(val);
-          }
-          return sanitized;
-        }
-        return input;
-      }
-
-      const safeData = sanitizeData(data);
-      const safeDataStr = JSON.stringify(safeData).slice(0, 3000);
-
-      const prompt = `Kamu adalah analis data untuk RW 03 Padasuka, Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi. Berikan rekomendasi singkat dan actionable (maksimal 3 poin, masing-masing 1-2 kalimat) berdasarkan data berikut.
-
-Bagian: ${section}
-Data: ${safeDataStr}
-
-Berikan rekomendasi dalam format:
-1. [rekomendasi 1]
-2. [rekomendasi 2]
-3. [rekomendasi 3]
-
-Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan bahasa Indonesia yang ringkas dan mudah dipahami.`;
-      const result = await generateWithGemini(prompt);
-      res.json({ insight: result.trim() });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message || "Gagal mendapatkan insight AI" });
-    }
-  });
-
-  app.get("/api/stats/monthly", requireAdmin, async (req, res) => {
-    try {
-      await storage.captureCurrentSnapshot();
-      const snapshots = await storage.getMonthlySnapshots();
-      res.json(snapshots);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message || "Gagal mengambil data bulanan" });
-    }
   });
 
   app.get("/api/stats/kependudukan", requireAdmin, async (req, res) => {
@@ -690,18 +552,6 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
     nomorWa: z.string().min(9, "Nomor WhatsApp tidak valid"),
   });
 
-  app.post("/api/public/validate-warga", async (req, res) => {
-    try {
-      const parsed = publicWargaIdentitySchema.parse(req.body);
-      const identity = await storage.validateWargaIdentity(parsed.nik, parsed.nomorWa);
-      if (!identity) {
-        return res.status(401).json({ message: "NIK dan nomor WhatsApp tidak cocok dengan data warga RW" });
-      }
-      return res.json(identity);
-    } catch (error: any) {
-      return res.status(400).json({ message: error.message || "Data tidak valid" });
-    }
-  });
 
   app.get("/api/public/rt-pelayanan", async (_req, res) => {
     try {
@@ -719,235 +569,7 @@ Fokus pada insight yang bisa dijadikan konten atau program kerja nyata. Gunakan 
     }
   });
 
-  app.post("/api/public/laporan", async (req, res) => {
-    try {
-      const parsed = publicLaporanSchema.parse(req.body);
-      const anonim = parsed.mode === "anonim";
-      const jenisLabel = jenisLaporanMasalahLabel(parsed.jenisLaporan);
-      const subJenisLabel = parsed.subJenis
-        ? subJenisInfrastrukturOptions.find((o) => o.value === parsed.subJenis)?.label
-        : undefined;
-
-      const judul = anonim
-        ? `Laporan ${jenisLabel} (Anonim)`
-        : parsed.judul!.trim();
-
-      const isi = anonim
-        ? formatLaporanAnonimIsi({ nomorRt: parsed.nomorRt, isi: parsed.isi })
-        : formatLaporanKioskIsi({
-            namaPelapor: parsed.namaPelapor!.trim(),
-            nomorRt: parsed.nomorRt,
-            nomorWa: parsed.nomorWa!.trim(),
-            isi: parsed.isi,
-          });
-
-      const data = await storage.createLaporan({
-        jenisLaporan: parsed.jenisLaporan,
-        subJenis: parsed.subJenis,
-        fotoLaporan: parsed.fotoLaporan,
-        judul,
-        isi,
-      });
-
-      notifyLaporanBaruKeKetuaRt(data, parsed.nomorRt, {
-        anonim,
-        namaPelapor: anonim ? undefined : parsed.namaPelapor?.trim(),
-        nomorWaPelapor: anonim ? undefined : parsed.nomorWa?.trim(),
-        jenisLabel,
-        subJenisLabel,
-      });
-
-      if (!anonim && parsed.nomorWa?.trim()) {
-        notifyLaporanDiterima(data, parsed.nomorWa.trim(), parsed.namaPelapor?.trim());
-      }
-
-      return res.json({ ...data, nomorReferensi: formatLaporanRef(data.id) });
-    } catch (error: any) {
-      return res.status(400).json({ message: error.message || "Gagal mengirim laporan" });
-    }
-  });
-
-  app.get("/api/public/laporan/:id/status", async (req, res) => {
-    try {
-      const id = parseInt(req.params.id as string, 10);
-      if (isNaN(id)) return res.status(400).json({ message: "Nomor laporan tidak valid" });
-      const lap = await storage.getLaporanById(id);
-      if (!lap) return res.status(404).json({ message: "Laporan tidak ditemukan" });
-      return res.json({
-        nomorReferensi: formatLaporanRef(lap.id),
-        judul: lap.judul,
-        jenisLaporan: lap.jenisLaporan,
-        subJenis: lap.subJenis,
-        status: lap.status,
-        tanggapanAdmin: lap.tanggapanAdmin,
-        createdAt: lap.createdAt,
-      });
-    } catch (error: any) {
-      return res.status(500).json({ message: error.message || "Gagal memuat status laporan" });
-    }
-  });
-
-  app.get("/api/public/program-kerja", async (_req, res) => {
-    res.status(410).json({ message: "Modul program kerja sudah tidak tersedia" });
-  });
-
-  app.get("/api/public/transparansi", async (_req, res) => {
-    res.status(410).json({ message: "Halaman transparansi program kerja sudah tidak tersedia" });
-  });
-
-  app.get("/api/public/kampung-umkm", async (_req, res) => {
-    res.status(410).json({ message: "Halaman kampung UMKM sudah tidak tersedia" });
-  });
-
   registerVisitrw3Routes(app);
-
-  app.get("/api/rt", requireAdmin, async (_req, res) => {
-    const data = await storage.getAllRt();
-    res.json(data);
-  });
-
-  app.patch("/api/rt/:id", requireAdmin, async (req, res) => {
-    const data = await storage.updateRt(parseInt(req.params.id as string), req.body);
-    if (!data) return res.status(404).json({ message: "RT tidak ditemukan" });
-    res.json(data);
-  });
-
-  app.get("/api/laporan", requireAdmin, async (_req, res) => {
-    const data = await storage.getAllLaporan();
-    res.json(data);
-  });
-
-  app.patch("/api/laporan/:id/status", requireAdmin, async (req, res) => {
-    const { status, tanggapan } = req.body;
-    if (!["diproses", "selesai", "ditolak"].includes(status)) {
-      return res.status(400).json({ message: "Status tidak valid" });
-    }
-    const data = await storage.updateLaporanStatus(parseInt(req.params.id as string), status, tanggapan);
-    if (!data) return res.status(404).json({ message: "Laporan tidak ditemukan" });
-
-    notifyLaporanStatusForRecord(data, status);
-
-    res.json(data);
-  });
-
-  const goneKekeringan = (_req: Request, res: Response) =>
-    res.status(410).json({ message: "Modul laporan kekeringan sudah tidak tersedia" });
-
-  app.post("/api/public/laporan-kekeringan", goneKekeringan);
-  app.get("/api/public/laporan-kekeringan/:nomor/status", goneKekeringan);
-  app.get("/api/laporan-kekeringan", requireAdmin, goneKekeringan);
-  app.patch("/api/laporan-kekeringan/:id/survey", requireAdmin, goneKekeringan);
-  app.patch("/api/laporan-kekeringan/:id/reject", requireAdmin, goneKekeringan);
-  app.patch("/api/laporan-kekeringan/:id/selesai", requireAdmin, goneKekeringan);
-
-  app.get("/api/surat-warga", requireAuth, async (req, res) => {
-    if (req.session.isAdmin) {
-      const data = await storage.getAllSuratWarga();
-      return res.json(data);
-    }
-    const data = await storage.getSuratByKkId(req.session.kkId!);
-    res.json(data);
-  });
-
-  app.post("/api/surat-warga", requireAuth, async (req, res) => {
-    try {
-      const parsed = insertSuratWargaSchema.parse(req.body);
-      if (!req.session.isAdmin) {
-        if (parsed.kkId !== req.session.kkId) {
-          return res.status(403).json({ message: "Akses ditolak" });
-        }
-        const w = await storage.getWargaById(parsed.wargaId);
-        if (!w || w.kkId !== req.session.kkId) {
-          return res.status(403).json({ message: "Warga bukan anggota KK Anda" });
-        }
-      }
-
-      const data = await storage.createSuratWarga(parsed);
-      res.json(data);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  const suratUpload = multer({
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 10 * 1024 * 1024 },
-    fileFilter: (_req, file, cb) => {
-      const allowed = [".jpg", ".jpeg", ".png", ".pdf"];
-      const ext = path.extname(file.originalname).toLowerCase();
-      if (allowed.includes(ext)) cb(null, true);
-      else cb(new Error("Format file tidak didukung. Gunakan JPG, PNG, atau PDF."));
-    },
-  });
-
-  app.post("/api/surat-warga/:id/upload", requireAdmin, suratUpload.single("file"), async (req, res) => {
-    try {
-      const surat = await storage.getSuratWargaById(parseInt(req.params.id as string));
-      if (!surat) return res.status(404).json({ message: "Surat tidak ditemukan" });
-      if (!req.file) return res.status(400).json({ message: "File tidak ditemukan" });
-
-      const base64Data = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
-      const fileRef = `/api/surat-warga/${surat.id}/file`;
-      const updated = await storage.updateSuratWargaFileSurat(surat.id, fileRef, base64Data);
-      res.json(updated);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/surat-warga/:id/file", async (req, res) => {
-    try {
-      if (!req.session?.kkId && !req.session?.isAdmin) {
-        return res.status(401).json({ message: "Silakan login terlebih dahulu" });
-      }
-      const id = parseInt(req.params.id as string);
-      const fileData = await storage.getSuratWargaFileData(id);
-      if (!fileData) return res.status(404).json({ message: "File tidak ditemukan" });
-
-      const commaIdx = fileData.indexOf(",");
-      const header = fileData.substring(0, commaIdx);
-      const mimeType = header.split(":")[1]?.split(";")[0] || "application/octet-stream";
-      const base64 = fileData.substring(commaIdx + 1);
-      const buffer = Buffer.from(base64, "base64");
-
-      res.setHeader("Content-Type", mimeType);
-      res.setHeader("Content-Disposition", `inline; filename="surat-${id}"`);
-      res.send(buffer);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.patch("/api/surat-warga/:id/status", requireAdmin, async (req, res) => {
-    try {
-      const { status, nomorSurat } = req.body;
-      if (!["disetujui", "ditolak"].includes(status)) {
-        return res.status(400).json({ message: "Status tidak valid. Gunakan 'disetujui' atau 'ditolak'." });
-      }
-      const surat = await storage.getSuratWargaById(parseInt(req.params.id as string));
-      if (!surat) return res.status(404).json({ message: "Surat tidak ditemukan" });
-      if (surat.status !== "pending") {
-        return res.status(400).json({ message: "Hanya surat dengan status pending yang bisa diubah." });
-      }
-
-      const data = await storage.updateSuratWargaStatus(surat.id, status);
-      if (!data) return res.status(404).json({ message: "Surat tidak ditemukan" });
-
-      if (status === "disetujui" && nomorSurat) {
-        await storage.updateSuratWargaNomor(surat.id, nomorSurat);
-      }
-
-      if (status === "disetujui") {
-        const updated = await storage.getSuratWargaById(surat.id);
-        res.json(updated);
-      } else {
-        res.json(data);
-      }
-    } catch (error: any) {
-      console.error("Surat approval error:", error);
-      res.status(500).json({ message: error.message });
-    }
-  });
 
   app.get("/api/surat-rw", requireAdmin, async (_req, res) => {
     const data = await storage.getAllSuratRw();
@@ -1046,437 +668,7 @@ dokumen sah bila ditandatangani basah oleh pejabat yang tercantum. Isi dokumen t
     }
   });
 
-  app.get("/api/bansos/penerima", requireAdmin, async (_req, res) => {
-    const data = await storage.getBansosRecipients();
-    res.json(data);
-  });
-
-  app.patch("/api/bansos/penerima/:kkId/jenis", requireAdmin, async (req, res) => {
-    try {
-      const kkId = parseInt(req.params.kkId as string);
-      const { jenisBansos } = req.body;
-      if (!jenisBansos || typeof jenisBansos !== "string") return res.status(400).json({ message: "Jenis bansos harus diisi" });
-      const kk = await storage.getKkById(kkId);
-      if (!assertKkInPemukimanScope(kk)) return res.status(404).json({ message: "KK tidak ditemukan atau di luar RT 01–04" });
-      if (!kk.penerimaBansos) return res.status(400).json({ message: "KK ini bukan penerima bansos" });
-      const updated = await storage.updateKkBansos(kkId, true, jenisBansos);
-      res.json(updated);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/bansos/penerima/tambah", requireAdmin, async (req, res) => {
-    try {
-      const { kkId, jenisBansos } = req.body;
-      if (!kkId) return res.status(400).json({ message: "KK ID harus diisi" });
-      if (!jenisBansos || typeof jenisBansos !== "string") return res.status(400).json({ message: "Jenis bansos harus diisi" });
-      const kk = await storage.getKkById(kkId);
-      if (!assertKkInPemukimanScope(kk)) return res.status(404).json({ message: "KK tidak ditemukan atau di luar RT 01–04" });
-      if (kk.penerimaBansos) return res.status(400).json({ message: "KK ini sudah terdaftar sebagai penerima bansos" });
-      const updated = await storage.updateKkBansos(kkId, true, jenisBansos);
-      res.json(updated);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/bansos/penerima/hapus", requireAdmin, async (req, res) => {
-    try {
-      const { kkId } = req.body;
-      if (!kkId) return res.status(400).json({ message: "KK ID harus diisi" });
-      const kk = await storage.getKkById(kkId);
-      if (!assertKkInPemukimanScope(kk)) return res.status(404).json({ message: "KK tidak ditemukan atau di luar RT 01–04" });
-      if (!kk.penerimaBansos) return res.status(400).json({ message: "KK ini bukan penerima bansos" });
-      const updated = await storage.updateKkBansos(kkId, false, null);
-      res.json(updated);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/bansos/pengajuan", requireAdmin, async (_req, res) => {
-    const data = await storage.getAllPengajuanBansos();
-    res.json(data);
-  });
-
-  app.post("/api/bansos/pengajuan", requireAdmin, async (req, res) => {
-    try {
-      const parsed = insertPengajuanBansosSchema.parse(req.body);
-      const kk = await storage.getKkById(parsed.kkId);
-      if (!assertKkInPemukimanScope(kk)) return res.status(404).json({ message: "KK tidak ditemukan atau di luar RT 01–04" });
-
-      if (parsed.jenisPengajuan === "rekomendasi_coret" && !kk.penerimaBansos) {
-        return res.status(400).json({ message: "KK ini bukan penerima bansos" });
-      }
-      if (parsed.jenisPengajuan === "rekomendasi_penerima" && kk.penerimaBansos) {
-        return res.status(400).json({ message: "KK ini sudah penerima bansos" });
-      }
-
-      const data = await storage.createPengajuanBansos(parsed);
-      res.json(data);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.patch("/api/bansos/pengajuan/:id/status", requireAdmin, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id as string);
-      const { status } = req.body;
-      if (!["disetujui", "ditolak"].includes(status)) {
-        return res.status(400).json({ message: "Status tidak valid" });
-      }
-
-      const pengajuan = await storage.getPengajuanBansosById(id);
-      if (!pengajuan) return res.status(404).json({ message: "Pengajuan tidak ditemukan" });
-      if (pengajuan.status !== "pending") return res.status(400).json({ message: "Pengajuan sudah diproses" });
-
-      let updated;
-      if (status === "disetujui") {
-        updated = await storage.approvePengajuanBansos(id, pengajuan.kkId, pengajuan.jenisPengajuan, pengajuan.jenisBansos);
-      } else {
-        updated = await storage.updatePengajuanBansosStatus(id, status);
-      }
-
-      res.json(updated);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/donasi-campaign", requireAuth, async (_req, res) => {
-    const campaigns = await storage.getAllDonasiCampaigns();
-    res.json(campaigns);
-  });
-
-  app.post("/api/donasi-campaign", requireAdmin, async (req, res) => {
-    try {
-      const parsed = insertDonasiCampaignSchema.parse(req.body);
-      const campaign = await storage.createDonasiCampaign(parsed);
-      res.json(campaign);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.patch("/api/donasi-campaign/:id/status", requireAdmin, async (req, res) => {
-    const { status } = req.body;
-    if (!["aktif", "selesai"].includes(status)) {
-      return res.status(400).json({ message: "Status tidak valid" });
-    }
-    const result = await storage.updateDonasiCampaignStatus(parseInt(req.params.id as string), status);
-    if (!result) return res.status(404).json({ message: "Campaign tidak ditemukan" });
-    res.json(result);
-  });
-
-  app.patch("/api/donasi-campaign/:id", requireAdmin, async (req, res) => {
-    try {
-      const { judul, deskripsi, targetDana } = req.body;
-      if (!judul || !deskripsi) {
-        return res.status(400).json({ message: "Judul dan deskripsi harus diisi" });
-      }
-      const result = await storage.updateDonasiCampaign(parseInt(req.params.id as string), {
-        judul,
-        deskripsi,
-        targetDana: targetDana ? parseInt(targetDana) : null,
-      });
-      if (!result) return res.status(404).json({ message: "Campaign tidak ditemukan" });
-      res.json(result);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/donasi", requireAuth, async (req, res) => {
-    if (req.session.isAdmin) {
-      const all = await storage.getAllDonasi();
-      return res.json(all);
-    }
-    const kkId = req.session.kkId;
-    if (!kkId) return res.json([]);
-    const list = await storage.getDonasiByKkId(kkId);
-    res.json(list);
-  });
-
-  app.post("/api/donasi", requireAuth, async (req, res) => {
-    try {
-      const kkId = req.session.kkId;
-      if (!kkId) return res.status(403).json({ message: "Tidak memiliki akses" });
-      const paymentMethod = String(req.body?.paymentMethod ?? "transfer_manual");
-
-      const parsed = insertDonasiSchema.parse({ ...req.body, kkId });
-      if (parsed.jumlah <= 0) {
-        return res.status(400).json({ message: "Jumlah donasi harus lebih dari 0" });
-      }
-
-      const campaigns = await storage.getAllDonasiCampaigns();
-      const campaign = campaigns.find(c => c.id === parsed.campaignId);
-      if (!campaign || campaign.status !== "aktif") {
-        return res.status(400).json({ message: "Campaign tidak ditemukan atau sudah selesai" });
-      }
-
-      const formatRupiah = (n: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n);
-      if (paymentMethod === "rwcoin") {
-        return res.status(410).json({ message: "Donasi via RWcoin sudah tidak digunakan." });
-      }
-
-      const result = await storage.createDonasi(parsed);
-      res.json(result);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.patch("/api/donasi/:id/status", requireAdmin, async (req, res) => {
-    const { status } = req.body;
-    if (!["pending", "dikonfirmasi", "ditolak"].includes(status)) {
-      return res.status(400).json({ message: "Status tidak valid" });
-    }
-    const donasiId = parseInt(req.params.id as string);
-    const existing = await storage.getDonasiById(donasiId);
-    if (!existing) return res.status(404).json({ message: "Donasi tidak ditemukan" });
-
-    const previousStatus = existing.status;
-
-    if (previousStatus === "dikonfirmasi" && status !== "dikonfirmasi") {
-      return res.status(400).json({ message: "Donasi yang sudah dikonfirmasi tidak bisa diubah statusnya. Hubungi pengembang jika ada kesalahan." });
-    }
-
-    if (previousStatus === status) {
-      return res.json(existing);
-    }
-
-    if (status === "dikonfirmasi") {
-      const campaigns = await storage.getAllDonasiCampaigns();
-      const campaign = campaigns.find(c => c.id === existing.campaignId);
-      const judulCampaign = campaign?.judul || "Donasi";
-      const today = new Date().toISOString().split("T")[0];
-
-      const result = await storage.confirmDonasiWithKas(donasiId, {
-        tipe: "pemasukan",
-        kategori: "Donasi",
-        jumlah: existing.jumlah,
-        keterangan: `Donasi: ${judulCampaign}`,
-        tanggal: today,
-        createdBy: "sistem",
-        campaignId: existing.campaignId,
-      });
-      if (!result) return res.status(404).json({ message: "Donasi tidak ditemukan" });
-      res.json(result);
-    } else {
-      const result = await storage.updateDonasiStatus(donasiId, status);
-      if (!result) return res.status(404).json({ message: "Donasi tidak ditemukan" });
-      res.json(result);
-    }
-  });
-
-  app.get("/api/donasi/leaderboard", async (_req, res) => {
-    const leaderboard = await storage.getDonasiLeaderboard();
-    res.json(leaderboard);
-  });
-
-  app.get("/api/donasi/terkumpul", requireAuth, async (_req, res) => {
-    const terkumpul = await storage.getDonasiTerkumpulByCampaign();
-    res.json(terkumpul);
-  });
-
-  app.get("/api/kas-rw/campaign-summary", requireAuth, async (_req, res) => {
-    try {
-      const summary = await storage.getKasRwCampaignSummary();
-      res.json(summary);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/kas-rw/summary", requireAuth, async (_req, res) => {
-    try {
-      const summary = await storage.getKasRwSummary();
-      res.json(summary);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/kas-rw/laporan", requireAuth, async (_req, res) => {
-    try {
-      const transaksi = await storage.getAllKasRw();
-      const summary = await storage.getKasRwSummary();
-      res.json({ transaksi, summary });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/kas-rw", requireAdmin, async (_req, res) => {
-    try {
-      const transaksi = await storage.getAllKasRw();
-      res.json(transaksi);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/kas-rw", requireAdmin, async (req, res) => {
-    try {
-      const parsed = insertKasRwSchema.parse(req.body);
-      const result = await storage.createKasRw({ ...parsed, createdBy: req.session.adminUsername || "admin" });
-      res.json(result);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.put("/api/kas-rw/:id", requireAdmin, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id as string);
-      const existing = await storage.getKasRwById(id);
-      if (!existing) return res.status(404).json({ message: "Transaksi tidak ditemukan" });
-      if (existing.createdBy === "sistem" || existing.createdBy === "iuran-sistem") {
-        return res.status(403).json({ message: "Transaksi otomatis tidak bisa diedit manual" });
-      }
-      const parsed = insertKasRwSchema.partial().parse(req.body);
-      const result = await storage.updateKasRw(id, parsed);
-      res.json(result);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.delete("/api/kas-rw/:id", requireAdmin, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id as string);
-      const existing = await storage.getKasRwById(id);
-      if (!existing) return res.status(404).json({ message: "Transaksi tidak ditemukan" });
-      if (existing.createdBy === "sistem" || existing.createdBy === "iuran-sistem") {
-        return res.status(403).json({ message: "Transaksi otomatis tidak bisa dihapus manual" });
-      }
-      await storage.deleteKasRw(id);
-      res.json({ message: "Transaksi berhasil dihapus" });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/kas-rw/reset", requireAdmin, async (req, res) => {
-    try {
-      if (req.body?.confirm !== "RESET") {
-        return res.status(400).json({ message: 'Ketik konfirmasi "RESET" untuk mengosongkan semua transaksi Kas RW' });
-      }
-      const result = await storage.resetAllKasRw();
-      res.json({ message: "Kas RW direset ke nol", ...result });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
   // === Iuran Routes ===
-
-  app.get("/api/iuran/setting", requireAdmin, async (_req, res) => {
-    try {
-      const setting = await storage.getIuranSetting();
-      res.json(setting ?? { jumlahDefault: 30000 });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.put("/api/iuran/setting", requireAdmin, async (req, res) => {
-    try {
-      const { jumlahDefault } = req.body;
-      if (!jumlahDefault || typeof jumlahDefault !== "number" || jumlahDefault <= 0) {
-        return res.status(400).json({ message: "Jumlah iuran harus lebih dari 0" });
-      }
-      const result = await storage.upsertIuranSetting(jumlahDefault, (req.session as any).adminUsername || "admin");
-      res.json(result);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/iuran/rekap", requireAdmin, async (req, res) => {
-    try {
-      const tahun = (req.query.tahun as string) || new Date().getFullYear().toString();
-      const result = await storage.getIuranRekap(tahun);
-      res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.get("/api/iuran", requireAdmin, async (req, res) => {
-    try {
-      const bulanTahun = req.query.bulanTahun as string | undefined;
-      const filterRt = req.query.rt ? parseInt(req.query.rt as string) : undefined;
-      if (!bulanTahun || !/^\d{4}-\d{2}$/.test(bulanTahun)) {
-        return res.status(400).json({ message: "Parameter bulanTahun (YYYY-MM) wajib diisi" });
-      }
-      if (filterRt !== undefined && !isActiveRt(filterRt)) {
-        return res.status(400).json({ message: "Filter RT harus 1–4" });
-      }
-      const data = await storage.getIuranByBulan(bulanTahun, filterRt);
-      res.json(data);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/iuran/generate", requireAdmin, async (req, res) => {
-    try {
-      const { bulanTahun } = req.body;
-      if (!bulanTahun || !/^\d{4}-\d{2}$/.test(bulanTahun)) {
-        return res.status(400).json({ message: "Format bulanTahun harus YYYY-MM" });
-      }
-      const setting = await storage.getIuranSetting();
-      const jumlahDefault = setting?.jumlahDefault ?? 30000;
-      const result = await storage.generateIuranBulan(bulanTahun, jumlahDefault);
-      res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.put("/api/iuran/:id/bayar", requireAdmin, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id as string);
-      const { tanggalBayar } = req.body;
-      if (!tanggalBayar || !/^\d{4}-\d{2}-\d{2}$/.test(tanggalBayar)) {
-        return res.status(400).json({ message: "Format tanggalBayar harus YYYY-MM-DD" });
-      }
-      const result = await storage.markIuranLunas(id, tanggalBayar, (req.session as any).adminUsername || "admin");
-      if (!result) return res.status(404).json({ message: "Iuran tidak ditemukan atau sudah lunas" });
-      res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.put("/api/iuran/:id/batal", requireAdmin, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id as string);
-      const result = await storage.batalIuranLunas(id);
-      if (!result) return res.status(404).json({ message: "Iuran tidak ditemukan atau belum lunas" });
-      res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.patch("/api/iuran/:id/jumlah", requireAdmin, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id as string);
-      const { jumlah } = req.body;
-      if (!jumlah || typeof jumlah !== "number" || jumlah <= 0) {
-        return res.status(400).json({ message: "Jumlah harus lebih dari 0" });
-      }
-      const result = await storage.updateJumlahIuran(id, jumlah);
-      if (!result) return res.status(400).json({ message: "Iuran tidak ditemukan atau sudah lunas" });
-      res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
 
   // === Pemilik Kost Routes (dihapus dari produk — arsip API) ===
   app.get("/api/pemilik-kost", requireAdmin, async (_req, res) => {
@@ -1771,7 +963,6 @@ dokumen sah bila ditandatangani basah oleh pejabat yang tercantum. Isi dokumen t
     }
   });
 
-  // ===================== PROGRAM RW =====================
   app.get("/api/admin/blusukan-summary", requireAdmin, async (req, res) => {
     try {
       const rtParam = req.query.rt ? parseInt(req.query.rt as string) : undefined;
@@ -1782,31 +973,6 @@ dokumen sah bila ditandatangani basah oleh pejabat yang tercantum. Isi dokumen t
       res.status(500).json({ message: error.message });
     }
   });
-
-  const goneProgramKerja = (_req: Request, res: Response) =>
-    res.status(410).json({ message: "Modul program kerja sudah tidak tersedia" });
-
-  app.get("/api/admin/program-kerja/dashboard", requireAdmin, goneProgramKerja);
-  app.post("/api/program-rw/seed-defaults", requireAdmin, goneProgramKerja);
-  app.get("/api/program-rw", requireAdmin, goneProgramKerja);
-  app.get("/api/program-rw/:id", requireAdmin, goneProgramKerja);
-  app.post("/api/program-rw", requireAdmin, goneProgramKerja);
-  app.patch("/api/program-rw/:id", requireAdmin, goneProgramKerja);
-  app.delete("/api/program-rw/:id", requireAdmin, goneProgramKerja);
-  app.get("/api/program-rw/:id/peserta", requireAdmin, goneProgramKerja);
-  app.post("/api/program-rw/:id/peserta", requireAdmin, goneProgramKerja);
-  app.patch("/api/program-rw/:id/peserta/:pesertaId", requireAdmin, goneProgramKerja);
-  app.delete("/api/program-rw/:id/peserta/:pesertaId", requireAdmin, goneProgramKerja);
-  app.get("/api/proyek-infrastruktur", requireAdmin, goneProgramKerja);
-  app.get("/api/proyek-infrastruktur/:id", requireAdmin, goneProgramKerja);
-  app.post("/api/proyek-infrastruktur", requireAdmin, goneProgramKerja);
-  app.patch("/api/proyek-infrastruktur/:id", requireAdmin, goneProgramKerja);
-  app.delete("/api/proyek-infrastruktur/:id", requireAdmin, goneProgramKerja);
-  app.get("/api/umkm-makeover", requireAdmin, goneProgramKerja);
-  app.get("/api/umkm-makeover/:id", requireAdmin, goneProgramKerja);
-  app.post("/api/umkm-makeover", requireAdmin, goneProgramKerja);
-  app.patch("/api/umkm-makeover/:id", requireAdmin, goneProgramKerja);
-  app.delete("/api/umkm-makeover/:id", requireAdmin, goneProgramKerja);
 
   return httpServer;
 }

@@ -17,14 +17,7 @@ import { AuthProvider, useAuth } from "@/lib/auth";
 
 const PublicLanding = lazy(() => import("@/pages/public/landing"));
 
-const PublicLapor = lazy(() => import("@/pages/public/lapor"));
-const PublicLaporMasalah = lazy(() => import("@/pages/public/lapor-masalah"));
-const PublicLaporStatus = lazy(() => import("@/pages/public/lapor-status"));
-
 const PublicPelayanan = lazy(() => import("@/pages/public/pelayanan"));
-
-const Rw3lawIndex = lazy(() => import("@/pages/public/rw3law/index"));
-const Rw3lawDokumen = lazy(() => import("@/pages/public/rw3law/dokumen"));
 
 const Visitrw3Hub = lazy(() => import("@/pages/visitrw3/hub"));
 const Visitrw3HubPemilik = lazy(() => import("@/pages/visitrw3/hub-pemilik"));
@@ -42,22 +35,10 @@ const Rw3bizPanduan = lazy(() => import("@/pages/rw3biz/panduan"));
 const Rw3bizStatus = lazy(() => import("@/pages/rw3biz/status"));
 const Rw3bizPerpanjang = lazy(() => import("@/pages/rw3biz/perpanjang"));
 
-const KarangtarunaHub = lazy(() => import("@/pages/karangtaruna/hub"));
-const KarangtarunaDaftar = lazy(() => import("@/pages/karangtaruna/daftar"));
-const KarangtarunaStatus = lazy(() => import("@/pages/karangtaruna/status"));
-
-const PublicRtjuara = lazy(() => import("@/pages/public/rtjuara"));
-const RtjuaraLogin = lazy(() => import("@/pages/rtjuara/login"));
-const RtjuaraQuest = lazy(() => import("@/pages/rtjuara/quest"));
-const RtjuaraKirim = lazy(() => import("@/pages/rtjuara/kirim"));
-const RtjuaraRiwayat = lazy(() => import("@/pages/rtjuara/riwayat"));
-const RtjuaraPeringkat = lazy(() => import("@/pages/rtjuara/peringkat"));
-
 const AdminLayout = lazy(() => import("@/components/admin-layout"));
 
 const AdminKependudukanRingkasan = lazy(() => import("@/pages/admin/kependudukan-ringkasan"));
-
-const AdminRw3law = lazy(() => import("@/pages/admin/rw3law"));
+const AdminAkunRt = lazy(() => import("@/pages/admin/akun-rt"));
 
 const AdminSuratRw = lazy(() => import("@/pages/admin/surat-rw"));
 const AdminSuratSakti = lazy(() => import("@/pages/admin/surat-sakti"));
@@ -77,30 +58,14 @@ const AdminRw3bizAntrian = lazy(() => import("@/pages/admin/rw3biz-antrian"));
 const AdminRw3bizBlast = lazy(() => import("@/pages/admin/rw3biz-blast"));
 const AdminRw3bizDashboard = lazy(() => import("@/pages/admin/rw3biz-dashboard"));
 const AdminRw3bizPengaturan = lazy(() => import("@/pages/admin/rw3biz-pengaturan"));
-const AdminRtjuaraDashboard = lazy(() => import("@/pages/admin/rtjuara-dashboard"));
-const AdminRtjuaraQuest = lazy(() => import("@/pages/admin/rtjuara-quest"));
-const AdminRtjuaraVerifikasi = lazy(() => import("@/pages/admin/rtjuara-verifikasi"));
-const AdminRtjuaraAkun = lazy(() => import("@/pages/admin/rtjuara-akun"));
-const AdminKarangtarunaLanding = lazy(() => import("@/pages/admin/karangtaruna-landing"));
-const AdminKarangtarunaAnggota = lazy(() => import("@/pages/admin/karangtaruna-anggota"));
-const AdminKarangtarunaDashboard = lazy(() => import("@/pages/admin/karangtaruna-dashboard"));
-
-const AdminKeuangan = lazy(() => import("@/pages/admin/keuangan"));
-
-const AdminKelolaLaporan = lazy(() => import("@/pages/admin/kelola-laporan"));
-
 import BlusukanrwLogin from "@/pages/blusukanrw/login";
 import BlusukanrwQuest from "@/pages/blusukanrw/quest";
-import BlusukanrwLaporan from "@/pages/blusukanrw/laporan";
 import BlusukanrwCari from "@/pages/blusukanrw/cari";
 import BlusukanrwKkDetail from "@/pages/blusukanrw/kk-detail";
 
 import goldLogo from "@assets/RW3-Cimahi-Logo-Gold.webp";
 import { BlusukanAuthProvider, useBlusukanAuth } from "@/lib/blusukan-auth";
 import { BlusukanrwLayout } from "@/components/blusukanrw-layout";
-import { RtjuaraAuthProvider, useRtjuaraAuth } from "@/lib/rtjuara-auth";
-import { RtjuaraLayout } from "@/components/rtjuara-layout";
-
 import emblemSvg from "@assets/rw03-emblem.svg";
 
 
@@ -141,11 +106,10 @@ function needsAuthSession(path: string) {
   return path.startsWith("/admin");
 }
 
-/** Redirect path lama /singgah/* ke alur Visit RW3 atau Lapor warga. */
+/** Redirect path lama /singgah/* ke alur Visit RW3. */
 function singgahLegacyRedirect(rest?: string): string {
   const path = (rest ?? "").replace(/^\//, "").toLowerCase();
   if (!path || path === "beranda") return "/visitrw3";
-  if (path === "laporan" || path.startsWith("laporan/")) return "/lapor/masalah";
   if (path === "pengajuan" || path.startsWith("pengajuan")) return "/visitrw3/pengajuan";
   if (path === "perpanjang" || path.startsWith("perpanjang")) return "/visitrw3/perpanjang";
   if (path === "status" || path.startsWith("status")) return "/visitrw3/status";
@@ -340,17 +304,11 @@ function AdminRoutes() {
           <Switch>
 
         <Route path="/admin/kependudukan" component={AdminKependudukanRingkasan} />
+        <Route path="/admin/akun-rt" component={AdminAkunRt} />
+        <Route path="/admin/rtjuara/:rest*">{() => <Redirect to="/admin/akun-rt" />}</Route>
+        <Route path="/admin/rtjuara">{() => <Redirect to="/admin/akun-rt" />}</Route>
 
-        <Route path="/admin/laporan" component={AdminKelolaLaporan} />
-        <Route path="/admin/kekeringan">{() => <Redirect to="/admin/laporan" />}</Route>
-
-        <Route path="/admin/surat-warga">{() => <Redirect to="/admin/laporan" />}</Route>
         <Route path="/admin/dashboard" component={AdminRwDashboard} />
-        <Route path="/admin/antrian-warga">{() => <Redirect to="/admin/laporan" />}</Route>
-        <Route path="/admin/rwcoin">{() => <Redirect to="/admin/laporan" />}</Route>
-
-        <Route path="/admin/rw3law" component={AdminRw3law} />
-        <Route path="/admin/rwlaw">{() => <Redirect to="/admin/rw3law" />}</Route>
 
         <Route path="/admin/surat-rw-lama" component={AdminSuratRw} />
         <Route path="/admin/surat-rw" component={AdminSuratSakti} />
@@ -360,13 +318,6 @@ function AdminRoutes() {
         <Route path="/admin/rw3biz/blast" component={AdminRw3bizBlast} />
         <Route path="/admin/rw3biz/dashboard" component={AdminRw3bizDashboard} />
         <Route path="/admin/rw3biz" component={AdminRw3bizLanding} />
-        <Route path="/admin/rtjuara/quest" component={AdminRtjuaraQuest} />
-        <Route path="/admin/rtjuara/verifikasi" component={AdminRtjuaraVerifikasi} />
-        <Route path="/admin/rtjuara/akun" component={AdminRtjuaraAkun} />
-        <Route path="/admin/rtjuara" component={AdminRtjuaraDashboard} />
-        <Route path="/admin/karangtaruna/anggota" component={AdminKarangtarunaAnggota} />
-        <Route path="/admin/karangtaruna/dashboard" component={AdminKarangtarunaDashboard} />
-        <Route path="/admin/karangtaruna" component={AdminKarangtarunaLanding} />
         <Route path="/admin/visitrw3/pengaturan" component={AdminVisitrw3Pengaturan} />
         <Route path="/admin/visitrw3/properti" component={AdminVisitrw3Properti} />
         <Route path="/admin/visitrw3/penghuni" component={AdminVisitrw3Penghuni} />
@@ -376,13 +327,6 @@ function AdminRoutes() {
         <Route path="/admin/visitrw3" component={AdminVisitrw3Landing} />
         <Route path="/admin/pemilik-kost">{() => <Redirect to="/admin/visitrw3/antrian" />}</Route>
         <Route path="/admin/warga-singgah">{() => <Redirect to="/admin/visitrw3/penghuni" />}</Route>
-
-        <Route path="/admin/keuangan" component={AdminKeuangan} />
-
-        <Route path="/admin/program-kerja/kelola">{() => <Redirect to="/admin/laporan" />}</Route>
-        <Route path="/admin/program-kerja/infrastruktur">{() => <Redirect to="/admin/laporan" />}</Route>
-        <Route path="/admin/program-kerja/umkm">{() => <Redirect to="/admin/laporan" />}</Route>
-        <Route path="/admin/program-kerja">{() => <Redirect to="/admin/laporan" />}</Route>
 
         <Route path="/admin">{() => <Redirect to="/admin/dashboard" />}</Route>
 
@@ -439,11 +383,11 @@ function BlusukanrwRoutes() {
     <BlusukanrwLayout>
       <Switch>
         <Route path="/blusukanrw/quest" component={BlusukanrwQuest} />
-        <Route path="/blusukanrw/laporan" component={BlusukanrwLaporan} />
         <Route path="/blusukanrw/cari" component={BlusukanrwCari} />
         <Route path="/blusukanrw/kk/:id" component={BlusukanrwKkDetail} />
         <Route path="/blusukanrw/dashboard">{() => <Redirect to="/blusukanrw/quest" />}</Route>
-        <Route path="/blusukanrw/kunjungan">{() => <Redirect to="/blusukanrw/laporan" />}</Route>
+        <Route path="/blusukanrw/kunjungan">{() => <Redirect to="/blusukanrw/quest" />}</Route>
+        <Route path="/blusukanrw/laporan">{() => <Redirect to="/blusukanrw/quest" />}</Route>
         <Route path="/blusukanrw/">{() => <Redirect to="/blusukanrw/quest" />}</Route>
         <Route path="/blusukanrw">{() => <Redirect to="/blusukanrw/quest" />}</Route>
       </Switch>
@@ -459,54 +403,6 @@ function BlusukanrwApp() {
   );
 }
 
-function RtjuaraPortalRoutes() {
-  const { sesi, loading, bootError } = useRtjuaraAuth();
-
-  if (loading) return <PageLoader />;
-
-  if (!sesi) {
-    return (
-      <Suspense fallback={<PageLoader />}>
-        <RtjuaraLogin bootError={bootError} />
-      </Suspense>
-    );
-  }
-
-  return (
-    <RtjuaraLayout>
-      <Suspense fallback={<PageLoader />}>
-        <Switch>
-          <Route path="/rtjuara/quest" component={RtjuaraQuest} />
-          <Route path="/rtjuara/kirim/:questId" component={RtjuaraKirim} />
-          <Route path="/rtjuara/riwayat" component={RtjuaraRiwayat} />
-          <Route path="/rtjuara/peringkat" component={RtjuaraPeringkat} />
-          <Route path="/rtjuara/login">{() => <Redirect to="/rtjuara/quest" />}</Route>
-          <Route>{() => <Redirect to="/rtjuara/quest" />}</Route>
-        </Switch>
-      </Suspense>
-    </RtjuaraLayout>
-  );
-}
-
-/** /rtjuara publik (papan peringkat warga); sub-path lainnya adalah portal ketua RT. */
-function RtjuaraApp() {
-  const [location] = useLocation();
-
-  if (location === "/rtjuara" || location === "/rtjuara/") {
-    return (
-      <Suspense fallback={<PageLoader />}>
-        <PublicRtjuara />
-      </Suspense>
-    );
-  }
-
-  return (
-    <RtjuaraAuthProvider>
-      <RtjuaraPortalRoutes />
-    </RtjuaraAuthProvider>
-  );
-}
-
 function PublicRoutes() {
 
   return (
@@ -514,11 +410,6 @@ function PublicRoutes() {
     <Switch>
       {/* Beranda & form warga publik */}
       <Route path="/" component={PublicLanding} />
-      <Route path="/lapor/kekeringan/status">{() => <Redirect to="/lapor" />}</Route>
-      <Route path="/lapor/kekeringan">{() => <Redirect to="/lapor" />}</Route>
-      <Route path="/lapor/masalah" component={PublicLaporMasalah} />
-      <Route path="/lapor/status" component={PublicLaporStatus} />
-      <Route path="/lapor" component={PublicLapor} />
       <Route path="/program/transparansi">{() => <Redirect to="/" />}</Route>
       <Route path="/program/:pilar">{() => <Redirect to="/" />}</Route>
       <Route path="/program">{() => <Redirect to="/" />}</Route>
@@ -530,25 +421,12 @@ function PublicRoutes() {
       <Route path="/isi/:token">{(p) => <PublicIsi token={p.token} />}</Route>
       <Route path="/isi">{() => <PublicIsi />}</Route>
 
-      {/* RW3LAW — path kanonik /rwlaw */}
-      <Route path="/rwlaw/:slug" component={Rw3lawDokumen} />
-      <Route path="/rwlaw" component={Rw3lawIndex} />
-      <Route path="/rw3law/:slug">
-        {(params) => <Redirect to={`/rwlaw/${params.slug}`} />}
-      </Route>
-      <Route path="/rw3law">{() => <Redirect to="/rwlaw" />}</Route>
-
       {/* RW3BIZ — izin usaha / jualan */}
       <Route path="/rw3biz/pengajuan" component={Rw3bizPengajuan} />
       <Route path="/rw3biz/perpanjang" component={Rw3bizPerpanjang} />
       <Route path="/rw3biz/status" component={Rw3bizStatus} />
       <Route path="/rw3biz/panduan" component={Rw3bizPanduan} />
       <Route path="/rw3biz" component={Rw3bizHub} />
-
-      {/* Karang Taruna — pendataan pemuda */}
-      <Route path="/karangtaruna/daftar" component={KarangtarunaDaftar} />
-      <Route path="/karangtaruna/status" component={KarangtarunaStatus} />
-      <Route path="/karangtaruna" component={KarangtarunaHub} />
 
       {/* Visit RW3 — tinggal (kost / kontrakan) */}
       <Route path="/visitrw3/daftar-usaha-rumahan">
@@ -568,7 +446,6 @@ function PublicRoutes() {
       <Route path="/visitrw3/status-properti" component={Visitrw3StatusProperti} />
       <Route path="/visitrw3/status" component={Visitrw3Status} />
       <Route path="/visitrw3/panduan" component={Visitrw3Panduan} />
-      <Route path="/visitrw3/laporan">{() => <Redirect to="/lapor" />}</Route>
       <Route path="/visitrw3/login">{() => <Redirect to="/visitrw3" />}</Route>
       <Route path="/visitrw3" component={Visitrw3Hub} />
 
@@ -628,7 +505,7 @@ function AppContent() {
   }
 
   if (location.startsWith("/rtjuara")) {
-    return <RtjuaraApp />;
+    return <Redirect to="/rt" />;
   }
 
   if (location === "/rt" || location.startsWith("/rt/")) {

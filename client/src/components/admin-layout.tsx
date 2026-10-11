@@ -1,57 +1,55 @@
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
-import { useLocation } from "wouter";
-import { Megaphone, LogOut, Menu, X, FileText, BarChart3 } from "lucide-react";
+import { useLocation, useSearch } from "wouter";
+import {
+  BarChart3,
+  CalendarDays,
+  ClipboardList,
+  FileText,
+  KeyRound,
+  LogOut,
+  Megaphone,
+  Menu,
+  PieChart,
+  Settings,
+  Users,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useVisitrw3AdminCounts } from "@/hooks/use-visitrw3-admin-counts";
+import { VISITRW3_ROUTES } from "@/lib/visitrw3-routes";
+import { RW3BIZ_ROUTES } from "@/lib/rw3biz-routes";
 import logoGold from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
 
-type NavItem = { path: string; icon: typeof Megaphone; label: string };
+type NavItem = { path: string; icon: typeof Megaphone; label: string; badge?: number };
+type NavGroup = { judul?: string; items: NavItem[] };
 
-/** Path kanonik admin Karang Taruna (langsung ke anggota, hindari redirect ganda). */
-export const ADMIN_KARANGTARUNA_PATH = "/admin/karangtaruna/anggota";
+export const ADMIN_AKUN_RT_PATH = "/admin/akun-rt";
 
-/** Menu utama RW hanya dua. Modul lain (Kas, RW3LAW, Visit, BIZ, dst.) dibuka dari Dashboard › Modul lain. */
-const navUtama: NavItem[] = [
-  { path: "/admin/dashboard", icon: BarChart3, label: "Dashboard" },
-  { path: "/admin/surat-rw", icon: FileText, label: "Surat RW" },
-];
-
-function isNavActive(location: string, path: string): boolean {
-  if (path === "/admin/dashboard") return !location.startsWith("/admin/surat-rw");
-  if (path === "/admin/laporan") return location === path || location.startsWith("/admin/laporan/");
-  if (path === "/admin/visitrw3") {
-    return location === path || location.startsWith("/admin/visitrw3/");
-  }
-  if (path === "/admin/rw3biz") {
-    return location === path || location.startsWith("/admin/rw3biz/");
-  }
-  if (path === ADMIN_KARANGTARUNA_PATH || path === "/admin/karangtaruna") {
-    return location === "/admin/karangtaruna" || location.startsWith("/admin/karangtaruna/");
-  }
-  if (path === "/admin/rtjuara") {
-    return location === path || location.startsWith("/admin/rtjuara/");
-  }
-  if (path === "/admin/kependudukan") {
-    return location === path;
-  }
-  return location === path || location.startsWith(`${path}/`);
+function isNavActive(location: string, search: string, path: string): boolean {
+  const [base, query] = path.split("?");
+  if (base === "/admin/dashboard") return location === base;
+  if (query) return location === base && search === query;
+  return location === base || location.startsWith(`${base}/`);
 }
 
 function NavButton({
   item,
   location,
+  search,
   onNavigate,
 }: {
   item: NavItem;
   location: string;
+  search: string;
   onNavigate: (path: string) => void;
 }) {
-  const active = isNavActive(location, item.path);
+  const active = isNavActive(location, search, item.path);
   return (
     <button
       type="button"
       onClick={() => onNavigate(item.path)}
-      className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-md text-sm transition-colors ${
+      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
         active
           ? "bg-[hsl(163,55%,22%)] text-white font-medium"
           : "text-foreground hover:bg-muted"
@@ -59,7 +57,16 @@ function NavButton({
       data-testid={`nav-admin-${item.label.toLowerCase().replace(/\s/g, "-")}`}
     >
       <item.icon className="w-4 h-4 flex-shrink-0" />
-      {item.label}
+      <span className="flex-1 text-left">{item.label}</span>
+      {item.badge ? (
+        <span
+          className={`min-w-[1.25rem] rounded-full px-1.5 py-0.5 text-center text-[10px] font-bold ${
+            active ? "bg-white/20 text-white" : "bg-destructive/15 text-destructive"
+          }`}
+        >
+          {item.badge > 99 ? "99+" : item.badge}
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -67,7 +74,47 @@ function NavButton({
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { logout } = useAuth();
   const [location, setLocation] = useLocation();
+  const search = useSearch();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const visit = useVisitrw3AdminCounts("visit");
+  const biz = useVisitrw3AdminCounts("rw3biz");
+
+  const grup: NavGroup[] = [
+    {
+      items: [
+        { path: "/admin/dashboard", icon: BarChart3, label: "Dashboard" },
+        { path: "/admin/surat-rw", icon: FileText, label: "Surat RW" },
+      ],
+    },
+    {
+      judul: "Visit RW3",
+      items: [
+        { path: VISITRW3_ROUTES.admin.antrianSurvey, icon: ClipboardList, label: "Survey hunian", badge: visit.surveyMenunggu },
+        { path: VISITRW3_ROUTES.admin.antrianSudahLolos, icon: ClipboardList, label: "Sudah disurvey" },
+        { path: VISITRW3_ROUTES.admin.penghuni, icon: Users, label: "Warga singgah" },
+        { path: VISITRW3_ROUTES.admin.kalender, icon: CalendarDays, label: "Kalender kontrak" },
+        { path: VISITRW3_ROUTES.admin.dashboard, icon: PieChart, label: "Statistik hunian" },
+        { path: VISITRW3_ROUTES.admin.pengaturan, icon: Settings, label: "Pengaturan Visit" },
+      ],
+    },
+    {
+      judul: "RW3 Biz",
+      items: [
+        { path: RW3BIZ_ROUTES.admin.antrianSurvey, icon: ClipboardList, label: "Survey usaha", badge: biz.surveyMenunggu },
+        { path: RW3BIZ_ROUTES.admin.antrianSudah, icon: ClipboardList, label: "Usaha terdaftar" },
+        { path: RW3BIZ_ROUTES.admin.blast, icon: Megaphone, label: "WA Blast usaha" },
+        { path: RW3BIZ_ROUTES.admin.dashboard, icon: PieChart, label: "Statistik usaha" },
+        { path: RW3BIZ_ROUTES.admin.pengaturan, icon: Settings, label: "Pengaturan Biz" },
+      ],
+    },
+    {
+      judul: "Kependudukan",
+      items: [
+        { path: "/admin/kependudukan", icon: Users, label: "Ringkasan warga" },
+        { path: ADMIN_AKUN_RT_PATH, icon: KeyRound, label: "Akun & PIN Ketua RT" },
+      ],
+    },
+  ];
 
   const go = (path: string) => {
     setLocation(path);
@@ -123,11 +170,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           }`}
         >
           <nav className="p-3 space-y-4">
-            <div className="space-y-1">
-              {navUtama.map((item) => (
-                <NavButton key={item.path} item={item} location={location} onNavigate={go} />
-              ))}
-            </div>
+            {grup.map((g, i) => (
+              <div key={g.judul ?? i} className="space-y-1">
+                {g.judul ? (
+                  <p className="px-3 pb-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{g.judul}</p>
+                ) : null}
+                {g.items.map((item) => (
+                  <NavButton key={item.path} item={item} location={location} search={search} onNavigate={go} />
+                ))}
+              </div>
+            ))}
           </nav>
         </aside>
 
