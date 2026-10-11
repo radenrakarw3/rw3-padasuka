@@ -104,10 +104,7 @@ export default function PusatCetak() {
 
   return (
     <div className="max-w-5xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: HIJAU }}>Pusat cetak F4</h1>
-        <p className="text-muted-foreground">Semua bahan cetak untuk warga dalam ukuran F4 (215 × 330 mm), hitam-putih hemat tinta, siap untuk Epson L3210. Untuk warga yang belum terbiasa HP: cetak, bagikan, lalu input formulir yang kembali.</p>
-      </div>
+      <h1 className="text-2xl font-bold" style={{ color: HIJAU }}>Pusat cetak F4</h1>
       {GRUP.map((g) => (
         <section key={g.judul}>
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">{g.judul}</h2>
