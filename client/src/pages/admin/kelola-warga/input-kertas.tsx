@@ -9,7 +9,7 @@ import { useRtKelola } from "./konteks";
 
 interface Fakta { kunci: string; nilai: string; statusVerifikasi: string }
 interface Anggota { id: number; nama: string; jenisKelamin: string; umur: number | null; kedudukan: string; status: string; fakta: Fakta[] }
-interface Detail { kk: { id: number; rt: number; alamat: string }; anggota: Anggota[]; fakta: Fakta[]; qr: { kodeKartu: string } | null }
+interface Detail { kk: { id: number; rt: number; alamat: string }; anggota: Anggota[]; fakta: Fakta[]; jawabanInduk?: Record<string, string>; qr: { kodeKartu: string } | null }
 type Nilai = Record<string, string | null>;
 
 const HIJAU = "hsl(163,55%,22%)";
@@ -80,7 +80,7 @@ function Bagian({ judul, sub, defs, prefix, nilai, awal, set }: {
 }
 
 function awalDari(d: Detail): Nilai {
-  const out: Nilai = {};
+  const out: Nilai = { ...d.jawabanInduk };
   for (const f of d.fakta) out[`kk:${d.kk.id}:${f.kunci}`] = f.nilai;
   for (const a of d.anggota) for (const f of a.fakta) out[`warga:${a.id}:${f.kunci}`] = f.nilai;
   return out;

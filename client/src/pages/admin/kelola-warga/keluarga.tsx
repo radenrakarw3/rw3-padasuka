@@ -19,6 +19,7 @@ interface Detail {
   rumah: { id: number; alamat: string; noUnit: string | null; jumlahKk: number } | null;
   usaha: { id: number; nama: string }[];
   fakta: Fakta[];
+  jawabanInduk?: Record<string, string>;
   qr: { kodeKartu: string; berlakuSampai: string } | null;
   usulan: { id: number; status: string }[];
   ringkas: { kelengkapan: number; terjawab: number; pertanyaan: number; perhatian: { kunci: string; label: string; detail: string }[] };
@@ -167,12 +168,17 @@ export default function Keluarga({ id }: { id: number }) {
   if (error || !d || !standar) return <Pesan jenis="error">{(error as Error)?.message ?? "Gagal memuat"}</Pesan>;
   const kepala = d.anggota.find((a) => a.kedudukan === "Kepala Keluarga")?.nama ?? "Keluarga";
   const batal = () => setMode({ m: "lihat" });
+  const awalDari = (subjek: "kk" | "warga", subjekId: number, fakta: Fakta[]) => {
+    const awalan = `${subjek}:${subjekId}:`;
+    const induk = Object.fromEntries(Object.entries(d.jawabanInduk ?? {}).filter(([k]) => k.startsWith(awalan)));
+    return { ...induk, ...kunciAwal(subjek, subjekId, fakta) };
+  };
 
   if (mode.m === "orang") {
     return (
       <div>
         <Judul kembali={batal} sub={mode.a.umur != null ? `${mode.a.umur} tahun` : "Umur belum diketahui"}>{mode.a.nama}</Judul>
-        <FormFakta draftKey={`warga:${mode.a.id}`} langkah={langkahWarga(mode.a, standar)} awal={kunciAwal("warga", mode.a.id, mode.a.fakta)}
+        <FormFakta draftKey={`warga:${mode.a.id}`} langkah={langkahWarga(mode.a, standar)} awal={awalDari("warga", mode.a.id, mode.a.fakta)}
           batal={batal} selesai={(n) => segarkan(n ? `${n} perubahan tersimpan.` : undefined)} />
       </div>
     );
@@ -181,7 +187,7 @@ export default function Keluarga({ id }: { id: number }) {
   if (mode.m === "anggota") return <div><Judul kembali={batal}>Tambah anggota</Judul><AnggotaBaru kkId={d.kk.id} batal={batal} selesai={() => segarkan("Anggota baru tersimpan.")} /></div>;
   if (mode.m === "rumah") return <div><Judul kembali={batal}>Hubungkan ke rumah</Judul><PilihRumah d={d} batal={batal} selesai={() => segarkan("Rumah terhubung.")} /></div>;
   if (mode.m === "keluarga") {
-    const awal = kunciAwal("kk", d.kk.id, d.fakta);
+    const awal = awalDari("kk", d.kk.id, d.fakta);
     return (
       <div>
         <Judul kembali={batal}>Kondisi keluarga</Judul>

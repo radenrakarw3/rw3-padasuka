@@ -2,7 +2,7 @@
  * Dashboard Ketua RW — hanya baca. Semua angka dihitung dari standar data RW 03 yang aktif.
  */
 import { pool } from "./db";
-import { ringkasKeluarga, type PerhatianKeluarga } from "./wilayah-data";
+import { indukKeluarga, ringkasKeluarga, type PerhatianKeluarga } from "./wilayah-data";
 import { standarAktif } from "./wilayah-standar";
 import { kenaPerhatian, nilaiBanyak } from "@shared/wilayah";
 import { ACTIVE_RT_NUMBERS } from "@shared/rt";
@@ -96,20 +96,34 @@ export async function ringkasanRw() {
 async function sebaranJawaban(kkIds: number[]): Promise<SebaranJawaban[]> {
   const defs = (await standarAktif()).filter((d) => d.tipe === "pilihan" || d.tipe === "banyak" || d.tipe === "yatidak");
   if (!kkIds.length || !defs.length) return [];
-  const { rows } = await pool.query(
-    `SELECT f.kunci, f.nilai, COUNT(*)::int AS n
-       FROM wil_fakta f LEFT JOIN warga w ON f.subjek = 'warga' AND w.id = f.subjek_id
-      WHERE f.sampai IS NULL AND f.status_verifikasi IN ('terverifikasi', 'perlu_cek') AND f.kunci = ANY($2)
-        AND ((f.subjek = 'kk' AND f.subjek_id = ANY($1)) OR (f.subjek = 'warga' AND w.kk_id = ANY($1) AND w.status_kependudukan = 'Aktif'))
-      GROUP BY f.kunci, f.nilai`,
-    [kkIds, defs.map((d) => d.kunci)],
-  );
+  const kunciDef = new Set(defs.map((d) => d.kunci));
+  const [{ rows }, induk] = await Promise.all([
+    pool.query(
+      `SELECT f.subjek, f.subjek_id, f.kunci, f.nilai
+         FROM wil_fakta f LEFT JOIN warga w ON f.subjek = 'warga' AND w.id = f.subjek_id
+        WHERE f.sampai IS NULL AND f.nilai IS NOT NULL AND f.status_verifikasi IN ('terverifikasi', 'perlu_cek') AND f.kunci = ANY($2)
+          AND ((f.subjek = 'kk' AND f.subjek_id = ANY($1)) OR (f.subjek = 'warga' AND w.kk_id = ANY($1) AND w.status_kependudukan = 'Aktif'))
+        ORDER BY (f.status_verifikasi = 'terverifikasi'), f.mulai, f.id`,
+      [kkIds, Array.from(kunciDef)],
+    ),
+    indukKeluarga(kkIds),
+  ]);
+  // Satu jawaban per subjek+kunci: fakta tercatat (terverifikasi menang) didahulukan, data induk sebagai cadangan.
+  const jawaban = new Map<string, string>();
+  for (const [k, v] of induk.jawaban) if (kunciDef.has(k.slice(k.lastIndexOf(":") + 1))) jawaban.set(k, v);
+  for (const r of rows) jawaban.set(`${r.subjek}:${r.subjek_id}:${r.kunci}`, r.nilai);
+  const perKunci = new Map<string, string[]>();
+  for (const [k, v] of jawaban) {
+    const kunci = k.slice(k.lastIndexOf(":") + 1);
+    perKunci.set(kunci, [...(perKunci.get(kunci) ?? []), v]);
+  }
+
   return defs.map((d) => {
     const hitung = new Map<string, number>();
-    let terjawab = 0;
-    for (const r of rows.filter((x) => x.kunci === d.kunci)) {
-      terjawab += r.n;
-      for (const v of d.tipe === "banyak" ? nilaiBanyak(r.nilai) : [r.nilai]) hitung.set(v, (hitung.get(v) ?? 0) + r.n);
+    const nilaiList = perKunci.get(d.kunci) ?? [];
+    const terjawab = nilaiList.length;
+    for (const n of nilaiList) {
+      for (const v of d.tipe === "banyak" ? nilaiBanyak(n) : [n]) hitung.set(v, (hitung.get(v) ?? 0) + 1);
     }
     const pilihan = d.tipe === "yatidak" ? [{ nilai: "ya", label: "Ya" }, { nilai: "tidak", label: "Tidak" }] : d.pilihan ?? [];
     return {

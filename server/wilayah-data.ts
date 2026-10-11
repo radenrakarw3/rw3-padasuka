@@ -34,7 +34,11 @@ export async function indukKeluarga(kkIds: number[], q: Q = pool) {
   const punyaWa = new Set<number>();
   if (!kkIds.length) return { jawaban, punyaWa };
   const [{ rows: kk }, { rows: orang }] = await Promise.all([
-    q.query(`SELECT id, penghasilan_bulanan FROM kartu_keluarga WHERE id = ANY($1)`, [kkIds]),
+    q.query(
+      `SELECT id, penghasilan_bulanan, status_rumah, kondisi_bangunan, sumber_air, sanitasi_wc, listrik, penerima_bansos, jenis_bansos
+         FROM kartu_keluarga WHERE id = ANY($1)`,
+      [kkIds],
+    ),
     q.query(
       `SELECT id, kk_id, pekerjaan, pendidikan, nomor_whatsapp FROM warga WHERE kk_id = ANY($1) AND status_kependudukan = 'Aktif'`,
       [kkIds],
@@ -312,6 +316,11 @@ export async function detailKeluarga(aktor: Aktor, kkId: number) {
   const [faktaKk, faktaWarga] = (await Promise.all([faktaAktif("kk", [kkId]), faktaAktif("warga", wargaIds)]))
     .map((list) => list.filter((f) => aktif.has(f.kunci)));
   const ringkas = (await ringkasKeluarga([kkId])).get(kkId)!;
+  const tercatat = new Set([...faktaKk, ...faktaWarga].map((f) => `${f.subjek}:${f.subjekId}:${f.kunci}`));
+  const jawabanInduk: Record<string, string> = {};
+  for (const [k, v] of (await indukKeluarga([kkId])).jawaban) {
+    if (aktif.has(k.slice(k.lastIndexOf(":") + 1)) && !tercatat.has(k)) jawabanInduk[k] = v;
+  }
 
   const rw = aktor.role === "rw";
   if (rw) await catatAudit(aktor, "lihat_detail", "kk", kkId, kk.rt);
@@ -336,6 +345,7 @@ export async function detailKeluarga(aktor: Aktor, kkId: number) {
     rumah: rumah ? { id: rumah.id, alamat: rumah.alamat, noUnit: rumah.no_unit, jumlahKk: rumah.jumlah_kk } : null,
     usaha: usaha.map((u) => ({ id: u.id, nama: u.nama, kategori: u.kategori })),
     fakta: faktaKk,
+    jawabanInduk,
     ringkas,
     qr: token[0] ? { kodeKartu: token[0].kode_kartu, dibuat: token[0].created_at, berlakuSampai: token[0].expires_at } : null,
     usulan: usulan.map((u) => ({ id: u.id, status: u.status, dibuat: u.created_at, kodeTerima: u.kode_terima })),
