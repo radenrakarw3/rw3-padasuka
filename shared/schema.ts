@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, serial, integer, boolean, timestamp, jsonb, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, serial, integer, boolean, timestamp, jsonb, uniqueIndex, index, customType } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { isActiveRt } from "./rt";
@@ -482,6 +482,8 @@ export const visitrw3Penghuni = pgTable("visitrw3_penghuni", {
   jenisKelamin: text("jenis_kelamin"),
   pekerjaan: text("pekerjaan"),
   keperluanTinggal: text("keperluan_tinggal"),
+  /** JSON DetailKeperluan (shared/visitrw3-keperluan.ts). */
+  detailKeperluan: text("detail_keperluan"),
   namaTempatKerja: text("nama_tempat_kerja"),
   namaSekolah: text("nama_sekolah"),
   punyaKendaraan: boolean("punya_kendaraan").notNull().default(false),
@@ -493,6 +495,34 @@ export const visitrw3Penghuni = pgTable("visitrw3_penghuni", {
   fotoKtpData: text("foto_ktp_data"),
   urutan: integer("urutan").notNull().default(0),
 });
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType: () => "bytea",
+});
+
+/**
+ * Foto dokumen Visit RW3 (KTP per penghuni, KK per pengajuan) sebagai biner, bukan base64:
+ * ±25% lebih hemat dan tidak ikut terbaca saat query daftar/detail.
+ */
+export const visitrw3Dokumen = pgTable(
+  "visitrw3_dokumen",
+  {
+    id: serial("id").primaryKey(),
+    pengajuanId: integer("pengajuan_id").notNull().references(() => visitrw3Pengajuan.id, { onDelete: "cascade" }),
+    penghuniId: integer("penghuni_id").references(() => visitrw3Penghuni.id, { onDelete: "cascade" }),
+    /** ktp | kk */
+    jenis: text("jenis").notNull(),
+    mime: text("mime").notNull(),
+    ukuran: integer("ukuran").notNull(),
+    sha256: text("sha256").notNull(),
+    data: bytea("data").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => [
+    index("visitrw3_dokumen_pengajuan_idx").on(t.pengajuanId, t.jenis),
+    index("visitrw3_dokumen_penghuni_idx").on(t.penghuniId),
+  ],
+);
 
 // ===================== RW3BIZ (izin usaha / jualan) =====================
 // Basis data terpisah dari Visit RW3. Visit RW3 hanya melayani kontrak/kost;

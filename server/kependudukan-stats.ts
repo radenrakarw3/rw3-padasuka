@@ -8,6 +8,7 @@ import {
   type WargaPengangguranSlice,
 } from "@shared/pekerjaan-labor";
 import { buildKelompokUsiaMap, type WargaKategoriSlice } from "@shared/kategori-umur";
+import { isWargaTerhitung } from "@shared/statistik-warga";
 import type { KartuKeluarga, Warga } from "@shared/schema";
 
 export type KependudukanStats = {
@@ -52,10 +53,11 @@ function buildPekerjaanDistribusi(allWarga: Warga[]): Record<string, number> {
 
 export function buildKependudukanStats(
   allKk: KartuKeluarga[],
-  allWarga: Warga[],
+  semuaWarga: Warga[],
   allKkForRt: KartuKeluarga[],
   rtFilter?: number,
 ): KependudukanStats {
+  const allWarga = semuaWarga.filter(isWargaTerhitung);
   const kkRtMap = new Map(allKkForRt.map((k) => [k.id, k.rt]));
   const perRt = [...ACTIVE_RT_NUMBERS].map((rt) => ({
     rt,

@@ -9,6 +9,7 @@ import {
   normalizeStarSenderPhone,
 } from "./starsender";
 import { storage } from "./storage";
+import { HARI_BATAS_PERPANJANG } from "./visitrw3-surat";
 import { isNomorHpValid, looksLikeNik } from "@shared/kontak";
 import type { Visitrw3Penghuni, Visitrw3Pengajuan, PemilikKost, Usaha } from "@shared/schema";
 
@@ -290,8 +291,15 @@ export function notifyVisitrw3Disetujui(
     const berlaku = pengajuan.tanggalBerlakuSampai
       ? formatTanggalId(pengajuan.tanggalBerlakuSampai)
       : "-";
-    const statusUrl = siteUrl("/visitrw3/status");
+    const statusUrl = siteUrl(`/visitrw3/status?nomor=${encodeURIComponent(pengajuan.nomorVisitrw3)}`);
     const tipeLabel = pengajuan.tipe === "perpanjang" ? "Perpanjangan" : "Pengajuan";
+    const batasPerpanjang = pengajuan.tanggalBerlakuSampai
+      ? formatTanggalId(
+          new Date(Date.parse(`${pengajuan.tanggalBerlakuSampai}T00:00:00Z`) - HARI_BATAS_PERPANJANG * 86_400_000)
+            .toISOString()
+            .slice(0, 10),
+        )
+      : "-";
 
     await sendToRecipients(
       recipients,
@@ -299,8 +307,10 @@ export function notifyVisitrw3Disetujui(
         `${salam(nama)}\n\n` +
         `*${tipeLabel} Visit RW3 disetujui!*\n\n` +
         `Nomor: *${pengajuan.nomorVisitrw3}*\n` +
-        `Berlaku sampai: *${berlaku}*\n\n` +
-        `Terima kasih atas kedisiplinan Anda. Cek detail di:\n${statusUrl}\n\n` +
+        `Berlaku sampai: *${berlaku}*\n` +
+        `Wajib perpanjang paling lambat: *${batasPerpanjang}*\n\n` +
+        `Surat Izin Tinggal Sementara Anda sudah terbit. Lihat & unduh suratnya di:\n${statusUrl}\n` +
+        `Surat asli bertanda tangan Ketua RW dapat diambil di sekretariat RW 03.\n\n` +
         `— ${SENDER_LABEL}`,
       {
         eventKeyPrefix: `visitrw3:approved:${pengajuan.id}`,

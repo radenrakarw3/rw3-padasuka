@@ -506,7 +506,11 @@ function AppContent() {
     return <Redirect to="/" />;
   }
 
-  if (location === "/isi" || location.startsWith("/isi/")) {
+  // Admin juga memakai form publik ini (mode petugas: input dari formulir kertas).
+  const layananPublik = ["/isi", "/visitrw3", "/rw3biz"].some(
+    (p) => location === p || location.startsWith(`${p}/`),
+  );
+  if (layananPublik) {
     return (
       <Suspense fallback={<PageLoader />}>
         <PublicRoutes />

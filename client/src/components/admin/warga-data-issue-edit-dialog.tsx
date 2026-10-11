@@ -172,6 +172,7 @@ export function WargaDataIssueEditDialog({ row, open, onOpenChange }: Props) {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["/api/warga-with-kk"] }),
         queryClient.invalidateQueries({ queryKey: ["/api/stats/kependudukan"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/statistik-warga"] }),
         queryClient.invalidateQueries({ queryKey: ["/api/warga", wargaId] }),
       ]);
       toast({ title: "Data warga disimpan", description: `Kategori: ${kategoriDef.label}` });

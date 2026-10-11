@@ -43,7 +43,8 @@ export const TTL = {
 
 export const CacheKey = {
   dashboard: (rt?: number) => `dashboard:rt=${rt ?? "all"}`,
-  kependudukan: (rt?: number) => `kependudukan:v14:rt=${rt ?? "all"}`,
+  kependudukan: (rt?: number) => `kependudukan:v15:rt=${rt ?? "all"}`,
+  statistikWarga: () => `kependudukan:satu-pintu:v1`,
   wargaList: () => `warga:list`,
   kkList: () => `kk:list`,
   wargaWithKk: () => `warga-with-kk:list`,
@@ -69,4 +70,5 @@ export function invalidateKk(): void {
 /** Statistik admin & transparansi publik (properti / penghuni Visit RW3). */
 export function invalidateVisitrw3Dashboard(): void {
   cache.invalidateByPrefix("dashboard:");
+  cache.delete(CacheKey.statistikWarga());
 }

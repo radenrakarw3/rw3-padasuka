@@ -225,6 +225,7 @@ const PENGAJUAN_ADMIN: SurveyChecklistItem[] = [
     id: "keperluan_jelas",
     kategori: "administrasi",
     label: "Keperluan pengajuan (tinggal / bisnis) sudah jelas & jujur",
+    hint: "Cocokkan tempat kerja/kampus, untuk apa, dan rencana tinggal sampai kapan dengan isian form.",
   }),
 ];
 
@@ -330,6 +331,13 @@ export function getChecklistSurveyPengajuan(
         kategori: "lingkungan",
         sdg: 11,
         label: "Kendaraan penghuni tidak menghalangi jalan / gang / tetangga",
+      }),
+      item({
+        id: "kendaraan_stnk_cocok",
+        kategori: "administrasi",
+        sdg: 16,
+        label: "STNK tiap kendaraan dicocokkan: plat, nama pemilik, dan status lunas/cicilan",
+        hint: "Kendaraan milik orang lain/cicilan: tanyakan bukti (izin pemilik, kartu angsuran). Tidak punya kendaraan: langsung centang.",
       }),
     );
   }

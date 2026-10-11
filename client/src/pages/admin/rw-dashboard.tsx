@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Baby, ClipboardList, Home, PieChart, Settings2, UserRound, Users } from "lucide-react";
+import { AlertTriangle, BarChart3, ClipboardList, Home, PieChart, Settings2 } from "lucide-react";
+import { StatistikSatuPintu } from "@/components/admin/statistik-satu-pintu";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { wil } from "@/lib/wilayah-api";
@@ -62,18 +63,21 @@ function RingkasanRw() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <Stat ikon={<Home className="h-4 w-4" />} label="Keluarga" nilai={t.kk} sub={`${t.kkBelumDiisi} belum diisi`} />
-        <Stat ikon={<Users className="h-4 w-4" />} label="Warga aktif" nilai={t.warga} sub={`♂ ${t.lakiLaki} · ♀ ${t.perempuan}`} />
-        <Stat ikon={<Baby className="h-4 w-4" />} label="Balita" nilai={t.balita} sub={`${t.anak} anak 5–17 th`} aksen={EMAS} />
-        <Stat ikon={<UserRound className="h-4 w-4" />} label="Lansia (60+)" nilai={t.lansia} aksen="hsl(265,45%,55%)" />
+      <StatistikSatuPintu />
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-semibold">Kelengkapan standar data</h3>
+        <Button size="sm" variant="outline" onClick={() => go("/admin/kependudukan")}><BarChart3 className="mr-1.5 h-4 w-4" />Rincian di Kependudukan</Button>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Stat ikon={<Home className="h-4 w-4" />} label="Keluarga belum diisi" nilai={t.kkBelumDiisi} sub={`dari ${t.kk} KK`} />
         <Stat ikon={<ClipboardList className="h-4 w-4" />} label="Kelengkapan data" nilai={t.kelengkapan == null ? "—" : `${t.kelengkapan}%`}
           sub={<span className="mt-1 block"><Batang persen={t.kelengkapan ?? 0} warna={warnaPersen(t.kelengkapan)} /></span>} />
         <Stat ikon={<AlertTriangle className="h-4 w-4" />} label="KK perlu perhatian" nilai={t.kkPerhatian} aksen="hsl(350,70%,52%)" sub="berdasar jawaban standar" />
       </div>
 
       <section>
-        <h3 className="mb-3 font-semibold">Per RT</h3>
+        <h3 className="mb-3 font-semibold">Kelengkapan per RT</h3>
         {data.perRt.length === 0 ? <p className="text-sm text-gray-500">Belum ada keluarga terdaftar.</p> : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {data.perRt.map((r) => (

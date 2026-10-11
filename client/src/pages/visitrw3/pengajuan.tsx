@@ -1,6 +1,9 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Link, useSearch, Redirect } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { compressDokumen, dataUrlBytes, formatBytes } from "@/lib/image-compress";
+import { normalizeNomorHp } from "@shared/kontak";
+import { hitungTanggalBerlaku } from "@shared/visitrw3-kontribusi";
 import { Visitrw3Shell } from "@/components/visitrw3-shell";
 import { Rw3bizShell } from "@/components/rw3biz-shell";
 import { Button } from "@/components/ui/button";
@@ -33,12 +36,20 @@ import {
   Home,
   BedDouble,
   Store,
+  Camera,
+  ImageIcon,
+  AlertCircle,
+  RotateCcw,
 } from "lucide-react";
 import {
   emptyKendaraanRow,
+  formatKendaraanDisplay,
+  kendaraanWithPlatParts,
   serializeKendaraanForApi,
   type KendaraanRow,
 } from "@/lib/visitrw3-kendaraan";
+import { bulanIni, STATUS_KENDARAAN, type StatusKendaraan } from "@shared/visitrw3-kendaraan";
+import { aturanKeperluan, barisKeperluan, type DetailKeperluan } from "@shared/visitrw3-keperluan";
 import { joinPlatNomor } from "@/lib/visitrw3-plat";
 import {
   validateStepBayar,
@@ -67,7 +78,7 @@ import {
   type JenisWarga,
 } from "@shared/visitrw3-jenis-warga";
 import { isVisitRw3Jenis } from "@shared/visitrw3-produk";
-import { getVisitrw3FormProfile } from "@shared/visitrw3-form-by-jenis";
+import { aturanFotoKk, getVisitrw3FormProfile } from "@shared/visitrw3-form-by-jenis";
 import type { PengajuanProduct } from "@/lib/visitrw3-produk-ui";
 
 type StepDef = { id: string; label: string };
@@ -129,9 +140,11 @@ function MicroStepHeader({
 }) {
   return (
     <div className="rounded-lg bg-brand/5 border border-brand/20 p-3 space-y-1">
-      <p className="text-xs text-muted-foreground">
-        Bagian {current} dari {total}
-      </p>
+      {total > 1 && (
+        <p className="text-xs text-muted-foreground">
+          Bagian {current} dari {total}
+        </p>
+      )}
       <p className="font-semibold text-sm">{title}</p>
       {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
     </div>
@@ -202,8 +215,10 @@ type PenghuniForm = {
   jenisKelamin: string;
   pekerjaan: string;
   keperluanTinggal: string;
+  detailKeperluan: DetailKeperluan;
   namaTempatKerja: string;
   namaSekolah: string;
+  punyaKendaraan: "" | "ya" | "tidak";
   kendaraanList: KendaraanRow[];
   fotoKtpPath: string;
 };
@@ -218,11 +233,337 @@ function emptyPenghuni(isAnak = false): PenghuniForm {
     jenisKelamin: "",
     pekerjaan: "",
     keperluanTinggal: "",
+    detailKeperluan: {},
     namaTempatKerja: "",
     namaSekolah: "",
+    punyaKendaraan: "",
     kendaraanList: [],
     fotoKtpPath: "",
   };
+}
+
+function RincianKeperluanFields({
+  idPrefix,
+  penghuni: p,
+  opsi,
+  onKeperluan,
+  onTempat,
+  onDetail,
+}: {
+  idPrefix: string;
+  penghuni: PenghuniForm;
+  opsi: readonly string[];
+  onKeperluan: (v: string) => void;
+  onTempat: (v: string) => void;
+  onDetail: (patch: Partial<DetailKeperluan>) => void;
+}) {
+  const aturan = aturanKeperluan(p.keperluanTinggal);
+  const d = p.detailKeperluan;
+  const bintang = (wajib: boolean) => (wajib ? " *" : "");
+  return (
+    <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+      <div className="space-y-2">
+        <Label>Keperluan tinggal di RW 03 *</Label>
+        <Select value={p.keperluanTinggal} onValueChange={onKeperluan}>
+          <SelectTrigger className="h-12 bg-background">
+            <SelectValue placeholder="Pilih: kerja, kuliah, usaha, atau lainnya" />
+          </SelectTrigger>
+          <SelectContent>
+            {opsi.map((o) => (
+              <SelectItem key={o} value={o}>
+                {o}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      {aturan && (
+        <>
+          <div className="space-y-2">
+            <Label htmlFor={`${idPrefix}-tempat`}>{aturan.tempat.label.replace(" (opsional)", "")}{bintang(aturan.tempat.wajib)}</Label>
+            <Input
+              id={`${idPrefix}-tempat`}
+              className="h-12 bg-background"
+              placeholder={aturan.tempat.placeholder}
+              value={p.namaTempatKerja}
+              onChange={(e) => onTempat(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor={`${idPrefix}-alamat`}>{aturan.alamat.label.replace(" (opsional)", "")}{bintang(aturan.alamat.wajib)}</Label>
+            <Input
+              id={`${idPrefix}-alamat`}
+              className="h-12 bg-background"
+              placeholder={aturan.alamat.placeholder}
+              value={d.alamat ?? ""}
+              onChange={(e) => onDetail({ alamat: e.target.value })}
+            />
+          </div>
+          {aturan.peran && (
+            <div className="space-y-2">
+              <Label htmlFor={`${idPrefix}-peran`}>{aturan.peran.label}{bintang(aturan.peran.wajib)}</Label>
+              <Input
+                id={`${idPrefix}-peran`}
+                className="h-12 bg-background"
+                placeholder={aturan.peran.placeholder}
+                value={d.peran ?? ""}
+                onChange={(e) => onDetail({ peran: e.target.value })}
+              />
+            </div>
+          )}
+          {aturan.status && (
+            <div className="space-y-2">
+              <Label>{aturan.status.label} *</Label>
+              <Select value={d.status ?? ""} onValueChange={(v) => onDetail({ status: v })}>
+                <SelectTrigger className="h-12 bg-background">
+                  <SelectValue placeholder={`Pilih ${aturan.status.label.toLowerCase()}`} />
+                </SelectTrigger>
+                <SelectContent>
+                  {aturan.status.opsi.map((o) => (
+                    <SelectItem key={o} value={o}>
+                      {o}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <div className="space-y-2">
+            <Label htmlFor={`${idPrefix}-sampai`}>{aturan.sampaiLabel} *</Label>
+            <Input
+              id={`${idPrefix}-sampai`}
+              type="month"
+              className="h-12 bg-background"
+              min={bulanIni()}
+              disabled={Boolean(aturan.tidakTentuLabel && d.tidakTentu)}
+              value={d.sampai ?? ""}
+              onChange={(e) => onDetail({ sampai: e.target.value })}
+            />
+            {aturan.tidakTentuLabel && (
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id={`${idPrefix}-tidak-tentu`}
+                  checked={Boolean(d.tidakTentu)}
+                  onCheckedChange={(c) => onDetail({ tidakTentu: Boolean(c), sampai: c ? null : d.sampai })}
+                />
+                <Label htmlFor={`${idPrefix}-tidak-tentu`} className="text-sm font-normal">
+                  {aturan.tidakTentuLabel}
+                </Label>
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">Pilih bulan dan tahun. Perkiraan juga boleh.</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor={`${idPrefix}-uraian`}>{aturan.uraian.label}{bintang(aturan.uraian.wajib)}</Label>
+            <Textarea
+              id={`${idPrefix}-uraian`}
+              rows={2}
+              maxLength={500}
+              className="bg-background"
+              placeholder={aturan.uraian.placeholder}
+              value={d.uraian ?? ""}
+              onChange={(e) => onDetail({ uraian: e.target.value })}
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function RingkasanPenghuni({ penghuni: p, pakaiKeperluan }: { penghuni: PenghuniForm; pakaiKeperluan: boolean }) {
+  const keperluan = pakaiKeperluan ? barisKeperluan(p.keperluanTinggal, p.namaTempatKerja, p.detailKeperluan) : [];
+  const api = serializeKendaraanForApi(p.kendaraanList, p.punyaKendaraan === "ya");
+  const kendaraan =
+    p.punyaKendaraan === "tidak"
+      ? "Tidak punya"
+      : p.punyaKendaraan === "ya"
+        ? formatKendaraanDisplay(api.jenisKendaraan, api.platNomor) || "Belum lengkap"
+        : "Belum dijawab";
+  return (
+    <dl className="mt-0.5 space-y-0.5 text-xs text-muted-foreground">
+      {keperluan.map(([a, v]) => (
+        <div key={a}>
+          <dt className="inline">{a}: </dt>
+          <dd className="inline text-foreground">{v}</dd>
+        </div>
+      ))}
+      <div>
+        <dt className="inline">Kendaraan: </dt>
+        <dd className="inline text-foreground">{kendaraan}</dd>
+      </div>
+    </dl>
+  );
+}
+
+function KendaraanFields({
+  idPrefix,
+  penghuni: p,
+  onPunya,
+  onUbah,
+  onTambah,
+  onHapus,
+}: {
+  idPrefix: string;
+  penghuni: PenghuniForm;
+  onPunya: (punya: boolean) => void;
+  onUbah: (ki: number, patch: Partial<KendaraanRow>) => void;
+  onTambah: () => void;
+  onHapus: (ki: number) => void;
+}) {
+  return (
+    <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+      <div className="space-y-1">
+        <Label>Punya kendaraan yang dibawa/dipakai di RW 03? *</Label>
+        <p className="text-xs text-muted-foreground">
+          Untuk keamanan lingkungan (mencegah kendaraan curian). Siapkan STNK, akan dicocokkan saat survey.
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <Button
+          type="button"
+          variant={p.punyaKendaraan === "ya" ? "default" : "outline"}
+          className="h-11"
+          aria-pressed={p.punyaKendaraan === "ya"}
+          onClick={() => onPunya(true)}
+        >
+          Ya, punya
+        </Button>
+        <Button
+          type="button"
+          variant={p.punyaKendaraan === "tidak" ? "default" : "outline"}
+          className="h-11"
+          aria-pressed={p.punyaKendaraan === "tidak"}
+          onClick={() => onPunya(false)}
+        >
+          Tidak punya
+        </Button>
+      </div>
+      {p.punyaKendaraan === "ya" && (
+        <div className="space-y-3">
+          {p.kendaraanList.map((k, ki) => {
+            const id = `${idPrefix}-${ki}`;
+            return (
+              <div key={ki} className="space-y-2 rounded-md border bg-background p-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium">Kendaraan {ki + 1}</p>
+                  {p.kendaraanList.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive"
+                      onClick={() => onHapus(ki)}
+                      aria-label={`Hapus kendaraan ${ki + 1}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Jenis *</Label>
+                    <Select value={k.jenis} onValueChange={(v) => onUbah(ki, { jenis: v })}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pilih" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {jenisKendaraanOptions.map((o) => (
+                          <SelectItem key={o} value={o}>
+                            {o}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor={`${id}-warna`} className="text-xs">Warna *</Label>
+                    <Input
+                      id={`${id}-warna`}
+                      placeholder="Hitam"
+                      value={k.warna}
+                      onChange={(e) => onUbah(ki, { warna: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor={`${id}-merek`} className="text-xs">Merek / tipe *</Label>
+                  <Input
+                    id={`${id}-merek`}
+                    placeholder="Contoh: Honda Beat, Toyota Avanza"
+                    value={k.merek}
+                    onChange={(e) => onUbah(ki, { merek: e.target.value })}
+                  />
+                </div>
+                <PlatNomorInput
+                  required
+                  idPrefix={`${id}-plat`}
+                  value={k.platParts}
+                  onChange={(platParts) => onUbah(ki, { platParts })}
+                />
+                <div className="space-y-1">
+                  <Label className="text-xs">Status kepemilikan *</Label>
+                  <Select value={k.status} onValueChange={(v) => onUbah(ki, { status: v as StatusKendaraan })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Lunas, cicilan, atau milik orang lain?" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STATUS_KENDARAAN.map((s) => (
+                        <SelectItem key={s.value} value={s.value}>
+                          {s.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {k.status === "cicilan" && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label htmlFor={`${id}-leasing`} className="text-xs">Leasing / finance *</Label>
+                      <Input
+                        id={`${id}-leasing`}
+                        placeholder="Adira, FIF, BAF…"
+                        value={k.leasing}
+                        onChange={(e) => onUbah(ki, { leasing: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor={`${id}-lunas`} className="text-xs">Perkiraan lunas *</Label>
+                      <Input
+                        id={`${id}-lunas`}
+                        type="month"
+                        value={k.lunasPada}
+                        onChange={(e) => onUbah(ki, { lunasPada: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <Label htmlFor={`${id}-stnk`} className="text-xs">Nama pemilik di STNK *</Label>
+                  <Input
+                    id={`${id}-stnk`}
+                    placeholder="Sesuai yang tertulis di STNK"
+                    value={k.atasNama}
+                    onChange={(e) => onUbah(ki, { atasNama: e.target.value })}
+                  />
+                  {k.status && k.status !== "lunas" && k.status !== "cicilan" && (
+                    <p className="text-xs text-muted-foreground">
+                      Kendaraan bukan milik sendiri: tulis nama pemilik di STNK, bukan nama Anda.
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          {p.kendaraanList.length < 10 && (
+            <Button type="button" variant="outline" size="sm" className="w-full gap-1" onClick={onTambah}>
+              <Plus className="w-4 h-4" /> Tambah kendaraan lain
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function umurFromDate(tgl: string) {
@@ -233,6 +574,203 @@ function umurFromDate(tgl: string) {
   const m = t.getMonth() - b.getMonth();
   if (m < 0 || (m === 0 && t.getDate() < b.getDate())) a--;
   return a;
+}
+
+function hariIniLokal() {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function formatTanggalPanjang(iso: string) {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+}
+
+function hitungBerlakuAman(tanggalBayar: string, terminBulan: string) {
+  try {
+    return tanggalBayar ? hitungTanggalBerlaku(tanggalBayar, parseInt(terminBulan, 10)) : "";
+  } catch {
+    return "";
+  }
+}
+
+type DraftPengajuan = {
+  v: 1;
+  step: number;
+  ktpRw3: boolean | null;
+  rt: string;
+  alamat: string;
+  nomorUnit: string;
+  namaUsaha: string;
+  jenisTempatUsaha: string;
+  jenisTempatUsahaLain: string;
+  kategoriUsaha: string[];
+  kategoriUsahaLain: string;
+  penanggungJawab: string;
+  jamBuka: string;
+  jamTutup: string;
+  alamatUsaha: string;
+  jumlahDewasa: number;
+  jumlahAnak: number;
+  penghuni: PenghuniForm[];
+  penghuniIndex: number;
+  tanggalBayar: string;
+  terminBulan: string;
+  catatan: string;
+  setujuTataTertib: boolean;
+  fotoKk?: string;
+};
+
+function bacaDraft(key: string): DraftPengajuan | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const d = JSON.parse(raw) as DraftPengajuan;
+    return d?.v === 1 && Array.isArray(d.penghuni) ? d : null;
+  } catch {
+    return null;
+  }
+}
+
+/** localStorage ±5 MB: bila foto KTP membuat penuh, simpan draf tanpa foto. */
+function simpanDraft(key: string, draft: DraftPengajuan) {
+  try {
+    localStorage.setItem(key, JSON.stringify(draft));
+  } catch {
+    try {
+      const tanpaFoto = {
+        ...draft,
+        fotoKk: "",
+        penghuni: draft.penghuni.map((p) => ({ ...p, fotoKtpPath: "" })),
+      };
+      localStorage.setItem(key, JSON.stringify(tanpaFoto));
+    } catch {
+      /* penyimpanan browser penuh / diblokir */
+    }
+  }
+}
+
+function hapusDraft(key: string) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    /* abaikan */
+  }
+}
+
+const DOKUMEN_FOTO = {
+  ktp: {
+    label: "Foto KTP",
+    petunjuk: "Foto KTP asli, tidak buram, seluruh kartu terlihat. Foto otomatis diperkecil sebelum dikirim.",
+    cekBaca: "Pastikan tulisan NIK & nama terbaca.",
+    kompres: { maxSide: 1280, targetBytes: 200_000, minSide: 900 },
+  },
+  kk: {
+    label: "Foto Kartu Keluarga",
+    petunjuk: "Foto seluruh lembar KK dari atas, terang, tidak terpotong. Foto otomatis diperkecil sebelum dikirim.",
+    cekBaca: "Pastikan nama anggota & nomor KK terbaca.",
+    kompres: { maxSide: 2000, targetBytes: 450_000, minSide: 1400 },
+  },
+} as const;
+
+type JenisFotoDokumen = keyof typeof DOKUMEN_FOTO;
+
+async function siapkanFotoDokumen(file: File, jenis: JenisFotoDokumen): Promise<string> {
+  if (!file.type.startsWith("image/") && file.type !== "") {
+    throw new Error(`File harus berupa gambar (${DOKUMEN_FOTO[jenis].label})`);
+  }
+  if (file.size > 25 * 1024 * 1024) throw new Error("Ukuran foto terlalu besar (maks. 25 MB)");
+  return compressDokumen(file, DOKUMEN_FOTO[jenis].kompres);
+}
+
+function FotoDokumenPicker({
+  jenis,
+  foto,
+  diproses,
+  onPilih,
+  label,
+}: {
+  jenis: JenisFotoDokumen;
+  foto: string;
+  diproses: boolean;
+  onPilih: (file: File) => void;
+  label?: string;
+}) {
+  const kameraRef = useRef<HTMLInputElement>(null);
+  const galeriRef = useRef<HTMLInputElement>(null);
+  const bisaPratinjau = foto.startsWith("data:image/");
+  const info = DOKUMEN_FOTO[jenis];
+
+  const handle = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (f) onPilih(f);
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label>{label ?? info.label}</Label>
+      {foto ? (
+        <div className="flex items-center gap-3 rounded-lg border border-success/40 bg-success/5 p-2">
+          {bisaPratinjau ? (
+            <img src={foto} alt={info.label} className="h-16 w-24 rounded object-cover border" />
+          ) : (
+            <div className="h-16 w-24 rounded border bg-muted flex items-center justify-center">
+              <ImageIcon className="w-5 h-5 text-muted-foreground" />
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-success">{info.label} siap ✓</p>
+            <p className="text-xs text-muted-foreground">
+              {info.cekBaca}
+              {bisaPratinjau && ` (${formatBytes(dataUrlBytes(foto))})`}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">{info.petunjuk}</p>
+      )}
+      <div className="grid grid-cols-2 gap-2">
+        <Button
+          type="button"
+          variant={foto ? "outline" : "default"}
+          className="h-11 gap-1.5"
+          disabled={diproses}
+          onClick={() => kameraRef.current?.click()}
+        >
+          {diproses ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+          {foto ? "Foto ulang" : "Ambil foto"}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className="h-11 gap-1.5"
+          disabled={diproses}
+          onClick={() => galeriRef.current?.click()}
+        >
+          <ImageIcon className="w-4 h-4" />
+          Dari galeri
+        </Button>
+      </div>
+      <input ref={kameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handle} />
+      <input ref={galeriRef} type="file" accept="image/*" className="hidden" onChange={handle} />
+    </div>
+  );
+}
+
+function PesanGalat({ pesan }: { pesan: string | null }) {
+  if (!pesan) return null;
+  return (
+    <div
+      role="alert"
+      className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive"
+    >
+      <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+      <span>{pesan}</span>
+    </div>
+  );
 }
 
 export default function Visitrw3Pengajuan() {
@@ -295,14 +833,23 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
   const [jumlahDewasa, setJumlahDewasa] = useState(1);
   const [jumlahAnak, setJumlahAnak] = useState(0);
   const jumlah = jumlahDewasa + jumlahAnak;
+  const aturanKk = product === "visit" ? aturanFotoKk(jenisWarga, jumlahAnak) : "tidak";
   const [penghuni, setPenghuni] = useState<PenghuniForm[]>([emptyPenghuni(false)]);
-  const [tanggalBayar, setTanggalBayar] = useState("");
+  const [tanggalBayar, setTanggalBayar] = useState(hariIniLokal);
   const [terminBulan, setTerminBulan] = useState("3");
-  const [previewSampai, setPreviewSampai] = useState("");
   const [catatan, setCatatan] = useState("");
   const [setujuTataTertib, setSetujuTataTertib] = useState(false);
   const [nomorHasil, setNomorHasil] = useState<string | null>(null);
   const [penghuniIndex, setPenghuniIndex] = useState(0);
+  const [galat, setGalat] = useState<{ pesan: string; step: number; idx: number } | null>(null);
+  const [fotoDiproses, setFotoDiproses] = useState<number | null>(null);
+  const [fotoKk, setFotoKk] = useState("");
+  const [kkDiproses, setKkDiproses] = useState(false);
+  const [draftDipulihkan, setDraftDipulihkan] = useState(false);
+  const previewSampai = useMemo(
+    () => hitungBerlakuAman(tanggalBayar, terminBulan),
+    [tanggalBayar, terminBulan],
+  );
 
   const catatanKirim = () => {
     const isi = catatan.trim();
@@ -328,7 +875,132 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
     setJumlahDewasa((d) => Math.min(Math.max(1, d), formProfile.maxDewasa));
   }, [formProfile]);
 
-  const showErr = (msg: string) => {
+  const draftKey = jenisWarga ? `pengajuan-draft:${product}:${jenisWarga}` : "";
+  const [draftSiapKey, setDraftSiapKey] = useState("");
+
+  function terapkanDraft(d: DraftPengajuan | null) {
+    setStep(d?.step ?? 0);
+    setKtpRw3(d?.ktpRw3 ?? null);
+    setRt(d?.rt ?? "");
+    setAlamat(d?.alamat ?? "");
+    setNomorUnit(d?.nomorUnit ?? "");
+    setNamaUsaha(d?.namaUsaha ?? "");
+    setJenisTempatUsaha(d?.jenisTempatUsaha ?? "");
+    setJenisTempatUsahaLain(d?.jenisTempatUsahaLain ?? "");
+    setKategoriUsaha(d?.kategoriUsaha ?? []);
+    setKategoriUsahaLain(d?.kategoriUsahaLain ?? "");
+    setPenanggungJawab(d?.penanggungJawab ?? "");
+    setJamBuka(d?.jamBuka ?? "");
+    setJamTutup(d?.jamTutup ?? "");
+    setAlamatUsaha(d?.alamatUsaha ?? "");
+    setJumlahDewasa(d?.jumlahDewasa ?? 1);
+    setJumlahAnak(d?.jumlahAnak ?? 0);
+    setPenghuni(
+      d?.penghuni?.length
+        ? d.penghuni.map((p) => {
+            const list = (p.kendaraanList ?? []).map((k) => kendaraanWithPlatParts(k));
+            return {
+              ...emptyPenghuni(p.isAnak),
+              ...p,
+              detailKeperluan: { ...(p.detailKeperluan ?? {}) },
+              kendaraanList: list,
+              punyaKendaraan: p.punyaKendaraan ?? (list.length ? "ya" : ""),
+            };
+          })
+        : [emptyPenghuni(false)],
+    );
+    setPenghuniIndex(d?.penghuniIndex ?? 0);
+    setTanggalBayar(d?.tanggalBayar || hariIniLokal());
+    if (d?.terminBulan) setTerminBulan(d.terminBulan);
+    setCatatan(d?.catatan ?? "");
+    setSetujuTataTertib(d?.setujuTataTertib ?? false);
+    setFotoKk(d?.fotoKk ?? "");
+  }
+
+  // Dideklarasikan setelah efek formProfile agar nilai draf menimpa nilai bawaan.
+  useEffect(() => {
+    if (!draftKey) return;
+    const d = bacaDraft(draftKey);
+    if (d) {
+      terapkanDraft(d);
+      setDraftDipulihkan(true);
+    } else {
+      setDraftDipulihkan(false);
+    }
+    setDraftSiapKey(draftKey);
+  }, [draftKey]);
+
+  useEffect(() => {
+    if (!draftKey || draftSiapKey !== draftKey || nomorHasil) return;
+    const t = window.setTimeout(() => {
+      simpanDraft(draftKey, {
+        v: 1,
+        step,
+        ktpRw3,
+        rt,
+        alamat,
+        nomorUnit,
+        namaUsaha,
+        jenisTempatUsaha,
+        jenisTempatUsahaLain,
+        kategoriUsaha,
+        kategoriUsahaLain,
+        penanggungJawab,
+        jamBuka,
+        jamTutup,
+        alamatUsaha,
+        jumlahDewasa,
+        jumlahAnak,
+        penghuni,
+        penghuniIndex,
+        tanggalBayar,
+        terminBulan,
+        catatan,
+        setujuTataTertib,
+        fotoKk,
+      });
+    }, 400);
+    return () => window.clearTimeout(t);
+  }, [
+    draftKey, draftSiapKey, nomorHasil, step, ktpRw3, rt, alamat, nomorUnit, namaUsaha,
+    jenisTempatUsaha, jenisTempatUsahaLain, kategoriUsaha, kategoriUsahaLain, penanggungJawab,
+    jamBuka, jamTutup, alamatUsaha, jumlahDewasa, jumlahAnak, penghuni, penghuniIndex,
+    tanggalBayar, terminBulan, catatan, setujuTataTertib, fotoKk,
+  ]);
+
+  function mulaiUlang() {
+    if (!window.confirm("Hapus semua isian dan mulai dari awal?")) return;
+    if (draftKey) hapusDraft(draftKey);
+    terapkanDraft(null);
+    if (formProfile) setTerminBulan(formProfile.defaultTerminBulan);
+    setDraftDipulihkan(false);
+    setErrMsg(null);
+  }
+
+  const sudahScroll = useRef(false);
+  useEffect(() => {
+    if (!sudahScroll.current) {
+      sudahScroll.current = true;
+      return;
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [step, penghuniIndex]);
+
+  const errMsg =
+    galat && galat.step === step && (stepId !== "penghuni" || galat.idx === penghuniIndex)
+      ? galat.pesan
+      : null;
+
+  function setErrMsg(pesan: string | null, tujuan?: { step: number; idx?: number }) {
+    setGalat(
+      pesan
+        ? { pesan, step: tujuan?.step ?? step, idx: tujuan?.idx ?? penghuniIndex }
+        : null,
+    );
+  }
+
+  const showErr = (msg: string, tujuan?: { step: number; idx?: number }) => {
+    setErrMsg(msg, tujuan);
     toast({ title: "Lengkapi data", description: msg, variant: "destructive" });
   };
 
@@ -336,14 +1008,17 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
     setStep((s) => Math.min(Math.max(0, s + delta), steps.length - 1));
   }
 
+  function indeksLangkah(id: string) {
+    return steps.findIndex((s) => s.id === id);
+  }
+
+  function lompatKe(id: string) {
+    const idx = indeksLangkah(id);
+    if (idx >= 0) setStep(idx);
+  }
+
   const settingsApi =
     product === "rw3biz" ? "/api/public/rw3biz/settings" : "/api/public/visitrw3/settings";
-  const previewApi =
-    product === "rw3biz"
-      ? "/api/public/rw3biz/preview-berlaku"
-      : "/api/public/visitrw3/preview-berlaku";
-  const uploadKtpApi =
-    product === "rw3biz" ? "/api/public/rw3biz/upload-ktp" : "/api/public/visitrw3/upload-ktp";
   const pengajuanApi =
     product === "rw3biz" ? "/api/public/rw3biz/pengajuan" : "/api/public/visitrw3/pengajuan";
 
@@ -362,10 +1037,6 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
   useEffect(() => {
     if (step >= steps.length && steps.length > 0) setStep(Math.max(0, steps.length - 1));
   }, [steps.length, step]);
-
-  useEffect(() => {
-    setPenghuniIndex(0);
-  }, [jumlahDewasa, jumlahAnak]);
 
   useEffect(() => {
     if (penghuniIndex >= penghuni.length) setPenghuniIndex(Math.max(0, penghuni.length - 1));
@@ -409,39 +1080,32 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
     return Math.min(maxAnak, Math.max(0, n));
   }
 
-  useEffect(() => {
-    if (!tanggalBayar || !terminBulan) return;
-    apiRequest("POST", previewApi, {
-      tanggalBayar,
-      terminBulan: parseInt(terminBulan, 10),
-    })
-      .then((r) => r.json())
-      .then((d) => setPreviewSampai(d.tanggalBerlakuSampai))
-      .catch(() => setPreviewSampai(""));
-  }, [tanggalBayar, terminBulan, previewApi]);
-
   const penghuniPayload = useMemo(
     () =>
       penghuni.map((p) => {
         const kendaraan = p.isAnak
           ? { punyaKendaraan: false, jenisKendaraan: null, platNomor: null }
-          : serializeKendaraanForApi(p.kendaraanList);
+          : serializeKendaraanForApi(p.kendaraanList, p.punyaKendaraan === "ya");
+        const pakaiDetail = !p.isAnak && Boolean(formProfile?.requireKeperluanTinggal);
         return {
-          namaLengkap: p.namaLengkap,
+          namaLengkap: p.namaLengkap.trim(),
           tanggalLahir: p.tanggalLahir,
           isAnak: p.isAnak,
           nik: p.isAnak ? null : p.nik,
-          nomorWhatsapp: p.isAnak ? null : p.nomorWhatsapp || null,
+          nomorWhatsapp: p.isAnak
+            ? null
+            : normalizeNomorHp(p.nomorWhatsapp) ?? (p.nomorWhatsapp.trim() || null),
           jenisKelamin: p.isAnak ? null : p.jenisKelamin || null,
           pekerjaan: p.isAnak ? null : p.pekerjaan || null,
           keperluanTinggal: p.isAnak ? null : p.keperluanTinggal || null,
-          namaTempatKerja: p.isAnak ? null : p.namaTempatKerja || null,
+          detailKeperluan: pakaiDetail ? p.detailKeperluan : null,
+          namaTempatKerja: p.isAnak ? null : p.namaTempatKerja.trim() || null,
           namaSekolah: p.namaSekolah?.trim() || null,
           fotoKtpPath: p.isAnak ? null : p.fotoKtpPath || null,
           ...kendaraan,
         };
       }),
-    [penghuni],
+    [penghuni, formProfile?.requireKeperluanTinggal],
   );
 
   const mutation = useMutation({
@@ -522,13 +1186,20 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
         terminBulan: parseInt(terminBulan, 10),
         catatanPemohon: catatanKirim(),
         penghuni: payloadPenghuni,
+        fotoKk: aturanKk === "tidak" ? null : fotoKk || null,
         setujuTataTertib: true as const,
       });
       return readJsonSafely<{ nomorVisitrw3: string; nomorBiz?: string }>(res);
     },
-    onSuccess: (data) => setNomorHasil(data.nomorBiz || data.nomorVisitrw3 || null),
+    onSuccess: (data) => {
+      if (draftKey) hapusDraft(draftKey);
+      setNomorHasil(data.nomorBiz || data.nomorVisitrw3 || null);
+      window.scrollTo({ top: 0 });
+    },
     onError: (e: unknown) => {
-      toast({ title: "Gagal mengirim", description: getApiErrorMessage(e), variant: "destructive" });
+      const pesan = getApiErrorMessage(e);
+      setErrMsg(pesan);
+      toast({ title: "Gagal mengirim", description: pesan, variant: "destructive" });
     },
   });
 
@@ -538,46 +1209,30 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
     );
   }
 
-  async function uploadKtp(file: File, index: number) {
-    if (!file.type.startsWith("image/")) {
-      throw new Error("File harus berupa gambar");
+  /** Foto dikirim sebagai data URL di body pengajuan — disk server Railway tidak permanen. */
+  async function pasangFotoKk(file: File) {
+    setKkDiproses(true);
+    try {
+      setFotoKk(await siapkanFotoDokumen(file, "kk"));
+      setErrMsg(null);
+    } finally {
+      setKkDiproses(false);
     }
-    if (file.size > 5 * 1024 * 1024) {
-      throw new Error("Ukuran foto maksimal 5 MB");
-    }
+  }
 
-    const applyPath = (pathOrData: string) => {
+  async function pasangFotoKtp(file: File, index: number) {
+    setFotoDiproses(index);
+    try {
+      const dataUrl = await siapkanFotoDokumen(file, "ktp");
       setPenghuni((prev) => {
         const next = [...prev];
-        next[index] = { ...next[index], fotoKtpPath: pathOrData };
+        next[index] = { ...next[index], fotoKtpPath: dataUrl };
         return next;
       });
-    };
-
-    // Coba unggah ke server; jika gagal (404/dll), simpan data URL lokal
-    // — server sudah mendukung path yang diawali data:image/
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch(uploadKtpApi, { method: "POST", body: fd });
-      const body = await res.json().catch(() => ({} as { message?: string; path?: string }));
-      if (res.ok && body.path) {
-        applyPath(body.path);
-        return;
-      }
-      // Endpoint belum deploy / error — lanjut fallback
-      console.warn("Upload KTP server gagal, pakai data URL:", body.message || res.status);
-    } catch (err) {
-      console.warn("Upload KTP network error, pakai data URL:", err);
+      setErrMsg(null);
+    } finally {
+      setFotoDiproses(null);
     }
-
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => reject(new Error("Gagal membaca foto KTP"));
-      reader.readAsDataURL(file);
-    });
-    applyPath(dataUrl);
   }
 
   function updatePenghuni(i: number, patch: Partial<PenghuniForm>) {
@@ -594,12 +1249,21 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
       const row = next[i];
       next[i] = {
         ...row,
+        punyaKendaraan: punya ? "ya" : "tidak",
         kendaraanList: punya
           ? row.kendaraanList.length > 0
             ? row.kendaraanList
-            : [emptyKendaraanRow()]
+            : [emptyKendaraanRow(row.namaLengkap.trim())]
           : [],
       };
+      return next;
+    });
+  }
+
+  function updateDetailKeperluan(i: number, patch: Partial<DetailKeperluan>) {
+    setPenghuni((prev) => {
+      const next = [...prev];
+      next[i] = { ...next[i], detailKeperluan: { ...next[i].detailKeperluan, ...patch } };
       return next;
     });
   }
@@ -621,7 +1285,10 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
   function addKendaraan(i: number) {
     setPenghuni((prev) => {
       const next = [...prev];
-      next[i] = { ...next[i], kendaraanList: [...next[i].kendaraanList, emptyKendaraanRow()] };
+      next[i] = {
+        ...next[i],
+        kendaraanList: [...next[i].kendaraanList, emptyKendaraanRow(next[i].namaLengkap.trim())],
+      };
       return next;
     });
   }
@@ -649,9 +1316,14 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
           nextSteps={[
             "Simpan nomor ini untuk cek status dan perpanjang nanti.",
             "Admin RW akan melakukan survey kelengkapan data.",
-            "Anda akan dihubungi lewat WhatsApp jika diperlukan klarifikasi.",
+            product === "rw3biz"
+              ? "Anda akan dihubungi lewat WhatsApp jika diperlukan klarifikasi."
+              : "Setelah disetujui, Surat Izin Tinggal Sementara terbit — bisa dilihat & dicetak dari halaman cek status.",
           ]}
-          primaryAction={{ label: "Cek status", href: statusHref }}
+          primaryAction={{
+            label: "Cek status",
+            href: product === "rw3biz" ? statusHref : `${statusHref}?nomor=${encodeURIComponent(nomorHasil)}`,
+          }}
           secondaryAction={{ label: `Kembali ke ${productTitle}`, href: hubHref }}
         />
       </Shell>
@@ -754,24 +1426,36 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
       }
       backHref={hubHref}
     >
-      <FeatureExplain title="Sebelum mulai" className="mb-3">
-        <p>{formProfile?.explainSebelum}</p>
-        <p>
-          Isi form langkah demi langkah — tekan <strong>Lanjut</strong> setelah setiap bagian.
-          Setelah kirim, simpan nomor VRW3-… dan pantau status atau tunggu WhatsApp dari pengurus.
-        </p>
-      </FeatureExplain>
-      <Link
-        href={panduanHref}
-        className="inline-flex items-center gap-1.5 text-sm text-brand font-medium mb-4 hover:underline"
-      >
-        <BookOpen className="w-4 h-4" />
-        Bingung? Baca panduan
-      </Link>
+      {step === 0 && (
+        <>
+          <FeatureExplain title="Sebelum mulai" className="mb-3">
+            <p>{formProfile?.explainSebelum}</p>
+            <p>
+              Isi form langkah demi langkah — tekan <strong>Lanjut</strong> setelah setiap bagian.
+              Isian tersimpan otomatis di HP ini, jadi aman bila halaman tertutup.
+            </p>
+          </FeatureExplain>
+          <Link
+            href={panduanHref}
+            className="inline-flex items-center gap-1.5 text-sm text-brand font-medium mb-4 hover:underline"
+          >
+            <BookOpen className="w-4 h-4" />
+            Bingung? Baca panduan
+          </Link>
+        </>
+      )}
       {petugas && (
         <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
           <b>Mode petugas:</b> diisi petugas dari formulir kertas. Salin isian sesuai formulir, foto KTP dari fotokopi yang dilampirkan.
           Pengajuan tetap masuk antrean survey seperti biasa.
+        </div>
+      )}
+      {draftDipulihkan && (
+        <div className="mb-4 flex items-center justify-between gap-2 rounded-lg border border-brand/30 bg-brand/5 p-3 text-sm">
+          <span>Isian sebelumnya dipulihkan — lanjutkan dari sini.</span>
+          <Button type="button" variant="ghost" size="sm" className="gap-1 flex-shrink-0" onClick={mulaiUlang}>
+            <RotateCcw className="w-3.5 h-3.5" /> Mulai ulang
+          </Button>
         </div>
       )}
       <FormStepper steps={steps} currentStep={step} />
@@ -821,6 +1505,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
               <p className="text-xs text-muted-foreground">{formProfile.nomorUnitHint}</p>
             </div>
           )}
+          <PesanGalat pesan={errMsg} />
           <div className="flex gap-2">
             <Link href={hubHref}>
               <Button variant="outline" className="touch-target">
@@ -972,6 +1657,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
               className="h-12"
             />
           </div>
+          <PesanGalat pesan={errMsg} />
           <div className="flex gap-2">
             <Button variant="outline" className="touch-target" onClick={() => goStep(-1)}>
               <ChevronLeft className="w-4 h-4" />
@@ -1030,6 +1716,29 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
           <p className="text-sm font-medium text-center text-brand">
             Total {jumlah} {formProfile.orangLabel}
           </p>
+          {aturanKk !== "tidak" && (
+            <div className="rounded-xl border bg-card p-3">
+              <FotoDokumenPicker
+                jenis="kk"
+                label={aturanKk === "wajib" ? "Foto Kartu Keluarga *" : "Foto Kartu Keluarga (opsional)"}
+                foto={fotoKk}
+                diproses={kkDiproses}
+                onPilih={(f) =>
+                  void pasangFotoKk(f).catch((err: unknown) => {
+                    const pesan = err instanceof Error ? err.message : "Coba lagi";
+                    setErrMsg(pesan);
+                    toast({ title: "Foto KK gagal", description: pesan, variant: "destructive" });
+                  })
+                }
+              />
+              {aturanKk === "opsional" && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Wajib bila tinggal bersama anak. Tinggal sendiri / bersama teman boleh dilewati.
+                </p>
+              )}
+            </div>
+          )}
+          <PesanGalat pesan={errMsg} />
           <div className="flex gap-2">
             <Button variant="outline" className="touch-target" onClick={() => goStep(-1)}>
               <ChevronLeft className="w-4 h-4" />
@@ -1039,6 +1748,10 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
               onClick={() => {
                 const err = validateJumlahByJenis(jumlahDewasa, jumlahAnak, formProfile);
                 if (err) return showErr(err);
+                if (kkDiproses) return showErr("Tunggu foto KK selesai diproses");
+                if (aturanKk === "wajib" && !fotoKk) {
+                  return showErr("Unggah foto Kartu Keluarga (wajib bila tinggal bersama anak)");
+                }
                 setPenghuniIndex(0);
                 goStep(1);
               }}
@@ -1079,7 +1792,9 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                   <Label>Nama lengkap</Label>
                   <Input
                     className="h-12"
-                    placeholder="Sesuai KTP"
+                    placeholder={p.isAnak ? "Nama lengkap anak" : "Sesuai KTP"}
+                    autoCapitalize="words"
+                    autoComplete="off"
                     value={p.namaLengkap}
                     onChange={(e) => updatePenghuni(i, { namaLengkap: e.target.value })}
                   />
@@ -1089,6 +1804,8 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                   <Input
                     className="h-12"
                     type="date"
+                    max={hariIniLokal()}
+                    min="1900-01-01"
                     value={p.tanggalLahir}
                     onChange={(e) => updatePenghuni(i, { tanggalLahir: e.target.value })}
                   />
@@ -1115,26 +1832,42 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                 ) : (
                   <>
                     <div className="space-y-2">
-                      <Label>NIK (16 digit)</Label>
+                      <div className="flex items-baseline justify-between">
+                        <Label>NIK (16 digit)</Label>
+                        <span
+                          className={`text-xs tabular-nums ${p.nik.length === 16 ? "text-success" : "text-muted-foreground"}`}
+                        >
+                          {p.nik.length}/16
+                        </span>
+                      </div>
                       <Input
-                        className="h-12"
+                        className="h-12 tracking-wider"
                         inputMode="numeric"
-                        placeholder="327xxxxxxxxxxxxx"
+                        autoComplete="off"
+                        placeholder="Lihat di KTP, 16 angka"
                         maxLength={16}
                         value={p.nik}
                         onChange={(e) =>
-                          updatePenghuni(i, { nik: e.target.value.replace(/\D/g, "") })
+                          updatePenghuni(i, { nik: e.target.value.replace(/\D/g, "").slice(0, 16) })
                         }
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>WhatsApp</Label>
+                      <Label>Nomor WhatsApp aktif</Label>
                       <Input
                         className="h-12"
+                        type="tel"
+                        inputMode="tel"
+                        autoComplete="tel"
                         placeholder="08xxxxxxxxxx"
                         value={p.nomorWhatsapp}
-                        onChange={(e) => updatePenghuni(i, { nomorWhatsapp: e.target.value })}
+                        onChange={(e) =>
+                          updatePenghuni(i, { nomorWhatsapp: e.target.value.replace(/[^\d+\s-]/g, "") })
+                        }
                       />
+                      <p className="text-xs text-muted-foreground">
+                        Pengurus mengabari hasil survey lewat nomor ini.
+                      </p>
                     </div>
                     <div
                       className={
@@ -1172,29 +1905,25 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                         </div>
                       )}
                     </div>
-                    {formProfile?.requireKeperluanTinggal && (
-                      <div className="space-y-2">
-                        <Label>Keperluan tinggal *</Label>
-                        <Select
-                          value={p.keperluanTinggal}
-                          onValueChange={(v) => updatePenghuni(i, { keperluanTinggal: v })}
-                        >
-                          <SelectTrigger className="h-12">
-                            <SelectValue placeholder="Pilih keperluan" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {(formProfile.keperluanTinggalOptions.length
-                              ? formProfile.keperluanTinggalOptions
-                              : keperluanTinggalOptions
-                            ).map((o) => (
-                              <SelectItem key={o} value={o}>
-                                {o}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
+                    {formProfile?.requireKeperluanTinggal ? (
+                      <RincianKeperluanFields
+                        idPrefix={`keperluan-${i}`}
+                        penghuni={p}
+                        opsi={
+                          formProfile.keperluanTinggalOptions.length
+                            ? formProfile.keperluanTinggalOptions
+                            : keperluanTinggalOptions
+                        }
+                        onKeperluan={(v) =>
+                          updatePenghuni(i, {
+                            keperluanTinggal: v,
+                            detailKeperluan: { ...p.detailKeperluan, status: null, tidakTentu: false },
+                          })
+                        }
+                        onTempat={(v) => updatePenghuni(i, { namaTempatKerja: v })}
+                        onDetail={(patch) => updateDetailKeperluan(i, patch)}
+                      />
+                    ) : (
                     <div className="space-y-2">
                       <Label>{formProfile?.tempatKerjaLabel ?? "Tempat kerja"} *</Label>
                       <Input
@@ -1226,6 +1955,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                         </button>
                       )}
                     </div>
+                    )}
                     {umurFromDate(p.tanggalLahir) < 21 && (
                       <div className="space-y-2">
                         <Label>Nama sekolah (usia di bawah 21)</Label>
@@ -1237,97 +1967,30 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                         />
                       </div>
                     )}
-                    <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                          checked={p.kendaraanList.length > 0}
-                          onCheckedChange={(c) => setPunyaKendaraan(i, Boolean(c))}
-                          id={`kendaraan-${i}`}
-                        />
-                        <Label htmlFor={`kendaraan-${i}`} className="font-normal text-sm">
-                          Punya kendaraan (opsional)
-                        </Label>
-                      </div>
-                      {p.kendaraanList.length > 0 && (
-                        <div className="space-y-3">
-                          {p.kendaraanList.map((k, ki) => (
-                            <div key={ki} className="space-y-2 rounded-md border bg-background p-2">
-                              <div className="flex items-center justify-between">
-                                <p className="text-xs font-medium text-muted-foreground">
-                                  Kendaraan {ki + 1}
-                                </p>
-                                {p.kendaraanList.length > 1 && (
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-destructive"
-                                    onClick={() => removeKendaraan(i, ki)}
-                                    aria-label={`Hapus kendaraan ${ki + 1}`}
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
-                                )}
-                              </div>
-                              <Select
-                                value={k.jenis}
-                                onValueChange={(v) => updateKendaraan(i, ki, { jenis: v })}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Jenis kendaraan" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {jenisKendaraanOptions.map((o) => (
-                                    <SelectItem key={o} value={o}>
-                                      {o}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <PlatNomorInput
-                                required
-                                idPrefix={`plat-${i}-${ki}`}
-                                value={k.platParts}
-                                onChange={(platParts) => updateKendaraan(i, ki, { platParts })}
-                              />
-                            </div>
-                          ))}
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="w-full gap-1"
-                            onClick={() => addKendaraan(i)}
-                          >
-                            <Plus className="w-4 h-4" /> Tambah kendaraan
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Foto KTP</Label>
-                      <Input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f)
-                            void uploadKtp(f, i).catch((err: unknown) =>
-                              toast({
-                                title: "Upload gagal",
-                                description: err instanceof Error ? err.message : "Coba lagi",
-                                variant: "destructive",
-                              }),
-                            );
-                        }}
-                      />
-                      {p.fotoKtpPath && (
-                        <p className="text-xs text-success">KTP sudah terunggah ✓</p>
-                      )}
-                    </div>
+                    <KendaraanFields
+                      idPrefix={`kendaraan-${i}`}
+                      penghuni={p}
+                      onPunya={(punya) => setPunyaKendaraan(i, punya)}
+                      onUbah={(ki, patch) => updateKendaraan(i, ki, patch)}
+                      onTambah={() => addKendaraan(i)}
+                      onHapus={(ki) => removeKendaraan(i, ki)}
+                    />
+                    <FotoDokumenPicker
+                      jenis="ktp"
+                      foto={p.fotoKtpPath}
+                      diproses={fotoDiproses === i}
+                      onPilih={(f) =>
+                        void pasangFotoKtp(f, i).catch((err: unknown) => {
+                          const pesan = err instanceof Error ? err.message : "Coba lagi";
+                          setErrMsg(pesan);
+                          toast({ title: "Foto KTP gagal", description: pesan, variant: "destructive" });
+                        })
+                      }
+                    />
                   </>
                 )}
               </div>
+              <PesanGalat pesan={errMsg} />
               <div className="flex gap-2">
                 <Button
                   variant="outline"
@@ -1350,6 +2013,17 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                       tempatKerjaLabel: formProfile?.tempatKerjaLabel,
                     });
                     if (err) return showErr(err);
+                    if (fotoDiproses !== null) return showErr("Tunggu foto KTP selesai diproses");
+                    if (!p.isAnak) {
+                      const kembar = penghuni.findIndex(
+                        (x, xi) => xi !== i && !x.isAnak && x.nik === p.nik,
+                      );
+                      if (kembar >= 0) {
+                        return showErr(
+                          `NIK ini sudah dipakai untuk ${penghuni[kembar].namaLengkap.trim() || penghuniHeading(penghuni[kembar], kembar)}`,
+                        );
+                      }
+                    }
                     if (penghuniIndex < penghuni.length - 1) {
                       setPenghuniIndex((idx) => idx + 1);
                       return;
@@ -1382,6 +2056,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
             onSetuju={setSetujuTataTertib}
             loading={settingsLoading}
           />
+          <PesanGalat pesan={errMsg} />
           <div className="flex gap-2 sticky bottom-0 bg-background pt-2">
             <Button variant="outline" onClick={() => goStep(-1)}>
               <ChevronLeft className="w-4 h-4" />
@@ -1435,7 +2110,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
           </div>
           {previewSampai && (
             <p className="text-sm rounded-lg bg-muted p-3">
-              Berlaku sampai: <span className="font-semibold">{previewSampai}</span>
+              Berlaku sampai: <span className="font-semibold">{formatTanggalPanjang(previewSampai)}</span>
             </p>
           )}
           <div className="space-y-2">
@@ -1444,9 +2119,82 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
               value={catatan}
               onChange={(e) => setCatatan(e.target.value)}
               rows={2}
+              maxLength={900}
               placeholder="Ada info tambahan untuk admin? (boleh dikosongkan)"
             />
           </div>
+          <div className="rounded-xl border bg-card p-4 space-y-3 text-sm">
+            <p className="font-semibold">Periksa sebelum kirim</p>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground">Lokasi</p>
+                <p>
+                  RT {rt ? rt.padStart(2, "0") : "—"} · {alamat.trim() || "—"}
+                  {nomorUnit.trim() ? ` · ${nomorUnit.trim()}` : ""}
+                </p>
+              </div>
+              <Button type="button" variant="ghost" size="sm" className="h-auto px-2 py-1 text-brand" onClick={() => lompatKe("lokasi")}>
+                Ubah
+              </Button>
+            </div>
+            {product === "rw3biz" && (
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">Usaha</p>
+                  <p>{namaUsaha.trim() || "—"} · PJ {penanggungJawab.trim() || "—"}</p>
+                </div>
+                <Button type="button" variant="ghost" size="sm" className="h-auto px-2 py-1 text-brand" onClick={() => lompatKe("usaha")}>
+                  Ubah
+                </Button>
+              </div>
+            )}
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">
+                {jumlah} {formProfile?.orangLabel ?? "orang"}
+              </p>
+              {penghuni.map((x, xi) => (
+                <div key={xi} className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate">
+                      {x.namaLengkap.trim() || penghuniHeading(x, xi)}
+                      <span className="text-muted-foreground">
+                        {x.isAnak ? " · anak" : x.fotoKtpPath ? " · KTP ✓" : " · KTP belum ada"}
+                      </span>
+                    </p>
+                    {!x.isAnak && (
+                      <RingkasanPenghuni penghuni={x} pakaiKeperluan={Boolean(formProfile?.requireKeperluanTinggal)} />
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-auto px-2 py-1 text-brand flex-shrink-0"
+                    onClick={() => {
+                      setPenghuniIndex(xi);
+                      lompatKe("penghuni");
+                    }}
+                  >
+                    Ubah
+                  </Button>
+                </div>
+              ))}
+            </div>
+            {aturanKk !== "tidak" && (
+              <div className="flex items-center justify-between gap-2">
+                <span>
+                  Kartu Keluarga
+                  <span className="text-muted-foreground">
+                    {fotoKk ? " · KK ✓" : aturanKk === "wajib" ? " · KK belum ada" : " · tidak dilampirkan"}
+                  </span>
+                </span>
+                <Button type="button" variant="ghost" size="sm" className="h-auto px-2 py-1 text-brand" onClick={() => lompatKe("jumlah")}>
+                  Ubah
+                </Button>
+              </div>
+            )}
+          </div>
+          <PesanGalat pesan={errMsg} />
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => goStep(-1)}>
               <ChevronLeft className="w-4 h-4" />
@@ -1464,6 +2212,35 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                   setujuTataTertib,
                 );
                 if (err) return showErr(err);
+                const errLokasi = validateLokasiWargaSinggah({ rt, alamat, jenisWarga, nomorUnit });
+                if (errLokasi) {
+                  lompatKe("lokasi");
+                  return showErr(errLokasi, { step: indeksLangkah("lokasi") });
+                }
+                const opsiPenghuni = {
+                  keperluan,
+                  requireKeperluanTinggal: formProfile?.requireKeperluanTinggal ?? false,
+                  requirePekerjaan: formProfile?.requirePekerjaan ?? true,
+                  requireTempatKerja: formProfile?.requireTempatKerja ?? true,
+                  tempatKerjaLabel: formProfile?.tempatKerjaLabel,
+                };
+                for (let xi = 0; xi < penghuni.length; xi++) {
+                  const errP = validateSinglePenghuni(penghuni[xi], opsiPenghuni);
+                  if (errP) {
+                    setPenghuniIndex(xi);
+                    lompatKe("penghuni");
+                    return showErr(
+                      `${penghuni[xi].namaLengkap.trim() || penghuniHeading(penghuni[xi], xi)}: ${errP}`,
+                      { step: indeksLangkah("penghuni"), idx: xi },
+                    );
+                  }
+                }
+                if (aturanKk === "wajib" && !fotoKk) {
+                  lompatKe("jumlah");
+                  return showErr("Unggah foto Kartu Keluarga (wajib bila tinggal bersama anak)", {
+                    step: indeksLangkah("jumlah"),
+                  });
+                }
                 mutation.mutate();
               }}
             >

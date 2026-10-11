@@ -22,7 +22,9 @@ const TERMIN_OPTIONS = [
 
 export default function Visitrw3Perpanjang() {
   const { toast } = useToast();
-  const [nomorLama, setNomorLama] = useState("");
+  const [nomorLama, setNomorLama] = useState(
+    () => (new URLSearchParams(window.location.search).get("nomor") ?? "").trim().toUpperCase(),
+  );
   const [tanggalBayar, setTanggalBayar] = useState("");
   const [terminBulan, setTerminBulan] = useState("3");
   const [previewSampai, setPreviewSampai] = useState("");
@@ -107,9 +109,12 @@ export default function Visitrw3Perpanjang() {
           nextSteps={[
             `Nomor sebelumnya: ${result.nomorLama}`,
             "Pengajuan masuk antrian survey admin.",
-            "Gunakan nomor antrian baru untuk cek status.",
+            "Setelah disetujui, surat izin tinggal baru terbit dengan nomor ini — surat lama tidak berlaku lagi.",
           ]}
-          primaryAction={{ label: "Cek status", href: "/visitrw3/status" }}
+          primaryAction={{
+            label: "Cek status",
+            href: `/visitrw3/status?nomor=${encodeURIComponent(result.nomorVisitrw3)}`,
+          }}
           secondaryAction={{ label: "Kembali ke Visit RW3", href: "/visitrw3" }}
         />
       </Visitrw3Shell>

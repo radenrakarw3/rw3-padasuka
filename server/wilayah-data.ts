@@ -20,6 +20,8 @@ import {
 } from "@shared/wilayah";
 import { isNomorHpValid, looksLikeNik, maskNik, normalizeNomorHp } from "@shared/kontak";
 import { jawabanIndukKk, jawabanIndukWarga } from "@shared/wilayah-induk";
+import { resolveKategoriUmurFromAge } from "@shared/kategori-umur";
+import { kelompokUmurRingkas } from "@shared/statistik-warga";
 
 type Q = { query: PoolClient["query"] };
 
@@ -180,11 +182,10 @@ export async function ringkasKeluarga(kkIds: number[]) {
       if (o.jenis_kelamin === "Laki-laki") lakiLaki++;
       else if (o.jenis_kelamin === "Perempuan") perempuan++;
       const umur = umurTahun(o.tanggal_lahir, acuan);
-      if (umur != null) {
-        if (umur < 5) balita++;
-        else if (umur < 18) anak++;
-        else if (umur >= 60) lansia++;
-      }
+      const kelompok = kelompokUmurRingkas(resolveKategoriUmurFromAge(umur));
+      if (kelompok === "balita") balita++;
+      else if (kelompok === "anak") anak++;
+      else if (kelompok === "lansia") lansia++;
       for (const d of defWarga) {
         if (!berlakuUntukWarga(d, { jenisKelamin: o.jenis_kelamin, umur })) continue;
         pertanyaan++;

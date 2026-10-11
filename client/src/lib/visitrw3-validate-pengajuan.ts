@@ -1,8 +1,9 @@
 import { visitrw3JenjangAnakOptions } from "./constants";
 import type { KeperluanPengajuanMode } from "./visitrw3-properti";
-import { joinPlatNomor, isPlatLengkap } from "./visitrw3-plat";
-import type { KendaraanRow } from "./visitrw3-kendaraan";
+import { validateKendaraanRow, type KendaraanRow } from "./visitrw3-kendaraan";
+import { validateDetailKeperluan, type DetailKeperluan } from "@shared/visitrw3-keperluan";
 import { buildKategoriUsahaPayload } from "@shared/visitrw3-kategori-usaha";
+import { isNomorHpValid } from "@shared/kontak";
 
 export type PenghuniDraft = {
   namaLengkap: string;
@@ -13,8 +14,11 @@ export type PenghuniDraft = {
   jenisKelamin: string;
   pekerjaan: string;
   keperluanTinggal: string;
+  detailKeperluan: DetailKeperluan;
   namaTempatKerja: string;
   namaSekolah: string;
+  /** Jawaban wajib: "" = belum dijawab. */
+  punyaKendaraan: "" | "ya" | "tidak";
   kendaraanList: KendaraanRow[];
   fotoKtpPath: string;
 };
@@ -172,8 +176,10 @@ export function validateSinglePenghuni(
   const requireTempat = opts.requireTempatKerja !== false;
   const tempatLabel = opts.tempatKerjaLabel ?? "tempat kerja";
 
-  if (!p.namaLengkap.trim()) return "Isi nama lengkap";
+  if (p.namaLengkap.trim().length < 2) return "Isi nama lengkap (minimal 2 huruf)";
   if (!p.tanggalLahir) return "Pilih tanggal lahir";
+  const usia = umur(p.tanggalLahir);
+  if (Number.isNaN(usia) || usia < 0 || usia > 120) return "Tanggal lahir tidak valid";
 
   if (p.isAnak) {
     if (!p.namaSekolah.trim()) return "Pilih jenjang pendidikan anak";
@@ -185,28 +191,28 @@ export function validateSinglePenghuni(
 
   if (!p.nik || p.nik.length !== 16) return "NIK harus 16 digit";
   if (!p.nomorWhatsapp.trim()) return "Isi nomor WhatsApp";
+  if (!isNomorHpValid(p.nomorWhatsapp)) return "Nomor WhatsApp tidak valid (contoh 081234567890)";
   if (!p.jenisKelamin) return "Pilih jenis kelamin";
   if (requirePekerjaan && !p.pekerjaan) return "Pilih pekerjaan";
-  if (requireKeperluan && !p.keperluanTinggal) return "Pilih keperluan tinggal";
-  const u = umur(p.tanggalLahir);
-  if (requireTempat && !p.namaTempatKerja.trim()) {
+  if (requireKeperluan) {
+    if (!p.keperluanTinggal) return "Pilih keperluan tinggal";
+    const errKeperluan = validateDetailKeperluan(p.keperluanTinggal, p.namaTempatKerja, p.detailKeperluan);
+    if (errKeperluan) return errKeperluan;
+  } else if (requireTempat && !p.namaTempatKerja.trim()) {
     return `Isi ${tempatLabel.toLowerCase()}`;
   }
+  const u = umur(p.tanggalLahir);
   if (u < 21 && !p.namaSekolah.trim()) return "Isi nama sekolah (usia di bawah 21 tahun)";
-  if (!p.fotoKtpPath) return "Unggah foto KTP";
 
-  if (p.kendaraanList.length > 0) {
+  if (!p.punyaKendaraan) return "Jawab dulu: punya kendaraan atau tidak";
+  if (p.punyaKendaraan === "ya") {
+    if (p.kendaraanList.length === 0) return "Isi minimal satu kendaraan";
     for (let ki = 0; ki < p.kendaraanList.length; ki++) {
-      const k = p.kendaraanList[ki];
-      if (!k.jenis.trim()) return `Pilih jenis kendaraan #${ki + 1}`;
-      const parts = k.platParts;
-      const plat = joinPlatNomor(parts) || k.plat;
-      if (!isPlatLengkap(parts) && !plat.trim()) {
-        return `Lengkapi plat nomor kendaraan #${ki + 1}`;
-      }
-      if (!isPlatLengkap(parts)) return `Lengkapi semua bagian plat nomor kendaraan #${ki + 1}`;
+      const err = validateKendaraanRow(p.kendaraanList[ki], ki + 1);
+      if (err) return err;
     }
   }
+  if (!p.fotoKtpPath) return "Unggah foto KTP";
   return null;
 }
 
@@ -372,7 +378,7 @@ export function validateStepBayar(
   setujuTataTertib?: boolean,
 ) {
   if (!setujuTataTertib) return "Lengkapi langkah syarat terlebih dahulu";
-  if (!tanggalBayar) return "Tanggal bayar wajib diisi";
+  if (!tanggalBayar || !/^\d{4}-\d{2}-\d{2}$/.test(tanggalBayar)) return "Tanggal bayar wajib diisi";
   if (!terminBulan) return "Termin pembayaran wajib dipilih";
   return null;
 }

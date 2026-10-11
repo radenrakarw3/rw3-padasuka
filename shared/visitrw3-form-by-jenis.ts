@@ -143,3 +143,9 @@ export const VISITRW3_FORM_BY_JENIS: Record<JenisWarga, Visitrw3FormProfile> = {
 export function getVisitrw3FormProfile(jenis: JenisWarga): Visitrw3FormProfile {
   return VISITRW3_FORM_BY_JENIS[jenis];
 }
+
+/** Foto KK hanya diminta untuk ngontrak; wajib bila ada anak (pasti satu keluarga). */
+export function aturanFotoKk(jenis: JenisWarga | "", jumlahAnak: number): "tidak" | "opsional" | "wajib" {
+  if (jenis !== "kontrak") return "tidak";
+  return jumlahAnak > 0 ? "wajib" : "opsional";
+}

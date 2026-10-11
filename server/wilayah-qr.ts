@@ -8,6 +8,7 @@ import crypto from "crypto";
 import QRCode from "qrcode";
 import { z } from "zod";
 import { pool } from "./db";
+import { invalidateWarga } from "./cache";
 import { catatAudit, WilayahError, type Aktor } from "./wilayah-auth";
 import { denganTransaksi, detailKeluarga, indukKeluarga, ringkasKeluarga, simpanFakta } from "./wilayah-data";
 import { registri, standarAktif } from "./wilayah-standar";
@@ -479,7 +480,7 @@ export async function putuskanUsulan(aktor: Aktor, id: number, input: unknown) {
   if (aktor.role !== "rt" || !aktor.rt) throw new WilayahError(403, "Hanya Ketua RT");
   const rt = aktor.rt;
   const d = putusanSchema.parse(input);
-  return denganTransaksi(async (c) => {
+  const hasil = await denganTransaksi(async (c) => {
     const { rows } = await c.query(`SELECT id, kk_id, rt, status FROM wil_usulan WHERE id = $1 FOR UPDATE`, [id]);
     const u = rows[0];
     if (!u || u.rt !== rt) throw new WilayahError(404, "Usulan tidak ditemukan");
@@ -531,4 +532,6 @@ export async function putuskanUsulan(aktor: Aktor, id: number, input: unknown) {
     await catatAudit(aktor, "usulan_terima", "usulan", id, rt, null, { diterapkan: n }, c);
     return { ok: true, diterapkan: n };
   });
+  if (hasil.diterapkan > 0) invalidateWarga();
+  return hasil;
 }

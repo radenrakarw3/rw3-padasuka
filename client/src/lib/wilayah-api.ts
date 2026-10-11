@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { queryClient } from "@/lib/queryClient";
 
 export class WilayahApiError extends Error {
   constructor(public status: number, message: string) {
@@ -48,7 +49,15 @@ export async function wil<T = any>(path: string, opsi: Opsi = {}): Promise<T> {
     /* bukan JSON */
   }
   if (!res.ok) throw new WilayahApiError(res.status, data?.message || `Gagal (kode ${res.status}). Coba lagi.`);
+  if (opsi.method !== "GET" && (opsi.method || opsi.body !== undefined)) segarkanStatistikWarga();
   return data as T;
+}
+
+/** Angka warga di Dashboard & Kependudukan dihitung dari data yang baru saja bisa berubah. */
+export function segarkanStatistikWarga() {
+  for (const key of ["/api/statistik-warga", "/api/warga-with-kk", "/api/wilayah/rw/ringkasan", "/api/stats/kependudukan"]) {
+    queryClient.invalidateQueries({ queryKey: [key] });
+  }
 }
 
 export async function unduh(path: string, namaCadangan: string, peran?: Peran) {

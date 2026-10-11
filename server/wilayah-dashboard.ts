@@ -4,7 +4,10 @@
 import { pool } from "./db";
 import { ringkasKeluarga, type PerhatianKeluarga } from "./wilayah-data";
 import { standarAktif } from "./wilayah-standar";
-import { WILAYAH_RT_NUMBERS, kenaPerhatian, nilaiBanyak } from "@shared/wilayah";
+import { kenaPerhatian, nilaiBanyak } from "@shared/wilayah";
+import { ACTIVE_RT_NUMBERS } from "@shared/rt";
+
+const RT_DASHBOARD = [...ACTIVE_RT_NUMBERS];
 
 export interface SebaranJawaban {
   kunci: string;
@@ -20,7 +23,7 @@ export async function ringkasanRw() {
     `SELECT k.id, k.rt, k.alamat,
             (SELECT nama_lengkap FROM warga w WHERE w.kk_id = k.id AND w.kedudukan_keluarga = 'Kepala Keluarga' ORDER BY w.id LIMIT 1) AS kepala
        FROM kartu_keluarga k WHERE k.rt = ANY($1)`,
-    [WILAYAH_RT_NUMBERS],
+    [RT_DASHBOARD],
   );
   const ringkas = await ringkasKeluarga(kks.map((k) => k.id));
   const { rows: antre } = await pool.query(
@@ -28,7 +31,7 @@ export async function ringkasanRw() {
        (SELECT COUNT(*)::int FROM wil_usulan u WHERE u.rt = r.rt AND u.status = 'menunggu') AS usulan,
        (SELECT COUNT(*)::int FROM wil_serah_terima s WHERE (s.rt_asal = r.rt OR s.rt_tujuan = r.rt) AND s.status = 'diajukan') AS pindah
      FROM unnest($1::int[]) AS r(rt)`,
-    [WILAYAH_RT_NUMBERS],
+    [RT_DASHBOARD],
   );
 
   const jumlah = (list: typeof kks, f: (r: NonNullable<ReturnType<typeof ringkas.get>>) => number) =>
@@ -51,7 +54,7 @@ export async function ringkasanRw() {
     kkBelumDiisi: kks.filter((k) => ringkas.get(k.id)!.terjawab === 0).length,
   };
 
-  const perRt = WILAYAH_RT_NUMBERS.map((rt) => {
+  const perRt = RT_DASHBOARD.map((rt) => {
     const list = kks.filter((k) => k.rt === rt);
     const a = antre.find((x) => x.rt === rt);
     return {

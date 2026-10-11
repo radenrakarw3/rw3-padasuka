@@ -25,7 +25,9 @@ import { invalidateVisitrw3Dashboard } from "./cache";
 import { ACTIVE_RT_NUMBERS } from "@shared/rt";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
-import { visitrw3Penghuni } from "@shared/schema";
+import { visitrw3Pengajuan, visitrw3Penghuni } from "@shared/schema";
+import { buatPdfSuratVisitrw3, getDataSuratVisitrw3, ringkasSuratPublik } from "./visitrw3-surat";
+import { ambilDokumenKk } from "./visitrw3-dokumen";
 
 const ktpDir = path.join(process.cwd(), "uploads", "visitrw3-ktp");
 fs.mkdirSync(ktpDir, { recursive: true });
@@ -106,6 +108,20 @@ export function registerVisitrw3Routes(app: Express) {
       res.send(payload.buffer);
     } catch (error: unknown) {
       res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat KTP") });
+    }
+  });
+
+  app.get("/api/admin/visitrw3/pengajuan/:id/kk", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(String(req.params.id), 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ message: "ID tidak valid" });
+      const dok = await ambilDokumenKk(id);
+      if (!dok) return res.status(404).json({ message: "Foto Kartu Keluarga tidak ada" });
+      res.setHeader("Content-Type", dok.mime);
+      res.setHeader("Cache-Control", "private, max-age=3600");
+      res.send(dok.buffer);
+    } catch (error: unknown) {
+      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat Kartu Keluarga") });
     }
   });
 
@@ -197,9 +213,60 @@ export function registerVisitrw3Routes(app: Express) {
     try {
       const data = await getStatusByNomor(req.params.nomor as string);
       if (!data) return res.status(404).json({ message: "Nomor Visit RW3 tidak ditemukan" });
-      res.json(data);
+      const surat = await getDataSuratVisitrw3(data.pengajuan.nomorVisitrw3);
+      // Endpoint publik: tanpa NIK lengkap, nomor WA, maupun foto KTP.
+      const {
+        catatanSurvey: _catatanSurvey,
+        reviewedBy: _reviewedBy,
+        persetujuanTetangga: _persetujuanTetangga,
+        ...pengajuan
+      } = data.pengajuan;
+      res.json({
+        pengajuan,
+        kost: data.kost ? { namaKost: data.kost.namaKost } : null,
+        kontrakAktif: Boolean(data.kontrakAktif),
+        surat: surat ? ringkasSuratPublik(surat) : null,
+      });
     } catch (error: unknown) {
       res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat status pengajuan") });
+    }
+  });
+
+  const kirimSurat = async (res: Response, nomor: string, nikLengkap: boolean, unduh: boolean) => {
+    const data = await getDataSuratVisitrw3(nomor);
+    if (!data) {
+      return res.status(404).json({ message: "Surat belum terbit — pengajuan belum disetujui atau nomor tidak ditemukan" });
+    }
+    const { buffer, nama } = await buatPdfSuratVisitrw3(data, { nikLengkap });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `${unduh ? "attachment" : "inline"}; filename="${nama}"`);
+    res.setHeader("Cache-Control", "no-store");
+    res.send(buffer);
+  };
+
+  /** Salinan warga: NIK disamarkan karena cukup bermodal nomor VRW3. */
+  app.get("/api/public/visitrw3/surat/:nomor", async (req, res) => {
+    try {
+      await kirimSurat(res, String(req.params.nomor), false, req.query.unduh === "1");
+    } catch (error: unknown) {
+      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal membuat surat") });
+    }
+  });
+
+  /** Arsip/cetak resmi admin: NIK lengkap. */
+  app.get("/api/admin/visitrw3/pengajuan/:id/surat", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(String(req.params.id), 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ message: "ID tidak valid" });
+      const [row] = await db
+        .select({ nomor: visitrw3Pengajuan.nomorVisitrw3 })
+        .from(visitrw3Pengajuan)
+        .where(eq(visitrw3Pengajuan.id, id))
+        .limit(1);
+      if (!row) return res.status(404).json({ message: "Pengajuan tidak ditemukan" });
+      await kirimSurat(res, row.nomor, true, req.query.unduh === "1");
+    } catch (error: unknown) {
+      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal membuat surat") });
     }
   });
 

@@ -20,7 +20,7 @@ const LH = 5.4;
 const ATAS_LANJUTAN = 20;
 
 let logo: string | null | undefined;
-function muatLogo(): string | null {
+export function muatLogo(): string | null {
   if (logo !== undefined) return logo;
   try {
     // Versi kecil (280 px) dari logo resmi; PNG 16x terlalu berat didekode jsPDF per dokumen.

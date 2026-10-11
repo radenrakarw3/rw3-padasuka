@@ -1,10 +1,20 @@
 /** Estimasi kontribusi Visit RW3 — tarif berjenjang (ukuran & jenis). */
 
+/** Tanggal + N bulan; hari dijepit ke akhir bulan (31 Jan + 1 bln = 28/29 Feb). Bebas zona waktu. */
 export function hitungTanggalBerlaku(tanggalBayar: string, terminBulan: number): string {
-  const d = new Date(`${tanggalBayar}T00:00:00`);
-  if (Number.isNaN(d.getTime())) throw new Error("Tanggal bayar tidak valid");
-  d.setMonth(d.getMonth() + terminBulan);
-  return d.toISOString().split("T")[0];
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(tanggalBayar ?? "").trim());
+  const termin = Number(terminBulan);
+  if (!m || !Number.isFinite(termin)) throw new Error("Tanggal bayar tidak valid");
+  const tahun = Number(m[1]);
+  const bulan = Number(m[2]) - 1;
+  const hari = Number(m[3]);
+  if (bulan < 0 || bulan > 11 || hari < 1 || hari > 31) throw new Error("Tanggal bayar tidak valid");
+  const totalBulan = bulan + termin;
+  const tahunHasil = tahun + Math.floor(totalBulan / 12);
+  const bulanHasil = ((totalBulan % 12) + 12) % 12;
+  const hariMaks = new Date(Date.UTC(tahunHasil, bulanHasil + 1, 0)).getUTCDate();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${tahunHasil}-${pad(bulanHasil + 1)}-${pad(Math.min(hari, hariMaks))}`;
 }
 
 export type UkuranProperti = "kecil" | "sedang" | "besar";

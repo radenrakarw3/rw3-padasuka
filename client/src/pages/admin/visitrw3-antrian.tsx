@@ -17,7 +17,7 @@ import { labelJenisWarga } from "@shared/visitrw3-jenis-warga";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Check, X, Eye, ClipboardList, MessageCircle, MapPin } from "lucide-react";
+import { Check, X, Eye, ClipboardList, MessageCircle, MapPin, Printer } from "lucide-react";
 import { toWaMeUrl } from "@/lib/wa";
 import { Visitrw3AdminNav } from "@/components/admin/visitrw3-admin-nav";
 import {
@@ -29,7 +29,8 @@ import {
   Visitrw3RtBadge,
 } from "@/components/admin/visitrw3-admin-ui";
 import { StatusBadge, visitrw3StatusVariant } from "@/components/gov/status-badge";
-import { formatKendaraanDisplay } from "@/lib/visitrw3-kendaraan";
+import { formatKendaraanBaris, parseKendaraan } from "@shared/visitrw3-kendaraan";
+import { barisKeperluan, parseDetailKeperluan } from "@shared/visitrw3-keperluan";
 import { labelJenisTempatUsahaAdmin, labelKategoriUsahaAdmin } from "@/lib/visitrw3-admin-labels";
 import { VISITRW3_ROUTES } from "@/lib/visitrw3-routes";
 import { RW3BIZ_ROUTES } from "@/lib/rw3biz-routes";
@@ -385,6 +386,19 @@ export default function AdminVisitrw3Antrian({
                     message={pesanWaPengajuan(row)}
                     label="Chat WA"
                   />
+                  {row.status === "disetujui" && row.jenisWarga !== "jualan" && (
+                    <a
+                      href={`/api/admin/visitrw3/pengajuan/${row.id}/surat`}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Button size="sm" variant="secondary" className="h-8 gap-1">
+                        <Printer className="w-4 h-4" />
+                        Cetak surat
+                      </Button>
+                    </a>
+                  )}
                   <Button
                     size="sm"
                     variant="secondary"
@@ -444,6 +458,22 @@ export default function AdminVisitrw3Antrian({
                 </span>
                 <StatusBadge variant={visitrw3StatusVariant(p.status)} />
               </div>
+
+              {p.status === "disetujui" && !isJualan && (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[hsl(163,55%,22%)]/30 bg-[hsl(163,55%,22%)]/5 p-3">
+                  <div>
+                    <p className="font-medium">Surat Izin Tinggal Sementara</p>
+                    <p className="text-xs text-muted-foreground">
+                      Berlaku sampai {p.tanggalBerlakuSampai} · cetak F4, tanda tangan basah Ketua RW
+                    </p>
+                  </div>
+                  <a href={`/api/admin/visitrw3/pengajuan/${p.id}/surat`} target="_blank" rel="noreferrer">
+                    <Button size="sm" className="gap-1">
+                      <Printer className="w-4 h-4" /> Cetak surat
+                    </Button>
+                  </a>
+                </div>
+              )}
 
               <div className="space-y-1 rounded-lg border bg-muted/20 p-3">
                 <p>
@@ -543,6 +573,10 @@ export default function AdminVisitrw3Antrian({
                     isAnak?: boolean;
                     nomorWhatsapp?: string | null;
                     nik?: string | null;
+                    keperluanTinggal?: string | null;
+                    detailKeperluan?: string | null;
+                    namaTempatKerja?: string | null;
+                    pekerjaan?: string | null;
                     punyaKendaraan?: boolean;
                     jenisKendaraan?: string | null;
                     platNomor?: string | null;
@@ -573,11 +607,30 @@ export default function AdminVisitrw3Antrian({
                           NIK: {ph.nik} · WA: {ph.nomorWhatsapp}
                         </p>
                       )}
-                      {ph.punyaKendaraan && (
-                        <p className="text-xs">
-                          Kendaraan:{" "}
-                          {formatKendaraanDisplay(ph.jenisKendaraan, ph.platNomor) || "—"}
-                        </p>
+                      {!ph.isAnak && ph.pekerjaan && <p className="text-xs">Pekerjaan: {ph.pekerjaan}</p>}
+                      {!ph.isAnak &&
+                        barisKeperluan(ph.keperluanTinggal, ph.namaTempatKerja, parseDetailKeperluan(ph.detailKeperluan)).map(
+                          ([a, v]) => (
+                            <p key={a} className="text-xs">
+                              {a}: {v}
+                            </p>
+                          ),
+                        )}
+                      {!ph.isAnak && (
+                        <div className="text-xs">
+                          {ph.punyaKendaraan ? (
+                            parseKendaraan(ph.jenisKendaraan, ph.platNomor).map((k, ki, all) => (
+                              <p key={ki}>
+                                {all.length > 1 ? `Kendaraan ${ki + 1}` : "Kendaraan"}: {formatKendaraanBaris(k)}
+                                {k.status && k.status !== "lunas" ? (
+                                  <span className="ml-1 rounded bg-amber-100 px-1 text-amber-900">cek STNK</span>
+                                ) : null}
+                              </p>
+                            ))
+                          ) : (
+                            <p>Kendaraan: tidak punya</p>
+                          )}
+                        </div>
                       )}
                       {ph.isAnak && ph.namaSekolah && (
                         <p className="text-xs">Jenjang: {ph.namaSekolah}</p>
@@ -602,6 +655,27 @@ export default function AdminVisitrw3Antrian({
                       )}
                     </div>
                   ),
+                )}
+                {detail.hasFotoKk && (
+                  <div className="rounded border p-2 space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-medium">Kartu Keluarga</p>
+                      <a
+                        className="text-xs text-primary underline"
+                        href={`/api/admin/visitrw3/pengajuan/${p.id}/kk`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Buka ukuran penuh
+                      </a>
+                    </div>
+                    <img
+                      src={`/api/admin/visitrw3/pengajuan/${p.id}/kk`}
+                      alt="Kartu Keluarga"
+                      className="max-h-56 w-full rounded border object-contain bg-muted/40"
+                      loading="lazy"
+                    />
+                  </div>
                 )}
               </div>
 

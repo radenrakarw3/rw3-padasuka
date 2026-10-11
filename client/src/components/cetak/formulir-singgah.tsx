@@ -1,5 +1,7 @@
 import { getVisitrw3FormProfile } from "@shared/visitrw3-form-by-jenis";
 import { rtOptions, jenisKendaraanOptions, visitrw3JenisTempatUsahaOptions, visitrw3KategoriUsahaOptions, visitrw3JenjangAnakOptions } from "@/lib/constants";
+import { STATUS_KENDARAAN } from "@shared/visitrw3-kendaraan";
+import { ATURAN_KEPERLUAN, STATUS_KERJA } from "@shared/visitrw3-keperluan";
 import { AlirF4, Isian, KopHemat, KotakCentang, KotakDigit } from "./lembar-f4";
 
 export type JenisFormSinggah = "kontrak" | "kost" | "jualan";
@@ -11,6 +13,60 @@ const JUDUL: Record<JenisFormSinggah, { judul: string; sub: string }> = {
 };
 
 const p9 = { fontSize: "9pt", marginTop: "1.6mm" } as const;
+const sel = { border: "1px solid #000", padding: "0.8mm 1mm", height: "6.5mm" } as const;
+
+/** Sama dengan isian online: tempat, alamat, peran, status, sampai kapan, untuk apa. */
+function RincianKeperluan({ opsi }: { opsi: readonly string[] }) {
+  const { Kerja, Kuliah, Usaha } = ATURAN_KEPERLUAN;
+  return (
+    <div style={{ marginTop: "1.6mm", fontSize: "9pt" }}>
+      <p>Keperluan tinggal di RW 03: {opsi.map((k) => <KotakCentang key={k} teks={k} />)}</p>
+      <p style={p9}><Isian label="Nama tempat kerja / kampus / usaha / instansi:" /></p>
+      <p style={p9}><Isian label="Alamat tempat kerja / kampus / usaha:" /></p>
+      <p style={p9}><Isian label={`${Kerja.peran!.label} · ${Kuliah.peran!.label.toLowerCase()} · ${Usaha.peran!.label.toLowerCase()}:`} /></p>
+      <p style={p9}>Status kerja: {STATUS_KERJA.map((s) => <KotakCentang key={s} teks={s} />)}</p>
+      <p style={p9}><Isian label="Bila kuliah, semester / tingkat:" lebar="55%" /></p>
+      <p style={p9}>
+        <Isian label="Sampai kapan (bulan/tahun):" lebar="50%" /> <KotakCentang teks="Tidak ada batas (karyawan tetap / usaha menetap)" />
+      </p>
+      <p style={p9}><Isian label="Untuk apa / keterangan (wajib bila Lainnya):" /></p>
+      <p style={p9}><Isian /></p>
+    </div>
+  );
+}
+
+function TabelKendaraan() {
+  const kolom = ["No", "Jenis", "Merek / tipe", "Warna", "Plat nomor", "Status*", "Nama di STNK", "Leasing & bln lunas (bila cicilan)"];
+  const lebar = ["5%", "10%", "15%", "9%", "14%", "8%", "18%", "21%"];
+  return (
+    <div style={{ marginTop: "1.6mm", fontSize: "9pt" }}>
+      <p>
+        Punya kendaraan yang dibawa/dipakai di RW 03? <KotakCentang teks="Tidak punya" /><KotakCentang teks="Ya, isi tabel (tunjukkan STNK saat survey)" />
+      </p>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "7.5pt", marginTop: "1mm", tableLayout: "fixed" }}>
+        <thead>
+          <tr>{kolom.map((k, i) => <th key={k} style={{ ...sel, height: "auto", width: lebar[i], fontWeight: 700, textAlign: "left" }}>{k}</th>)}</tr>
+        </thead>
+        <tbody>
+          {[1, 2].map((n) => (
+            <tr key={n}>{kolom.map((k, i) => <td key={k} style={sel}>{i === 0 ? n : ""}</td>)}</tr>
+          ))}
+        </tbody>
+      </table>
+      <p style={{ fontSize: "7.5pt", marginTop: "0.8mm" }}>
+        *Status: {STATUS_KENDARAAN.map((s) => `${KODE_STATUS[s.value]} = ${s.label.toLowerCase()}`).join(" · ")}. Jenis: {jenisKendaraanOptions.join(" / ")}. Lebih dari 2 kendaraan: tulis di balik lembar.
+      </p>
+    </div>
+  );
+}
+
+const KODE_STATUS: Record<(typeof STATUS_KENDARAAN)[number]["value"], string> = {
+  lunas: "L",
+  cicilan: "C",
+  keluarga: "K",
+  kantor: "D",
+  sewa: "S",
+};
 
 function Orang({ no, judul, profil, jualan }: { no: number; judul: string; profil: ReturnType<typeof getVisitrw3FormProfile>; jualan: boolean }) {
   return (
@@ -19,16 +75,12 @@ function Orang({ no, judul, profil, jualan }: { no: number; judul: string; profi
       <p style={p9}><Isian label="Nama lengkap (sesuai KTP):" /></p>
       <p style={p9}>NIK: <KotakDigit jumlah={16} /> &nbsp; <KotakCentang teks="Laki-laki" /><KotakCentang teks="Perempuan" /></p>
       <p style={p9}><Isian label="Tanggal lahir:" lebar="44%" /> <Isian label="No. WhatsApp:" lebar="52%" /></p>
-      {profil.requirePekerjaan && <p style={p9}><Isian label="Pekerjaan:" lebar="44%" /> <Isian label={`${profil.tempatKerjaLabel}:`} lebar="52%" /></p>}
+      {profil.requirePekerjaan && !profil.requireKeperluanTinggal && <p style={p9}><Isian label="Pekerjaan:" lebar="44%" /> <Isian label={`${profil.tempatKerjaLabel}:`} lebar="52%" /></p>}
+      {profil.requirePekerjaan && profil.requireKeperluanTinggal && <p style={p9}><Isian label="Pekerjaan:" lebar="60%" /></p>}
       {!profil.requirePekerjaan && profil.requireTempatKerja && <p style={p9}><Isian label={`${profil.tempatKerjaLabel}:`} /></p>}
-      {profil.requireKeperluanTinggal && (
-        <p style={p9}>Keperluan tinggal: {profil.keperluanTinggalOptions.map((k) => <KotakCentang key={k} teks={k} />)}</p>
-      )}
+      {profil.requireKeperluanTinggal && <RincianKeperluan opsi={profil.keperluanTinggalOptions} />}
       <p style={p9}>Umur di bawah 21 tahun? <Isian label="Nama sekolah/kampus:" lebar="60%" /></p>
-      <p style={p9}>
-        Kendaraan: <KotakCentang teks="Tidak ada" />{jenisKendaraanOptions.map((k) => <KotakCentang key={k} teks={k} />)}
-        <Isian label="Plat nomor:" lebar="30%" />
-      </p>
+      <TabelKendaraan />
       {jualan && no === 1 && <p style={{ ...p9, fontStyle: "italic" }}>Orang no. 1 adalah penanggung jawab (PJ) usaha.</p>}
     </div>
   );

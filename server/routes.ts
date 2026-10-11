@@ -24,6 +24,7 @@ import {
   startVisitrw3ReminderScheduler,
 } from "./wa-notify";
 import { buildKependudukanStats } from "./kependudukan-stats";
+import { statistikWarga } from "./statistik-warga";
 
 function resolveAppVersion() {
   const productionIndexPath = path.resolve(process.cwd(), "dist", "public", "index.html");
@@ -294,6 +295,15 @@ export async function registerRoutes(
     req.session.destroy(() => {
       res.json({ message: "Logout berhasil" });
     });
+  });
+
+  app.get("/api/statistik-warga", requireAdmin, async (_req, res) => {
+    try {
+      res.json(await statistikWarga());
+    } catch (error: unknown) {
+      console.error("[statistik-warga] error:", error);
+      res.status(500).json({ message: "Gagal memuat statistik warga" });
+    }
   });
 
   app.get("/api/stats/kependudukan", requireAdmin, async (req, res) => {

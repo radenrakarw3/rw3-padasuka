@@ -1,62 +1,67 @@
 import { joinPlatNomor, parsePlatNomor, type PlatParts } from "./visitrw3-plat";
+import {
+  formatKendaraanBaris,
+  parseKendaraan,
+  serializeKendaraan,
+  validateKendaraan,
+  type KendaraanData,
+  type StatusKendaraan,
+} from "@shared/visitrw3-kendaraan";
 
-export type KendaraanRow = { jenis: string; plat: string; platParts: PlatParts };
+export type KendaraanRow = {
+  jenis: string;
+  plat: string;
+  platParts: PlatParts;
+  merek: string;
+  warna: string;
+  status: StatusKendaraan | "";
+  atasNama: string;
+  leasing: string;
+  lunasPada: string;
+};
 
-export function emptyKendaraanRow(): KendaraanRow {
+export function emptyKendaraanRow(atasNama = ""): KendaraanRow {
   const platParts = { daerah: "", angka: "", belakang: "" };
-  return { jenis: "", plat: "", platParts };
+  return { jenis: "", plat: "", platParts, merek: "", warna: "", status: "", atasNama, leasing: "", lunasPada: "" };
 }
 
 export function kendaraanWithPlatParts(row: Partial<KendaraanRow> & { jenis?: string; plat?: string }): KendaraanRow {
   const platParts = row.platParts ?? parsePlatNomor(row.plat);
   const plat = joinPlatNomor(platParts) || row.plat || "";
-  return { jenis: row.jenis || "", plat, platParts };
+  return { ...emptyKendaraanRow(), ...row, jenis: row.jenis || "", plat, platParts };
 }
 
-/** Untuk kirim ke API (kompatibel single + multi). */
-export function serializeKendaraanForApi(list: KendaraanRow[]) {
-  const valid = list
-    .map((k) => ({ ...k, plat: joinPlatNomor(k.platParts) || k.plat.trim() }))
-    .filter((k) => k.jenis.trim());
-  if (valid.length === 0) {
-    return { punyaKendaraan: false, jenisKendaraan: null as string | null, platNomor: null as string | null };
-  }
-  if (valid.length === 1) {
-    return {
-      punyaKendaraan: true,
-      jenisKendaraan: valid[0].jenis.trim(),
-      platNomor: valid[0].plat.trim() || null,
-    };
-  }
+export function kendaraanRowKeData(k: KendaraanRow): KendaraanData {
   return {
-    punyaKendaraan: true,
-    jenisKendaraan: JSON.stringify(
-      valid.map((k) => ({ jenis: k.jenis.trim(), platNomor: k.plat.trim() || null })),
-    ),
-    platNomor: valid
-      .map((k) => k.plat.trim())
-      .filter(Boolean)
-      .join("; "),
+    jenis: k.jenis.trim(),
+    platNomor: (joinPlatNomor(k.platParts) || k.plat).trim() || null,
+    merek: k.merek,
+    warna: k.warna,
+    status: k.status || null,
+    atasNama: k.atasNama,
+    leasing: k.leasing,
+    lunasPada: k.lunasPada,
+  };
+}
+
+export function validateKendaraanRow(k: KendaraanRow, no: number): string | null {
+  return validateKendaraan(kendaraanRowKeData(k), no);
+}
+
+/** Untuk kirim ke API; `punya` = jawaban eksplisit penghuni. */
+export function serializeKendaraanForApi(list: KendaraanRow[], punya = list.length > 0) {
+  const data = punya ? list.map(kendaraanRowKeData).filter((k) => k.jenis) : [];
+  return {
+    punyaKendaraan: punya,
+    jenisKendaraan: serializeKendaraan(data),
+    platNomor: data.map((k) => k.platNomor).filter(Boolean).join("; ") || null,
   };
 }
 
 /** Tampilan admin / status. */
 export function formatKendaraanDisplay(jenisKendaraan?: string | null, platNomor?: string | null): string | null {
-  if (!jenisKendaraan?.trim()) return null;
-  try {
-    const parsed = JSON.parse(jenisKendaraan) as { jenis?: string; platNomor?: string | null }[];
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed
-        .map((k, i) => {
-          const jenis = k.jenis || "Kendaraan";
-          const plat = k.platNomor?.trim();
-          return plat ? `${i + 1}. ${jenis} (${plat})` : `${i + 1}. ${jenis}`;
-        })
-        .join(" · ");
-    }
-  } catch {
-    /* single legacy */
-  }
-  const plat = platNomor?.trim();
-  return plat ? `${jenisKendaraan} (${plat})` : jenisKendaraan;
+  const list = parseKendaraan(jenisKendaraan, platNomor);
+  if (!list.length) return null;
+  if (list.length === 1) return formatKendaraanBaris(list[0]);
+  return list.map((k, i) => `${i + 1}. ${formatKendaraanBaris(k)}`).join(" · ");
 }
