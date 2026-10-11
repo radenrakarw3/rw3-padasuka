@@ -102,7 +102,7 @@ export const FormulirKeluarga = forwardRef<HTMLDivElement, { defs: DefinisiFakta
               ? <>Cara mengisi: tanda <b>✓</b> adalah data yang sudah kami catat. Bila salah, <b>coret</b> lalu centang yang benar. Kotak yang belum dicentang berarti belum ada data, mohon dicentang. Tidak perlu menulis NIK.</>
               : <>Cara mengisi: centang (✓) jawaban yang sesuai. Tulis dengan huruf cetak. Tidak perlu menulis NIK atau nomor KK.</>}
           </p>
-          <p style={{ fontSize: "9pt", marginTop: "1.5mm" }}><Isian label="Diisi oleh:" lebar="42%" /> <Isian label="Hubungan:" lebar="24%" /> <Isian label="No. HP:" lebar="30%" /></p>
+          <p style={{ fontSize: "9pt", marginTop: "1.5mm" }}><Isian label="Diisi oleh:" lebar="38%" /> <Isian label="Hubungan:" lebar="22%" /> <Isian label="No. WA (wajib):" lebar="36%" /></p>
 
           <p style={{ fontWeight: 700, marginTop: "2.5mm" }}>A. KELUARGA & RUMAH</p>
           <Daftar defs={kk} jawab={(d) => jawaban[`kk:${paket?.kkId}:${d.kunci}`]} />

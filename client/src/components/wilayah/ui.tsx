@@ -177,14 +177,17 @@ export function PilihFakta({ kunci, def: defProp, nilai, onChange }: { kunci: st
 }
 
 export function IsianTeks({
-  label, nilai, onChange, tipe = "text", placeholder, bantuan, inputMode, maks,
+  label, nilai, onChange, tipe = "text", placeholder, bantuan, inputMode, maks, wajib, galat, autoComplete,
 }: {
   label: string; nilai: string; onChange: (v: string) => void; tipe?: string; placeholder?: string; bantuan?: string;
-  inputMode?: "text" | "numeric" | "tel"; maks?: number;
+  inputMode?: "text" | "numeric" | "tel"; maks?: number; wajib?: boolean; galat?: string | null; autoComplete?: string;
 }) {
   return (
     <label className="block mb-5">
-      <span className="block text-lg font-semibold text-gray-900 mb-1">{label}</span>
+      <span className="block text-lg font-semibold text-gray-900 mb-1">
+        {label}
+        {wajib && <span className="ml-2 align-middle rounded-md bg-red-50 px-2 py-0.5 text-sm font-semibold text-red-700">Wajib</span>}
+      </span>
       {bantuan && <span className="block text-base text-gray-600 mb-2">{bantuan}</span>}
       <input
         type={tipe}
@@ -192,9 +195,13 @@ export function IsianTeks({
         inputMode={inputMode}
         maxLength={maks}
         placeholder={placeholder}
+        autoComplete={autoComplete}
+        required={wajib}
+        aria-invalid={galat ? true : undefined}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full min-h-[56px] rounded-xl border-2 border-gray-300 px-4 text-lg focus:outline-none focus:border-[hsl(163,55%,22%)]"
+        className={`w-full min-h-[56px] rounded-xl border-2 px-4 text-lg focus:outline-none ${galat ? "border-red-500 bg-red-50/40 focus:border-red-600" : "border-gray-300 focus:border-[hsl(163,55%,22%)]"}`}
       />
+      {galat && <span role="alert" className="block mt-2 text-base font-medium text-red-700">{galat}</span>}
     </label>
   );
 }
@@ -216,10 +223,12 @@ export function IsianPanjang({ label, nilai, onChange, placeholder }: { label: s
 
 /** Kerangka form bertahap: langkah X dari Y, tombol Kembali/Lanjut besar. */
 export function Langkah({
-  langkah, total, judul, children, onKembali, onLanjut, labelLanjut = "Lanjut", bisaLanjut = true, memuat,
+  langkah, total, judul, children, onKembali, onLanjut, labelLanjut = "Lanjut", bisaLanjut = true, memuat, alasan, lengket,
 }: {
   langkah: number; total: number; judul: string; children: ReactNode; onKembali?: () => void; onLanjut: () => void;
-  labelLanjut?: string; bisaLanjut?: boolean; memuat?: boolean;
+  labelLanjut?: string; bisaLanjut?: boolean; memuat?: boolean; alasan?: string | null;
+  /** Tombol menempel di bawah layar HP (halaman publik berlatar hijau muda). */
+  lengket?: boolean;
 }) {
   return (
     <div className="pb-4">
@@ -231,9 +240,12 @@ export function Langkah({
       <p className="text-base text-gray-600">Langkah {langkah} dari {total}</p>
       <h2 className="text-xl font-bold mb-4">{judul}</h2>
       {children}
-      <div className="grid grid-cols-2 gap-3 mt-6">
-        {onKembali ? <TombolBesar varian="kedua" onClick={onKembali}>Kembali</TombolBesar> : <span />}
-        <TombolBesar onClick={onLanjut} disabled={!bisaLanjut} memuat={memuat}>{labelLanjut}</TombolBesar>
+      <div className={lengket ? "sticky bottom-0 -mx-4 mt-6 border-t border-gray-200 bg-[hsl(163,30%,96%)]/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur" : "mt-6"}>
+        {!bisaLanjut && alasan && <p className="mb-2 text-base font-medium text-amber-800">{alasan}</p>}
+        <div className="grid grid-cols-2 gap-3">
+          {onKembali ? <TombolBesar varian="kedua" onClick={onKembali}>Kembali</TombolBesar> : <span />}
+          <TombolBesar onClick={onLanjut} disabled={!bisaLanjut} memuat={memuat}>{labelLanjut}</TombolBesar>
+        </div>
       </div>
     </div>
   );

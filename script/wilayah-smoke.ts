@@ -143,6 +143,9 @@ async function main() {
   await uji("skema usulan menolak NIK di kolom HP dan isian kosong", () => {
     pastikan(!qr.isiUsulanSchema.safeParse({ ...isiValid, nomorHp: "3277011234567890" }).success, "NIK lolos");
     pastikan(!qr.isiUsulanSchema.safeParse({ ...isiValid, anggota: [] }).success, "tanpa anggota lolos");
+    pastikan(!qr.isiUsulanSchema.safeParse({ ...isiValid, nomorHp: "" }).success, "tanpa nomor WA lolos");
+    pastikan(!qr.isiUsulanSchema.safeParse({ ...isiValid, nomorHp: null }).success, "nomor WA null lolos");
+    pastikan(!qr.isiUsulanSchema.safeParse({ ...isiValid, nomorHp: "12345" }).success, "nomor WA asal lolos");
   });
   await uji("batas laju menolak setelah kuota", () => {
     const k = `uji:${Date.now()}`;
@@ -251,7 +254,7 @@ async function ujiDatabase() {
       sama(JSON.stringify(Object.keys(buka).sort()), JSON.stringify(["pertanyaan", "rt", "versiForm"]), "isi respons buka");
       pastikan(buka.pertanyaan.length > 0 && buka.pertanyaan.every((p: any) => p.aktif && p.diQr), "pertanyaan QR");
       const sebelum = JSON.stringify(await data.detailKeluarga(rt7, kkId).then((d) => [d.anggota, d.fakta]));
-      const body = { idempotencyKey: `uji-${acak()}-kunci`, isi: { versiForm: 1, namaPengisi: "Uji Satu", hubunganPengisi: "Kepala Keluarga", rumahTangga: { s_internet: "ya" }, anggota: [{ nama: "Uji Satu", hubungan: "Kepala Keluarga", jenisKelamin: "Laki-laki", jawaban: {} }] } };
+      const body = { idempotencyKey: `uji-${acak()}-kunci`, isi: { versiForm: 1, namaPengisi: "Uji Satu", hubunganPengisi: "Kepala Keluarga", nomorHp: "081234567890", rumahTangga: { s_internet: "ya" }, anggota: [{ nama: "Uji Satu", hubungan: "Kepala Keluarga", jenisKelamin: "Laki-laki", jawaban: {} }] } };
       const a = await qr.kirimUsulan(token, body, "127.0.0.1");
       const b = await qr.kirimUsulan(token, body, "127.0.0.1");
       sama(b.kodeTerima, a.kodeTerima, "kirim ganda");
@@ -349,7 +352,7 @@ async function alurLengkap(k: any) {
   await uji("usulan warga: RT terima → fakta resmi berubah dengan sumber usulan", async () => {
     const [kartu] = await qr.kartuUntukCetak(rt7, [kkId], true);
     const token = qr.normalisasiToken(kartu.tokenTampil)!;
-    const isi = { versiForm: 1, namaPengisi: "Uji Satu", hubunganPengisi: "Kepala Keluarga", rumahTangga: { s_internet: "tidak" }, anggota: [{ nama: "Uji Satu", hubungan: "Kepala Keluarga", jenisKelamin: "Laki-laki", jawaban: { s_jaminan_kesehatan: "bpjs_pbi" } }] };
+    const isi = { versiForm: 1, namaPengisi: "Uji Satu", hubunganPengisi: "Kepala Keluarga", nomorHp: "081234567890", rumahTangga: { s_internet: "tidak" }, anggota: [{ nama: "Uji Satu", hubungan: "Kepala Keluarga", jenisKelamin: "Laki-laki", jawaban: { s_jaminan_kesehatan: "bpjs_pbi" } }] };
     const { kodeTerima } = await qr.kirimUsulan(token, { idempotencyKey: `usl-${acak()}-kunci`, isi }, "127.0.0.2");
     sama((await qr.statusUsulan(kodeTerima)).status, "menunggu", "status");
     const u = (await qr.daftarUsulan(rt7)).find((x: any) => x.kk_id === kkId);

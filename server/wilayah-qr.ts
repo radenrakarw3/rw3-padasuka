@@ -279,7 +279,8 @@ export const isiUsulanSchema: z.ZodType<IsiUsulan> = z.object({
   versiForm: z.literal(1),
   namaPengisi: z.string().trim().min(2).max(100),
   hubunganPengisi: z.string().trim().min(2).max(40),
-  nomorHp: z.string().trim().max(20).nullable().optional(),
+  nomorHp: z.string({ required_error: "Nomor WhatsApp wajib diisi", invalid_type_error: "Nomor WhatsApp wajib diisi" })
+    .trim().min(1, "Nomor WhatsApp wajib diisi").max(20),
   rumahTangga: jawabanSchema,
   anggota: z.array(z.object({
     nama: z.string().trim().min(2).max(100),
@@ -292,8 +293,8 @@ export const isiUsulanSchema: z.ZodType<IsiUsulan> = z.object({
   catatan: z.string().trim().max(1000).nullable().optional(),
 }).superRefine((v, ctx) => {
   if (v.nomorHp) {
-    if (looksLikeNik(v.nomorHp)) ctx.addIssue({ code: "custom", path: ["nomorHp"], message: "Nomor HP terlihat seperti NIK" });
-    else if (!normalizeNomorHp(v.nomorHp)) ctx.addIssue({ code: "custom", path: ["nomorHp"], message: "Nomor HP tidak valid" });
+    if (looksLikeNik(v.nomorHp)) ctx.addIssue({ code: "custom", path: ["nomorHp"], message: "Nomor WhatsApp terlihat seperti NIK" });
+    else if (!normalizeNomorHp(v.nomorHp)) ctx.addIssue({ code: "custom", path: ["nomorHp"], message: "Nomor WhatsApp tidak valid (awali 08, 10–13 angka)" });
   }
 });
 
