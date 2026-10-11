@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Copy, Download, Eye, FilePlus2, FileText, Inbox, Paperclip, PencilLine, Send, Trash2, XCircle } from "lucide-react";
+import { ArrowLeft, Copy, Download, Eye, FilePlus2, Paperclip, PencilLine, Send, Trash2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { bukaBerkas, unduh, wil } from "@/lib/wilayah-api";
-import { KATALOG, PETA_JENIS, BENTUK_BANTUAN, rupiah, isoHariIni, type Blok } from "@shared/surat-sakti";
+import { PETA_JENIS, BENTUK_BANTUAN, rupiah, isoHariIni, type Blok } from "@shared/surat-sakti";
 import { Galat, LencanaTindak, PratinjauBloks, RW, TigaStatus, bacaFile, rt2, tanggalId, type RingkasSurat } from "./dasar";
 import { editorDariSurat, type StateEditor } from "./wizard";
 
@@ -20,8 +20,6 @@ interface Detail extends RingkasSurat {
   lampiran: { id: number; nama: string; mime: string; ukuran: number }[];
   kirim: { id: number; kanal: string; penerima: string; status: string; catatan: string | null; ada_bukti: boolean; bukti_teks: string | null; dikirim_pada: string; diterima_pada: string | null }[];
   tindak: Tindak[];
-  terkait: { id: number; nomor_surat: string | null; jenis_surat: string; perihal: string; status: string; induk_id: number | null; mengganti_id: number | null }[];
-  masuk: { id: number; pengirim: string; nomor: string | null; tanggal: string; perihal: string; ringkasan: string | null; berkas_nama: string | null }[];
   bantuan: { id: number; tahap: string; uraian: string; jumlah: number | null; satuan: string | null; nominal: number | null; pemberi: string | null; tanggal: string; ada_bukti: boolean }[];
 }
 
@@ -54,7 +52,7 @@ function BuktiInput({ nilai, ubah, setErr, label = "Bukti" }: { nilai: string; u
   );
 }
 
-export function DetailSurat({ id, tutup, ubahDraft, buka }: { id: number; tutup: () => void; ubahDraft: (s: StateEditor) => void; buka: (id: number) => void }) {
+export function DetailSurat({ id, tutup, ubahDraft }: { id: number; tutup: () => void; ubahDraft: (s: StateEditor) => void }) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const kunci = ["/api/wilayah/surat", id];
@@ -67,15 +65,12 @@ export function DetailSurat({ id, tutup, ubahDraft, buka }: { id: number; tutup:
   const [tindak, setTindak] = useState({ tindakan: "", picNama: "", picRt: "", tenggat: "" });
   const [upd, setUpd] = useState<{ id: number; catatan: string; progres: string; status: string; bukti: string; dariPihakLuar: boolean } | null>(null);
   const [bantuan, setBantuan] = useState({ tahap: "dijanjikan", uraian: "", jumlah: "", satuan: "", nominal: "", pemberi: "", tanggal: isoHariIni(), bukti: "" });
-  const [masuk, setMasuk] = useState({ pengirim: "", nomor: "", tanggal: isoHariIni(), perihal: "", ringkasan: "", berkas: "", berkasNama: "" });
   const [alasan, setAlasan] = useState("");
-  const [lanjut, setLanjut] = useState("");
 
   const segarkan = () => Promise.all([
     qc.invalidateQueries({ queryKey: ["/api/wilayah/surat"] }),
     qc.invalidateQueries({ queryKey: ["/api/wilayah/rw/surat-ringkasan"] }),
     qc.invalidateQueries({ queryKey: ["/api/wilayah/surat-tindak"] }),
-    qc.invalidateQueries({ queryKey: ["/api/wilayah/surat-rangkaian"] }),
   ]);
   const jalankan = async (fn: () => Promise<unknown>, sukses?: string) => {
     setSibuk(true);
@@ -100,7 +95,6 @@ export function DetailSurat({ id, tutup, ubahDraft, buka }: { id: number; tutup:
   const draft = s.status === "draft";
   const terbit = s.status === "terbit";
   const final = s.status !== "draft";
-  const opsiLanjut = [...(j?.lanjutan ?? []).map((k) => PETA_JENIS[k]).filter(Boolean), ...KATALOG.filter((x) => !j?.lanjutan.includes(x.kode))];
 
   return (
     <div className="space-y-4 pb-10">
@@ -132,7 +126,7 @@ export function DetailSurat({ id, tutup, ubahDraft, buka }: { id: number; tutup:
         )}
         {draft && (
           <Button variant="ghost" className="text-red-700" disabled={sibuk} onClick={async () => {
-            if (!confirm("Hapus draft ini? Permintaan RT terkait kembali ke antrean.")) return;
+            if (!confirm("Hapus draft ini?")) return;
             if (await jalankan(() => wil(`/api/wilayah/rw/surat/${s.id}`, { ...RW, method: "DELETE" }), "Draft dihapus")) tutup();
           }}><Trash2 className="w-4 h-4 mr-1" /> Hapus draft</Button>
         )}
@@ -296,43 +290,11 @@ export function DetailSurat({ id, tutup, ubahDraft, buka }: { id: number; tutup:
               <Button size="sm" disabled={sibuk || bantuan.uraian.trim().length < 3} onClick={async () => {
                 const ok = await jalankan(() => wil("/api/wilayah/rw/surat-bantuan", {
                   ...RW, body: {
-                    suratId: s.id, rangkaianId: s.rangkaianId, tahap: bantuan.tahap, uraian: bantuan.uraian, tanggal: bantuan.tanggal, pemberi: bantuan.pemberi || null,
+                    suratId: s.id, tahap: bantuan.tahap, uraian: bantuan.uraian, tanggal: bantuan.tanggal, pemberi: bantuan.pemberi || null,
                     jumlah: bantuan.jumlah ? Number(bantuan.jumlah) : null, satuan: bantuan.satuan || null, nominal: bantuan.nominal ? Number(bantuan.nominal) : null, bukti: bantuan.bukti || null,
                   },
                 }), "Tahap bantuan dicatat");
                 if (ok) { setForm(null); setBantuan({ ...bantuan, uraian: "", jumlah: "", nominal: "", bukti: "" }); }
-              }}>Simpan</Button>
-            </div>
-          )}
-        </Bagian>
-      )}
-
-      {final && (
-        <Bagian judul={`Surat masuk / balasan (${s.masuk.length})`} aksi={<Button size="sm" variant="outline" onClick={() => setForm(form === "masuk" ? null : "masuk")}><Inbox className="w-4 h-4 mr-1" /> Catat balasan</Button>}>
-          <ul className="text-sm space-y-1">
-            {s.masuk.map((m) => (
-              <li key={m.id}>{m.tanggal} · <b>{m.pengirim}</b>{m.nomor ? ` (${m.nomor})` : ""} · {m.perihal}{m.ringkasan ? ` — ${m.ringkasan}` : ""}
-                {m.berkas_nama && <button type="button" className="underline ml-1 text-xs" onClick={() => bukaBerkas(`/api/wilayah/rw/surat-masuk/${m.id}/berkas`, "rw").catch(setErr)}>berkas</button>}</li>
-            ))}
-          </ul>
-          {form === "masuk" && (
-            <div className="rounded border p-2 space-y-2 bg-stone-50">
-              <div className="grid sm:grid-cols-3 gap-2">
-                <Input placeholder="Pengirim" value={masuk.pengirim} onChange={(e) => setMasuk({ ...masuk, pengirim: e.target.value })} />
-                <Input placeholder="Nomor surat (bila ada)" value={masuk.nomor} onChange={(e) => setMasuk({ ...masuk, nomor: e.target.value })} />
-                <Input type="date" value={masuk.tanggal} onChange={(e) => setMasuk({ ...masuk, tanggal: e.target.value })} />
-              </div>
-              <Input placeholder="Perihal" value={masuk.perihal} onChange={(e) => setMasuk({ ...masuk, perihal: e.target.value })} />
-              <Textarea rows={2} placeholder="Ringkasan isi balasan" value={masuk.ringkasan} onChange={(e) => setMasuk({ ...masuk, ringkasan: e.target.value })} />
-              <Input type="file" accept="image/png,image/jpeg,image/webp,application/pdf" onChange={async (e) => {
-                const f = e.target.files?.[0];
-                if (f) bacaFile(f).then((b) => setMasuk({ ...masuk, berkas: b, berkasNama: f.name })).catch(setErr);
-              }} />
-              <Button size="sm" disabled={sibuk || masuk.pengirim.trim().length < 2 || masuk.perihal.trim().length < 3} onClick={async () => {
-                const ok = await jalankan(() => wil("/api/wilayah/rw/surat-masuk", {
-                  ...RW, body: { membalasId: s.id, pengirim: masuk.pengirim, nomor: masuk.nomor || null, tanggal: masuk.tanggal, perihal: masuk.perihal, ringkasan: masuk.ringkasan || null, berkas: masuk.berkas || null, berkasNama: masuk.berkasNama || null },
-                }), "Surat masuk dicatat");
-                if (ok) { setForm(null); setMasuk({ pengirim: "", nomor: "", tanggal: isoHariIni(), perihal: "", ringkasan: "", berkas: "", berkasNama: "" }); }
               }}>Simpan</Button>
             </div>
           )}
@@ -363,35 +325,20 @@ export function DetailSurat({ id, tutup, ubahDraft, buka }: { id: number; tutup:
       </Bagian>
 
       {final && (
-        <Bagian judul="Langkah berikutnya">
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="flex-1 min-w-[14rem] space-y-1">
-              <Label>Buat dokumen lanjutan (dalam rangkaian yang sama)</Label>
-              <select className="h-10 w-full border rounded-md px-2 bg-white" value={lanjut} onChange={(e) => setLanjut(e.target.value)}>
-                <option value="">— pilih jenis —</option>
-                {opsiLanjut.map((x, i) => <option key={x.kode} value={x.kode}>{i < (j?.lanjutan.length ?? 0) ? "★ " : ""}{x.label}</option>)}
-              </select>
-            </div>
-            <Button disabled={!lanjut || sibuk} onClick={async () => {
-              setSibuk(true);
-              try {
-                const r = await wil<any>(`/api/wilayah/rw/surat/${s.id}/lanjutan`, { ...RW, body: { kode: lanjut } });
-                await segarkan();
-                if (r.sudahAda) toast({ title: "Draft lanjutan jenis ini sudah ada", description: "Membuka draft yang sama, tidak membuat ganda." });
-                ubahDraft(editorDariSurat(r));
-              } catch (e) { setErr(e); } finally { setSibuk(false); }
-            }}><FilePlus2 className="w-4 h-4 mr-1" /> Buat lanjutan</Button>
-          </div>
-          {terbit && (
-            <div className="flex flex-wrap gap-2 pt-2 border-t">
+        <Bagian judul="Koreksi atau pakai ulang">
+          <p className="text-xs text-muted-foreground">Dokumen terbit tidak dapat diubah. Salin isinya menjadi draft baru yang berdiri sendiri (nomor baru saat terbit). Bila dokumen ini keliru, batalkan juga.</p>
+          <div className="flex flex-wrap gap-2">
+            {j && (
               <Button variant="outline" disabled={sibuk} onClick={async () => {
                 setSibuk(true);
                 try {
-                  const r = await wil<any>(`/api/wilayah/rw/surat/${s.id}/pengganti`, { ...RW, body: {} });
+                  const r = await wil<any>(`/api/wilayah/rw/surat/${s.id}/salin`, { ...RW, body: {} });
                   await segarkan();
                   ubahDraft(editorDariSurat(r));
                 } catch (e) { setErr(e); } finally { setSibuk(false); }
-              }}><FileText className="w-4 h-4 mr-1" /> Koreksi (buat pengganti)</Button>
+              }}><FilePlus2 className="w-4 h-4 mr-1" /> Salin jadi draft baru</Button>
+            )}
+            {terbit && (
               <div className="flex flex-1 min-w-[16rem] gap-2">
                 <Input placeholder="Alasan pembatalan" value={alasan} onChange={(e) => setAlasan(e.target.value)} />
                 <Button variant="outline" className="text-red-700" disabled={sibuk || alasan.trim().length < 5} onClick={async () => {
@@ -399,21 +346,8 @@ export function DetailSurat({ id, tutup, ubahDraft, buka }: { id: number; tutup:
                   if (await jalankan(() => wil(`/api/wilayah/rw/surat/${s.id}/batal`, { ...RW, body: { alasan } }), "Dokumen dibatalkan")) setAlasan("");
                 }}><XCircle className="w-4 h-4 mr-1" /> Batalkan</Button>
               </div>
-            </div>
-          )}
-          {s.terkait.length > 0 && (
-            <div className="pt-2 border-t">
-              <p className="text-sm font-medium">Dokumen terkait</p>
-              <ul className="text-sm">
-                {s.terkait.map((t) => (
-                  <li key={t.id}><button type="button" className="underline text-left" onClick={() => buka(t.id)}>
-                    {t.id === s.indukId ? "Induk: " : t.id === s.menggantiId ? "Menggantikan: " : t.mengganti_id === s.id ? "Pengganti: " : "Lanjutan: "}
-                    {t.nomor_surat ?? "draft"} · {t.jenis_surat} · {t.perihal} ({t.status})
-                  </button></li>
-                ))}
-              </ul>
-            </div>
-          )}
+            )}
+          </div>
         </Bagian>
       )}
 

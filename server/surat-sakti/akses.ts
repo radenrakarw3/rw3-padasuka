@@ -1,7 +1,7 @@
 /**
  * Akses dokumen Surat Sakti. RW: semua. RT: hanya dokumen terbit yang relevan dengan wilayahnya.
- *  - akses 'rt_terkait': RT yang tercantum di rt_terkait, RT pemohon, atau RT penanggung jawab tindak lanjut.
- *  - akses 'internal'  : hanya RT pemohon atau RT penanggung jawab tindak lanjut.
+ *  - akses 'rt_terkait': RT yang tercantum di rt_terkait atau RT penanggung jawab tindak lanjut.
+ *  - akses 'internal'  : hanya RT penanggung jawab tindak lanjut.
  *  - akses 'terbatas'  : hanya RW.
  */
 import { pool } from "../db";
@@ -11,7 +11,6 @@ import { WilayahError, type Aktor } from "../wilayah-auth";
 export function kondisiBacaRt(param: string): string {
   return `(s.status <> 'draft' AND s.akses <> 'terbatas' AND (
       (s.akses = 'rt_terkait' AND ${param} = ANY(s.rt_terkait))
-      OR EXISTS (SELECT 1 FROM wil_permintaan_surat p WHERE p.surat_id = s.id AND p.rt = ${param})
       OR EXISTS (SELECT 1 FROM wil_surat_tindak t WHERE t.surat_id = s.id AND t.pic_rt = ${param})))`;
 }
 

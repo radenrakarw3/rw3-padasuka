@@ -9,7 +9,7 @@ export const rt2 = (rt: number | null | undefined) => (rt ? `RT ${String(rt).pad
 export interface RingkasSurat {
   id: number; nomorSurat: string | null; jenisSurat: string; kodeJenis: string | null; perihal: string; tujuan: string | null;
   tanggalSurat: string | null; status: StatusDokumen; dataForm?: Record<string, unknown>; akses: string; rtTerkait: number[];
-  rangkaianId: number | null; indukId: number | null; menggantiId: number | null; permintaanId: number | null; kejadianId: number | null; kegiatanId: number | null;
+  kejadianId: number | null; kegiatanId: number | null;
   alasanBatal: string | null; perluPemeriksaan: boolean; finalV2: boolean; diterbitkanAt: string | null; updatedAt: string | null;
   statusDokumen: StatusDokumen; statusDistribusi: StatusDistribusi; statusPekerjaan: StatusPekerjaan; terlambat: number;
 }

@@ -1,6 +1,6 @@
-export type TujuanUtama = "tugaskan" | "masalah" | "keputusan" | "dukungan" | "pantau";
-export type Kategori = "A" | "B" | "C" | "D" | "E";
-export type Layout = "surat" | "keputusan" | "berita_acara" | "tabel" | "notulen" | "laporan";
+export type TujuanUtama = "tugaskan" | "masalah" | "keputusan" | "dukungan" | "pantau" | "kustom";
+export type Kategori = "A" | "B" | "C" | "D" | "E" | "F";
+export type Layout = "surat" | "keputusan" | "berita_acara" | "tabel" | "notulen" | "laporan" | "kustom";
 export type PosisiPenerima = "pengurus" | "warga" | "eksternal" | "internal";
 export type Akses = "internal" | "rt_terkait" | "terbatas";
 
@@ -41,8 +41,6 @@ export interface Field {
   tunggal?: boolean;
   /** Tidak dicetak (mis. centang konfirmasi internal). */
   internal?: boolean;
-  /** Tidak disalin ke dokumen lanjutan (konfirmasi, tanggal aktual). */
-  jangan_salin?: boolean;
   /** Jumlah baris kosong tambahan saat dicetak (daftar hadir). */
   barisKosong?: number;
 }
@@ -71,11 +69,9 @@ export interface JenisDokumen {
   pembuka?: string;
   /** Kalimat penutup baku. */
   penutup?: string;
-  /** Jenis yang lazim dibuat sesudahnya. */
-  lanjutan: string[];
   /** Saat terbit, sarankan tindak lanjut. */
   butuhTindak: boolean;
-  /** Label lama (8 jenis surat v1) untuk kompatibilitas arsip/permintaan RT. */
+  /** Label lama (8 jenis surat v1) untuk kompatibilitas arsip. */
   labelLama?: string;
   /** Wajib ada dasar yang diperiksa sebelum terbit. */
   perluDasar?: boolean;

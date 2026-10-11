@@ -994,8 +994,7 @@ export async function antreanRt(aktor: Aktor) {
        (SELECT COUNT(*)::int FROM wil_kejadian WHERE rt = $1 AND pengelola = 'rt' AND status <> 'selesai') AS kejadian_terbuka,
        (SELECT COUNT(*)::int FROM wil_kegiatan g WHERE g.pengelola = 'rw' AND $1 = ANY(g.rt_terlibat) AND g.tanggal >= current_date - 60
            AND NOT EXISTS (SELECT 1 FROM wil_kegiatan_peserta p WHERE p.kegiatan_id = g.id AND p.rt = $1)) AS hadir_belum_diisi,
-       (SELECT COUNT(*)::int FROM wil_usulan_koreksi WHERE rt_pengusul = $1 AND status <> 'baru' AND diputus_at > now() - interval '14 days') AS koreksi_dijawab,
-       (SELECT COUNT(*)::int FROM wil_permintaan_surat WHERE rt = $1 AND status IN ('baru', 'diproses')) AS permintaan_surat`,
+       (SELECT COUNT(*)::int FROM wil_usulan_koreksi WHERE rt_pengusul = $1 AND status <> 'baru' AND diputus_at > now() - interval '14 days') AS koreksi_dijawab`,
     [rt],
   );
   return rows[0];

@@ -168,7 +168,32 @@ export function renderDokumen(j: JenisDokumen, d: DataDokumen, meta: MetaRender,
   const tembusan = daftarStr(d.tembusan);
   const ttd = penandatangan(j, d);
 
-  if (j.layout === "surat") {
+  if (j.layout === "kustom") {
+    const penerima = daftarPihak(d.penerima);
+    const isi = str(d.isiSurat).replace(/\r/g, "").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+    if (penerima.length) {
+      out.push({
+        t: "kepala",
+        tempatTanggal,
+        baris: [
+          ["Nomor", meta.nomor ?? "(belum bernomor — draf)"],
+          ["Sifat", akses === "terbatas" ? "Terbatas" : "Biasa"],
+          ["Lampiran", meta.jumlahLampiran ? `${meta.jumlahLampiran} berkas` : "-"],
+          ["Perihal", meta.perihal],
+        ],
+      });
+      out.push({ t: "alamat", baris: ["Kepada Yth.", ...(penerima.length > 1 ? penerima.map((p, i) => `${i + 1}. ${teksPihak(p)}`) : penerima.map(teksPihak)), "di", "Tempat"] });
+      if (!/^dengan hormat/i.test(isi[0] ?? "")) out.push({ t: "paragraf", teks: "Dengan hormat," });
+    } else {
+      out.push({ t: "judul", teks: (str(d.judulSurat) || meta.perihal).toUpperCase(), sub: [`Nomor: ${meta.nomor ?? "(belum bernomor — draf)"}`] });
+    }
+    for (const p of isi) out.push({ t: "paragraf", teks: p });
+    const poin = daftarStr(d.poinSurat);
+    if (poin.length) out.push({ t: "daftar", item: poin, bernomor: true });
+    const tutup = str(d.penutupSurat);
+    if (tutup !== "-") out.push({ t: "paragraf", teks: tutup || penutup });
+    out.push({ t: "ttd", tempatTanggal: penerima.length ? undefined : tempatTanggal, kolom: ttd });
+  } else if (j.layout === "surat") {
     const penerima = daftarPihak(d.penerima);
     if (j.kelompok.includes("penerima")) {
       out.push({

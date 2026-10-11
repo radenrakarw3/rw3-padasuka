@@ -1,7 +1,7 @@
 /**
  * Surat Sakti v2: draft → pratinjau → terbit (nomor atomik + snapshot + PDF, satu transaksi)
  * → distribusi & tindak lanjut (lihat tindak.ts). Dokumen final tidak pernah ditimpa;
- * koreksi = dokumen pengganti, pembatalan tercatat.
+ * koreksi = batalkan lalu buat dokumen baru (boleh disalin), pembatalan tercatat.
  */
 import crypto from "crypto";
 import { z } from "zod";
@@ -11,7 +11,7 @@ import { denganTransaksi } from "../wilayah-data";
 import { alokasiNomorUrut } from "../wilayah-surat";
 import { formatNomorKode } from "@shared/surat-nomor";
 import {
-  barisTabel, daftarPihak, jenisDariKode, jenisDariLabelLama, PETA_JENIS, prefillLanjutan, renderDokumen, renderTeksLama,
+  barisTabel, daftarPihak, jenisDariKode, jenisDariLabelLama, PETA_JENIS, renderDokumen, renderTeksLama,
   statusDistribusi, statusDokumen, statusPekerjaan, str, teksPihak, teksPolos, validasiDokumen, isoHariIni, terlambat,
   type Blok, type DataDokumen, type JenisDokumen,
 } from "@shared/surat-sakti";
@@ -23,16 +23,15 @@ export function situs(): string {
 }
 
 const KOLOM = `s.id, s.nomor_surat, s.jenis_surat, s.kode_jenis, s.perihal, s.tujuan, s.tanggal_surat, s.status, s.data_form,
-  s.dibuat_oleh, s.diterbitkan_at, s.dibatalkan_at, s.alasan_batal, s.mengganti_id, s.kejadian_id, s.kegiatan_id, s.permintaan_id,
-  s.rangkaian_id, s.induk_id, s.akses, s.rt_terkait, s.template_versi, s.perlu_pemeriksaan, s.created_at, s.updated_at,
+  s.dibuat_oleh, s.diterbitkan_at, s.dibatalkan_at, s.alasan_batal, s.kejadian_id, s.kegiatan_id, s.akses, s.rt_terkait, s.template_versi, s.perlu_pemeriksaan, s.created_at, s.updated_at,
   (s.snapshot IS NOT NULL) AS final_v2`;
 
 function petakan(r: any) {
   return {
     id: r.id, nomorSurat: r.nomor_surat, jenisSurat: r.jenis_surat, kodeJenis: r.kode_jenis, perihal: r.perihal, tujuan: r.tujuan,
     tanggalSurat: r.tanggal_surat, status: r.status, dataForm: r.data_form ?? {}, dibuatOleh: r.dibuat_oleh,
-    diterbitkanAt: r.diterbitkan_at, dibatalkanAt: r.dibatalkan_at, alasanBatal: r.alasan_batal, menggantiId: r.mengganti_id,
-    kejadianId: r.kejadian_id, kegiatanId: r.kegiatan_id, permintaanId: r.permintaan_id, rangkaianId: r.rangkaian_id, indukId: r.induk_id,
+    diterbitkanAt: r.diterbitkan_at, dibatalkanAt: r.dibatalkan_at, alasanBatal: r.alasan_batal,
+    kejadianId: r.kejadian_id, kegiatanId: r.kegiatan_id,
     akses: r.akses, rtTerkait: r.rt_terkait ?? [], templateVersi: r.template_versi, perluPemeriksaan: r.perlu_pemeriksaan,
     finalV2: r.final_v2, createdAt: r.created_at, updatedAt: r.updated_at,
   };
@@ -54,7 +53,7 @@ const AGREGAT = `,
   (SELECT COALESCE(json_agg(json_build_object('status', k.status)), '[]') FROM wil_surat_kirim k WHERE k.surat_id = s.id) AS kirim_status,
   (SELECT COALESCE(json_agg(json_build_object('status', t.status, 'tenggat', to_char(t.tenggat, 'YYYY-MM-DD'))), '[]') FROM wil_surat_tindak t WHERE t.surat_id = s.id) AS tindak_ringkas`;
 
-export async function daftarSurat(aktor: Aktor, q: { bagian?: string; cari?: string; rangkaianId?: number }) {
+export async function daftarSurat(aktor: Aktor, q: { bagian?: string; cari?: string }) {
   const cari = q.cari?.trim() ? `%${q.cari.trim()}%` : null;
   const syarat: string[] = [];
   const param: unknown[] = [cari];
@@ -70,10 +69,6 @@ export async function daftarSurat(aktor: Aktor, q: { bagian?: string; cari?: str
       semua: `TRUE`,
     };
     syarat.push(bagian[q.bagian ?? "arsip"] ?? bagian.arsip);
-  }
-  if (q.rangkaianId) {
-    param.push(q.rangkaianId);
-    syarat.push(`s.rangkaian_id = $${param.length}`);
   }
   const { rows } = await pool.query(
     `SELECT ${KOLOM} ${AGREGAT}
@@ -97,7 +92,7 @@ export async function detailSurat(aktor: Aktor, id: number) {
   if (!rows[0]) throw new WilayahError(404, "Dokumen tidak ditemukan");
   const r = rows[0];
   const rw = aktor.role === "rw";
-  const [lampiran, kirim, tindak, update, terkait, masuk, bantuan] = await Promise.all([
+  const [lampiran, kirim, tindak, update, bantuan] = await Promise.all([
     pool.query(`SELECT id, nama, mime, length(data) AS ukuran, created_at FROM wil_surat_lampiran WHERE surat_id = $1 ORDER BY id`, [id]),
     rw ? pool.query(`SELECT id, kanal, penerima, status, catatan, (bukti IS NOT NULL) AS ada_bukti, CASE WHEN bukti LIKE 'data:%' THEN NULL ELSE bukti END AS bukti_teks,
                        dikirim_pada, diterima_pada, dicatat_oleh FROM wil_surat_kirim WHERE surat_id = $1 ORDER BY dikirim_pada`, [id]) : { rows: [] },
@@ -106,9 +101,6 @@ export async function detailSurat(aktor: Aktor, id: number) {
                   FROM wil_surat_tindak WHERE surat_id = $1 AND ($2::int IS NULL OR pic_rt = $2) ORDER BY id`, [id, rw ? null : aktor.rt]),
     pool.query(`SELECT u.id, u.tindak_id, u.progres, u.status, u.catatan, u.sumber, u.oleh, u.created_at, (u.bukti IS NOT NULL) AS ada_bukti
                   FROM wil_surat_tindak_update u JOIN wil_surat_tindak t ON t.id = u.tindak_id WHERE t.surat_id = $1 ORDER BY u.id`, [id]),
-    pool.query(`SELECT id, nomor_surat, kode_jenis, jenis_surat, perihal, status, induk_id, mengganti_id FROM surat_rw
-                 WHERE (induk_id = $1 OR mengganti_id = $1 OR id = $2 OR id = $3) AND id <> $1 ORDER BY id`, [id, r.induk_id ?? 0, r.mengganti_id ?? 0]),
-    rw ? pool.query(`SELECT id, pengirim, nomor, to_char(tanggal, 'YYYY-MM-DD') AS tanggal, perihal, ringkasan, berkas_nama, created_at FROM wil_surat_masuk WHERE membalas_id = $1 ORDER BY tanggal`, [id]) : { rows: [] },
     rw ? pool.query(`SELECT id, tahap, uraian, jumlah, satuan, nominal, pemberi, to_char(tanggal, 'YYYY-MM-DD') AS tanggal, (bukti IS NOT NULL) AS ada_bukti FROM wil_surat_bantuan WHERE surat_id = $1 ORDER BY tanggal, id`, [id]) : { rows: [] },
   ]);
   const p = petakan(r);
@@ -129,8 +121,6 @@ export async function detailSurat(aktor: Aktor, id: number) {
     lampiran: lampiran.rows,
     kirim: kirim.rows,
     tindak: tindak.rows.map((t) => ({ ...t, update: updatePerTindak.get(t.id) ?? [] })),
-    terkait: rw ? terkait.rows : [],
-    masuk: masuk.rows,
     bantuan: bantuan.rows,
   };
 }
@@ -149,11 +139,8 @@ const draftSchema = z.object({
   dataForm: z.record(z.string(), z.unknown()).default({}),
   akses: z.enum(["internal", "rt_terkait", "terbatas"]).default("rt_terkait"),
   rtTerkait: z.array(z.number().int().min(1).max(7)).max(7).default([]),
-  rangkaianId: z.number().int().positive().nullable().optional(),
-  indukId: z.number().int().positive().nullable().optional(),
   kejadianId: z.number().int().positive().nullable().optional(),
   kegiatanId: z.number().int().positive().nullable().optional(),
-  permintaanId: z.number().int().positive().nullable().optional(),
   idempotencyKey: z.string().min(16).max(64).optional(),
 });
 
@@ -178,11 +165,11 @@ export async function simpanDraft(aktor: Aktor, input: unknown, id?: number) {
   const v = validasiDokumen(jenis, d.dataForm, { perihal: d.perihal, tanggal: d.tanggalSurat });
   const isi = teksPolos(renderDokumen(jenis, d.dataForm, { nomor: null, tanggal: d.tanggalSurat, perihal: d.perihal, draft: true }, d.akses));
   const nilai = [d.kodeJenis, jenis.label, d.perihal, tujuanDari(d.dataForm), d.tanggalSurat, isi, JSON.stringify(d.dataForm), d.akses, d.rtTerkait,
-    d.rangkaianId ?? null, d.kejadianId ?? null, d.kegiatanId ?? null, v.perluPemeriksaan];
+    d.kejadianId ?? null, d.kegiatanId ?? null, v.perluPemeriksaan];
   if (id) {
     const { rows } = await pool.query(
       `UPDATE surat_rw SET kode_jenis = $2, jenis_surat = $3, perihal = $4, tujuan = $5, tanggal_surat = $6, isi_surat = $7, data_form = $8,
-              akses = $9, rt_terkait = $10, rangkaian_id = $11, kejadian_id = $12, kegiatan_id = $13, perlu_pemeriksaan = $14, updated_at = now()
+              akses = $9, rt_terkait = $10, kejadian_id = $11, kegiatan_id = $12, perlu_pemeriksaan = $13, updated_at = now()
         WHERE id = $1 AND status = 'draft' RETURNING ${KOLOM.replace(/s\./g, "")}`,
       [id, ...nilai],
     );
@@ -194,19 +181,16 @@ export async function simpanDraft(aktor: Aktor, input: unknown, id?: number) {
     if (rows[0]) return { ...petakan(rows[0]), validasi: v };
   }
   const { rows } = await pool.query(
-    `INSERT INTO surat_rw (kode_jenis, jenis_surat, perihal, tujuan, tanggal_surat, isi_surat, data_form, akses, rt_terkait, rangkaian_id,
-                           kejadian_id, kegiatan_id, perlu_pemeriksaan, status, dibuat_oleh, induk_id, permintaan_id, idempotency_key, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'draft', $14, $15, $16, $17, now())
+    `INSERT INTO surat_rw (kode_jenis, jenis_surat, perihal, tujuan, tanggal_surat, isi_surat, data_form, akses, rt_terkait,
+                           kejadian_id, kegiatan_id, perlu_pemeriksaan, status, dibuat_oleh, idempotency_key, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'draft', $13, $14, now())
      ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
      RETURNING ${KOLOM.replace(/s\./g, "")}`,
-    [...nilai, aktor.label, d.indukId ?? null, d.permintaanId ?? null, d.idempotencyKey ?? null],
+    [...nilai, aktor.label, d.idempotencyKey ?? null],
   );
   if (!rows[0]) {
     const again = await pool.query(`SELECT ${KOLOM} FROM surat_rw s WHERE s.idempotency_key = $1`, [d.idempotencyKey]);
     return { ...petakan(again.rows[0]), validasi: v };
-  }
-  if (d.permintaanId) {
-    await pool.query(`UPDATE wil_permintaan_surat SET status = 'diproses', surat_id = $2, updated_at = now() WHERE id = $1 AND status = 'baru'`, [d.permintaanId, rows[0].id]);
   }
   await catatAudit(aktor, "buat_draft_surat", "surat", rows[0].id, null, null, { kode: d.kodeJenis });
   return { ...petakan(rows[0]), validasi: v };
@@ -217,8 +201,6 @@ export async function hapusDraft(aktor: Aktor, id: number) {
   await denganTransaksi(async (c) => {
     const { rows } = await c.query(`SELECT status FROM surat_rw WHERE id = $1 FOR UPDATE`, [id]);
     if (rows[0]?.status !== "draft") throw new WilayahError(409, "Hanya draft yang dapat dihapus");
-    // Permintaan RT kembali ke antrean, bukan ikut hilang.
-    await c.query(`UPDATE wil_permintaan_surat SET status = 'baru', surat_id = NULL, updated_at = now() WHERE surat_id = $1 AND status = 'diproses'`, [id]);
     await c.query(`DELETE FROM surat_rw WHERE id = $1 AND status = 'draft'`, [id]);
     await catatAudit(aktor, "hapus_draft_surat", "surat", id, null, null, null, c);
   });
@@ -315,7 +297,6 @@ export async function terbitkan(aktor: Aktor, id: number) {
         [s.mengganti_id, nomor],
       );
     }
-    if (s.permintaan_id) await c.query(`UPDATE wil_permintaan_surat SET status = 'selesai', surat_id = $2, updated_at = now() WHERE id = $1`, [s.permintaan_id, id]);
     // Rencana tindak lanjut dari wizard → catatan tindak lanjut nyata.
     for (const t of barisTabel(data.tindakRencana)) {
       if (!t.tindakan) continue;
@@ -329,9 +310,9 @@ export async function terbitkan(aktor: Aktor, id: number) {
     if (jenis.kelompok.includes("bantuan")) {
       const nominal = Number(String(data.nominal ?? "").replace(/[^\d]/g, "")) || null;
       await c.query(
-        `INSERT INTO wil_surat_bantuan (surat_id, rangkaian_id, tahap, uraian, nominal, pemberi, tanggal, dicatat_oleh)
-         VALUES ($1, $2, 'dimohonkan', $3, $4, $5, $6, $7)`,
-        [id, s.rangkaian_id, `${str(data.bentukBantuan) || "Bantuan"}: ${s.perihal}`, nominal, s.tujuan, s.tanggal_surat, aktor.label],
+        `INSERT INTO wil_surat_bantuan (surat_id, tahap, uraian, nominal, pemberi, tanggal, dicatat_oleh)
+         VALUES ($1, 'dimohonkan', $2, $3, $4, $5, $6)`,
+        [id, `${str(data.bentukBantuan) || "Bantuan"}: ${s.perihal}`, nominal, s.tujuan, s.tanggal_surat, aktor.label],
       );
     }
     await catatAudit(aktor, "terbit_surat", "surat", id, null, null, { nomor, kode: jenis.kode, sha256: sha }, c);
@@ -351,57 +332,19 @@ export async function batalkan(aktor: Aktor, id: number, alasan: string) {
   return { ok: true };
 }
 
-/** Koreksi: draft baru menyalin isi; dokumen lama tetap tersimpan dan berstatus 'digantikan' saat pengganti terbit. */
-export async function buatPengganti(aktor: Aktor, id: number) {
+/** Salin isi dokumen menjadi draft baru yang berdiri sendiri. Dokumen asal tidak berubah. */
+export async function salinJadiDraft(aktor: Aktor, id: number) {
   hanyaRw(aktor);
-  const ada = await pool.query(`SELECT ${KOLOM} FROM surat_rw s WHERE s.mengganti_id = $1 AND s.status = 'draft' LIMIT 1`, [id]);
-  if (ada.rows[0]) return petakan(ada.rows[0]);
   const { rows } = await pool.query(
-    `INSERT INTO surat_rw (kode_jenis, jenis_surat, perihal, tujuan, tanggal_surat, isi_surat, data_form, status, dibuat_oleh, mengganti_id, induk_id,
-                           rangkaian_id, kejadian_id, kegiatan_id, akses, rt_terkait, updated_at)
-     SELECT kode_jenis, jenis_surat, perihal, tujuan, to_char(current_date, 'YYYY-MM-DD'), isi_surat, data_form, 'draft', $2, id, induk_id,
-            rangkaian_id, kejadian_id, kegiatan_id, akses, rt_terkait, now()
-       FROM surat_rw WHERE id = $1 AND status = 'terbit' RETURNING ${KOLOM.replace(/s\./g, "")}`,
+    `INSERT INTO surat_rw (kode_jenis, jenis_surat, perihal, tujuan, tanggal_surat, isi_surat, data_form, status, dibuat_oleh, akses, rt_terkait, updated_at)
+     SELECT kode_jenis, jenis_surat, perihal, tujuan, to_char(current_date, 'YYYY-MM-DD'), isi_surat, COALESCE(snapshot->'data', data_form, '{}'::jsonb), 'draft', $2,
+            akses, rt_terkait, now()
+       FROM surat_rw WHERE id = $1 AND kode_jenis IS NOT NULL RETURNING ${KOLOM.replace(/s\./g, "")}`,
     [id, aktor.label],
   );
-  if (!rows[0]) throw new WilayahError(409, "Hanya dokumen terbit yang dapat dikoreksi");
-  await catatAudit(aktor, "buat_pengganti_surat", "surat", rows[0].id, null, null, { mengganti: id });
+  if (!rows[0]) throw new WilayahError(409, "Dokumen format lama tidak dapat disalin. Buat dokumen baru.");
+  await catatAudit(aktor, "salin_surat", "surat", rows[0].id, null, null, { dari: id });
   return petakan(rows[0]);
-}
-
-/** Dokumen lanjutan dalam rangkaian yang sama. Tidak mengubah status dokumen/tindak induk. */
-export async function buatLanjutan(aktor: Aktor, id: number, kode: string) {
-  hanyaRw(aktor);
-  const tujuan = PETA_JENIS[kode];
-  if (!tujuan) throw new WilayahError(400, "Jenis dokumen tidak dikenal");
-  return denganTransaksi(async (c) => {
-    const { rows } = await c.query(`SELECT * FROM surat_rw WHERE id = $1 FOR UPDATE`, [id]);
-    const s = rows[0];
-    if (!s) throw new WilayahError(404, "Dokumen tidak ditemukan");
-    if (s.status === "draft") throw new WilayahError(409, "Terbitkan dokumen ini dahulu sebelum membuat dokumen lanjutan");
-    const ada = await c.query(`SELECT ${KOLOM} FROM surat_rw s WHERE s.induk_id = $1 AND s.kode_jenis = $2 AND s.status = 'draft' LIMIT 1`, [id, kode]);
-    if (ada.rows[0]) return { ...petakan(ada.rows[0]), sudahAda: true };
-    let rangkaianId = s.rangkaian_id;
-    if (!rangkaianId) {
-      const r = await c.query(
-        `INSERT INTO wil_surat_rangkaian (judul, jenis, kejadian_id, kegiatan_id, rt_terkait, dibuat_oleh)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-        [s.perihal, s.kejadian_id ? "kasus" : s.kegiatan_id ? "kegiatan" : "lainnya", s.kejadian_id, s.kegiatan_id, s.rt_terkait ?? [], aktor.label],
-      );
-      rangkaianId = r.rows[0].id;
-      await c.query(`UPDATE surat_rw SET rangkaian_id = $2 WHERE id = $1`, [id, rangkaianId]);
-    }
-    const data = prefillLanjutan({ jenis: jenisDariKode(s.kode_jenis), data: s.snapshot?.data ?? s.data_form ?? {}, nomor: s.nomor_surat, perihal: s.perihal, tanggal: s.tanggal_surat }, tujuan);
-    const { rows: baru } = await c.query(
-      `INSERT INTO surat_rw (kode_jenis, jenis_surat, perihal, tujuan, tanggal_surat, data_form, status, dibuat_oleh, induk_id, rangkaian_id,
-                             kejadian_id, kegiatan_id, akses, rt_terkait, updated_at)
-       VALUES ($1, $2, $3, $4, to_char(current_date, 'YYYY-MM-DD'), $5, 'draft', $6, $7, $8, $9, $10, $11, $12, now())
-       RETURNING ${KOLOM.replace(/s\./g, "")}`,
-      [kode, tujuan.label, s.perihal, tujuanDari(data), JSON.stringify(data), aktor.label, id, rangkaianId, s.kejadian_id, s.kegiatan_id, s.akses, s.rt_terkait ?? []],
-    );
-    await catatAudit(aktor, "buat_lanjutan_surat", "surat", baru[0].id, null, null, { induk: id, kode }, c);
-    return petakan(baru[0]);
-  });
 }
 
 /** Teks pengantar WhatsApp untuk disalin. Tidak mengirim apa pun. Isi lengkap tidak disertakan. */

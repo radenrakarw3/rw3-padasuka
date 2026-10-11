@@ -137,7 +137,7 @@ function Beranda() {
       <KartuMenu ikon={<QrCode className="w-7 h-7" />} judul="Cetak QR Pemberitahuan" sub="Kartu pendataan untuk tiap keluarga" onClick={() => go("/rt/cetak")} />
       <KartuMenu ikon={<Store className="w-7 h-7" />} judul="Usaha, Fasilitas, Kegiatan" sub="Data wilayah RT" onClick={() => go("/rt/objek")} />
       <KartuMenu ikon={<Truck className="w-7 h-7" />} judul="Pindah RT (serah-terima)" onClick={() => go("/rt/pindah")} />
-      <KartuMenu ikon={<Mail className="w-7 h-7" />} judul="Minta Surat ke RW" angka={a?.permintaan_surat} onClick={() => go("/rt/objek?tab=surat")} />
+      <KartuMenu ikon={<Mail className="w-7 h-7" />} judul="Surat dari RW" sub="Dokumen untuk RT dan tugas yang perlu dilaporkan" onClick={() => go("/rt/objek?tab=surat")} />
     </div>
   );
 }

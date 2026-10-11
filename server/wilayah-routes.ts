@@ -88,8 +88,6 @@ export function registerWilayahRoutes(app: Express) {
   app.get("/api/wilayah/kejadian", RR, h(async (req) => data.daftarKejadian(req.aktor!, { status: req.query.status as string | undefined, rt: rtQuery(req) })));
   app.get("/api/wilayah/koreksi", RR, h(async (req) => data.daftarUsulanKoreksi(req.aktor!)));
   app.get("/api/wilayah/serah-terima", RR, h(async (req) => data.daftarSerahTerima(req.aktor!)));
-  app.get("/api/wilayah/permintaan-surat", RR, h(async (req) => surat.daftarPermintaan(req.aktor!)));
-
   app.post("/api/wilayah/fasilitas", RR, h(async (req) => data.simpanFasilitas(req.aktor!, req.body)));
   app.patch("/api/wilayah/fasilitas/:id", RR, h(async (req) => data.simpanFasilitas(req.aktor!, req.body, idParam(req))));
   app.post("/api/wilayah/fasilitas/:id/nonaktif", RR, h(async (req) => data.nonaktifkanObjek(req.aktor!, "fasilitas", idParam(req))));
@@ -164,8 +162,6 @@ export function registerWilayahRoutes(app: Express) {
   app.get("/api/wilayah/rt/usulan", RT, h(async (req) => qr.daftarUsulan(req.aktor!, String(req.query.status ?? "menunggu"))));
   app.get("/api/wilayah/rt/usulan/:id", RT, h(async (req) => qr.detailUsulan(req.aktor!, idParam(req))));
   app.post("/api/wilayah/rt/usulan/:id/putuskan", RT, h(async (req) => qr.putuskanUsulan(req.aktor!, idParam(req), req.body)));
-  app.post("/api/wilayah/rt/permintaan-surat", RT, h(async (req) => surat.ajukanPermintaan(req.aktor!, req.body)));
-
   // ------------------------------------------------------------------ khusus Ketua RW
   const RW = requireRwWilayah;
   app.post("/api/wilayah/rw/usulan", RW, h(async (req) => qr.kirimUsulanRw(req.aktor!, req.body)));
@@ -183,8 +179,6 @@ export function registerWilayahRoutes(app: Express) {
     return lap.statusLaporanSemuaRt(tahun, bulan);
   }));
   app.post("/api/wilayah/rw/koreksi/:id/putuskan", RW, h(async (req) => data.putuskanKoreksi(req.aktor!, idParam(req), req.body?.terima === true, String(req.body?.jawaban ?? ""))));
-  app.post("/api/wilayah/rw/permintaan-surat/:id/tolak", RW, h(async (req) => surat.tolakPermintaan(req.aktor!, idParam(req), String(req.body?.jawaban ?? ""))));
-
   // ------------------------------------------------------------------ Surat Sakti (RW mengelola; RT membaca yang relevan)
   const kirimBerkas = (gagal: string, fn: (req: Request) => Promise<{ buffer: Buffer; nama: string; mime?: string }>, unduh = false) =>
     async (req: Request, res: Response) => {
@@ -206,7 +200,6 @@ export function registerWilayahRoutes(app: Express) {
   app.get("/api/wilayah/surat", RR, h(async (req) => layanan.daftarSurat(req.aktor!, {
     bagian: req.query.bagian as string | undefined,
     cari: req.query.cari as string | undefined,
-    rangkaianId: req.query.rangkaian ? Number(req.query.rangkaian) : undefined,
   })));
   app.get("/api/wilayah/surat/:id", RR, h(async (req) => layanan.detailSurat(req.aktor!, idParam(req))));
   app.get("/api/wilayah/surat/:id/pdf", RR, kirimBerkas("Gagal membuka PDF", (req) => layanan.unduhPdf(req.aktor!, idParam(req)), true));
@@ -214,11 +207,6 @@ export function registerWilayahRoutes(app: Express) {
   app.get("/api/wilayah/surat-tindak", RR, h(async (req) => tindak.daftarTindak(req.aktor!, String(req.query.filter ?? "terbuka"))));
   app.post("/api/wilayah/surat-tindak/:id/update", RR, h(async (req) => tindak.perbaruiTindak(req.aktor!, idParam(req), req.body)));
   app.get("/api/wilayah/surat-tindak-update/:id/bukti", RR, kirimBerkas("Gagal membuka bukti", (req) => tindak.ambilBuktiTindak(req.aktor!, idParam(req))));
-  app.get("/api/wilayah/surat-rangkaian", RR, h(async (req) => tindak.daftarRangkaian(req.aktor!, String(req.query.status ?? "aktif"))));
-  app.get("/api/wilayah/surat-rangkaian/:id", RR, h(async (req) => tindak.detailRangkaian(req.aktor!, idParam(req))));
-  app.post("/api/wilayah/surat-fakta", RR, h(async (req) => tindak.tambahFakta(req.aktor!, req.body)));
-  app.get("/api/wilayah/permintaan-surat/:id/fakta", RR, h(async (req) => tindak.daftarFaktaPermintaan(req.aktor!, idParam(req))));
-  app.get("/api/wilayah/surat-fakta/:id/bukti", RR, kirimBerkas("Gagal membuka bukti", (req) => tindak.ambilBuktiFakta(req.aktor!, idParam(req))));
   app.get("/api/wilayah/cari-pihak", RR, h(async (req) => tindak.cariPihak(req.aktor!, String(req.query.q ?? ""))));
 
   app.get("/api/wilayah/rw/surat-ringkasan", RW, h(async (req) => tindak.ringkasan(req.aktor!)));
@@ -229,10 +217,8 @@ export function registerWilayahRoutes(app: Express) {
   app.get("/api/wilayah/rw/surat/:id/pratinjau.pdf", RW, kirimBerkas("Gagal membentuk pratinjau", (req) => layanan.pratinjauPdf(req.aktor!, idParam(req))));
   app.post("/api/wilayah/rw/surat/:id/terbit", RW, h(async (req) => layanan.terbitkan(req.aktor!, idParam(req)), "Gagal menerbitkan dokumen"));
   app.post("/api/wilayah/rw/surat/:id/batal", RW, h(async (req) => layanan.batalkan(req.aktor!, idParam(req), String(req.body?.alasan ?? ""))));
-  app.post("/api/wilayah/rw/surat/:id/pengganti", RW, h(async (req) => layanan.buatPengganti(req.aktor!, idParam(req))));
-  app.post("/api/wilayah/rw/surat/:id/lanjutan", RW, h(async (req) => layanan.buatLanjutan(req.aktor!, idParam(req), String(req.body?.kode ?? ""))));
+  app.post("/api/wilayah/rw/surat/:id/salin", RW, h(async (req) => layanan.salinJadiDraft(req.aktor!, idParam(req))));
   app.get("/api/wilayah/rw/surat/:id/wa", RW, h(async (req) => ({ teks: await layanan.pengantarWa(req.aktor!, idParam(req)) })));
-  app.post("/api/wilayah/rw/surat/:id/rangkaian", RW, h(async (req) => tindak.hubungkanRangkaian(req.aktor!, idParam(req), req.body?.rangkaianId ? Number(req.body.rangkaianId) : null)));
   app.post("/api/wilayah/rw/surat/:id/lampiran", RW, h(async (req) => surat.tambahLampiran(req.aktor!, idParam(req), req.body)));
   app.delete("/api/wilayah/rw/surat-lampiran/:id", RW, h(async (req) => surat.hapusLampiran(req.aktor!, idParam(req))));
   app.post("/api/wilayah/rw/surat/:id/kirim", RW, h(async (req) => tindak.catatKirim(req.aktor!, idParam(req), req.body)));
@@ -241,8 +227,4 @@ export function registerWilayahRoutes(app: Express) {
   app.post("/api/wilayah/rw/surat/:id/tindak", RW, h(async (req) => tindak.tambahTindak(req.aktor!, idParam(req), req.body)));
   app.post("/api/wilayah/rw/surat-tindak/:id/evaluasi", RW, h(async (req) => tindak.evaluasiTindak(req.aktor!, idParam(req), String(req.body?.evaluasi ?? ""))));
   app.post("/api/wilayah/rw/surat-bantuan", RW, h(async (req) => tindak.catatBantuan(req.aktor!, req.body)));
-  app.post("/api/wilayah/rw/surat-masuk", RW, h(async (req) => tindak.catatSuratMasuk(req.aktor!, req.body)));
-  app.get("/api/wilayah/rw/surat-masuk/:id/berkas", RW, kirimBerkas("Gagal membuka berkas", (req) => tindak.ambilBerkasMasuk(req.aktor!, idParam(req))));
-  app.post("/api/wilayah/rw/surat-rangkaian", RW, h(async (req) => tindak.buatRangkaian(req.aktor!, req.body)));
-  app.post("/api/wilayah/rw/surat-rangkaian/:id/tutup", RW, h(async (req) => tindak.tutupRangkaian(req.aktor!, idParam(req), String(req.body?.evaluasi ?? ""))));
 }

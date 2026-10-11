@@ -10,7 +10,7 @@ const pilihan = (key: string, label: string, opsi: readonly string[], o: Partial
 const tabel = (key: string, label: string, kolom: KolomTabel[], o: Partial<Field> = {}): Field => ({ key, label, tipe: "tabel", kolom, ...o });
 const rp = (key: string, label: string, o: Partial<Field> = {}): Field => ({ key, label, tipe: "rupiah", ...o });
 const angka = (key: string, label: string, o: Partial<Field> = {}): Field => ({ key, label, tipe: "angka", ...o });
-const centang = (key: string, label: string, o: Partial<Field> = {}): Field => ({ key, label, tipe: "centang", internal: true, jangan_salin: true, ...o });
+const centang = (key: string, label: string, o: Partial<Field> = {}): Field => ({ key, label, tipe: "centang", internal: true, ...o });
 
 const K = (key: string, label: string, tipe?: KolomTabel["tipe"], lebar?: number): KolomTabel => ({ key, label, tipe, lebar });
 
@@ -41,15 +41,15 @@ export const KELOMPOK: Record<string, KelompokField> = {
     pihak("pic", "Penanggung jawab"),
     teks("kontak", "Kontak koordinasi"),
   ] },
-  rujukan: { id: "rujukan", judul: "Surat sebelumnya", fields: [
-    teks("suratRujukan", "Nomor/perihal surat sebelumnya", { wajib: true }),
+  rujukan: { id: "rujukan", judul: "Surat sebelumnya (opsional)", fields: [
+    teks("suratRujukan", "Nomor/perihal surat sebelumnya", { bantuan: "Boleh dikosongkan bila tidak merujuk surat lain." }),
     tgl("tanggalRujukan", "Tanggal surat sebelumnya"),
   ] },
   ttd: { id: "ttd", judul: "Penandatangan", fields: [
     pihak("penandatangan", "Penandatangan", { bantuan: "Kosongkan untuk Ketua RW. Tanda tangan dibubuhkan basah setelah dicetak." }),
   ] },
   tindak: { id: "tindak", judul: "Langkah tindak lanjut", fields: [
-    tabel("tindakRencana", "Rencana tindak lanjut (dicatat saat terbit)", [K("tindakan", "Tindakan"), K("pic", "PIC"), K("tenggat", "Tenggat", "tanggal")], { internal: true, jangan_salin: true }),
+    tabel("tindakRencana", "Rencana tindak lanjut (dicatat saat terbit)", [K("tindakan", "Tindakan"), K("pic", "PIC"), K("tenggat", "Tenggat", "tanggal")], { internal: true }),
   ] },
 
   // ------------------------------------------------------------ A. menggerakkan pengurus
@@ -86,7 +86,7 @@ export const KELOMPOK: Record<string, KelompokField> = {
     tabel("instruksiPeran", "Tugas per peran", [K("peran", "Peran", undefined, 2), K("pelaksana", "Pelaksana", undefined, 2), K("tugas", "Tugas", undefined, 4), K("tenggat", "Tenggat", "tanggal", 2)], { wajib: true }),
   ] },
   mintaLaporan: { id: "mintaLaporan", judul: "Laporan yang diminta", fields: [
-    teks("penugasanRujukan", "Penugasan yang dilaporkan", { wajib: true }),
+    teks("penugasanRujukan", "Penugasan yang dilaporkan"),
     daftar("isiLaporan", "Isi laporan", { wajib: true }),
     tgl("batasLaporan", "Batas penyampaian", { wajib: true }),
     pilihan("formatLaporan", "Bentuk laporan", ["Tertulis", "Foto dan keterangan", "Lisan, dicatat pengurus"]),
@@ -101,7 +101,7 @@ export const KELOMPOK: Record<string, KelompokField> = {
     daftar("rekomendasi", "Rekomendasi", { wajib: true }),
   ] },
   ubahTugas: { id: "ubahTugas", judul: "Perubahan penugasan", fields: [
-    teks("penugasanRujukan", "Penugasan semula", { wajib: true }),
+    teks("penugasanRujukan", "Penugasan semula"),
     pilihan("jenisPerubahan", "Jenis perubahan", ["Perubahan lingkup", "Perpanjangan", "Pengakhiran"], { wajib: true }),
     uraian("alasanPerubahan", "Alasan", { wajib: true }),
     daftar("ketentuanBaru", "Ketentuan baru"),
@@ -110,7 +110,7 @@ export const KELOMPOK: Record<string, KelompokField> = {
   serah: { id: "serah", judul: "Serah-terima", fields: [
     pihak("pihakMenyerahkan", "Pihak yang menyerahkan", { wajib: true, tunggal: true }),
     pihak("pihakMenerima", "Pihak yang menerima", { wajib: true, tunggal: true }),
-    tgl("waktuSerah", "Tanggal serah-terima", { wajib: true, jangan_salin: true }),
+    tgl("waktuSerah", "Tanggal serah-terima", { wajib: true }),
     tabel("daftarBarang", "Daftar barang/hasil/dokumen", [K("nama", "Uraian", undefined, 4), K("jumlah", "Jumlah", "angka", 1), K("satuan", "Satuan", undefined, 1), K("kondisi", "Kondisi", undefined, 2), K("catatan", "Catatan", undefined, 2)]),
     uraian("catatanSerah", "Catatan"),
   ] },
@@ -143,7 +143,7 @@ export const KELOMPOK: Record<string, KelompokField> = {
     pihak("fasilitator", "Fasilitator"),
   ] },
   beritaAcara: { id: "beritaAcara", judul: "Berita acara", fields: [
-    tgl("waktuAktual", "Tanggal pelaksanaan (aktual)", { wajib: true, jangan_salin: true }),
+    tgl("waktuAktual", "Tanggal pelaksanaan (aktual)", { wajib: true }),
     jam("jamMulai", "Mulai pukul"),
     jam("jamSelesai", "Selesai pukul"),
     teks("tempatAcara", "Tempat", { wajib: true }),
@@ -230,7 +230,7 @@ export const KELOMPOK: Record<string, KelompokField> = {
     teks("usulanWaktu", "Usulan waktu pertemuan"),
   ] },
   ubahKeputusan: { id: "ubahKeputusan", judul: "Perubahan keputusan", fields: [
-    teks("keputusanDiubah", "Keputusan yang diubah/dicabut", { wajib: true }),
+    teks("keputusanDiubah", "Keputusan yang diubah/dicabut"),
     pilihan("jenisPerubahanKeputusan", "Jenis", ["Perubahan", "Pencabutan"], { wajib: true }),
     uraian("alasanPerubahan", "Alasan", { wajib: true }),
     daftar("perubahan", "Ketentuan setelah perubahan"),
@@ -313,6 +313,16 @@ export const KELOMPOK: Record<string, KelompokField> = {
     tabel("penggunaanDana", "Penggunaan dana", [K("tanggal", "Tanggal", "tanggal", 2), K("uraian", "Uraian", undefined, 5), K("jumlah", "Jumlah", "rupiah", 2)]),
     tabel("penggunaanBarang", "Penggunaan barang", [K("barang", "Barang", undefined, 3), K("diterima", "Diterima", "angka", 1), K("digunakan", "Digunakan", "angka", 1), K("sisa", "Sisa", "angka", 1), K("keterangan", "Keterangan", undefined, 3)]),
     daftar("buktiPenggunaan", "Bukti (terlampir)"),
+  ] },
+
+  // ------------------------------------------------------------ F. surat kustom
+  kustom: { id: "kustom", judul: "Isi surat", fields: [
+    pihak("penerima", "Kepada (opsional)", { bantuan: "Isi untuk surat ber-\"Kepada Yth.\". Kosongkan untuk dokumen berjudul (mis. surat keterangan, pengumuman)." }),
+    teks("judulSurat", "Judul dokumen", { bantuan: "Dipakai bila penerima kosong. Mis. SURAT KETERANGAN, PENGUMUMAN. Kosongkan untuk memakai perihal." }),
+    uraian("isiSurat", "Isi surat", { wajib: true, bantuan: "Tulis bebas. Pisahkan paragraf dengan satu baris kosong." }),
+    daftar("poinSurat", "Butir/poin (opsional)", { bantuan: "Dicetak sebagai daftar bernomor sesudah isi surat." }),
+    uraian("penutupSurat", "Kalimat penutup", { bantuan: "Kosongkan untuk penutup baku. Tulis \"-\" bila tanpa penutup." }),
+    daftar("tembusan", "Tembusan"),
   ] },
 };
 

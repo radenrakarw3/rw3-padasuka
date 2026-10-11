@@ -464,12 +464,12 @@ async function alurLengkap(k: any) {
     await Promise.all([
       data.daftarKeluarga(rt7, {}), data.daftarKeluarga(rw, { rt: 1 }), data.antreanRt(rt7), data.cariWarga(rt7, "Uji"),
       data.daftarUsaha(rw, null), data.daftarKegiatan(rt7, {}), data.daftarKejadian(rw, {}), data.daftarUsulanKoreksi(rw),
-      data.daftarSerahTerima(rt7), surat.daftarPermintaan(rw), surat.daftarPermintaan(rt7), qr.daftarUsulan(rt7, "semua"),
+      data.daftarSerahTerima(rt7), qr.daftarUsulan(rt7, "semua"),
       dash.ringkasanRw(2026, 10), dash.aksiRw(2026, 10), lap.statusLaporanSemuaRt(2026, 10),
       lap.pratinjauLaporan(rt7, null, 2026, 10), lap.pratinjauLaporan(rw, null, 2026, 10), lap.pratinjauLaporan(rw, 1, 2026, 10),
       lap.daftarVersi(rw, 7, 2026, 9),
       ...["draft", "belum_distribusi", "arsip"].map((b) => surat.daftarSurat(rw, { bagian: b })),
-      surat.daftarSurat(rt7, {}), surat.ringkasan(rw), surat.daftarTindak(rw), surat.daftarRangkaian(rw), surat.referensi(rw),
+      surat.daftarSurat(rt7, {}), surat.ringkasan(rw), surat.daftarTindak(rw), surat.referensi(rw),
     ]);
     const ex = await lap.dataEkspor(rw, null, 2026, [9, 10, 11, 12]);
     sama(ex.baris.length, 119, "ekspor rekap");
@@ -477,9 +477,8 @@ async function alurLengkap(k: any) {
     const fin = await lap.finalkanLaporan(rw, 2026, 10);
     await pool.query(`DELETE FROM wil_laporan WHERE id = $1`, [fin.id]);
   });
-  await uji("surat: permintaan RT → draft → lampiran → terbit → kirim berbukti → tindak → pengganti", async () => {
-    const p = await surat.ajukanPermintaan(rt7, { kodeJenis: "b_permohonan_instansi", perihal: "Pengajuan uji", uraian: "Mohon dibuatkan surat pengajuan uji", kejadianId: ids.kej, idempotencyKey: `prm-${acak()}-kunci` });
-    const s = await surat.simpanDraft(rw, draftUji("b_permohonan_instansi", "Pengantar uji", { permintaanId: p.id }));
+  await uji("surat: draft → lampiran → terbit → kirim berbukti → tindak → salin jadi draft baru", async () => {
+    const s = await surat.simpanDraft(rw, draftUji("b_permohonan_instansi", "Pengantar uji"));
     bersih.surat.push(s.id);
     const lamp = await surat.tambahLampiran(rw, s.id, { nama: "uji.png", data: "data:image/png;base64,iVBORw0KGgo=" });
     pastikan((await surat.ambilLampiranAman(rw, lamp.id)), "lampiran");
@@ -490,14 +489,12 @@ async function alurLengkap(k: any) {
     const td = await surat.tambahTindak(rw, s.id, { tindakan: "Tunggu balasan", picNama: "Ketua RW", tenggat: "2026-10-20" });
     await surat.perbaruiTindak(rw, td.id, { catatan: "Balasan diterima", status: "selesai", bukti: "Surat balasan kelurahan" });
     pastikan((await surat.pengantarWa(rw, s.id)).includes(t.nomorSurat), "pengantar WA tanpa nomor");
-    const g = await surat.buatPengganti(rw, s.id);
+    const g = await surat.salinJadiDraft(rw, s.id);
     bersih.surat.push(g.id);
     await surat.terbitkan(rw, g.id);
     const lama = await surat.detailSurat(rw, s.id);
-    sama(lama.status, "digantikan", "surat lama");
+    sama(lama.status, "terbit", "surat asal");
     sama(lama.nomorSurat, t.nomorSurat, "nomor lama tetap");
-    const { rows } = await pool.query(`SELECT status FROM wil_permintaan_surat WHERE id = $1`, [p.id]);
-    sama(rows[0].status, "selesai", "permintaan");
   });
   await uji("serah-terima KK pindah RT atomik, tidak bisa diterima dua kali", async () => {
     const st = await data.ajukanSerahTerima(rt7, { jenis: "kk", kkId, rtTujuan: 6 });
@@ -509,7 +506,7 @@ async function alurLengkap(k: any) {
     await harusGagal(() => data.detailKeluarga(rt7, kkId), 404, "RT asal masih melihat");
     await data.detailKeluarga(rt6, kkId);
   });
-  await uji("sisa alur: ubah warga, data perlu dicek, cetak semua, tolak permintaan, batal/hapus surat", async () => {
+  await uji("sisa alur: ubah warga, data perlu dicek, cetak semua, batal/hapus surat", async () => {
     await data.ubahWarga(rt6, wargaId, { tanggalLahir: "1960-02-02" });
     await harusGagal(() => data.ubahWarga(rt7, wargaId, { tanggalLahir: "1960-02-03" }), 404, "RT lama mengubah");
     await harusGagal(() => data.ubahWarga(rt6, wargaId, { nomorHp: "3277011234567890" }), 400, "NIK di kolom HP");
@@ -518,8 +515,6 @@ async function alurLengkap(k: any) {
        VALUES ('kk', $1, 'jamban', 'ya', current_date, 'perlu_cek', 'data_lama', 6, 'rt', 'uji') RETURNING id`, [kkId]);
     await data.putuskanFaktaPerluCek(rt6, pc[0].id, true);
     pastikan((await qr.kartuUntukCetak(rt6, "semua", false)).length >= 1, "cetak semua kosong");
-    const p = await surat.ajukanPermintaan(rt6, { jenisSurat: "Surat Undangan", perihal: "Undangan uji", uraian: "Mohon undangan rapat uji", idempotencyKey: `prm-${acak()}-kunci` });
-    await surat.tolakPermintaan(rw, p.id, "Sudah ada undangan");
     const d1 = await surat.simpanDraft(rw, draftUji("c_edaran", "Edaran uji"));
     const l = await surat.tambahLampiran(rw, d1.id, { nama: "a.pdf", data: "data:application/pdf;base64,JVBERi0=" });
     await surat.hapusLampiran(rw, l.id);

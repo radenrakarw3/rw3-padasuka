@@ -90,8 +90,6 @@ export async function ringkasanRw(tahun: number, bulan: number) {
     `SELECT 'kejadian' AS jenis, id, rt, judul AS judul, created_at FROM wil_kejadian WHERE status = 'perlu_rw'
      UNION ALL
      SELECT 'koreksi', id, rt_pengusul, left(uraian, 120), created_at FROM wil_usulan_koreksi WHERE status = 'baru'
-     UNION ALL
-     SELECT 'permintaan_surat', id, rt, perihal, created_at FROM wil_permintaan_surat WHERE status = 'baru'
      ORDER BY created_at LIMIT 50`,
   );
 

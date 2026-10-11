@@ -29,11 +29,8 @@ export interface StateEditor {
   data: DataDokumen;
   akses: Akses;
   rtTerkait: number[];
-  rangkaianId: number | null;
   kejadianId: number | null;
   kegiatanId: number | null;
-  permintaanId: number | null;
-  indukId: number | null;
   langkah: number;
 }
 
@@ -42,7 +39,7 @@ const KUNCI_LOKAL = "wil-draft:surat-sakti-editor";
 export function editorBaru(awal: Partial<StateEditor> = {}): StateEditor {
   return {
     id: null, kunci: kunciIdempoten(), kode: "", tujuan: null, perihal: "", tanggal: isoHariIni(), data: {}, akses: "rt_terkait", rtTerkait: [],
-    rangkaianId: null, kejadianId: null, kegiatanId: null, permintaanId: null, indukId: null, langkah: awal.kode ? 1 : 0, ...awal,
+    kejadianId: null, kegiatanId: null, langkah: awal.kode ? 1 : 0, ...awal,
   };
 }
 
@@ -67,15 +64,15 @@ export function hapusEditorLokal() {
 export function editorDariSurat(s: any): StateEditor {
   return editorBaru({
     id: s.id, kode: s.kodeJenis ?? "", tujuan: PETA_JENIS[s.kodeJenis]?.tujuan ?? null, perihal: s.perihal, tanggal: s.tanggalSurat ?? isoHariIni(),
-    data: s.dataForm ?? {}, akses: s.akses ?? "rt_terkait", rtTerkait: s.rtTerkait ?? [], rangkaianId: s.rangkaianId, kejadianId: s.kejadianId,
-    kegiatanId: s.kegiatanId, permintaanId: s.permintaanId, indukId: s.indukId, langkah: s.kodeJenis && PETA_JENIS[s.kodeJenis] ? 2 : 0,
+    data: s.dataForm ?? {}, akses: s.akses ?? "rt_terkait", rtTerkait: s.rtTerkait ?? [], kejadianId: s.kejadianId,
+    kegiatanId: s.kegiatanId, langkah: s.kodeJenis && PETA_JENIS[s.kodeJenis] ? 2 : 0,
   });
 }
 
 const LANGKAH = ["Jenis dokumen", "Konteks", "Isi", "Penanda tangan & tindak lanjut", "Periksa & terbit"];
 const AKSES: { v: Akses; label: string; ket: string }[] = [
   { v: "rt_terkait", label: "RT terkait", ket: "Ketua RT yang dipilih dapat membaca dan mengunduh setelah terbit." },
-  { v: "internal", label: "Internal", ket: "Hanya RT pemohon dan RT yang ditugaskan (PIC)." },
+  { v: "internal", label: "Internal", ket: "Hanya RT yang ditugaskan (PIC) di tindak lanjut." },
   { v: "terbatas", label: "Terbatas", ket: "Hanya Ketua RW. Untuk perkara sensitif." },
 ];
 
@@ -85,7 +82,6 @@ export interface Referensi {
   fasilitas: { id: number; nama: string; jenis: string; lokasi: string | null }[];
   program: { id: number; nama: string; status: string }[];
   rw3law: { id: number; judul: string; kategori: string; nomor_peraturan: string | null; tahun_nomor: number | null }[];
-  rangkaian: { id: number; judul: string; jenis: string; rt_terkait: number[] }[];
 }
 
 export function Pilih<T extends { id: number }>({ label, items, nilai, teks, sub, ubah, kosong = "Tidak ada" }: {
@@ -227,8 +223,8 @@ export function Wizard({ awal, tutup }: { awal: StateEditor; tutup: (id: number 
     try {
       const body = {
         kodeJenis: x.kode, perihal: x.perihal.trim(), tanggalSurat: x.tanggal, dataForm: x.data, akses: x.akses, rtTerkait: x.rtTerkait,
-        rangkaianId: x.rangkaianId, kejadianId: x.kejadianId, kegiatanId: x.kegiatanId,
-        ...(x.id ? {} : { permintaanId: x.permintaanId, indukId: x.indukId, idempotencyKey: x.kunci }),
+        kejadianId: x.kejadianId, kegiatanId: x.kegiatanId,
+        ...(x.id ? {} : { idempotencyKey: x.kunci }),
       };
       berubah.current = false;
       const r = await wil<{ id: number }>(x.id ? `/api/wilayah/rw/surat/${x.id}` : "/api/wilayah/rw/surat", { ...RW, method: x.id ? "PATCH" : "POST", body });
@@ -270,7 +266,6 @@ export function Wizard({ awal, tutup }: { awal: StateEditor; tutup: (id: number 
       hapusEditorLokal();
       qc.invalidateQueries({ queryKey: ["/api/wilayah/surat"] });
       qc.invalidateQueries({ queryKey: ["/api/wilayah/rw/surat-ringkasan"] });
-      qc.invalidateQueries({ queryKey: ["/api/wilayah/permintaan-surat"] });
       toast({ title: "Dokumen terbit", description: `Nomor ${r.nomorSurat}. PDF final tersimpan. Dokumen belum tercatat dikirim.` });
       tutup(id);
     } catch (e) {
@@ -336,23 +331,6 @@ export function Wizard({ awal, tutup }: { awal: StateEditor; tutup: (id: number 
             <Label htmlFor="tgl">Tanggal dokumen <span className="text-red-600">*</span></Label>
             <Input id="tgl" type="date" className="max-w-[12rem]" value={s.tanggal} onChange={(e) => ubah({ tanggal: e.target.value })} />
           </div>
-          {ref && (
-            <>
-              <Pilih label="Rangkaian (kasus/program/keputusan)" items={ref.rangkaian} nilai={s.rangkaianId} teks={(r) => r.judul} sub={(r) => r.jenis}
-                ubah={(id) => ubah({ rangkaianId: id, rtTerkait: id ? Array.from(new Set([...s.rtTerkait, ...(ref.rangkaian.find((r) => r.id === id)?.rt_terkait ?? [])])).sort() : s.rtTerkait })}
-                kosong="Belum ada rangkaian aktif. Buat dari tab Rangkaian." />
-              <Pilih label="Masalah / kejadian terkait" items={ref.kejadian} nilai={s.kejadianId} teks={(k) => k.judul} sub={(k) => `${rt2(k.rt)} · ${k.tanggal} · ${k.status}`}
-                ubah={(id) => {
-                  const k = ref.kejadian.find((x) => x.id === id);
-                  ubah({
-                    kejadianId: id,
-                    rtTerkait: k?.rt && !s.rtTerkait.includes(k.rt) ? [...s.rtTerkait, k.rt].sort() : s.rtTerkait,
-                    data: k && !s.data.lokasi && k.lokasi ? { ...s.data, lokasi: k.lokasi } : s.data,
-                  });
-                }} />
-              <Pilih label="Kegiatan terkait" items={ref.kegiatan} nilai={s.kegiatanId} teks={(k) => k.judul} sub={(k) => k.tanggal} ubah={(id) => ubah({ kegiatanId: id })} />
-            </>
-          )}
           <div className="space-y-2">
             <Label>Siapa yang boleh membaca setelah terbit</Label>
             <div className="grid gap-2 sm:grid-cols-3">
@@ -448,7 +426,7 @@ export function Wizard({ awal, tutup }: { awal: StateEditor; tutup: (id: number 
             <AlertDialogTitle>Terbitkan dokumen?</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-sm">
-                <p>Nomor resmi dibuat sekarang. Setelah terbit, isi dan PDF tidak dapat diubah — koreksi dilakukan dengan dokumen pengganti.</p>
+                <p>Nomor resmi dibuat sekarang. Setelah terbit, isi dan PDF tidak dapat diubah. Bila ada kesalahan, batalkan lalu buat dokumen baru (bisa disalin dari dokumen ini).</p>
                 <p>Terbit bukan berarti terkirim. Catat penyerahan setelah dokumen benar-benar diberikan, dan bubuhkan tanda tangan basah pada cetakan.</p>
                 {validasi && validasi.peringatan.length > 0 && <p className="text-amber-800">Ada {validasi.peringatan.length} peringatan — pastikan sudah diperiksa.</p>}
               </div>

@@ -47,12 +47,10 @@ async function main() {
       pastikan(!kode.has(j.kode), `kode ganda ${j.kode}`);
       kode.add(j.kode);
       for (const k of j.kelompok) pastikan(ss.KELOMPOK[k], `${j.kode}: kelompok ${k} tidak ada`);
-      for (const l of j.lanjutan) pastikan(ss.PETA_JENIS[l], `${j.kode}: lanjutan ${l} tidak ada`);
     }
-    for (const p of ss.PAKET) for (const l of p.langkah) pastikan(ss.PETA_JENIS[l], `paket ${p.kode}: ${l}`);
   });
-  await uji("kelima kategori A–E terisi dan 8 jenis lama terpetakan", async () => {
-    for (const k of ["A", "B", "C", "D", "E"]) pastikan(ss.KATALOG.some((j) => j.kategori === k), `kategori ${k} kosong`);
+  await uji("kategori A–F terisi dan 8 jenis lama terpetakan", async () => {
+    for (const k of ["A", "B", "C", "D", "E", "F"]) pastikan(ss.KATALOG.some((j) => j.kategori === k), `kategori ${k} kosong`);
     const { JENIS_SURAT_RW } = await import("../shared/surat-nomor");
     for (const lama of JENIS_SURAT_RW) pastikan(ss.jenisDariLabelLama(lama), `jenis lama ${lama} tidak terpetakan`);
   });
@@ -105,14 +103,26 @@ async function main() {
     pastikan(ss.terlambat({ status: "menunggu", tenggat: "2026-10-01" }, "2026-10-10"), "harus terlambat");
     pastikan(!ss.terlambat({ status: "selesai", tenggat: "2026-10-01" }, "2026-10-10"), "selesai tidak terlambat");
   });
-  await uji("lanjutan tidak menyalin konfirmasi/tanggal aktual dan merujuk induk", () => {
-    const asal = ss.PETA_JENIS.b_kesepakatan;
-    const tujuan = ss.PETA_JENIS.b_pengingat;
-    const d = ss.prefillLanjutan({ jenis: asal, data: contohData(asal), nomor: "001/KSP/RW.03", perihal: "Kebisingan", tanggal: "2026-10-12" }, tujuan);
-    pastikan(d.konfirmasiPihak === undefined, "konfirmasi tersalin");
-    pastikan(String(d.suratRujukan).includes("001/KSP"), "rujukan");
-    const ba = ss.prefillLanjutan({ jenis: ss.PETA_JENIS.b_klarifikasi, data: contohData(ss.PETA_JENIS.b_klarifikasi), nomor: "002", perihal: "x", tanggal: "2026-10-12" }, ss.PETA_JENIS.b_ba_klarifikasi);
-    pastikan(ba.waktuAktual === undefined, "tanggal aktual tersalin");
+  await uji("surat yang biasa merujuk surat lama tetap sah tanpa rujukan", () => {
+    for (const kode of ["b_pengingat", "d_pengingat", "e_kembali", "a_ubah", "c_ubah", "a_minta_laporan"]) {
+      const j = ss.PETA_JENIS[kode];
+      const d = { ...contohData(j), suratRujukan: "", tanggalRujukan: "", penugasanRujukan: "", keputusanDiubah: "" };
+      const v = ss.validasiDokumen(j, d, { perihal: "Uji tanpa rujukan", tanggal: "2026-10-12" });
+      pastikan(v.galat.length === 0, `${kode}: ${v.galat.join("; ")}`);
+    }
+  });
+  await uji("surat kustom: isi wajib, paragraf terpisah, berjudul atau ber-Kepada", () => {
+    const j = ss.PETA_JENIS.f_kustom;
+    pastikan(j && j.tujuan === "kustom", "jenis kustom tidak ada");
+    const kosong = ss.validasiDokumen(j, {}, { perihal: "Kustom", tanggal: "2026-10-12" });
+    pastikan(kosong.galat.some((g) => g.startsWith("Isi surat")), JSON.stringify(kosong.galat));
+    const meta = { nomor: "001/SRT/RW.03/X/2026", tanggal: "2026-10-12", perihal: "Keterangan domisili", draft: false };
+    const berjudul = ss.renderDokumen(j, { judulSurat: "Surat Keterangan", isiSurat: "Paragraf satu.\n\nParagraf dua.", penutupSurat: "-" }, meta);
+    pastikan(berjudul[0].t === "judul" && (berjudul[0] as any).teks === "SURAT KETERANGAN", "judul");
+    pastikan(berjudul.filter((b) => b.t === "paragraf").length === 2, "paragraf terpisah / penutup '-' tetap dicetak");
+    const surat = ss.renderDokumen(j, { penerima: [{ nama: "Lurah Padasuka", jenis: "instansi" }], isiSurat: "Isi.", poinSurat: ["Satu", "Dua"] }, meta);
+    pastikan(surat.some((b) => b.t === "alamat") && surat.some((b) => b.t === "daftar"), "kepala surat / poin");
+    pastikan(surat.some((b) => b.t === "paragraf" && b.teks.startsWith("Demikian")), "penutup baku");
   });
 
   console.log("\n== PDF semua jenis ==");

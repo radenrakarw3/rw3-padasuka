@@ -4,7 +4,7 @@ Sumber kebenaran: `shared/surat-sakti/` (registry). Dokumen ini ringkasan untuk 
 
 ## Alur
 
-Masalah/program/keputusan → dokumen → penugasan/permintaan → pelaksanaan → bukti → evaluasi.
+Setiap surat berdiri sendiri: RW langsung membuat dokumen (format baku atau Surat Kustom), tanpa permintaan RT dan tanpa rangkaian/surat induk. Rujukan surat sebelumnya bersifat opsional (teks bebas).
 Terbit ≠ terkirim ≠ selesai. Tiga status berdiri sendiri:
 
 | Status | Nilai | Sumber |
@@ -15,13 +15,13 @@ Terbit ≠ terkirim ≠ selesai. Tiga status berdiri sendiri:
 
 ## Peran
 
-- **RT**: meminta dokumen (jenis dari katalog atau "biar RW memilih"), menambah fakta/bukti, membaca dokumen terbit yang relevan (akses `rt_terkait` dengan RT-nya, RT pemohon, atau RT yang menjadi PIC), melaporkan progres tugas miliknya. RT tidak dapat menerbitkan.
-- **RW**: membuat, menerbitkan, membatalkan, membuat pengganti, menunjuk PIC, mencatat distribusi, surat masuk, bantuan bertahap, evaluasi.
+- **RT**: membaca dokumen terbit yang relevan (akses `rt_terkait` dengan RT-nya atau RT yang menjadi PIC), melaporkan progres tugas miliknya. RT tidak dapat meminta atau menerbitkan surat.
+- **RW**: membuat, menerbitkan, membatalkan, menyalin jadi draft baru, menunjuk PIC, mencatat distribusi, bantuan bertahap, evaluasi.
 - Pihak luar hanya penerima/PIC (dicatat RW sebagai `pihak_luar_dicatat`), tidak punya login.
 
 Akses dokumen: `internal` (RT pemohon/PIC saja), `rt_terkait` (RT terpilih), `terbatas` (hanya RW). Semua dicek di server (`server/surat-sakti/akses.ts`).
 
-## Katalog (53 jenis)
+## Katalog (54 jenis)
 
 Kolom: kode registry · kode nomor · tata letak · catatan.
 
@@ -35,7 +35,7 @@ Kolom: kode registry · kode nomor · tata letak · catatan.
 
 **E. Pelaksanaan dan pertanggungjawaban** — e_rencana (RK) · e_daftar_hadir (DH, tabel + baris kosong tanda tangan) · e_notulen (NOT) · e_progres / e_selesai / e_penggunaan (LAP) · e_ba_terima / e_serah_aset / e_kembali (BA) · e_tanda_terima (TT, tabel) · e_evaluasi (EVL)
 
-Paket rangkaian (urutan saran, tiap langkah tetap diperiksa): BetterBlock, Drainase, Kebisingan, Kabel provider, Ronda (`PAKET` di `katalog.ts`).
+**F. Surat kustom** — f_kustom (SRT): isi ditulis bebas. Bila penerima diisi berbentuk surat ber-"Kepada Yth."; bila kosong berbentuk dokumen berjudul. Paragraf dipisah baris kosong, poin opsional, penutup kosong = penutup standar, "-" = tanpa penutup.
 
 ## Field
 
@@ -59,7 +59,7 @@ Pihak dipilih dari data yang sudah ada (akun RT, ketua kelompok aktif, warga, us
 - Terbit (satu transaksi): nomor atomik → snapshot (data, blok, versi template) → PDF → SHA-256 → `wil_surat_berkas`. Trigger DB menolak perubahan isi/nomor/PDF final.
 - Tanda tangan: ruang kosong untuk tanda tangan basah + nama/jabatan. Tidak ada gambar tanda tangan.
 - QR/tautan `/verify/surat/<token>` hanya menampilkan nomor, tanggal, jenis, penerbit, status. Ditulis jelas: bukan tanda tangan elektronik tersertifikasi.
-- Koreksi = dokumen pengganti (lama berstatus "digantikan"); pembatalan tercatat beralasan. Arsip lama tidak dinomori ulang; PDF arsip lama dibentuk dari teks tersimpan.
+- Koreksi = batalkan dokumen lama lalu "Salin jadi draft baru" (nomor baru, tidak tertaut ke dokumen lama); pembatalan tercatat beralasan. Arsip lama tidak dinomori ulang; PDF arsip lama dibentuk dari teks tersimpan.
 
 ## Perlu konfirmasi Ketua RW
 

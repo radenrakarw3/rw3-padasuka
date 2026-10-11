@@ -98,8 +98,7 @@ export default function Objek() {
   const params = new URLSearchParams(useSearch());
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>((params.get("tab") as Tab) || "usaha");
-  const kejadian = params.get("kejadian");
-  const [form, setForm] = useState<boolean>(!!kejadian);
+  const [form, setForm] = useState(false);
   const [izin, setIzin] = useState<{ id: number; nama: string } | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const url = `/api/wilayah/${tab}`;
@@ -124,10 +123,10 @@ export default function Objek() {
   if (tab === "surat") {
     return (
       <div className="space-y-4">
-        <Judul kembali={() => go("/rt")}>Surat dari / ke Ketua RW</Judul>
+        <Judul kembali={() => go("/rt")}>Surat dari Ketua RW</Judul>
         <PilihTombol label="Pilih" belumTahu={false} kolom={3} nilai={tab} onChange={(v) => { if (v) { setTab(v as Tab); setInfo(null); } }}
           pilihan={[{ nilai: "usaha", label: "Usaha" }, { nilai: "fasilitas", label: "Fasilitas" }, { nilai: "kelompok", label: "Kelompok" }, { nilai: "kegiatan", label: "Kegiatan" }, { nilai: "surat", label: "Surat" }]} />
-        <SuratRt kejadianAwal={kejadian ? Number(kejadian) : null} />
+        <SuratRt />
       </div>
     );
   }

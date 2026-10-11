@@ -1,5 +1,5 @@
 /**
- * Rangkaian dokumen, surat masuk/balasan, distribusi, tindak lanjut, bantuan bertahap, fakta RT, ringkasan.
+ * Distribusi, tindak lanjut, bantuan bertahap, ringkasan. Tiap dokumen berdiri sendiri.
  * Tidak ada pengiriman otomatis: distribusi hanya dicatat dari tindakan nyata pengguna.
  */
 import { z } from "zod";
@@ -13,132 +13,6 @@ const tanggal = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const berkas = z.string().regex(/^data:(image\/(png|jpeg|webp)|application\/pdf);base64,/, "Berkas harus foto (PNG/JPG/WEBP) atau PDF").max(4_000_000);
 /** Bukti boleh keterangan teks atau berkas. */
 const bukti = z.union([berkas, z.string().trim().min(3).max(1000).refine((s) => !s.startsWith("data:"), "Format berkas tidak didukung")]);
-
-// ================================================================== rangkaian
-const rangkaianSchema = z.object({
-  judul: z.string().trim().min(3).max(200),
-  jenis: z.enum(["kasus", "program", "keputusan", "fasilitas", "kegiatan", "lainnya"]),
-  paket: z.string().max(40).nullable().optional(),
-  kejadianId: z.number().int().positive().nullable().optional(),
-  kegiatanId: z.number().int().positive().nullable().optional(),
-  fasilitasId: z.number().int().positive().nullable().optional(),
-  programId: z.number().int().positive().nullable().optional(),
-  rw3lawId: z.number().int().positive().nullable().optional(),
-  rtTerkait: z.array(z.number().int().min(1).max(7)).max(7).default([]),
-  catatan: z.string().max(2000).nullable().optional(),
-});
-
-export async function buatRangkaian(aktor: Aktor, input: unknown) {
-  hanyaRw(aktor);
-  const d = rangkaianSchema.parse(input);
-  const { rows } = await pool.query(
-    `INSERT INTO wil_surat_rangkaian (judul, jenis, paket, kejadian_id, kegiatan_id, fasilitas_id, program_id, rw3law_id, rt_terkait, catatan, dibuat_oleh)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
-    [d.judul, d.jenis, d.paket ?? null, d.kejadianId ?? null, d.kegiatanId ?? null, d.fasilitasId ?? null, d.programId ?? null, d.rw3lawId ?? null, d.rtTerkait, d.catatan ?? null, aktor.label],
-  );
-  await catatAudit(aktor, "buat_rangkaian", "rangkaian", rows[0].id, null, null, { judul: d.judul, jenis: d.jenis });
-  return { id: rows[0].id };
-}
-
-export async function daftarRangkaian(aktor: Aktor, status = "aktif") {
-  const rt = aktor.role === "rt" ? aktor.rt : null;
-  const { rows } = await pool.query(
-    `SELECT r.id, r.judul, r.jenis, r.paket, r.status, r.rt_terkait, r.kejadian_id, r.kegiatan_id, r.fasilitas_id, r.program_id, r.rw3law_id,
-            r.created_at, r.ditutup_at,
-            (SELECT COUNT(*)::int FROM surat_rw s WHERE s.rangkaian_id = r.id AND s.status <> 'draft') AS jumlah_terbit,
-            (SELECT COUNT(*)::int FROM surat_rw s WHERE s.rangkaian_id = r.id AND s.status = 'draft') AS jumlah_draft,
-            (SELECT COUNT(*)::int FROM wil_surat_tindak t JOIN surat_rw s ON s.id = t.surat_id
-              WHERE s.rangkaian_id = r.id AND t.status IN ('menunggu', 'berjalan')) AS tindak_terbuka,
-            (SELECT MAX(COALESCE(s.diterbitkan_at, s.updated_at)) FROM surat_rw s WHERE s.rangkaian_id = r.id) AS aktivitas_terakhir
-       FROM wil_surat_rangkaian r
-      WHERE ($1::text = 'semua' OR r.status = $1) AND ($2::int IS NULL OR $2 = ANY(r.rt_terkait))
-      ORDER BY (r.status = 'aktif') DESC, r.created_at DESC LIMIT 200`,
-    [status, rt],
-  );
-  return rows;
-}
-
-export async function detailRangkaian(aktor: Aktor, id: number) {
-  const { rows } = await pool.query(`SELECT * FROM wil_surat_rangkaian WHERE id = $1`, [id]);
-  const r = rows[0];
-  if (!r || (aktor.role === "rt" && !(r.rt_terkait ?? []).includes(aktor.rt))) throw new WilayahError(404, "Rangkaian tidak ditemukan");
-  const rt = aktor.role === "rt" ? aktor.rt : null;
-  const [surat, masuk, bantuan, fakta] = await Promise.all([
-    pool.query(
-      `SELECT s.id, s.nomor_surat, s.kode_jenis, s.jenis_surat, s.perihal, s.status, s.tanggal_surat, s.induk_id, s.mengganti_id, s.diterbitkan_at, s.created_at,
-              (SELECT COALESCE(json_agg(json_build_object('status', k.status)), '[]') FROM wil_surat_kirim k WHERE k.surat_id = s.id) AS kirim_status,
-              (SELECT COALESCE(json_agg(json_build_object('id', t.id, 'tindakan', COALESCE(t.tindakan, t.catatan), 'status', t.status, 'progres', t.progres,
-                       'pic', t.pic_nama, 'tenggat', to_char(t.tenggat, 'YYYY-MM-DD')) ORDER BY t.id), '[]') FROM wil_surat_tindak t WHERE t.surat_id = s.id) AS tindak
-         FROM surat_rw s
-        WHERE s.rangkaian_id = $1 AND ($2::int IS NULL OR ${kondisiBacaRt("$2::int")})
-        ORDER BY COALESCE(s.diterbitkan_at, s.created_at)`,
-      [id, rt],
-    ),
-    rt ? { rows: [] } : pool.query(`SELECT id, membalas_id, pengirim, nomor, to_char(tanggal, 'YYYY-MM-DD') AS tanggal, perihal, ringkasan, berkas_nama, created_at FROM wil_surat_masuk WHERE rangkaian_id = $1 ORDER BY tanggal`, [id]),
-    rt ? { rows: [] } : pool.query(`SELECT id, surat_id, tahap, uraian, jumlah, satuan, nominal, pemberi, to_char(tanggal, 'YYYY-MM-DD') AS tanggal FROM wil_surat_bantuan WHERE rangkaian_id = $1 OR surat_id IN (SELECT id FROM surat_rw WHERE rangkaian_id = $1) ORDER BY tanggal, id`, [id]),
-    pool.query(`SELECT id, rt, isi, sumber, (bukti IS NOT NULL) AS ada_bukti, bukti_nama, oleh, created_at FROM wil_surat_fakta WHERE rangkaian_id = $1 AND ($2::int IS NULL OR rt = $2) ORDER BY id`, [id, rt]),
-  ]);
-  const hariIni = isoHariIni();
-  const dokumen = surat.rows.map((s) => ({
-    ...s,
-    statusDistribusi: statusDistribusi(s.kirim_status),
-    statusPekerjaan: statusPekerjaan(s.tindak),
-    terlambat: s.tindak.filter((t: any) => terlambat(t, hariIni)).length,
-  }));
-  // Ringkasan bantuan per tahap — tahap dipisah, tidak dijumlah menjadi satu "pemasukan".
-  const bantuanPerTahap: Record<string, number> = { dimohonkan: 0, dijanjikan: 0, diterima: 0, digunakan: 0 };
-  for (const b of bantuan.rows) bantuanPerTahap[b.tahap] += Number(b.nominal ?? 0);
-  return { ...r, dokumen, masuk: masuk.rows, bantuan: bantuan.rows, bantuanPerTahap, fakta: fakta.rows };
-}
-
-export async function tutupRangkaian(aktor: Aktor, id: number, evaluasi: string) {
-  hanyaRw(aktor);
-  if (!evaluasi?.trim() || evaluasi.trim().length < 5) throw new WilayahError(400, "Tulis evaluasi singkat sebelum menutup rangkaian");
-  const { rows: terbuka } = await pool.query(
-    `SELECT COUNT(*)::int AS n FROM wil_surat_tindak t JOIN surat_rw s ON s.id = t.surat_id WHERE s.rangkaian_id = $1 AND t.status IN ('menunggu', 'berjalan')`, [id]);
-  if (terbuka[0].n) throw new WilayahError(409, `Masih ada ${terbuka[0].n} tindak lanjut terbuka. Selesaikan atau tandai tidak diperlukan dahulu.`);
-  const { rowCount } = await pool.query(`UPDATE wil_surat_rangkaian SET status = 'ditutup', evaluasi = $2, ditutup_at = now() WHERE id = $1 AND status = 'aktif'`, [id, evaluasi.trim()]);
-  if (!rowCount) throw new WilayahError(409, "Rangkaian sudah ditutup");
-  await catatAudit(aktor, "tutup_rangkaian", "rangkaian", id, null, null, { evaluasi });
-  return { ok: true };
-}
-
-export async function hubungkanRangkaian(aktor: Aktor, suratId: number, rangkaianId: number | null) {
-  hanyaRw(aktor);
-  await pool.query(`UPDATE surat_rw SET rangkaian_id = $2 WHERE id = $1`, [suratId, rangkaianId]);
-  return { ok: true };
-}
-
-// ================================================================== surat masuk / balasan
-const masukSchema = z.object({
-  rangkaianId: z.number().int().positive().nullable().optional(),
-  membalasId: z.number().int().positive().nullable().optional(),
-  pengirim: z.string().trim().min(2).max(200),
-  nomor: z.string().trim().max(200).nullable().optional(),
-  tanggal,
-  perihal: z.string().trim().min(3).max(300),
-  ringkasan: z.string().trim().max(3000).nullable().optional(),
-  berkas: berkas.nullable().optional(),
-  berkasNama: z.string().max(200).nullable().optional(),
-});
-
-export async function catatSuratMasuk(aktor: Aktor, input: unknown) {
-  hanyaRw(aktor);
-  const d = masukSchema.parse(input);
-  let rangkaianId = d.rangkaianId ?? null;
-  if (d.membalasId) {
-    const { rows } = await pool.query(`SELECT rangkaian_id, status FROM surat_rw WHERE id = $1`, [d.membalasId]);
-    if (!rows[0] || rows[0].status === "draft") throw new WilayahError(400, "Surat yang dibalas tidak ditemukan atau masih draft");
-    rangkaianId = rangkaianId ?? rows[0].rangkaian_id;
-  }
-  const { rows } = await pool.query(
-    `INSERT INTO wil_surat_masuk (rangkaian_id, membalas_id, pengirim, nomor, tanggal, perihal, ringkasan, berkas, berkas_nama, dicatat_oleh)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
-    [rangkaianId, d.membalasId ?? null, d.pengirim, d.nomor ?? null, d.tanggal, d.perihal, d.ringkasan ?? null, d.berkas ?? null, d.berkasNama ?? null, aktor.label],
-  );
-  await catatAudit(aktor, "catat_surat_masuk", "surat_masuk", rows[0].id, null, null, { membalas: d.membalasId, pengirim: d.pengirim });
-  return { id: rows[0].id };
-}
 
 // ================================================================== distribusi
 const kirimSchema = z.object({
@@ -277,7 +151,7 @@ export async function daftarTindak(aktor: Aktor, filter = "terbuka") {
   };
   const { rows } = await pool.query(
     `SELECT t.id, t.surat_id, COALESCE(t.tindakan, t.catatan) AS tindakan, t.status, t.progres, t.pic_nama, t.pic_rt, to_char(t.tenggat, 'YYYY-MM-DD') AS tenggat,
-            t.evaluasi, t.updated_at, s.nomor_surat, s.perihal, s.kode_jenis, s.rangkaian_id,
+            t.evaluasi, t.updated_at, s.nomor_surat, s.perihal, s.kode_jenis,
             (SELECT u.catatan FROM wil_surat_tindak_update u WHERE u.tindak_id = t.id ORDER BY u.id DESC LIMIT 1) AS catatan_terakhir
        FROM wil_surat_tindak t JOIN surat_rw s ON s.id = t.surat_id
       WHERE ${kondisi[filter] ?? kondisi.terbuka} AND ($1::int IS NULL OR t.pic_rt = $1)
@@ -290,8 +164,7 @@ export async function daftarTindak(aktor: Aktor, filter = "terbuka") {
 
 // ================================================================== bantuan bertahap
 const bantuanSchema = z.object({
-  suratId: z.number().int().positive().nullable().optional(),
-  rangkaianId: z.number().int().positive().nullable().optional(),
+  suratId: z.number().int().positive(),
   tahap: z.enum(["dimohonkan", "dijanjikan", "diterima", "digunakan"]),
   uraian: z.string().trim().min(3).max(500),
   jumlah: z.number().nonnegative().nullable().optional(),
@@ -305,66 +178,14 @@ const bantuanSchema = z.object({
 export async function catatBantuan(aktor: Aktor, input: unknown) {
   hanyaRw(aktor);
   const d = bantuanSchema.parse(input);
-  if (!d.suratId && !d.rangkaianId) throw new WilayahError(400, "Pilih dokumen atau rangkaian terkait");
   if ((d.tahap === "diterima" || d.tahap === "digunakan") && !d.bukti) throw new WilayahError(400, "Bantuan diterima/digunakan wajib disertai bukti (berita acara, tanda terima, nota, foto)");
   const { rows } = await pool.query(
-    `INSERT INTO wil_surat_bantuan (surat_id, rangkaian_id, tahap, uraian, jumlah, satuan, nominal, pemberi, tanggal, bukti, dicatat_oleh)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
-    [d.suratId ?? null, d.rangkaianId ?? null, d.tahap, d.uraian, d.jumlah ?? null, d.satuan ?? null, d.nominal ?? null, d.pemberi ?? null, d.tanggal, d.bukti ?? null, aktor.label],
+    `INSERT INTO wil_surat_bantuan (surat_id, tahap, uraian, jumlah, satuan, nominal, pemberi, tanggal, bukti, dicatat_oleh)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+    [d.suratId, d.tahap, d.uraian, d.jumlah ?? null, d.satuan ?? null, d.nominal ?? null, d.pemberi ?? null, d.tanggal, d.bukti ?? null, aktor.label],
   );
   await catatAudit(aktor, "catat_bantuan", "bantuan", rows[0].id, null, null, { tahap: d.tahap, nominal: d.nominal });
   return { id: rows[0].id };
-}
-
-// ================================================================== fakta dari RT
-const faktaSchema = z.object({
-  permintaanId: z.number().int().positive().nullable().optional(),
-  rangkaianId: z.number().int().positive().nullable().optional(),
-  isi: z.string().trim().min(5).max(3000),
-  sumber: z.string().trim().max(300).nullable().optional(),
-  bukti: berkas.nullable().optional(),
-  buktiNama: z.string().max(200).nullable().optional(),
-});
-
-export async function tambahFakta(aktor: Aktor, input: unknown) {
-  const d = faktaSchema.parse(input);
-  if (!d.permintaanId && !d.rangkaianId) throw new WilayahError(400, "Pilih permintaan atau rangkaian");
-  let rt: number | null = aktor.rt;
-  if (aktor.role === "rt") {
-    if (d.permintaanId) {
-      const { rows } = await pool.query(`SELECT rt FROM wil_permintaan_surat WHERE id = $1`, [d.permintaanId]);
-      if (rows[0]?.rt !== aktor.rt) throw new WilayahError(404, "Permintaan tidak ditemukan di RT Anda");
-    }
-    if (d.rangkaianId) {
-      const { rows } = await pool.query(`SELECT rt_terkait FROM wil_surat_rangkaian WHERE id = $1`, [d.rangkaianId]);
-      if (!(rows[0]?.rt_terkait ?? []).includes(aktor.rt)) throw new WilayahError(404, "Rangkaian tidak ditemukan untuk RT Anda");
-    }
-  } else rt = null;
-  const { rows } = await pool.query(
-    `INSERT INTO wil_surat_fakta (permintaan_id, rangkaian_id, rt, isi, sumber, bukti, bukti_nama, oleh) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-    [d.permintaanId ?? null, d.rangkaianId ?? null, rt, d.isi, d.sumber ?? null, d.bukti ?? null, d.buktiNama ?? null, aktor.label],
-  );
-  await catatAudit(aktor, "tambah_fakta_surat", "surat_fakta", rows[0].id, rt);
-  return { id: rows[0].id };
-}
-
-export async function daftarFaktaPermintaan(aktor: Aktor, permintaanId: number) {
-  const { rows: p } = await pool.query(`SELECT rt FROM wil_permintaan_surat WHERE id = $1`, [permintaanId]);
-  if (!p[0] || (aktor.role === "rt" && p[0].rt !== aktor.rt)) throw new WilayahError(404, "Permintaan tidak ditemukan");
-  const { rows } = await pool.query(`SELECT id, isi, sumber, bukti_nama, (bukti IS NOT NULL) AS ada_bukti, oleh, created_at FROM wil_surat_fakta WHERE permintaan_id = $1 ORDER BY id`, [permintaanId]);
-  return rows;
-}
-
-export async function ambilBuktiFakta(aktor: Aktor, faktaId: number) {
-  const { rows } = await pool.query(`SELECT bukti, rt FROM wil_surat_fakta WHERE id = $1`, [faktaId]);
-  if (!rows[0] || (aktor.role === "rt" && rows[0].rt !== aktor.rt)) throw new WilayahError(404, "Berkas tidak ditemukan");
-  return berkasDari(rows[0].bukti, `bukti-fakta-${faktaId}`);
-}
-
-export async function ambilBerkasMasuk(aktor: Aktor, id: number) {
-  hanyaRw(aktor);
-  const { rows } = await pool.query(`SELECT berkas FROM wil_surat_masuk WHERE id = $1`, [id]);
-  return berkasDari(rows[0]?.berkas, `surat-masuk-${id}`);
 }
 
 export async function ambilLampiranAman(aktor: Aktor, lampiranId: number) {
@@ -375,15 +196,10 @@ export async function ambilLampiranAman(aktor: Aktor, lampiranId: number) {
 }
 
 // ================================================================== ringkasan dashboard RW
-/** Jenis yang menunggu respons pihak luar. */
-const KODE_PERMOHONAN = `(s.kode_jenis LIKE 'd\\_%' AND s.kode_jenis NOT IN ('d_terima_kasih')) OR s.kode_jenis IN ('b_permohonan_instansi', 'c_koordinasi')
-  OR (s.kode_jenis IS NULL AND (s.jenis_surat ILIKE '%permohonan%' OR s.jenis_surat ILIKE '%pengajuan%'))`;
-
 export async function ringkasan(aktor: Aktor) {
   hanyaRw(aktor);
   const { rows } = await pool.query(`
     SELECT
-      (SELECT COUNT(*)::int FROM wil_permintaan_surat WHERE status = 'baru') AS permintaan_rt,
       (SELECT COUNT(*)::int FROM surat_rw WHERE status = 'draft') AS draft,
       (SELECT COUNT(*)::int FROM surat_rw WHERE status = 'draft' AND perlu_pemeriksaan) AS perlu_pemeriksaan,
       (SELECT COUNT(*)::int FROM surat_rw s WHERE s.status = 'terbit' AND s.snapshot IS NOT NULL
@@ -392,16 +208,8 @@ export async function ringkasan(aktor: Aktor) {
           WHERE s.status = 'terbit' AND t.status IN ('menunggu', 'berjalan') AND t.tenggat IS NOT NULL AND t.tenggat < current_date) AS tindak_terlambat,
       (SELECT COUNT(*)::int FROM wil_surat_tindak t JOIN surat_rw s ON s.id = t.surat_id
           WHERE s.status = 'terbit' AND t.status IN ('menunggu', 'berjalan') AND t.tenggat IS NOT NULL AND t.tenggat BETWEEN current_date AND current_date + 3) AS tindak_jatuh_tempo,
-      (SELECT COUNT(*)::int FROM surat_rw s WHERE s.status = 'terbit' AND (${KODE_PERMOHONAN})
-          AND NOT EXISTS (SELECT 1 FROM wil_surat_masuk m WHERE m.membalas_id = s.id)) AS permohonan_tanpa_respons,
-      (SELECT COUNT(*)::int FROM wil_surat_tindak WHERE status = 'selesai' AND updated_at > now() - interval '30 days') AS pekerjaan_selesai_30h,
-      (SELECT COUNT(*)::int FROM wil_surat_rangkaian WHERE status = 'aktif') AS rangkaian_aktif`);
-  const { rows: permohonan } = await pool.query(
-    `SELECT s.id, s.nomor_surat, s.perihal, s.tujuan, s.diterbitkan_at, (current_date - s.diterbitkan_at::date) AS umur_hari
-       FROM surat_rw s
-      WHERE s.status = 'terbit' AND (${KODE_PERMOHONAN}) AND NOT EXISTS (SELECT 1 FROM wil_surat_masuk m WHERE m.membalas_id = s.id)
-      ORDER BY s.diterbitkan_at NULLS LAST LIMIT 20`);
-  return { ...rows[0], permohonan };
+      (SELECT COUNT(*)::int FROM wil_surat_tindak WHERE status = 'selesai' AND updated_at > now() - interval '30 days') AS pekerjaan_selesai_30h`);
+  return rows[0];
 }
 
 // ================================================================== pilihan data yang sudah ada
@@ -445,15 +253,14 @@ export async function referensi(aktor: Aktor) {
       return [];
     }
   };
-  const [kejadian, kegiatan, fasilitas, program, rw3law, rangkaian] = await Promise.all([
+  const [kejadian, kegiatan, fasilitas, program, rw3law] = await Promise.all([
     aman(`SELECT id, judul, jenis, rt, status, to_char(tanggal, 'YYYY-MM-DD') AS tanggal, lokasi FROM wil_kejadian ORDER BY (status <> 'selesai') DESC, tanggal DESC LIMIT 200`),
     aman(`SELECT id, judul, jenis, to_char(tanggal, 'YYYY-MM-DD') AS tanggal, lokasi, rt_terlibat FROM wil_kegiatan ORDER BY tanggal DESC LIMIT 200`),
     aman(`SELECT id, nama, jenis, lokasi, rt_lokasi FROM wil_fasilitas ORDER BY nama LIMIT 300`),
     aman(`SELECT id, nama_program AS nama, status, pic FROM program_rw ORDER BY created_at DESC LIMIT 200`),
     aman(`SELECT id, judul, kategori, nomor_peraturan, tahun_nomor, status FROM rw3law_dokumen WHERE status = 'disetujui' AND dicabut_at IS NULL ORDER BY tahun_nomor DESC NULLS LAST, nomor_peraturan LIMIT 200`),
-    aman(`SELECT id, judul, jenis, status, rt_terkait FROM wil_surat_rangkaian WHERE status = 'aktif' ORDER BY created_at DESC LIMIT 200`),
   ]);
-  return { kejadian, kegiatan, fasilitas, program, rw3law, rangkaian };
+  return { kejadian, kegiatan, fasilitas, program, rw3law };
 }
 
 // ================================================================== verifikasi publik (minimum)

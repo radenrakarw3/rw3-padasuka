@@ -141,7 +141,6 @@ export default function Masalah({ baru }: { baru?: boolean }) {
                 <p key={i} className="text-base border-l-4 border-gray-300 pl-3 my-2">{t.catatan} <span className="text-gray-500">— {t.oleh}</span></p>
               ))}
               {k.bolehUbah && k.status !== "selesai" && <Tindak k={k} selesai={() => segar("Tindak lanjut tersimpan.")} />}
-              {k.bolehUbah && <div className="mt-3"><TombolBesar varian="kedua" onClick={() => go(`/rt/objek?tab=surat&kejadian=${k.id}`)}>Minta surat ke RW</TombolBesar></div>}
             </div>
           )}
         </div>

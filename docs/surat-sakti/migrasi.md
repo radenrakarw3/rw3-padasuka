@@ -11,6 +11,7 @@ Prasyarat: `0023_wilayah.sql` dan `0024_wilayah_input_rw.sql` sudah diterapkan.
 - `wil_surat_kirim`: `status`, `diterima_pada`, `catatan`; `bukti` boleh kosong hanya untuk status gagal (dicek di server).
 - `wil_surat_tindak`: `tindakan`, `pic_*`, `progres`, `bukti`, `evaluasi`, `updated_at`.
 - `wil_permintaan_surat`: `kode_jenis`, `rangkaian_id`.
+- Catatan: fitur permintaan surat RT, rangkaian, surat masuk, fakta, lanjutan, dan pengganti sudah dihapus dari aplikasi. Tabel/kolomnya tetap ada (tidak di-drop) agar data lama aman, tetapi tidak dipakai lagi.
 
 Arsip lama (tanpa `snapshot`) tetap bisa dibaca dan diunduh; trigger final tidak berlaku untuknya. Draft lama tanpa `kode_jenis` harus dibuka lalu dipilih jenisnya sebelum terbit.
 

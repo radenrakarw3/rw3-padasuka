@@ -215,12 +215,11 @@ function Aksi({ tahun, bulan }: { tahun: number; bulan: number }) {
   const [, go] = useLocation();
   const { data, error } = useQuery<any>({ queryKey: ["/api/wilayah/rw/aksi", tahun, bulan], queryFn: () => wil(`/api/wilayah/rw/aksi?tahun=${tahun}&bulan=${bulan}`, RW) });
   const { data: koreksi } = useQuery<any[]>({ queryKey: ["/api/wilayah/koreksi", "rw"], queryFn: () => wil("/api/wilayah/koreksi", RW) });
-  const { data: permintaan } = useQuery<any[]>({ queryKey: ["/api/wilayah/permintaan-surat", "rw"], queryFn: () => wil("/api/wilayah/permintaan-surat", RW) });
   const { data: surat } = useQuery<any>({ queryKey: ["/api/wilayah/rw/surat-ringkasan"], queryFn: () => wil("/api/wilayah/rw/surat-ringkasan", RW) });
   const { data: lap } = useQuery<any>({ queryKey: ["/api/wilayah/laporan", "rw-konf", tahun, bulan], queryFn: () => wil(`/api/wilayah/laporan?tahun=${tahun}&bulan=${bulan}`, RW) });
   const [g, setG] = useState({ jenis: "rembug_rw", judul: "", tanggal: isoTanggal(new Date()), lokasi: "", rt: [1, 2, 3, 4, 5, 6, 7] });
   const [err, setErr] = useState<unknown>(null);
-  const segar = () => Promise.all(["/api/wilayah/rw/aksi", "/api/wilayah/koreksi", "/api/wilayah/permintaan-surat", "/api/wilayah/laporan", "/api/wilayah/rw/ringkasan"].map((k) => qc.invalidateQueries({ queryKey: [k] })));
+  const segar = () => Promise.all(["/api/wilayah/rw/aksi", "/api/wilayah/koreksi", "/api/wilayah/laporan", "/api/wilayah/rw/ringkasan"].map((k) => qc.invalidateQueries({ queryKey: [k] })));
   const jalankan = async (fn: () => Promise<unknown>) => { setErr(null); try { await fn(); await segar(); } catch (e) { setErr(e); } };
   const tambah = useKirimSekali(async (kunci) => {
     await wil("/api/wilayah/kegiatan", { ...RW, body: { jenis: g.jenis, judul: g.judul, tanggal: g.tanggal, lokasi: g.lokasi || null, rtTerlibat: g.rt, idempotencyKey: kunci } });
@@ -307,11 +306,11 @@ function Aksi({ tahun, bulan }: { tahun: number; bulan: number }) {
           <Button size="sm" variant="outline" onClick={() => go("/admin/surat-rw")}>Buka Surat Sakti</Button>
         </div>
         {surat && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 text-sm">
             {([
-              ["Permintaan RT baru", surat.permintaan_rt], ["Draft", surat.draft], ["Terbit belum diserahkan", surat.belum_distribusi],
-              ["Tindak lanjut terlambat", surat.tindak_terlambat], ["Jatuh tempo ≤3 hari", surat.tindak_jatuh_tempo], ["Permohonan belum dibalas", surat.permohonan_tanpa_respons],
-              ["Pekerjaan selesai 30 hari", surat.pekerjaan_selesai_30h], ["Rangkaian aktif", surat.rangkaian_aktif],
+              ["Draft", surat.draft], ["Terbit belum diserahkan", surat.belum_distribusi],
+              ["Tindak lanjut terlambat", surat.tindak_terlambat], ["Jatuh tempo ≤3 hari", surat.tindak_jatuh_tempo],
+              ["Pekerjaan selesai 30 hari", surat.pekerjaan_selesai_30h],
             ] as [string, number][]).map(([l, n]) => (
               <button key={l} type="button" onClick={() => go("/admin/surat-rw")} className="rounded-lg border p-2 text-left hover:bg-muted/40">
                 <p className={`text-xl font-bold ${n && (l.includes("terlambat") || l.includes("belum")) ? "text-amber-700" : ""}`}>{n}</p>
@@ -322,21 +321,6 @@ function Aksi({ tahun, bulan }: { tahun: number; bulan: number }) {
         )}
       </section>
 
-      <section>
-        <h3 className="font-semibold mb-2">Permintaan surat dari RT</h3>
-        <ul className="text-sm divide-y border rounded-lg">
-          {permintaan?.filter((p) => p.status === "baru").length === 0 && <li className="p-2 text-muted-foreground">Tidak ada.</li>}
-          {permintaan?.filter((p) => p.status === "baru").map((p) => (
-            <li key={p.id} className="p-2 flex flex-wrap justify-between gap-2">
-              <span>{rt2(p.rt)} · {p.jenis_surat}: <b>{p.perihal}</b> — {p.uraian}{p.jumlah_fakta ? ` (${p.jumlah_fakta} fakta tambahan)` : ""}</span>
-              <span className="flex gap-2">
-                <Button size="sm" onClick={() => go(`/admin/surat-rw?permintaan=${p.id}`)}>Buat dokumen</Button>
-                <Button size="sm" variant="outline" onClick={() => { const j = prompt("Alasan untuk RT:"); if (j) jalankan(() => wil(`/api/wilayah/rw/permintaan-surat/${p.id}/tolak`, { ...RW, body: { jawaban: j } })); }}>Tolak</Button>
-              </span>
-            </li>
-          ))}
-        </ul>
-      </section>
     </div>
   );
 }

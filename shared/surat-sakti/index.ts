@@ -4,6 +4,5 @@ export * from "./field";
 export * from "./render";
 export * from "./redaksi";
 export * from "./validasi";
-export * from "./lanjutan";
 export * from "./identitas";
 export * from "./status";

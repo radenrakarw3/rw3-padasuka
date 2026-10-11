@@ -17,16 +17,7 @@ export async function hapusSuratUji(pool: Pool, ids: number[]) {
     await c.query(`DELETE FROM wil_surat_berkas WHERE surat_id = ANY($1::int[])`, [ids]);
     await c.query(`ALTER TABLE wil_surat_berkas ENABLE TRIGGER trg_wil_surat_berkas_tetap`);
     await c.query(`DELETE FROM wil_surat_bantuan WHERE surat_id = ANY($1::int[])`, [ids]);
-    await c.query(`DELETE FROM wil_surat_masuk WHERE membalas_id = ANY($1::int[])`, [ids]);
-    await c.query(`UPDATE wil_permintaan_surat SET surat_id = NULL WHERE surat_id = ANY($1::int[])`, [ids]);
-    await c.query(`UPDATE surat_rw SET induk_id = NULL WHERE induk_id = ANY($1::int[])`, [ids]);
-    const { rows } = await c.query(`SELECT DISTINCT rangkaian_id FROM surat_rw WHERE id = ANY($1::int[]) AND rangkaian_id IS NOT NULL`, [ids]);
     await c.query(`DELETE FROM surat_rw WHERE id = ANY($1::int[])`, [ids]);
-    for (const r of rows) {
-      await c.query(`DELETE FROM wil_surat_fakta WHERE rangkaian_id = $1`, [r.rangkaian_id]);
-      await c.query(`DELETE FROM wil_surat_masuk WHERE rangkaian_id = $1`, [r.rangkaian_id]);
-      await c.query(`DELETE FROM wil_surat_rangkaian r WHERE r.id = $1 AND NOT EXISTS (SELECT 1 FROM surat_rw s WHERE s.rangkaian_id = r.id)`, [r.rangkaian_id]);
-    }
     await c.query("COMMIT");
   } catch (e) {
     await c.query("ROLLBACK").catch(() => {});
@@ -46,7 +37,6 @@ export async function ujiIntegrasi(uji: Uji, pastikan: Pastikan) {
   }
   const L = await import("../server/surat-sakti/layanan");
   const T = await import("../server/surat-sakti/tindak");
-  const W = await import("../server/wilayah-surat");
   const ss = await import("../shared/surat-sakti");
   const { contohData } = await import("../shared/surat-sakti/contoh");
 
@@ -54,7 +44,6 @@ export async function ujiIntegrasi(uji: Uji, pastikan: Pastikan) {
   const rt7 = { role: "rt" as const, rt: 7, label: "Uji SS RT 07" };
   const rt6 = { role: "rt" as const, rt: 6, label: "Uji SS RT 06" };
   const ids: number[] = [];
-  const permintaan: number[] = [];
   const gagalDengan = async (fn: () => Promise<unknown>, status: number, ket: string) => {
     try {
       await fn();
@@ -140,52 +129,47 @@ export async function ujiIntegrasi(uji: Uji, pastikan: Pastikan) {
       pastikan(d.statusDokumen === "dibatalkan" && d.statusPekerjaan === "selesai" && d.statusDistribusi === "diserahkan", "batal mengubah status lain");
     });
 
-    await uji("dokumen lanjutan: rangkaian sama, tanpa duplikasi, induk tidak berubah", async () => {
-      const s = await draft("b_klarifikasi", "lanjutan");
-      await L.terbitkan(rw, s.id);
-      const a = await L.buatLanjutan(rw, s.id, "b_ba_klarifikasi");
-      const b = await L.buatLanjutan(rw, s.id, "b_ba_klarifikasi");
-      ids.push(a.id);
-      pastikan(a.id === b.id, "lanjutan ganda");
-      const induk = await L.detailSurat(rw, s.id);
-      pastikan(induk.status === "terbit" && a.rangkaianId === induk.rangkaianId && a.indukId === s.id, "relasi");
-      pastikan(a.perihal === induk.perihal && a.status === "draft" && !a.nomorSurat, "draft lanjutan");
-      const r = await T.detailRangkaian(rw, induk.rangkaianId!);
-      pastikan(r.dokumen.length === 2, "rangkaian");
-      await T.catatSuratMasuk(rw, { membalasId: s.id, pengirim: "Pihak uji", tanggal: "2026-10-09", perihal: "Balasan uji" });
-      pastikan((await T.detailRangkaian(rw, induk.rangkaianId!)).masuk.length === 1, "surat masuk tertaut");
-    });
-
-    await uji("kesepakatan tanpa konfirmasi tidak dapat terbit; pengganti menandai lama 'digantikan'", async () => {
+    await uji("kesepakatan tanpa konfirmasi tidak dapat terbit; salin jadi draft baru tanpa keterkaitan", async () => {
       const k = await draft("b_kesepakatan", "kesepakatan");
       await pool.query(`UPDATE surat_rw SET data_form = data_form || '{"konfirmasiPihak": false}' WHERE id = $1`, [k.id]);
       await gagalDengan(() => L.terbitkan(rw, k.id), 400, "kesepakatan tanpa konfirmasi");
-      const s = await draft("c_undangan", "pengganti");
+      const s = await draft("c_undangan", "salin");
       const t = await L.terbitkan(rw, s.id);
-      const g = await L.buatPengganti(rw, s.id);
+      const g = await L.salinJadiDraft(rw, s.id);
       ids.push(g.id);
-      await L.terbitkan(rw, g.id);
+      pastikan(g.status === "draft" && !g.nomorSurat && g.perihal === "Uji SS salin", "draft salinan");
+      const t2 = await L.terbitkan(rw, g.id);
       const lama = await L.detailSurat(rw, s.id);
-      pastikan(lama.status === "digantikan" && lama.nomorSurat === t.nomorSurat, "pengganti");
+      pastikan(lama.status === "terbit" && lama.nomorSurat === t.nomorSurat && t2.nomorSurat !== t.nomorSurat, "dokumen asal tidak berubah");
+      const { rows } = await pool.query(`SELECT mengganti_id, induk_id, rangkaian_id, permintaan_id FROM surat_rw WHERE id = $1`, [g.id]);
+      pastikan(Object.values(rows[0]).every((v) => v == null), "salinan masih tertaut ke surat lain");
     });
 
-    await uji("permintaan RT + fakta → draft → selesai; bantuan bertahap tidak menjadi pemasukan", async () => {
-      const p = await W.ajukanPermintaan(rt7, { kodeJenis: "d_material_bekas", perihal: "Uji SS material", uraian: "Butuh material bekas untuk BetterBlock", idempotencyKey: `ss-${Date.now()}-kunci-uji` });
-      await T.tambahFakta(rt7, { permintaanId: p.id, isi: "Lokasi taman RT 07 rusak" });
-      await gagalDengan(() => T.tambahFakta(rt6, { permintaanId: p.id, isi: "RT lain menambah" }), 404, "RT lain menambah fakta");
-      const s = await draft("d_material_bekas", "material", { permintaanId: p.id });
+    await uji("surat berdiri sendiri: rujukan surat lama opsional; surat kustom langsung terbit", async () => {
+      const p = await L.simpanDraft(rw, { kodeJenis: "d_pengingat", perihal: "Uji SS pengingat tanpa rujukan", tanggalSurat: "2026-10-08",
+        dataForm: { ...contohData(ss.PETA_JENIS.d_pengingat), suratRujukan: "", tanggalRujukan: "" } });
+      ids.push(p.id);
+      await L.terbitkan(rw, p.id);
+      const kustom = await L.simpanDraft(rw, { kodeJenis: "f_kustom", perihal: "Uji SS kustom", tanggalSurat: "2026-10-08", dataForm: { judulSurat: "Surat Keterangan", isiSurat: "Yang bertanda tangan di bawah ini menerangkan hal uji.\n\nDemikian." , penutupSurat: "-" } });
+      ids.push(kustom.id);
+      const h = await L.terbitkan(rw, kustom.id);
+      pastikan(/\/SRT\//.test(h.nomorSurat), `nomor kustom ${h.nomorSurat}`);
+      const pdf = await L.unduhPdf(rw, kustom.id);
+      pastikan(pdf.buffer.subarray(0, 5).toString() === "%PDF-", "PDF kustom");
+      await gagalDengan(() => L.simpanDraft(rw, { kodeJenis: "f_kustom", perihal: "Uji SS kustom kosong", tanggalSurat: "2026-10-08", dataForm: {} }).then(async (x) => { ids.push(x.id); await L.terbitkan(rw, x.id); }), 400, "kustom tanpa isi");
+    });
+
+    await uji("bantuan bertahap tidak menjadi pemasukan", async () => {
+      const s = await draft("d_material_bekas", "material");
       await L.terbitkan(rw, s.id);
-      const { rows } = await pool.query(`SELECT status FROM wil_permintaan_surat WHERE id = $1`, [p.id]);
-      pastikan(rows[0].status === "selesai", "permintaan");
       const { rows: b } = await pool.query(`SELECT tahap FROM wil_surat_bantuan WHERE surat_id = $1`, [s.id]);
       pastikan(b.length === 1 && b[0].tahap === "dimohonkan", "bantuan dimohonkan");
       await gagalDengan(() => T.catatBantuan(rw, { suratId: s.id, tahap: "diterima", uraian: "Paving bekas", tanggal: "2026-10-10" }), 400, "diterima tanpa bukti");
-      permintaan.push(p.id);
     });
 
     await uji("ringkasan dashboard & pengantar WA (tanpa kirim)", async () => {
       const r = await T.ringkasan(rw);
-      pastikan(typeof r.draft === "number" && Array.isArray(r.permohonan), "ringkasan");
+      pastikan(typeof r.draft === "number" && typeof r.tindak_terlambat === "number", "ringkasan");
       const s = await draft("c_edaran", "wa");
       await L.terbitkan(rw, s.id);
       const teks = await L.pengantarWa(rw, s.id);
@@ -196,9 +180,5 @@ export async function ujiIntegrasi(uji: Uji, pastikan: Pastikan) {
     });
   } finally {
     await hapusSuratUji(pool, ids);
-    if (permintaan.length) {
-      await pool.query(`DELETE FROM wil_surat_fakta WHERE permintaan_id = ANY($1::int[])`, [permintaan]).catch(() => {});
-      await pool.query(`DELETE FROM wil_permintaan_surat WHERE id = ANY($1::int[])`, [permintaan]).catch(() => {});
-    }
   }
 }
