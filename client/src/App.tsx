@@ -53,12 +53,9 @@ const AdminVisitrw3Kalender = lazy(() => import("@/pages/admin/visitrw3-kalender
 const AdminVisitrw3Antrian = lazy(() => import("@/pages/admin/visitrw3-antrian-page"));
 const AdminVisitrw3Properti = lazy(() => import("@/pages/admin/visitrw3-properti"));
 const AdminVisitrw3Penghuni = lazy(() => import("@/pages/admin/visitrw3-penghuni"));
-const AdminVisitrw3Pengaturan = lazy(() => import("@/pages/admin/visitrw3-pengaturan"));
 const AdminRw3bizLanding = lazy(() => import("@/pages/admin/rw3biz-landing"));
 const AdminRw3bizAntrian = lazy(() => import("@/pages/admin/rw3biz-antrian"));
-const AdminRw3bizBlast = lazy(() => import("@/pages/admin/rw3biz-blast"));
 const AdminRw3bizDashboard = lazy(() => import("@/pages/admin/rw3biz-dashboard"));
-const AdminRw3bizPengaturan = lazy(() => import("@/pages/admin/rw3biz-pengaturan"));
 import BlusukanrwLogin from "@/pages/blusukanrw/login";
 import BlusukanrwQuest from "@/pages/blusukanrw/quest";
 import BlusukanrwCari from "@/pages/blusukanrw/cari";
@@ -317,12 +314,9 @@ function AdminRoutes() {
         <Route path="/admin/surat-rw-lama" component={AdminSuratRw} />
         <Route path="/admin/surat-rw" component={AdminSuratSakti} />
 
-        <Route path="/admin/rw3biz/pengaturan" component={AdminRw3bizPengaturan} />
         <Route path="/admin/rw3biz/antrian" component={AdminRw3bizAntrian} />
-        <Route path="/admin/rw3biz/blast" component={AdminRw3bizBlast} />
         <Route path="/admin/rw3biz/dashboard" component={AdminRw3bizDashboard} />
         <Route path="/admin/rw3biz" component={AdminRw3bizLanding} />
-        <Route path="/admin/visitrw3/pengaturan" component={AdminVisitrw3Pengaturan} />
         <Route path="/admin/visitrw3/properti" component={AdminVisitrw3Properti} />
         <Route path="/admin/visitrw3/penghuni" component={AdminVisitrw3Penghuni} />
         <Route path="/admin/visitrw3/antrian" component={AdminVisitrw3Antrian} />

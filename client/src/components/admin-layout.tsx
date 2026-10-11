@@ -11,7 +11,6 @@ import {
   Megaphone,
   Menu,
   PieChart,
-  Settings,
   Users,
   X,
   QrCode,
@@ -100,7 +99,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         { path: VISITRW3_ROUTES.admin.penghuni, icon: Users, label: "Warga singgah" },
         { path: VISITRW3_ROUTES.admin.kalender, icon: CalendarDays, label: "Kalender kontrak" },
         { path: VISITRW3_ROUTES.admin.dashboard, icon: PieChart, label: "Statistik hunian" },
-        { path: VISITRW3_ROUTES.admin.pengaturan, icon: Settings, label: "Pengaturan Visit" },
       ],
     },
     {
@@ -108,9 +106,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       items: [
         { path: RW3BIZ_ROUTES.admin.antrianSurvey, icon: ClipboardList, label: "Survey usaha", badge: biz.surveyMenunggu },
         { path: RW3BIZ_ROUTES.admin.antrianSudah, icon: ClipboardList, label: "Usaha terdaftar" },
-        { path: RW3BIZ_ROUTES.admin.blast, icon: Megaphone, label: "WA Blast usaha" },
         { path: RW3BIZ_ROUTES.admin.dashboard, icon: PieChart, label: "Statistik usaha" },
-        { path: RW3BIZ_ROUTES.admin.pengaturan, icon: Settings, label: "Pengaturan Biz" },
       ],
     },
     {

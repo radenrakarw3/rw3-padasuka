@@ -476,38 +476,6 @@ export async function listUsahaAktif() {
     .orderBy(desc(rw3bizUsaha.createdAt));
 }
 
-export type Rw3bizBlastRecipient = {
-  usahaId: number;
-  nomorBiz: string;
-  namaUsaha: string;
-  pjNama: string;
-  pjNomorWhatsapp: string;
-  rt: number;
-};
-
-/** PJ usaha aktif yang setuju menerima notifikasi (sumber WA blast RW3BIZ). */
-export async function getPjBlastRecipients(opts?: {
-  rt?: number | null;
-}): Promise<Rw3bizBlastRecipient[]> {
-  const conditions = [eq(rw3bizUsaha.status, "aktif"), eq(rw3bizUsaha.pjSetujuNotifikasi, true)];
-  if (opts?.rt != null && Number.isFinite(opts.rt)) {
-    conditions.push(eq(rw3bizUsaha.rt, opts.rt));
-  }
-  const rows = await db
-    .select({
-      usahaId: rw3bizUsaha.id,
-      nomorBiz: rw3bizUsaha.nomorBiz,
-      namaUsaha: rw3bizUsaha.namaUsaha,
-      pjNama: rw3bizUsaha.pjNama,
-      pjNomorWhatsapp: rw3bizUsaha.pjNomorWhatsapp,
-      rt: rw3bizUsaha.rt,
-    })
-    .from(rw3bizUsaha)
-    .where(and(...conditions))
-    .orderBy(rw3bizUsaha.rt, rw3bizUsaha.namaUsaha);
-  return rows.filter((r) => r.pjNomorWhatsapp?.trim());
-}
-
 export async function ensureRw3bizSchema() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS rw3biz_usaha (

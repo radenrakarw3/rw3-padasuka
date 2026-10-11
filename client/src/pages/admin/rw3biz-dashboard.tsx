@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Store, Megaphone, ClipboardList, Users } from "lucide-react";
+import { Store, ClipboardList, Users } from "lucide-react";
 import { Visitrw3AdminNav } from "@/components/admin/visitrw3-admin-nav";
 import {
   Visitrw3AdminShell,
@@ -21,13 +21,6 @@ type UsahaRow = {
   status: string;
 };
 
-type BlastRecipient = {
-  usahaId: number;
-  namaUsaha: string;
-  pjNama: string;
-  pjNomorWhatsapp: string;
-};
-
 export default function AdminRw3bizDashboard() {
   const { surveyMenunggu, isLoading: countsLoading } = useVisitrw3AdminCounts("rw3biz");
 
@@ -40,16 +33,7 @@ export default function AdminRw3bizDashboard() {
     },
   });
 
-  const { data: recipients = [], isLoading: blastLoading } = useQuery<BlastRecipient[]>({
-    queryKey: ["/api/admin/rw3biz/blast/recipients"],
-    queryFn: async () => {
-      const res = await fetch("/api/admin/rw3biz/blast/recipients", { credentials: "include" });
-      if (!res.ok) throw new Error("Gagal memuat penerima blast");
-      return res.json();
-    },
-  });
-
-  const loading = countsLoading || usahaLoading || blastLoading;
+  const loading = countsLoading || usahaLoading;
 
   return (
     <Visitrw3AdminShell>
@@ -63,7 +47,7 @@ export default function AdminRw3bizDashboard() {
         <Skeleton className="h-40 w-full rounded-2xl" />
       ) : (
         <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Visitrw3StatCard
               title="Menunggu survey"
               value={String(surveyMenunggu)}
@@ -78,14 +62,6 @@ export default function AdminRw3bizDashboard() {
               description="Sudah disetujui"
               icon={Store}
               tone="success"
-            />
-            <Visitrw3StatCard
-              title="Penerima WA blast"
-              value={String(recipients.length)}
-              description="PJ yang opt-in notifikasi"
-              icon={Megaphone}
-              href={RW3BIZ_ROUTES.admin.blast}
-              tone="gold"
             />
           </div>
 

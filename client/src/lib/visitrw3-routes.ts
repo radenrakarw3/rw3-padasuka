@@ -30,7 +30,6 @@ export const VISITRW3_ROUTES = {
     penghuni: "/admin/visitrw3/penghuni",
     kalender: "/admin/visitrw3/kalender",
     dashboard: "/admin/visitrw3/dashboard",
-    pengaturan: "/admin/visitrw3/pengaturan",
   },
 } as const;
 

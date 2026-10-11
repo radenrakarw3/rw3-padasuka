@@ -19,7 +19,7 @@ import {
   getPenghuniKtpPayload,
   resolveFotoKtpData,
 } from "./visitrw3";
-import { loadVisitrw3SettingsRows, upsertVisitrw3Setting } from "./visitrw3-settings";
+import { loadVisitrw3SettingsRows } from "./visitrw3-settings";
 import { visitrw3ApiErrorMessage } from "./visitrw3-api-error";
 import { invalidateVisitrw3Dashboard } from "./cache";
 import { ACTIVE_RT_NUMBERS } from "@shared/rt";
@@ -69,29 +69,6 @@ export function registerVisitrw3Routes(app: Express) {
       );
     } catch (error: unknown) {
       res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat pengaturan") });
-    }
-  });
-
-  app.get("/api/admin/visitrw3/settings", requireAdmin, async (_req, res) => {
-    try {
-      const rows = await loadVisitrw3SettingsRows();
-      res.json(rows.filter((r) => !r.key.startsWith("fee_") && !r.key.startsWith("tier_pintu_")));
-    } catch (error: unknown) {
-      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat pengaturan") });
-    }
-  });
-
-  app.patch("/api/admin/visitrw3/settings/:key", requireAdmin, async (req, res) => {
-    try {
-      const key = String(req.params.key);
-      if (key.startsWith("fee_") || key.startsWith("tier_pintu_")) {
-        return res.status(410).json({ message: "Pengaturan tarif kontribusi sudah dihapus" });
-      }
-      const value = String(req.body?.value ?? "");
-      const row = await upsertVisitrw3Setting(key, value);
-      res.json(row);
-    } catch (error: any) {
-      res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Permintaan tidak valid") });
     }
   });
 

@@ -10,8 +10,6 @@ export const RW3BIZ_ROUTES = {
     landing: "/admin/rw3biz",
     antrianSurvey: "/admin/rw3biz/antrian?view=belum",
     antrianSudah: "/admin/rw3biz/antrian?view=sudah",
-    blast: "/admin/rw3biz/blast",
     dashboard: "/admin/rw3biz/dashboard",
-    pengaturan: "/admin/rw3biz/pengaturan",
   },
 } as const;

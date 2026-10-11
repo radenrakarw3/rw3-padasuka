@@ -145,7 +145,7 @@ export default function AdminRw3bizAntrian() {
       return readJsonSafely(res);
     },
     onSuccess: () => {
-      toast({ title: "Disetujui", description: "Usaha aktif — PJ dapat dihubungi untuk notifikasi/blast" });
+      toast({ title: "Disetujui", description: "Usaha aktif dan tercatat di daftar usaha terdaftar" });
       setDetailId(null);
       queryClient.invalidateQueries({ queryKey: ["/api/admin/rw3biz/pengajuan"] });
     },

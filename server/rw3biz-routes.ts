@@ -12,21 +12,11 @@ import {
   approvePengajuan,
   rejectPengajuan,
   listUsahaAktif,
-  getPjBlastRecipients,
   getOrangKtpPayload,
   hitungTanggalBerlaku,
 } from "./rw3biz";
-import {
-  getRw3bizBlastChannelStatus,
-  listRw3bizBlasts,
-  getRw3bizBlastDetail,
-  createRw3bizBlast,
-  retryRw3bizBlast,
-  ensureRw3bizBlastTables,
-} from "./wa-notify-rw3biz";
 import { loadVisitrw3SettingsRows } from "./visitrw3-settings";
 import { visitrw3ApiErrorMessage } from "./visitrw3-api-error";
-import { ACTIVE_RT_NUMBERS } from "@shared/rt";
 
 const ktpDir = path.join(process.cwd(), "uploads", "rw3biz-ktp");
 fs.mkdirSync(ktpDir, { recursive: true });
@@ -50,10 +40,6 @@ function requireAdmin(req: Request, res: Response, next: () => void) {
 }
 
 export function registerRw3bizRoutes(app: Express) {
-  void ensureRw3bizBlastTables().catch((err) => {
-    console.error("[RW3BIZ] Gagal memastikan tabel wa_blast:", err);
-  });
-
   // --- Publik ---
 
   app.get("/api/public/rw3biz/settings", async (_req, res) => {
@@ -202,75 +188,6 @@ export function registerRw3bizRoutes(app: Express) {
     }
   });
 
-  // --- WA blast (StarSender) ---
-
-  app.get("/api/admin/rw3biz/blast/channel", requireAdmin, (_req, res) => {
-    res.json(getRw3bizBlastChannelStatus());
-  });
-
-  app.get("/api/admin/rw3biz/blast/recipients", requireAdmin, async (req, res) => {
-    try {
-      const rtRaw = req.query.rt != null ? Number(req.query.rt) : null;
-      const rt =
-        rtRaw != null && Number.isFinite(rtRaw) && (ACTIVE_RT_NUMBERS as readonly number[]).includes(rtRaw)
-          ? rtRaw
-          : null;
-      const recipients = await getPjBlastRecipients({ rt });
-      res.json(recipients);
-    } catch (error: unknown) {
-      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat penerima blast") });
-    }
-  });
-
-  app.get("/api/admin/rw3biz/blast", requireAdmin, async (_req, res) => {
-    try {
-      const list = await listRw3bizBlasts();
-      res.json(list);
-    } catch (error: unknown) {
-      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat riwayat blast") });
-    }
-  });
-
-  app.get("/api/admin/rw3biz/blast/:id", requireAdmin, async (req, res) => {
-    try {
-      const id = parseInt(String(req.params.id), 10);
-      if (!Number.isFinite(id)) return res.status(400).json({ message: "ID tidak valid" });
-      const detail = await getRw3bizBlastDetail(id);
-      if (!detail) return res.status(404).json({ message: "Blast tidak ditemukan" });
-      res.json(detail);
-    } catch (error: unknown) {
-      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat detail blast") });
-    }
-  });
-
-  app.post("/api/admin/rw3biz/blast", requireAdmin, async (req, res) => {
-    try {
-      const pesan = String(req.body?.pesan || "");
-      const rtRaw = req.body?.rt != null && req.body.rt !== "" ? Number(req.body.rt) : null;
-      const rt =
-        rtRaw != null && Number.isFinite(rtRaw) && (ACTIVE_RT_NUMBERS as readonly number[]).includes(rtRaw)
-          ? rtRaw
-          : null;
-      const usahaIds = Array.isArray(req.body?.usahaIds)
-        ? req.body.usahaIds.map((x: unknown) => Number(x)).filter((n: number) => Number.isFinite(n))
-        : null;
-      const blast = await createRw3bizBlast({ pesan, rt, usahaIds });
-      res.status(201).json(blast);
-    } catch (error: unknown) {
-      res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal membuat blast") });
-    }
-  });
-
-  app.post("/api/admin/rw3biz/blast/:id/retry", requireAdmin, async (req, res) => {
-    try {
-      const id = parseInt(String(req.params.id), 10);
-      if (!Number.isFinite(id)) return res.status(400).json({ message: "ID tidak valid" });
-      const blast = await retryRw3bizBlast(id);
-      res.json(blast);
-    } catch (error: unknown) {
-      res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal retry blast") });
-    }
-  });
 }
 
 export { ensureRw3bizSchema };
