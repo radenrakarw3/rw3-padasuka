@@ -361,6 +361,19 @@ async function alurLengkap(k: any) {
     pastikan(d.fakta.some((f: any) => f.kunci === "s_internet" && f.nilai === "tidak"), "fakta usulan tidak diterapkan");
     await harusGagal(() => qr.putuskanUsulan(rt7, u.id, { aksi: "tolak", catatan: "ulang" }), 409, "diputus dua kali");
   });
+  await uji("cetak F4: paket per KK tanpa NIK/No KK, jawaban tercetak, kode kartu hanya di RT sendiri", async () => {
+    const [p] = await qr.paketUntukCetak(rt7, [kkId]);
+    const json = JSON.stringify(p);
+    pastikan(!json.includes(nik1) && !/"nik"|nomorKk|nomor_kk/.test(json), "NIK/No KK bocor ke bahan cetak");
+    pastikan(p.anggota.some((a: any) => a.nama === "Uji Satu"), "anggota tidak ada di paket");
+    sama(p.jawaban[`kk:${kkId}:s_internet`], "tidak", "jawaban saat ini");
+    await harusGagal(() => qr.paketUntukCetak(rt6, [kkId]), 404, "paket lintas RT");
+    sama((await qr.kkDariKodeKartu(rt7, p.kodeKartu.toLowerCase())).kkId, kkId, "cari kode kartu");
+    await harusGagal(() => qr.kkDariKodeKartu(rt6, p.kodeKartu), 404, "kode kartu lintas RT");
+    await data.simpanBanyakFakta(rt7, [{ subjek: "kk", subjekId: kkId, kunci: "s_internet", nilai: "ya", sumber: "formulir_kertas", catatan: `Formulir kertas ${p.kodeKartu}` }]);
+    const d = await data.detailKeluarga(rt7, kkId);
+    pastikan(d.fakta.some((f: any) => f.kunci === "s_internet" && f.nilai === "ya" && f.sumber === "formulir_kertas"), "sumber formulir_kertas");
+  });
   await uji("semua fungsi baca halaman RT/RW berjalan", async () => {
     await Promise.all([
       data.daftarKeluarga(rt7, {}), data.daftarKeluarga(rw, { rt: 1 }), data.cariWarga(rt7, "Uji"),

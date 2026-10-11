@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useLocation, useSearch } from "wouter";
+import { TombolIsiPetugas } from "@/components/cetak/isi-petugas";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, getApiErrorMessage, readJsonSafely } from "@/lib/queryClient";
 import { invalidateVisitrw3Queries } from "@/lib/visitrw3-invalidate";
@@ -324,7 +325,10 @@ export default function AdminVisitrw3Antrian({
             : "Riwayat pengajuan yang sudah disetujui atau ditolak."
         }
         actions={
-          <Visitrw3ChipFilters options={lolosViewOptions} value={lolosView} onChange={switchLolosView} />
+          <div className="flex flex-wrap items-center gap-2">
+            <Visitrw3ChipFilters options={lolosViewOptions} value={lolosView} onChange={switchLolosView} />
+            <TombolIsiPetugas product={product === "rw3biz" ? "rw3biz" : "visit"} />
+          </div>
         }
       />
 

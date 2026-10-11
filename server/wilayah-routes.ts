@@ -89,6 +89,11 @@ export function registerWilayahRoutes(app: Express) {
     const b = z.object({ kkIds: z.union([z.literal("semua"), z.array(z.number().int().positive()).min(1).max(400)]), ganti: z.boolean().optional() }).parse(req.body);
     return qr.kartuUntukCetak(req.aktor!, b.kkIds, b.ganti === true);
   }, "Gagal menyiapkan kartu QR"));
+  app.post("/api/wilayah/rt/cetak/paket", RT, h(async (req) => {
+    const b = z.object({ kkIds: z.union([z.literal("semua"), z.array(z.number().int().positive()).min(1).max(400)]) }).parse(req.body);
+    return qr.paketUntukCetak(req.aktor!, b.kkIds);
+  }, "Gagal menyiapkan bahan cetak"));
+  app.get("/api/wilayah/rt/kartu/:kode", RT, h(async (req) => qr.kkDariKodeKartu(req.aktor!, String(req.params.kode))));
   app.post("/api/wilayah/rt/qr/:id/cabut", RT, h(async (req) => qr.cabutToken(req.aktor!, idParam(req))));
   app.get("/api/wilayah/rt/usulan", RT, h(async (req) => qr.daftarUsulan(req.aktor!, String(req.query.status ?? "menunggu"))));
   app.get("/api/wilayah/rt/usulan/:id", RT, h(async (req) => qr.detailUsulan(req.aktor!, idParam(req))));

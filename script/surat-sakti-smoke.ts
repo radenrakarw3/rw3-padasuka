@@ -139,6 +139,8 @@ async function main() {
       const { buffer, halaman } = await buatPdf({ bloks, nomor: `001/${j.nomorKode}/RW.03/X/2026`, draft: false, verifikasiUrl: "https://rw3padasukacimahi.org/verify/surat/contoh" });
       pastikan(buffer.subarray(0, 5).toString() === "%PDF-", "bukan PDF");
       pastikan(halaman >= 1, "halaman 0");
+      const kotak = /\/MediaBox \[0 0 ([\d.]+) ([\d.]+)\]/.exec(buffer.toString("latin1"));
+      pastikan(!!kotak && Math.round(Number(kotak[1]) / 72 * 25.4) === 215 && Math.round(Number(kotak[2]) / 72 * 25.4) === 330, `bukan F4: ${kotak?.slice(1).join("x")}`);
       fs.writeFileSync(path.join(keluar, `${j.kode}.pdf`), buffer);
     });
   }

@@ -1,122 +1,93 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocation, useSearch } from "wouter";
-import { Printer, QrCode } from "lucide-react";
+import { ClipboardList, FileText, Printer, QrCode } from "lucide-react";
 import { wil } from "@/lib/wilayah-api";
 import { useRtKelola } from "./konteks";
 import { Judul, Memuat, Pesan, PilihTombol, TombolBesar, rt2 } from "@/components/wilayah/ui";
-import { HUBUNGAN_KELUARGA, kelompokkan, type DefinisiFakta } from "@shared/wilayah";
+import { isoTanggal } from "@shared/wilayah";
 import { useStandar } from "@/lib/standar";
-import logoBlack from "@assets/RW03-Cimahi-Logo-Black.svg";
+import { AlirF4, AreaCetak, GayaCetakF4, ISI_H, KopHemat, LembarF4, PanduanPrinter } from "@/components/cetak/lembar-f4";
+import { FormulirKeluarga, KartuQr, SuratPemberitahuan, type PaketKk } from "@/components/cetak/formulir-keluarga";
 
-interface Kartu { kkId: number; rt: number; kepala: string; alamatSingkat: string; kodeKartu: string; tokenTampil: string; url: string; qrSvg: string; berlakuSampai: string }
+type Mode = "paket" | "kartu" | "kosong" | "rekap";
+const MODE: { nilai: Mode; label: string }[] = [
+  { nilai: "paket", label: "Paket per KK (surat + formulir terisi)" },
+  { nilai: "kartu", label: "Kartu QR (2 per lembar)" },
+  { nilai: "kosong", label: "Formulir kosong" },
+  { nilai: "rekap", label: "Rekap keliling RT" },
+];
+const KETERANGAN: Record<Mode, string> = {
+  paket: "Depan: surat pemberitahuan + QR. Belakang: formulir yang sudah terisi data kami, warga cukup mengoreksi. Cetak bolak-balik manual.",
+  kartu: "Satu lembar F4 berisi dua kartu QR. Potong di garis putus-putus. Kartu tidak memuat NIK atau nomor KK.",
+  kosong: "Untuk keluarga baru atau yang belum tercatat. Pertanyaan sama persis dengan formulir QR.",
+  rekap: "Daftar KK untuk pengurus keliling: catat kapan surat diantar dan formulir kembali.",
+};
 
-const SITUS = "rw3padasukacimahi.org/isi";
-
-function Kop() {
-  return (
-    <div className="flex items-center gap-3 border-b-2 border-black pb-1">
-      <img src={logoBlack} alt="" className="w-[14mm] h-[14mm]" />
-      <div className="flex-1 text-center leading-tight">
-        <p className="text-[11pt] font-bold">RUKUN WARGA 03</p>
-        <p className="text-[9pt]">KELURAHAN PADASUKA · KECAMATAN CIMAHI TENGAH · KOTA CIMAHI</p>
-      </div>
-    </div>
-  );
+function tambahHari(n: number) {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return isoTanggal(d);
 }
 
-function KartuA5({ k, namaKetua }: { k: Kartu; namaKetua: string | null }) {
-  return (
-    <div className="kartu-a5 bg-white text-black px-[10mm] py-[7mm] flex flex-col">
-      <Kop />
-      <p className="text-center text-[13pt] font-bold mt-2">PEMBERITAHUAN PENDATAAN KELUARGA</p>
-      <div className="flex gap-[6mm] mt-2 flex-1">
-        <div className="flex-1 text-[10.5pt] leading-snug">
-          <p>Kepada Yth.<br /><b className="text-[12pt]">Bapak/Ibu {k.kepala}</b></p>
-          <p>{rt2(k.rt)} / RW 03 · {k.alamatSingkat}</p>
-          <p className="mt-2">Mohon bantu memperbarui data keluarga untuk laporan RT dan pelayanan warga.</p>
-          <ol className="mt-2 list-decimal pl-5 font-semibold">
-            <li>Scan QR dengan kamera HP</li>
-            <li>Isi pertanyaan</li>
-            <li>Tekan Kirim</li>
-          </ol>
-          <p className="mt-2 text-[9.5pt]">Tanpa QR: buka <b>{SITUS}</b> lalu ketik kode:<br /><b className="text-[11pt] tracking-wider">{k.tokenTampil}</b></p>
-          <p className="mt-1 text-[9pt]">Butuh bantuan? Hubungi Ketua {rt2(k.rt)}{namaKetua ? ` (${namaKetua})` : ""}. Bisa juga isi formulir kertas.</p>
-        </div>
-        <div className="w-[52mm] flex flex-col items-center">
-          <div className="w-[50mm] h-[50mm]" dangerouslySetInnerHTML={{ __html: k.qrSvg }} />
-          <p className="text-[8pt] mt-1">Kode kartu: <b>{k.kodeKartu}</b></p>
-          <p className="text-[7.5pt]">Berlaku s.d. {new Date(k.berlakuSampai).toLocaleDateString("id-ID")}</p>
-        </div>
-      </div>
-      <div className="flex justify-between items-end text-[9pt] mt-1">
-        <p className="max-w-[60%] text-[7.5pt]">Kartu ini tidak berisi data pribadi. Jangan bagikan kode ke orang lain. Data lama tidak ditampilkan saat scan.</p>
-        <div className="text-center">
-          <p>Cimahi, {new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</p>
-          <p>Ketua RW 03</p>
-          <div className="h-[12mm]" />
-          <p className="border-t border-black px-6">(.................................)</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Kotak({ teks }: { teks: string }) {
-  return <span className="inline-flex items-center gap-1 mr-3"><span className="inline-block w-[4mm] h-[4mm] border border-black" />{teks}</span>;
-}
-
-function PertanyaanKertas({ def }: { def: DefinisiFakta }) {
-  const pilihan = def.tipe === "yatidak" ? ["Ya", "Tidak"] : (def.pilihan ?? []).map((p) => p.label);
-  const syarat = [def.khususPerempuan ? "perempuan" : null, def.usiaMin != null ? `usia ≥ ${def.usiaMin}` : null, def.usiaMax != null ? `usia ≤ ${def.usiaMax}` : null].filter(Boolean);
-  return (
-    <div className="mb-[2mm] break-inside-avoid">
-      <p>{def.pertanyaan}{syarat.length ? <span className="italic text-[8.5pt]"> ({syarat.join(", ")})</span> : null}{def.tipe === "banyak" ? <span className="italic text-[8.5pt]"> — boleh lebih dari satu</span> : null}</p>
-      {def.tipe === "angka" || def.tipe === "teks"
-        ? <p className="pl-2">______________________________</p>
-        : <p className="pl-2">{pilihan.map((p) => <Kotak key={p} teks={p} />)}<Kotak teks="Belum tahu" /></p>}
-    </div>
-  );
-}
-
-function DaftarKertas({ defs }: { defs: DefinisiFakta[] }) {
+/** Paket per KK. Halaman tiap KK digenapkan agar cetak bolak-balik manual tidak bergeser antar-keluarga. */
+function DaftarPaket({ paket, batas, kontak }: { paket: PaketKk[]; batas: string; kontak: string }) {
+  const { data: standar } = useStandar();
+  const acuan = useRef<HTMLDivElement>(null);
+  const isi = useRef<(HTMLDivElement | null)[]>([]);
+  const [ganjil, setGanjil] = useState<Set<number>>(new Set());
+  useLayoutEffect(() => {
+    const tinggi = acuan.current?.offsetHeight ?? 0;
+    if (!tinggi) return;
+    const s = new Set<number>();
+    paket.forEach((p, i) => {
+      const h = isi.current[i]?.offsetHeight ?? 0;
+      const halamanForm = Math.max(1, Math.ceil(h / (tinggi * 0.94)));
+      if ((1 + halamanForm) % 2 === 1) s.add(p.kkId);
+    });
+    setGanjil(s);
+  }, [paket, standar]);
+  if (!standar) return <Memuat />;
   return (
     <>
-      {kelompokkan(defs).map((g) => (
-        <div key={g.kelompok} className="break-inside-avoid">
-          <p className="font-semibold underline mt-1">{g.kelompok}</p>
-          <div className="columns-2 gap-[8mm]">{g.daftar.map((d) => <PertanyaanKertas key={d.kunci} def={d} />)}</div>
-        </div>
+      <div className="alir-f4 print:hidden" aria-hidden style={{ position: "absolute", visibility: "hidden", pointerEvents: "none" }}>
+        <div ref={acuan} style={{ height: `${ISI_H}mm` }} />
+      </div>
+      {paket.map((p, i) => (
+        <Fragment key={p.kkId}>
+          <SuratPemberitahuan p={p} batas={batas} kontak={kontak} />
+          <FormulirKeluarga ref={(el) => { isi.current[i] = el; }} defs={standar} paket={p} />
+          {ganjil.has(p.kkId) && <LembarF4><p style={{ margin: "auto", fontSize: "8pt", color: "#999" }}>(halaman sengaja kosong)</p></LembarF4>}
+        </Fragment>
       ))}
     </>
   );
 }
 
-/** Formulir kertas: pertanyaan dan pilihan sama persis dengan form digital (/isi). */
-function FormulirKertas() {
-  const { data: standar } = useStandar();
-  if (!standar) return <Memuat />;
-  const kk = standar.filter((d) => d.subjek === "kk" && d.diQr);
-  const warga = standar.filter((d) => d.subjek === "warga" && d.diQr);
+function Rekap({ paket, rt }: { paket: PaketKk[]; rt: number | null }) {
+  const sel = { border: "1px solid #000", padding: "1.2mm 1.5mm", verticalAlign: "top" } as const;
   return (
-    <div className="formulir bg-white text-black p-[12mm] text-[10pt] leading-snug">
-      <Kop />
-      <p className="text-center text-[13pt] font-bold my-2">FORMULIR PENDATAAN KELUARGA</p>
-      <p>Kode kartu: ______________ &nbsp; Nama pengisi: ____________________ &nbsp; Hubungan: ______________</p>
-      <p className="mb-2">Nomor HP (bukan NIK): ____________________</p>
-      <p className="font-bold mt-3 mb-1">A. KELUARGA & RUMAH</p>
-      <DaftarKertas defs={kk} />
-      {[1, 2, 3, 4].map((n) => (
-        <div key={n} className="mt-3 border-t border-black pt-2 break-inside-avoid">
-          <p className="font-bold">B{n}. ANGGOTA KELUARGA</p>
-          <p>Nama: ______________________________ &nbsp; Tgl lahir: ____ / ____ / ________</p>
-          <p>Hubungan: {HUBUNGAN_KELUARGA.slice(0, 6).map((h) => <Kotak key={h} teks={h} />)}</p>
-          <p><Kotak teks="Laki-laki" /><Kotak teks="Perempuan" /> &nbsp; Keterangan: <Kotak teks="Tetap" /><Kotak teks="Baru" /><Kotak teks="Pindah" /><Kotak teks="Meninggal" /></p>
-          <DaftarKertas defs={warga} />
-        </div>
-      ))}
-      <p className="mt-3">Catatan: ____________________________________________________________</p>
-      <p className="mt-4 text-[9pt]">Serahkan ke pengurus RT/RW. Pengurus RW memeriksa sebelum data resmi diubah.</p>
-    </div>
+    <AlirF4>
+      <KopHemat kecil />
+      <p style={{ fontSize: "13pt", fontWeight: 700, marginTop: "2mm" }}>REKAP KELILING PENDATAAN · {rt2(rt)} / RW 03</p>
+      <p style={{ fontSize: "9pt" }}>Dicetak {new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} · {paket.length} KK · Petugas: ..............................</p>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "8.5pt", marginTop: "2mm" }}>
+        <thead style={{ display: "table-header-group" }}>
+          <tr style={{ fontWeight: 700 }}>
+            <td style={{ ...sel, width: "7mm" }}>No</td><td style={sel}>Kepala keluarga</td><td style={sel}>Alamat</td><td style={{ ...sel, width: "22mm" }}>Kode kartu</td>
+            <td style={{ ...sel, width: "11mm" }}>Data</td><td style={{ ...sel, width: "20mm" }}>Diantar (tgl/paraf)</td><td style={{ ...sel, width: "20mm" }}>Kembali (tgl/paraf)</td><td style={{ ...sel, width: "24mm" }}>Catatan</td>
+          </tr>
+        </thead>
+        <tbody>
+          {paket.map((p, i) => (
+            <tr key={p.kkId} className="jaga">
+              <td style={sel}>{i + 1}</td><td style={sel}>{p.kepala}</td><td style={sel}>{p.alamatSingkat}</td><td style={sel}>{p.kodeKartu}</td>
+              <td style={sel}>{Math.round(p.kelengkapan * 100)}%</td><td style={sel} /><td style={sel} /><td style={sel} />
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p style={{ fontSize: "8pt", marginTop: "2mm" }}>Kolom "Data" = kelengkapan data saat dicetak. Formulir yang kembali diinput di Kependudukan › Input dari kertas.</p>
+    </AlirF4>
   );
 }
 
@@ -125,16 +96,20 @@ export default function Cetak() {
   const params = new URLSearchParams(useSearch());
   const rtKelola = useRtKelola();
   const kkParam = params.get("kk");
-  const [mode, setMode] = useState<"kartu" | "formulir">("kartu");
-  const [kartu, setKartu] = useState<Kartu[] | null>(null);
+  const modeAwal = (params.get("mode") as Mode | null) ?? (kkParam ? "paket" : "paket");
+  const [mode, setMode] = useState<Mode>(MODE.some((m) => m.nilai === modeAwal) ? modeAwal : "paket");
+  const [paket, setPaket] = useState<PaketKk[] | null>(null);
   const [memuat, setMemuat] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [batas, setBatas] = useState(tambahHari(14));
+  const [kontak, setKontak] = useState("");
+  const { data: standar } = useStandar();
 
   const muat = async (kkIds: number[] | "semua") => {
     setMemuat(true);
     setErr(null);
     try {
-      setKartu(await wil<Kartu[]>("/api/wilayah/rt/qr/cetak", { body: { kkIds } }));
+      setPaket(await wil<PaketKk[]>("/api/wilayah/rt/cetak/paket", { body: { kkIds } }));
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -144,43 +119,56 @@ export default function Cetak() {
   useEffect(() => {
     if (kkParam) muat(kkParam.split(",").map(Number).filter((n) => n > 0));
   }, [kkParam]);
-  useEffect(() => () => setKartu(null), []);
+  useEffect(() => () => setPaket(null), []);
 
-  const halaman: Kartu[][] = [];
-  for (let i = 0; i < (kartu?.length ?? 0); i += 2) halaman.push(kartu!.slice(i, i + 2));
+  const butuhData = mode !== "kosong";
+  const halamanKartu: PaketKk[][] = [];
+  for (let i = 0; i < (paket?.length ?? 0); i += 2) halamanKartu.push(paket!.slice(i, i + 2));
+  const siap = butuhData ? !!paket : !!standar;
+  const label = mode === "paket" ? `Cetak paket ${paket?.length ?? 0} KK` : mode === "kartu" ? `Cetak ${paket?.length ?? 0} kartu (${halamanKartu.length} lembar)` : mode === "rekap" ? "Cetak rekap" : "Cetak formulir kosong";
 
   return (
     <div>
-      <style>{`
-        @page { size: A4 portrait; margin: 0; }
-        .lembar-a4 { width: 210mm; height: 297mm; display: flex; flex-direction: column; page-break-after: always; break-after: page; }
-        .kartu-a5 { width: 210mm; height: 148.5mm; box-sizing: border-box; border-bottom: 1px dashed #999; overflow: hidden; }
-        .kartu-a5 svg { width: 100%; height: 100%; }
-        .formulir { width: 210mm; box-sizing: border-box; }
-        @media screen { .lembar-a4, .formulir { transform-origin: top left; zoom: 0.45; margin-bottom: 8px; box-shadow: 0 0 0 1px #ddd; } }
-        @media print { body * { visibility: hidden; } #area-cetak, #area-cetak * { visibility: visible; } #area-cetak { position: absolute; left: 0; top: 0; } }
-      `}</style>
+      <GayaCetakF4 />
       <div className="print:hidden space-y-4">
-        <Judul kembali={() => go("/warga")}>Cetak pemberitahuan</Judul>
-        <PilihTombol label="Yang dicetak" belumTahu={false} nilai={mode} onChange={(v) => v && setMode(v as typeof mode)}
-          pilihan={[{ nilai: "kartu", label: "Kartu QR" }, { nilai: "formulir", label: "Formulir kertas" }]} />
-        {mode === "kartu" && (
-          <>
-            <Pesan>Satu lembar A4 berisi dua kartu A5. Potong di garis putus-putus. Kartu tidak memuat NIK atau nomor KK.</Pesan>
-            {!kkParam && <TombolBesar ikon={<QrCode className="w-6 h-6" />} memuat={memuat} onClick={() => muat("semua")}>Siapkan semua keluarga</TombolBesar>}
-            {memuat && <Memuat teks="Menyiapkan kartu…" />}
-            {err && <Pesan jenis="error">{err}</Pesan>}
-            {kartu && <TombolBesar ikon={<Printer className="w-6 h-6" />} onClick={() => window.print()}>Cetak {kartu.length} kartu ({halaman.length} lembar)</TombolBesar>}
-          </>
+        <Judul kembali={() => go("/warga")} sub={`${rt2(rtKelola)} · kertas F4`}>Cetak untuk warga</Judul>
+        <PilihTombol label="Yang dicetak" belumTahu={false} nilai={mode} onChange={(v) => v && setMode(v as Mode)} pilihan={MODE} />
+        <Pesan>{KETERANGAN[mode]}</Pesan>
+        {mode === "paket" && (
+          <div className="grid gap-3 rounded-2xl border bg-white p-4 text-base sm:grid-cols-2">
+            <label className="space-y-1">
+              <span className="text-sm font-semibold">Kembalikan formulir paling lambat</span>
+              <input type="date" value={batas} onChange={(e) => setBatas(e.target.value)} className="w-full rounded-xl border px-3 py-2" />
+            </label>
+            <label className="space-y-1">
+              <span className="text-sm font-semibold">Kontak bantuan (boleh kosong)</span>
+              <input value={kontak} onChange={(e) => setKontak(e.target.value)} placeholder="mis. Pak RT 0812-xxxx-xxxx" className="w-full rounded-xl border px-3 py-2" />
+            </label>
+          </div>
         )}
-        {mode === "formulir" && <TombolBesar ikon={<Printer className="w-6 h-6" />} onClick={() => window.print()}>Cetak formulir</TombolBesar>}
+        <PanduanPrinter bolakBalik={mode === "paket"} />
+        {butuhData && !kkParam && (
+          <TombolBesar ikon={mode === "rekap" ? <ClipboardList className="w-6 h-6" /> : mode === "kartu" ? <QrCode className="w-6 h-6" /> : <FileText className="w-6 h-6" />} memuat={memuat} onClick={() => muat("semua")}>
+            Siapkan semua keluarga {rt2(rtKelola)}
+          </TombolBesar>
+        )}
+        {memuat && <Memuat teks="Menyiapkan bahan cetak…" />}
+        {err && <Pesan jenis="error">{err}</Pesan>}
+        {paket && paket.length === 0 && butuhData && <Pesan jenis="peringatan">Belum ada KK di {rt2(rtKelola)}.</Pesan>}
+        {siap && (!butuhData || (paket && paket.length > 0)) && (
+          <TombolBesar ikon={<Printer className="w-6 h-6" />} onClick={() => window.print()}>{label}</TombolBesar>
+        )}
       </div>
-      <div id="area-cetak" className="mt-4 overflow-x-auto">
-        {mode === "kartu" && halaman.map((h, i) => (
-          <div key={i} className="lembar-a4 bg-white">{h.map((k) => <KartuA5 key={k.kkId} k={k} namaKetua={null} />)}</div>
+      <AreaCetak>
+        {mode === "paket" && paket && <DaftarPaket paket={paket} batas={batas} kontak={kontak} />}
+        {mode === "kartu" && halamanKartu.map((h, i) => (
+          <LembarF4 key={i}>
+            {h.map((k, j) => <div key={k.kkId} style={{ height: "50%", borderBottom: j === 0 ? "1px dashed #000" : undefined }}><KartuQr k={k} /></div>)}
+          </LembarF4>
         ))}
-        {mode === "formulir" && <FormulirKertas />}
-      </div>
+        {mode === "kosong" && standar && <FormulirKeluarga defs={standar} />}
+        {mode === "rekap" && paket && <Rekap paket={paket} rt={rtKelola} />}
+      </AreaCetak>
     </div>
   );
 }

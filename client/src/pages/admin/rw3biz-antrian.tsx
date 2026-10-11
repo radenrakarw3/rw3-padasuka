@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useLocation, useSearch } from "wouter";
+import { TombolIsiPetugas } from "@/components/cetak/isi-petugas";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, getApiErrorMessage, readJsonSafely } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -194,14 +195,17 @@ export default function AdminRw3bizAntrian() {
         title={lolosView === "belum" ? "Survey izin usaha" : "Riwayat usaha"}
         description="Antrian RW3BIZ dari tabel terpisah — data PJ siap untuk notifikasi & blast WA."
         actions={
-          <Visitrw3ChipFilters
-            options={viewOptions}
-            value={lolosView}
-            onChange={(v) => {
-              setLolosView(v);
-              setLocation(buildUrl(v, hasil));
-            }}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <Visitrw3ChipFilters
+              options={viewOptions}
+              value={lolosView}
+              onChange={(v) => {
+                setLolosView(v);
+                setLocation(buildUrl(v, hasil));
+              }}
+            />
+            <TombolIsiPetugas product="rw3biz" />
+          </div>
         }
       />
 

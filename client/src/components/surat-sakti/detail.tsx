@@ -10,6 +10,7 @@ import { bukaBerkas, unduh, wil } from "@/lib/wilayah-api";
 import { PETA_JENIS, BENTUK_BANTUAN, rupiah, isoHariIni, type Blok } from "@shared/surat-sakti";
 import { Galat, LencanaTindak, PratinjauBloks, RW, TigaStatus, bacaFile, rt2, tanggalId, type RingkasSurat } from "./dasar";
 import { editorDariSurat, type StateEditor } from "./wizard";
+import { PanduanPrinter } from "@/components/cetak/lembar-f4";
 
 interface Tindak {
   id: number; tindakan: string; status: string; progres: number; pic_nama: string | null; pic_rt: number | null; tenggat: string | null;
@@ -110,6 +111,7 @@ export function DetailSurat({ id, tutup, ubahDraft }: { id: number; tutup: () =>
       {s.alasanBatal && <p className="text-sm rounded border border-amber-300 bg-amber-50 p-2">{s.status === "digantikan" ? "Digantikan." : "Dibatalkan."} {s.alasanBatal}</p>}
       {!j && draft && <p className="text-sm rounded border border-amber-300 bg-amber-50 p-2">Draft format lama. Pilih jenis dokumen di formulir baru sebelum terbit.</p>}
 
+      <PanduanPrinter />
       <div className="flex flex-wrap gap-2">
         {draft && <Button onClick={() => ubahDraft(editorDariSurat(s))}><PencilLine className="w-4 h-4 mr-1" /> Lanjutkan isi & terbitkan</Button>}
         {draft && <Button variant="outline" onClick={() => bukaBerkas(`/api/wilayah/rw/surat/${s.id}/pratinjau.pdf`, "rw").catch(setErr)}><Eye className="w-4 h-4 mr-1" /> PDF draf</Button>}

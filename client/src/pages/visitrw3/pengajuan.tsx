@@ -244,6 +244,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
   const search = useSearch();
   const rawJenis = useMemo(() => parseJenisWargaFromSearch(search), [search]);
   const redirectToRw3biz = product === "visit" && rawJenis === "jualan";
+  const petugas = useMemo(() => new URLSearchParams(search).get("petugas") === "1", [search]);
 
   const jenisWarga: JenisWarga | "" =
     product === "rw3biz" ? "jualan" : isVisitRw3Jenis(rawJenis) ? rawJenis : "";
@@ -278,6 +279,12 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
   const [setujuTataTertib, setSetujuTataTertib] = useState(false);
   const [nomorHasil, setNomorHasil] = useState<string | null>(null);
   const [penghuniIndex, setPenghuniIndex] = useState(0);
+
+  const catatanKirim = () => {
+    const isi = catatan.trim();
+    if (!petugas) return isi || null;
+    return `[Diisi petugas dari formulir kertas]${isi ? ` ${isi}` : ""}`;
+  };
 
   const keperluan = jenisWarga ? keperluanFromJenisWarga(jenisWarga) : "tinggal";
   const formProfile = useMemo(
@@ -461,7 +468,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
           jumlahOrang: jumlah,
           tanggalBayar,
           terminBulan: parseInt(terminBulan, 10),
-          catatanPemohon: catatan.trim() || null,
+          catatanPemohon: catatanKirim(),
           orang,
           setujuTataTertib: true as const,
         });
@@ -489,7 +496,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
         jumlahPenghuni: jumlah,
         tanggalBayar,
         terminBulan: parseInt(terminBulan, 10),
-        catatanPemohon: catatan.trim() || null,
+        catatanPemohon: catatanKirim(),
         penghuni: payloadPenghuni,
         setujuTataTertib: true as const,
       });
@@ -714,6 +721,12 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
         <BookOpen className="w-4 h-4" />
         Bingung? Baca panduan
       </Link>
+      {petugas && (
+        <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          <b>Mode petugas:</b> diisi petugas dari formulir kertas. Salin isian sesuai formulir, foto KTP dari fotokopi yang dilampirkan.
+          Pengajuan tetap masuk antrean survey seperti biasa.
+        </div>
+      )}
       <FormStepper steps={steps} currentStep={step} />
 
       {stepId === "lokasi" && formProfile && (

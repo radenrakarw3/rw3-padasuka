@@ -11,6 +11,7 @@ const Keluarga = lazy(() => import("./keluarga"));
 const Usulan = lazy(() => import("./usulan"));
 const Cetak = lazy(() => import("./cetak"));
 const Pindah = lazy(() => import("./pindah"));
+const InputKertas = lazy(() => import("./input-kertas"));
 
 function rtAwal(): number {
   const n = Number(localStorage.getItem(KUNCI_RT));
@@ -65,6 +66,7 @@ export default function KelolaWarga() {
               <Route path="/usulan">{() => <Usulan />}</Route>
               <Route path="/cetak" component={Cetak} />
               <Route path="/pindah" component={Pindah} />
+              <Route path="/input-kertas" component={InputKertas} />
               <Route>{() => <Redirect to="/warga" />}</Route>
             </Switch>
           </Route>

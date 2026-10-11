@@ -18,6 +18,8 @@ import {
   Truck,
   UserPen,
   ListChecks,
+  ClipboardPen,
+  Printer,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useVisitrw3AdminCounts } from "@/hooks/use-visitrw3-admin-counts";
@@ -86,6 +88,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     {
       items: [
         { path: "/admin/dashboard", icon: BarChart3, label: "Dashboard" },
+        { path: "/admin/pusat-cetak", icon: Printer, label: "Pusat cetak F4" },
         { path: "/admin/surat-rw", icon: FileText, label: "Surat RW" },
       ],
     },
@@ -116,7 +119,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         { path: "/admin/kependudukan", icon: Users, label: "Ringkasan warga" },
         { path: "/admin/kelola-warga/warga", icon: UserPen, label: "Data warga & KK" },
         { path: "/admin/kelola-warga/usulan", icon: Inbox, label: "Isian QR warga" },
-        { path: "/admin/kelola-warga/cetak", icon: QrCode, label: "Cetak kartu QR" },
+        { path: "/admin/kelola-warga/cetak", icon: QrCode, label: "Cetak untuk warga" },
+        { path: "/admin/kelola-warga/input-kertas", icon: ClipboardPen, label: "Input dari kertas" },
         { path: "/admin/kelola-warga/pindah", icon: Truck, label: "Pindah RT" },
         { path: "/admin/standar-data", icon: ListChecks, label: "Standar data" },
       ],

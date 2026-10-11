@@ -9,7 +9,7 @@ import QRCode from "qrcode";
 import { z } from "zod";
 import { pool } from "./db";
 import { catatAudit, WilayahError, type Aktor } from "./wilayah-auth";
-import { denganTransaksi, detailKeluarga, simpanFakta } from "./wilayah-data";
+import { denganTransaksi, detailKeluarga, ringkasKeluarga, simpanFakta } from "./wilayah-data";
 import { registri, standarAktif } from "./wilayah-standar";
 import { HUBUNGAN_KELUARGA, validasiNilaiFakta, type IsiUsulan } from "@shared/wilayah";
 import { looksLikeNik, normalizeNomorHp } from "@shared/kontak";
@@ -150,6 +150,59 @@ export async function kartuUntukCetak(aktor: Aktor, kkIds: number[] | "semua", g
   }
   await catatAudit(aktor, "cetak_qr", "kk", null, rt, null, { jumlah: hasil.length });
   return hasil;
+}
+
+export interface AnggotaCetak { id: number; nama: string; hubungan: string | null; jenisKelamin: string | null; tanggalLahir: string | null }
+export interface PaketCetak extends KartuCetak {
+  anggota: AnggotaCetak[];
+  /** Jawaban standar saat ini, kunci `kk:<id>:<kunci>` atau `warga:<id>:<kunci>`. */
+  jawaban: Record<string, string>;
+  kelengkapan: number;
+}
+
+/** Paket cetak per KK: kartu + anggota aktif + jawaban saat ini untuk formulir pra-isi. Tanpa NIK / nomor KK. */
+export async function paketUntukCetak(aktor: Aktor, kkIds: number[] | "semua"): Promise<PaketCetak[]> {
+  const kartu = await kartuUntukCetak(aktor, kkIds);
+  const ids = kartu.map((k) => k.kkId);
+  if (!ids.length) return [];
+  const kunci = (await standarAktif()).map((d) => d.kunci);
+  const [{ rows: orang }, { rows: fakta }, ringkas] = await Promise.all([
+    pool.query(
+      `SELECT id, kk_id, nama_lengkap, kedudukan_keluarga, jenis_kelamin, tanggal_lahir
+         FROM warga WHERE kk_id = ANY($1) AND status_kependudukan = 'Aktif'
+        ORDER BY CASE WHEN kedudukan_keluarga = 'Kepala Keluarga' THEN 0 ELSE 1 END, tanggal_lahir NULLS LAST, id`,
+      [ids],
+    ),
+    pool.query(
+      `SELECT f.subjek, f.subjek_id, f.kunci, f.nilai, CASE WHEN f.subjek = 'kk' THEN f.subjek_id ELSE w.kk_id END AS kk_id
+         FROM wil_fakta f LEFT JOIN warga w ON f.subjek = 'warga' AND w.id = f.subjek_id
+        WHERE f.sampai IS NULL AND f.nilai IS NOT NULL AND f.status_verifikasi IN ('terverifikasi', 'perlu_cek') AND f.kunci = ANY($2)
+          AND ((f.subjek = 'kk' AND f.subjek_id = ANY($1)) OR (f.subjek = 'warga' AND w.kk_id = ANY($1)))`,
+      [ids, kunci],
+    ),
+    ringkasKeluarga(ids),
+  ]);
+  return kartu.map((k) => ({
+    ...k,
+    anggota: orang.filter((o) => o.kk_id === k.kkId).map((o) => ({
+      id: o.id, nama: o.nama_lengkap, hubungan: o.kedudukan_keluarga, jenisKelamin: o.jenis_kelamin, tanggalLahir: o.tanggal_lahir || null,
+    })),
+    jawaban: Object.fromEntries(fakta.filter((f) => f.kk_id === k.kkId).map((f) => [`${f.subjek}:${f.subjek_id}:${f.kunci}`, f.nilai])),
+    kelengkapan: ringkas.get(k.kkId)?.kelengkapan ?? 0,
+  }));
+}
+
+/** Cari KK dari kode kartu (untuk input formulir kertas). Hanya di RT yang sedang dikelola. */
+export async function kkDariKodeKartu(aktor: Aktor, kode: string): Promise<{ kkId: number; rt: number; kodeKartu: string }> {
+  if (aktor.role !== "rt" || !aktor.rt) throw new WilayahError(403, "Pilih RT dulu");
+  const bersih = kode.toUpperCase().replace(/\s+/g, "");
+  const { rows } = await pool.query(
+    `SELECT t.kk_id, k.rt, t.kode_kartu FROM wil_kk_token t JOIN kartu_keluarga k ON k.id = t.kk_id
+      WHERE upper(t.kode_kartu) = $1 ORDER BY t.dicabut_at NULLS FIRST, t.id DESC LIMIT 1`,
+    [bersih],
+  );
+  if (!rows[0] || rows[0].rt !== aktor.rt) throw new WilayahError(404, "Kode kartu tidak ditemukan di RT ini");
+  return { kkId: rows[0].kk_id, rt: rows[0].rt, kodeKartu: rows[0].kode_kartu };
 }
 
 export async function cabutToken(aktor: Aktor, kkId: number) {

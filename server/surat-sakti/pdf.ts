@@ -7,10 +7,11 @@ import path from "path";
 import { jsPDF } from "jspdf";
 import QRCode from "qrcode";
 import { IDENTITAS_RW } from "@shared/surat-sakti/identitas";
+import { F4 } from "@shared/kertas";
 import type { Blok } from "@shared/surat-sakti/tipe";
 
-const W = 210;
-const H = 297;
+const W = F4.w;
+const H = F4.h;
 const ML = 25;
 const MR = 20;
 const MB = 20;
@@ -53,7 +54,7 @@ export interface OpsiPdf {
 }
 
 class Penulis {
-  doc = new jsPDF({ unit: "mm", format: "a4", compress: true });
+  doc = new jsPDF({ unit: "mm", format: [F4.w, F4.h], compress: true });
   y = 0;
   constructor(private nomor: string | null) {}
 
@@ -180,8 +181,7 @@ class Penulis {
       this.font("bold", fs);
       const sel = kolom.map((k, i) => this.pecah(k, lw[i] - 2 * pad));
       const h = Math.max(...sel.map((s) => s.length)) * lh + 2 * pad;
-      this.doc.setFillColor(232, 236, 234);
-      this.doc.rect(ML, this.y - 0.5, CW, h, "FD");
+      this.doc.rect(ML, this.y - 0.5, CW, h);
       sel.forEach((s, i) => {
         this.doc.rect(xs[i], this.y - 0.5, lw[i], h);
         s.forEach((l, j) => this.doc.text(l, xs[i] + pad, this.y - 0.5 + pad + lh * (j + 0.8)));
@@ -282,7 +282,7 @@ class Penulis {
     for (let i = 1; i <= n; i++) {
       this.doc.setPage(i);
       if (draft) {
-        this.doc.setTextColor(200, 40, 40);
+        this.doc.setTextColor(120);
         this.font("bold", 46);
         try {
           const GState = (this.doc as any).GState;

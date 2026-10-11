@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import logoBlack from "@assets/RW03-Cimahi-Logo-Black.svg";
 import QRCode from "qrcode";
+import { F4 } from "@shared/kertas";
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -223,12 +224,12 @@ export async function generateSuratPDF(options: {
   returnBlob?: boolean;
 }): Promise<Blob | void> {
   const { id, nomorSurat, isiSurat, jenisSurat, tanggalSurat, fileName, returnBlob } = options;
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [330, 210], compress: true });
-  const pageWidth = 210;
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [F4.w, F4.h], compress: true });
+  const pageWidth = F4.w;
   const marginLeft = 18;
   const marginRight = 18;
   const contentWidth = pageWidth - marginLeft - marginRight;
-  const pageHeight = 330;
+  const pageHeight = F4.h;
   const startY = 51;
   const bottomMargin = 18;
   const availableHeight = pageHeight - startY - bottomMargin;
@@ -645,8 +646,8 @@ export async function generateSuratRekomendasiBansosPDF(options: {
   ketuaRt: string;
 }) {
   const { jenisPengajuan, jenisBansos, kepalaKeluarga, nomorKk, alamat, rt, alasan, ketuaRt } = options;
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4", compress: true });
-  const pageWidth = 210;
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [F4.w, F4.h], compress: true });
+  const pageWidth = F4.w;
   const marginLeft = 20;
   const marginRight = 20;
   const contentWidth = pageWidth - marginLeft - marginRight;
