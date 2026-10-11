@@ -12,7 +12,6 @@ Migrasi `migrations/0023_wilayah.sql` bersifat **additive dan idempoten**: hanya
 4. **Impor data lama sebagai `perlu_cek`** (opsional): `npm run wilayah:migrate -- --import-lama` (dry-run), lalu `--import-lama --apply`. Pemetaan ID tetap memakai `kartu_keluarga.id` dan `warga.id` yang sudah ada.
 5. **Rekonsiliasi**: pastikan jumlah KK/warga lama sama sebelum dan sesudah, dan jumlah fakta `perlu_cek` sesuai laporan dry-run.
 6. Set env: `QR_TOKEN_SECRET` (≥ 32 karakter acak), `BLUSUKAN_PIN` (≥ 6 karakter).
-7. Buat/atur PIN 7 akun RT di `/admin/rtjuara/akun`. Jangan bagikan PIN lewat grup.
 
 ## Rollback
 

@@ -1,22 +1,20 @@
 # Sistem Wilayah RT/RW — ringkasan
 
-Dokumen terkait: [indikator-119.md](indikator-119.md) · [migrasi.md](migrasi.md) · [panduan-rt.md](panduan-rt.md) · [panduan-rw.md](panduan-rw.md)
+Dokumen terkait: [indikator-119.md](indikator-119.md) · [migrasi.md](migrasi.md) · [panduan-rw.md](panduan-rw.md)
 
 ## Peran
 
 | Peran | Akun | Boleh | Tidak boleh |
 |---|---|---|---|
-| RT (7) | PIN per RT (`rtjuara_rt_akun`, bcrypt) | Kelola & verifikasi data RT sendiri, laporan bulanan RT, QR, usulan, minta surat | Melihat/mengubah RT lain |
-| RW (1) | Admin (`isAdmin`) | Baca seluruh wilayah, putuskan koreksi/kejadian, kelola objek bersama RW, Surat RW, Kas, RW3LAW | Mengubah master warga/KK RT |
+| RW (1) | Admin (`isAdmin`) | Baca seluruh wilayah; kelola warga/KK, isian QR, cetak QR, dan pindah RT atas nama RT yang dipilih; objek bersama RW; Surat RW | — |
 | Warga | Tanpa akun, lewat QR KK | Mengirim usulan perubahan | Melihat data lama |
 
-Scope RT selalu dari sesi (`req.session.rtjuaraRt`). Tidak ada peran ketiga.
+Portal & login PIN Ketua RT sudah dihapus. Admin RW mengelola data per RT di **Kependudukan** (`/admin/kelola-warga`); RT yang dikelola dikirim lewat header `X-Wilayah-Rt` dan hanya diterima dari sesi admin. Aktornya ber-role `rt` sehingga semua pemeriksaan scope RT tetap berlaku, dan audit mencatat nama admin. Tabel `rtjuara_rt_akun` dibiarkan (tidak di-drop).
 
 ## Audit fitur lama (checklist)
 
-- [x] **Laporan masalah**: tetap. Kejadian baru dicatat lewat `/rt/masalah`.
-- [x] **Kependudukan**: tetap sebagai modul baca RW. Penulisan master warga oleh RW diblokir (`tolakUbahMasterOlehRw`), kecuali env `IZINKAN_RW_EDIT_MASTER=true`.
-- [x] **Blusukan**: PIN hardcode dihapus. Wajib env `BLUSUKAN_PIN` (≥ 6 karakter). Tulis master oleh RW diblokir.
+- [x] **Kependudukan**: Ringkasan warga + Kelola data warga (admin RW).
+- [x] **Blusukan**: PIN hardcode dihapus. Wajib env `BLUSUKAN_PIN` (≥ 6 karakter).
 - [x] **Visit RW3 / RW3BIZ**: tetap. Usaha warga untuk laporan dicatat terpisah di `wil_usaha` (bukan data hunian).
 - [x] **Karang Taruna**: tetap.
 - [x] **Kas RW, RW3LAW**: tetap, dibuka dari Dashboard › Modul lain. Tidak ada reset atau hapus otomatis.
@@ -29,10 +27,10 @@ Scope RT selalu dari sesi (`req.session.rtjuaraRt`). Tidak ada peran ketiga.
 
 | Kebutuhan | Lokasi |
 |---|---|
-| Portal RT mobile (Beranda / Warga / Laporan) | `/rt` → `client/src/pages/rt/*` |
+| Kelola data warga per RT (warga/KK, isian QR, cetak QR, pindah RT) | `/admin/kelola-warga/*` → `client/src/pages/admin/kelola-warga/*` |
 | Form QR warga | `/isi/<token>`, `/isi/status` → `client/src/pages/public/isi.tsx` |
 | Dashboard RW (5 tab) | `/admin/dashboard` → `client/src/pages/admin/rw-dashboard.tsx` |
-| Data Warga + formulir dari RW | tab Data Warga → `client/src/pages/admin/rw-data-warga.tsx`, `POST/GET /api/wilayah/rw/usulan` |
+| Data Warga seluruh RW (baca) | tab Data Warga → `client/src/pages/admin/rw-data-warga.tsx` |
 | Surat Sakti | `/admin/surat-rw` → `client/src/pages/admin/surat-sakti.tsx` |
 | API | `server/wilayah-routes.ts` (`/api/wilayah/*`, `/api/isi/*`) |
 | Model fakta, temporal + riwayat | `server/wilayah-data.ts`, tabel `wil_fakta` |
@@ -44,7 +42,7 @@ Scope RT selalu dari sesi (`req.session.rtjuaraRt`). Tidak ada peran ketiga.
 ## Asumsi
 
 1. Hanya fakta **terverifikasi** yang dihitung. Tidak ada baris berarti *belum diketahui* (sel kosong), bukan 0.
-2. Data lama diimpor sebagai `perlu_cek` (nilai lama punya default seperti "PDAM"), jadi tidak dihitung sampai RT menekan "Benar".
+2. Data lama diimpor sebagai `perlu_cek` (nilai lama punya default seperti "PDAM"), jadi tidak dihitung sampai admin menekan "Benar" di halaman keluarga.
 3. Umur dihitung dari tanggal lahir pada tanggal acuan, yaitu akhir bulan atau hari ini untuk bulan berjalan. Lansia = 60+ (khusus laporan kecamatan). Bayi = 0–11 bulan.
 4. TOTAL: indikator kejadian/kehadiran dijumlah. Indikator stok/populasi **tidak** dijumlah antarbulan (kosong) sampai kecamatan mengonfirmasi (`MODE_TOTAL_STOK`).
 5. Rekap RW menghitung objek unik. Fasilitas bersama RW yang melayani beberapa RT diberi status "perlu konfirmasi" di sel RT.

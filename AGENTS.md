@@ -94,3 +94,4 @@ Notifikasi otomatis via StarSender: Visit RW3 (pengajuan, approve/reject, pengin
 ## Catatan Penting
 
 - RT yang dikelola di sistem: **01–04** (pemukiman RW 03)
+- Tidak ada portal/login Ketua RT. Data warga per RT dikelola admin RW di Kependudukan (`/admin/kelola-warga`, header `X-Wilayah-Rt`).

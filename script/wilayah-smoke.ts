@@ -245,16 +245,14 @@ async function main() {
     const c = baca("client/src/pages/public/isi.tsx");
     pastikan(c.includes("replaceState") && c.includes("no-referrer"), "token tidak dibersihkan dari URL");
   });
-  await uji("scope RT diambil dari sesi, bukan body/query", () => {
+  await uji("kelola RT: wajib sesi admin RW, RT dari header tervalidasi, bukan body/query", () => {
     pastikan(!/req\.body\.rt\b/.test(baca("server/wilayah-routes.ts")), "rt dibaca dari body");
     const auth = baca("server/wilayah-auth.ts");
-    pastikan(auth.includes("session") && auth.includes("rtjuaraRt") && !/req\.(body|query)/.test(auth), "aktor RT tidak dari sesi");
+    pastikan(auth.includes("isAdmin") && auth.includes("x-wilayah-rt") && auth.includes("isWilayahRt(rt)") && !/req\.(body|query)/.test(auth), "aktor kelola RT tidak aman");
+    pastikan(!auth.includes("rtjuaraRt"), "login PIN RT masih dipakai");
   });
   await uji("tidak ada PIN/kredensial ter-hardcode di Blusukan", () => {
     pastikan(!baca("server/blusukan-routes.ts").includes("664599"), "PIN lama masih ada");
-  });
-  await uji("tulis master oleh RW diblokir di rute lama", () => {
-    pastikan(baca("server/routes.ts").includes("tolakUbahMasterOlehRw"), "guard master RW tidak terpasang");
   });
 
   if (DB_UJI) await ujiDatabase();
@@ -402,13 +400,6 @@ async function alurLengkap(k: any) {
     const r = (await data.daftarRumah(rt7)).find((x: any) => x.id === ids.rumah);
     pastikan(r && r.kk.length === 1 && r.listrik === listrik, "rumah tidak lengkap");
   });
-  await uji("usaha: buat, ubah, tutup", async () => {
-    const isi = { nama: "Warung Uji", kategori: W.KATEGORI_USAHA[0].nilai, pemilikWargaIds: [wargaId] };
-    ids.usaha = (await data.simpanUsaha(rt7, isi)).id;
-    await data.simpanUsaha(rt7, { ...isi, nama: "Warung Uji 2" }, ids.usaha);
-    await data.simpanBanyakFakta(rt7, [{ subjek: "usaha", subjekId: ids.usaha, kunci: "nib", nilai: "ya" }]);
-    await data.tutupUsaha(rt7, ids.usaha);
-  });
   await uji("fasilitas & kelompok: RW bersama dan RT sendiri, nonaktifkan", async () => {
     ids.fasRw = (await data.simpanFasilitas(rw, { jenis: "posyandu", nama: "Posyandu Uji", rtLokasi: 7, rtLayanan: [6, 7] })).id;
     ids.fasRt = (await data.simpanFasilitas(rt7, { jenis: W.JENIS_FASILITAS[0].nilai, nama: "Pos Uji", rtLokasi: 7 })).id;
@@ -428,13 +419,6 @@ async function alurLengkap(k: any) {
     await harusGagal(() => data.catatKehadiran(rt6, ids.keg, 3), 404, "RT tak terlibat");
     const { rows } = await pool.query(`SELECT COUNT(*)::int AS n, MAX(jumlah_hadir) AS j FROM wil_kegiatan_peserta WHERE kegiatan_id = $1`, [ids.keg]);
     pastikan(rows[0].n === 1 && rows[0].j === 15, "peserta dobel");
-  });
-  await uji("kejadian & tindak lanjut, koreksi RT ke objek RW diputus RW", async () => {
-    ids.kej = (await data.catatKejadian(rt7, { jenis: "bencana", judul: "Banjir uji", tanggal: "2026-10-04", idempotencyKey: `kej-${acak()}` })).id;
-    await data.tindakLanjutKejadian(rt7, ids.kej, { catatan: "Sudah dicek warga" });
-    const ko = await data.usulkanKoreksi(rt7, { objek: "fasilitas", objekId: ids.fasRw, uraian: "Nama posyandu salah" });
-    await data.putuskanKoreksi(rw, ko.id, true, "Sudah diperbaiki");
-    await harusGagal(() => data.putuskanKoreksi(rt7, ko.id, true, "x"), 403, "RT memutus koreksi");
   });
   await uji("konfirmasi kelengkapan: RT dan RW sesuai bagian", async () => {
     const bRt = W.BAGIAN_KONFIRMASI.find((b) => b.scope === "rt")!.nilai;
@@ -462,8 +446,8 @@ async function alurLengkap(k: any) {
   });
   await uji("semua fungsi baca halaman RT/RW berjalan", async () => {
     await Promise.all([
-      data.daftarKeluarga(rt7, {}), data.daftarKeluarga(rw, { rt: 1 }), data.antreanRt(rt7), data.cariWarga(rt7, "Uji"),
-      data.daftarUsaha(rw, null), data.daftarKegiatan(rt7, {}), data.daftarKejadian(rw, {}), data.daftarUsulanKoreksi(rw),
+      data.daftarKeluarga(rt7, {}), data.daftarKeluarga(rw, { rt: 1 }), data.cariWarga(rt7, "Uji"),
+      data.daftarUsaha(rw, null), data.daftarKegiatan(rt7, {}), data.daftarKejadian(rw, {}),
       data.daftarSerahTerima(rt7), qr.daftarUsulan(rt7, "semua"),
       dash.ringkasanRw(2026, 10), dash.aksiRw(2026, 10), lap.statusLaporanSemuaRt(2026, 10),
       lap.pratinjauLaporan(rt7, null, 2026, 10), lap.pratinjauLaporan(rw, null, 2026, 10), lap.pratinjauLaporan(rw, 1, 2026, 10),
@@ -524,39 +508,6 @@ async function alurLengkap(k: any) {
     await surat.terbitkan(rw, d2.id);
     await harusGagal(() => surat.batalkan(rw, d2.id, "x"), 400, "batal tanpa alasan");
     await surat.batalkan(rw, d2.id, "Salah tujuan surat");
-    await data.tindakLanjutKejadian(rw, ids.kej, { catatan: "RW sudah koordinasi" }).catch((e: any) => { if (e?.status !== 403) throw e; });
-  });
-  const isiRw = { versiForm: 1, namaPengisi: "Uji Datang ke RW", hubunganPengisi: "Kepala Keluarga", rumahTangga: { air_bersih: "ya" }, anggota: [{ nama: "Uji Datang", hubungan: "Kepala Keluarga", jenisKelamin: "Perempuan", jawaban: {} }], usaha: [] };
-  await uji("formulir dari RW (KK terdaftar): masuk antrean RT pemilik, idempoten, RT lain & RT memanggil jalur RW ditolak", async () => {
-    const body = { idempotencyKey: `rw-${acak()}-kunci`, kkId, isi: isiRw };
-    const a = await qr.kirimUsulanRw(rw, body);
-    const b = await qr.kirimUsulanRw(rw, body);
-    sama(b.kodeTerima, a.kodeTerima, "kirim ganda RW");
-    sama(a.rt, 6, "RT tujuan");
-    await harusGagal(() => qr.kirimUsulanRw(rt6, { ...body, idempotencyKey: `rw-${acak()}-kunci` }), 403, "RT memakai jalur RW");
-    pastikan(!(await qr.daftarUsulan(rt7)).some((x: any) => x.kk_id === kkId), "RT lain melihat usulan RW");
-    const u = (await qr.daftarUsulan(rt6)).find((x: any) => x.kk_id === kkId && x.sumber === "rw");
-    pastikan(u, "usulan RW tak muncul di antrean RT");
-    await qr.putuskanUsulan(rt6, u.id, { aksi: "terima", fakta: [{ subjek: "kk", subjekId: kkId, kunci: "air_bersih", nilai: "ya" }] });
-    const r = (await qr.daftarUsulanRw(rw)).find((x: any) => x.kode_terima === a.kodeTerima);
-    pastikan(r && r.status === "diterima", "status di riwayat RW");
-  });
-  await uji("formulir dari RW (keluarga baru): RT wajib daftarkan KK dulu, lalu fakta tercatat di KK tersebut", async () => {
-    const a = await qr.kirimUsulanRw(rw, { idempotencyKey: `rwb-${acak()}-kunci`, keluargaBaru: { rt: 6, alamat: "Jl. Uji Baru 9" }, isi: isiRw });
-    const zod400 = (e: any) => { if (e?.name === "ZodError") e.status = 400; throw e; };
-    await harusGagal(() => qr.kirimUsulanRw(rw, { idempotencyKey: `rwx-${acak()}-kunci`, isi: isiRw }).catch(zod400), 400, "tanpa KK maupun keluarga baru");
-    pastikan(!(await qr.daftarUsulan(rt7)).some((x: any) => x.kode_terima === a.kodeTerima || (x.kk_id == null && x.sumber === "rw")), "RT lain melihat keluarga baru");
-    const u = (await qr.daftarUsulan(rt6)).find((x: any) => x.kk_id == null && x.sumber === "rw");
-    pastikan(u, "keluarga baru tak muncul di RT tujuan");
-    const baru = (await data.tambahKeluarga(rt6, { nomorKk: `9905${acak()}`, alamat: "Jl. Uji Baru 9" })).id;
-    bersih.kkLain.push(baru);
-    const fakta = [{ subjek: "kk", subjekId: baru, kunci: "air_bersih", nilai: "ya" }];
-    await harusGagal(() => qr.putuskanUsulan(rt6, u.id, { aksi: "terima", fakta }), 400, "terima tanpa KK");
-    const kkRt7 = (await data.daftarKeluarga(rt7, {}))[0]?.id;
-    if (kkRt7) await harusGagal(() => qr.putuskanUsulan(rt6, u.id, { aksi: "terima", kkId: kkRt7, fakta }), 404, "KK di luar RT");
-    await qr.putuskanUsulan(rt6, u.id, { aksi: "terima", kkId: baru, fakta });
-    const d = await data.detailKeluarga(rt6, baru);
-    pastikan(d.fakta.some((f: any) => f.kunci === "air_bersih" && f.nilai === "ya"), "fakta keluarga baru tidak tercatat");
   });
 }
 

@@ -1,7 +1,8 @@
 /**
- * Akses modul wilayah — hanya dua role:
- *  - RT: sesi Ketua RT (akun rtjuara_rt_akun, PIN ter-hash, RT 01–07). Scope RT SELALU dari sesi.
- *  - RW: sesi admin RW (admin_user).
+ * Akses modul wilayah — hanya admin RW (sesi admin_user). Portal Ketua RT sudah dihapus.
+ *  - RW: membaca semua RT.
+ *  - Kelola RT: admin RW yang mengubah data atas nama satu RT (header X-Wilayah-Rt). Aktor ber-role "rt"
+ *    agar seluruh pemeriksaan scope RT tetap berlaku; label audit tetap menyebut admin RW.
  */
 import type { Request, Response, NextFunction } from "express";
 import { pool } from "./db";
@@ -23,23 +24,23 @@ declare global {
   }
 }
 
-export const PESAN_RW_TIDAK_UBAH_MASTER =
-  "Data warga, KK, rumah, dan usaha dikelola Ketua RT masing-masing. RW hanya dapat melihat.";
-
-function aktorRt(req: Request): Aktor | null {
-  const rt = req.session?.rtjuaraRt;
-  if (!isWilayahRt(rt)) return null;
-  return { role: "rt", rt, label: `Ketua RT ${String(rt).padStart(2, "0")}${req.session.rtjuaraNama ? ` (${req.session.rtjuaraNama})` : ""}` };
-}
-
 function aktorRw(req: Request): Aktor | null {
   if (!req.session?.isAdmin) return null;
   return { role: "rw", rt: null, label: req.session.adminNama || req.session.adminUsername || "Ketua RW" };
 }
 
+function aktorKelolaRt(req: Request): Aktor | null {
+  const rw = aktorRw(req);
+  const rt = Number(req.get("x-wilayah-rt"));
+  if (!rw || !isWilayahRt(rt)) return null;
+  return { role: "rt", rt, label: `${rw.label} (kelola RT ${String(rt).padStart(2, "0")})` };
+}
+
+/** Ubah data atas nama satu RT — wajib sesi admin RW + header X-Wilayah-Rt. */
 export function requireRtWilayah(req: Request, res: Response, next: NextFunction) {
-  const a = aktorRt(req);
-  if (!a) return res.status(401).json({ message: "Sesi Ketua RT tidak valid. Silakan masuk lagi." });
+  if (!aktorRw(req)) return res.status(401).json({ message: "Akses khusus Ketua RW" });
+  const a = aktorKelolaRt(req);
+  if (!a) return res.status(400).json({ message: "Pilih RT terlebih dahulu" });
   req.aktor = a;
   next();
 }
@@ -51,18 +52,12 @@ export function requireRwWilayah(req: Request, res: Response, next: NextFunction
   next();
 }
 
-/** RT atau RW — handler wajib memeriksa scope dengan aktor.rt. */
+/** Baca: RW melihat semua RT; dengan header X-Wilayah-Rt dibatasi ke RT yang sedang dikelola. */
 export function requireRtAtauRw(req: Request, res: Response, next: NextFunction) {
-  // Bila browser memegang dua sesi sah sekaligus, klien boleh memilih sesi mana yang dipakai (tidak menambah hak).
-  const a = req.get("x-wilayah-peran") === "rw" ? aktorRw(req) ?? aktorRt(req) : aktorRt(req) ?? aktorRw(req);
-  if (!a) return res.status(401).json({ message: "Silakan masuk sebagai Ketua RT atau Ketua RW" });
+  const a = req.get("x-wilayah-peran") === "rw" ? aktorRw(req) : aktorKelolaRt(req) ?? aktorRw(req);
+  if (!a) return res.status(401).json({ message: "Akses khusus Ketua RW" });
   req.aktor = a;
   next();
-}
-
-/** Penjaga endpoint lama yang mengubah master warga/KK: RW tidak menjadi operator edit master. */
-export function tolakUbahMasterOlehRw(_req: Request, res: Response) {
-  return res.status(403).json({ message: PESAN_RW_TIDAK_UBAH_MASTER });
 }
 
 export async function catatAudit(

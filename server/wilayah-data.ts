@@ -13,9 +13,7 @@ import {
   FAKTA_INTI_WARGA,
   JENIS_FASILITAS,
   JENIS_KEGIATAN,
-  JENIS_KEJADIAN,
   JENIS_KELOMPOK,
-  KATEGORI_USAHA,
   STATUS_KEJADIAN,
   isWilayahRt,
   isoTanggal,
@@ -511,15 +509,6 @@ export async function hubungkanKkRumah(aktor: Aktor, kkId: number, rumahId: numb
 // Usaha
 // ===========================================================================
 
-const usahaSchema = z.object({
-  nama: z.string().trim().min(2),
-  kategori: z.enum(nilaiDari(KATEGORI_USAHA)).nullable(),
-  alamat: z.string().trim().max(200).optional().nullable(),
-  rumahId: z.number().int().positive().optional().nullable(),
-  mulai: tanggalSchema.optional().nullable(),
-  pemilikWargaIds: z.array(z.number().int().positive()).min(1, "Pilih minimal satu pemilik").max(5),
-});
-
 export async function daftarUsaha(aktor: Aktor, rtQuery?: number | null) {
   const rt = aktor.role === "rt" ? aktor.rt : rtQuery ?? null;
   const { rows } = await pool.query(
@@ -534,47 +523,6 @@ export async function daftarUsaha(aktor: Aktor, rtQuery?: number | null) {
   const ids = rows.map((r) => r.id);
   const fakta = await faktaAktif("usaha", ids);
   return rows.map((r) => ({ ...r, fakta: fakta.filter((f) => f.subjekId === r.id) }));
-}
-
-export async function simpanUsaha(aktor: Aktor, input: unknown, id?: number) {
-  const rt = wajibRt(aktor);
-  const d = usahaSchema.parse(input);
-  return denganTransaksi(async (c) => {
-    const { rows: pem } = await c.query(
-      `SELECT w.id FROM warga w JOIN kartu_keluarga k ON k.id = w.kk_id WHERE w.id = ANY($1) AND k.rt = $2`,
-      [d.pemilikWargaIds, rt],
-    );
-    if (pem.length !== d.pemilikWargaIds.length) throw new WilayahError(400, "Pemilik harus warga RT Anda");
-    if (d.rumahId) {
-      const { rows: r } = await c.query(`SELECT rt FROM wil_rumah WHERE id = $1`, [d.rumahId]);
-      if (r[0]?.rt !== rt) throw new WilayahError(400, "Rumah tidak ditemukan di RT Anda");
-    }
-    let usahaId = id;
-    if (usahaId) {
-      const { rows } = await c.query(`SELECT rt FROM wil_usaha WHERE id = $1 FOR UPDATE`, [usahaId]);
-      if (rows[0]?.rt !== rt) throw new WilayahError(404, "Usaha tidak ditemukan di RT Anda");
-      await c.query(`UPDATE wil_usaha SET nama = $2, kategori = $3, alamat = $4, rumah_id = $5, mulai = COALESCE($6, mulai) WHERE id = $1`, [usahaId, d.nama, d.kategori, d.alamat || null, d.rumahId || null, d.mulai || null]);
-      await c.query(`DELETE FROM wil_usaha_pemilik WHERE usaha_id = $1`, [usahaId]);
-    } else {
-      const { rows } = await c.query(
-        `INSERT INTO wil_usaha (rt, nama, kategori, alamat, rumah_id, mulai, dibuat_oleh) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-        [rt, d.nama, d.kategori, d.alamat || null, d.rumahId || null, d.mulai || hariIni(), aktor.label],
-      );
-      usahaId = rows[0].id;
-    }
-    for (const w of d.pemilikWargaIds) await c.query(`INSERT INTO wil_usaha_pemilik (usaha_id, warga_id) VALUES ($1, $2)`, [usahaId, w]);
-    await catatAudit(aktor, id ? "ubah" : "tambah", "usaha", usahaId!, rt, null, d, c);
-    return { id: usahaId! };
-  });
-}
-
-export async function tutupUsaha(aktor: Aktor, id: number, tanggal?: string) {
-  const rt = wajibRt(aktor);
-  const t = tanggal ? tanggalSchema.parse(tanggal) : hariIni();
-  const { rowCount } = await pool.query(`UPDATE wil_usaha SET sampai = $3 WHERE id = $1 AND rt = $2 AND sampai IS NULL`, [id, rt, t]);
-  if (!rowCount) throw new WilayahError(404, "Usaha tidak ditemukan atau sudah ditutup");
-  await catatAudit(aktor, "tutup", "usaha", id, rt, null, { sampai: t });
-  return { ok: true };
 }
 
 // ===========================================================================
@@ -757,18 +705,6 @@ export async function catatKehadiran(aktor: Aktor, kegiatanId: number, jumlahHad
   return { ok: true };
 }
 
-const kejadianSchema = z.object({
-  jenis: z.enum(nilaiDari(JENIS_KEJADIAN)),
-  judul: z.string().trim().min(3),
-  uraian: z.string().trim().max(3000).optional().nullable(),
-  tanggal: tanggalSchema,
-  rt: rtSchema.nullable().optional(),
-  lokasi: z.string().trim().max(200).optional().nullable(),
-  jumlahPelaku: z.number().int().min(0).nullable().optional(),
-  jumlahKorban: z.number().int().min(0).nullable().optional(),
-  idempotencyKey: z.string().min(8).max(80).optional(),
-});
-
 export async function daftarKejadian(aktor: Aktor, opsi: { status?: string; rt?: number | null }) {
   const rt = aktor.role === "rt" ? aktor.rt : opsi.rt ?? null;
   const { rows } = await pool.query(
@@ -785,25 +721,6 @@ export async function daftarKejadian(aktor: Aktor, opsi: { status?: string; rt?:
     [rt, opsi.status || null],
   );
   return rows.map((r) => ({ ...r, bolehUbah: r.pengelola === aktor.role && (aktor.role === "rw" || r.rt === aktor.rt) }));
-}
-
-export async function catatKejadian(aktor: Aktor, input: unknown) {
-  const d = kejadianSchema.parse(input);
-  if (d.tanggal > hariIni()) throw new WilayahError(400, "Tanggal kejadian tidak boleh di masa depan");
-  const p = pengelolaDari(aktor);
-  const rt = aktor.role === "rt" ? aktor.rt : d.rt ?? null;
-  const { rows } = await pool.query(
-    `INSERT INTO wil_kejadian (jenis, judul, uraian, tanggal, rt, pengelola, lokasi, jumlah_pelaku, jumlah_korban, idempotency_key, dibuat_oleh)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-     ON CONFLICT (idempotency_key) DO NOTHING RETURNING id`,
-    [d.jenis, d.judul, d.uraian || null, d.tanggal, rt, p.pengelola, d.lokasi || null, d.jumlahPelaku ?? null, d.jumlahKorban ?? null, d.idempotencyKey ?? null, aktor.label],
-  );
-  if (!rows[0]) {
-    const { rows: ada } = await pool.query(`SELECT id FROM wil_kejadian WHERE idempotency_key = $1`, [d.idempotencyKey]);
-    return { id: ada[0].id as number, duplikat: true };
-  }
-  await catatAudit(aktor, "tambah", "kejadian", rows[0].id, rt, null, { jenis: d.jenis, judul: d.judul });
-  return { id: rows[0].id as number, duplikat: false };
 }
 
 const tindakSchema = z.object({
@@ -830,33 +747,6 @@ export async function tindakLanjutKejadian(aktor: Aktor, id: number, input: unkn
     await catatAudit(aktor, "tindak_lanjut", "kejadian", id, k.rt, { status: k.status }, { status: d.status, catatan: d.catatan }, c);
     return { ok: true };
   });
-}
-
-const koreksiSchema = z.object({ objek: z.enum(["fasilitas", "kelompok", "kegiatan", "kejadian"]), objekId: z.number().int().positive(), uraian: z.string().trim().min(5).max(1000) });
-
-export async function usulkanKoreksi(aktor: Aktor, input: unknown) {
-  const rt = wajibRt(aktor);
-  const d = koreksiSchema.parse(input);
-  const { rows } = await pool.query(`INSERT INTO wil_usulan_koreksi (objek, objek_id, rt_pengusul, uraian) VALUES ($1, $2, $3, $4) RETURNING id`, [d.objek, d.objekId, rt, d.uraian]);
-  await catatAudit(aktor, "usul_koreksi", d.objek, d.objekId, rt, null, { uraian: d.uraian });
-  return { id: rows[0].id as number };
-}
-
-export async function daftarUsulanKoreksi(aktor: Aktor) {
-  const { rows } = await pool.query(
-    `SELECT id, objek, objek_id, rt_pengusul, uraian, status, jawaban, created_at, diputus_at FROM wil_usulan_koreksi
-      WHERE ($1::int IS NULL OR rt_pengusul = $1) ORDER BY (status <> 'baru'), created_at DESC LIMIT 200`,
-    [aktor.role === "rt" ? aktor.rt : null],
-  );
-  return rows;
-}
-
-export async function putuskanKoreksi(aktor: Aktor, id: number, terima: boolean, jawaban: string) {
-  if (aktor.role !== "rw") throw new WilayahError(403, "Hanya RW");
-  const { rowCount } = await pool.query(`UPDATE wil_usulan_koreksi SET status = $2, jawaban = $3, diputus_at = now() WHERE id = $1 AND status = 'baru'`, [id, terima ? "diterima" : "ditolak", jawaban]);
-  if (!rowCount) throw new WilayahError(404, "Usulan tidak ditemukan atau sudah diputus");
-  await catatAudit(aktor, terima ? "terima_koreksi" : "tolak_koreksi", "usulan_koreksi", id, null, null, { jawaban });
-  return { ok: true };
 }
 
 // ===========================================================================
@@ -982,23 +872,6 @@ export async function putuskanSerahTerima(aktor: Aktor, id: number, input: unkno
 // ===========================================================================
 // Antrean pekerjaan RT (Beranda)
 // ===========================================================================
-
-export async function antreanRt(aktor: Aktor) {
-  const rt = wajibRt(aktor);
-  const { rows } = await pool.query(
-    `SELECT
-       (SELECT COUNT(*)::int FROM wil_usulan WHERE rt = $1 AND status = 'menunggu') AS usulan,
-       (SELECT COUNT(*)::int FROM wil_serah_terima WHERE rt_tujuan = $1 AND status = 'diajukan') AS pindah_masuk,
-       (SELECT COUNT(*)::int FROM wil_fakta WHERE rt = $1 AND status_verifikasi = 'perlu_cek') AS perlu_cek,
-       (SELECT COUNT(*)::int FROM kartu_keluarga k WHERE k.rt = $1 AND NOT EXISTS (SELECT 1 FROM wil_rumah_kk rk WHERE rk.kk_id = k.id AND rk.sampai IS NULL)) AS kk_tanpa_rumah,
-       (SELECT COUNT(*)::int FROM wil_kejadian WHERE rt = $1 AND pengelola = 'rt' AND status <> 'selesai') AS kejadian_terbuka,
-       (SELECT COUNT(*)::int FROM wil_kegiatan g WHERE g.pengelola = 'rw' AND $1 = ANY(g.rt_terlibat) AND g.tanggal >= current_date - 60
-           AND NOT EXISTS (SELECT 1 FROM wil_kegiatan_peserta p WHERE p.kegiatan_id = g.id AND p.rt = $1)) AS hadir_belum_diisi,
-       (SELECT COUNT(*)::int FROM wil_usulan_koreksi WHERE rt_pengusul = $1 AND status <> 'baru' AND diputus_at > now() - interval '14 days') AS koreksi_dijawab`,
-    [rt],
-  );
-  return rows[0];
-}
 
 export async function cariWarga(aktor: Aktor, q: string) {
   const s = q.trim().toLowerCase();

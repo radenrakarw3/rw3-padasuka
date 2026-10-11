@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { unduh, useKirimSekali, wil } from "@/lib/wilayah-api";
 import { eksporPdfLaporan } from "@/lib/laporan-pdf";
 import { FormFakta, kunciAwal } from "@/components/wilayah/form-fakta";
-import { TabelIndikator, LABEL_STATUS, type HasilSel } from "@/pages/rt/laporan";
+import { TabelIndikator, LABEL_STATUS, type HasilSel } from "@/components/wilayah/tabel-indikator";
 import DataWarga from "./rw-data-warga";
 import { BAGIAN_KONFIRMASI, JENIS_FASILITAS, JENIS_KEGIATAN, JENIS_KELOMPOK, NAMA_BULAN, STATUS_KEJADIAN, isoTanggal } from "@shared/wilayah";
 
@@ -162,7 +162,7 @@ function DataBersama() {
   const daftarJenis = f.tabel === "fasilitas" ? JENIS_FASILITAS : JENIS_KELOMPOK;
   return (
     <div className="space-y-6">
-      <p className="text-sm text-muted-foreground">Objek bersama dikelola RW dengan satu data induk. RT hanya dapat melihat dan mengusulkan koreksi. Objek dengan nama sama tidak digabung otomatis.</p>
+      <p className="text-sm text-muted-foreground">Objek bersama dikelola RW dengan satu data induk. Objek dengan nama sama tidak digabung otomatis.</p>
       <section className="border rounded-lg p-3 space-y-2">
         <h3 className="font-semibold">Tambah objek bersama RW</h3>
         <div className="grid sm:grid-cols-3 gap-2">
@@ -214,12 +214,11 @@ function Aksi({ tahun, bulan }: { tahun: number; bulan: number }) {
   const qc = useQueryClient();
   const [, go] = useLocation();
   const { data, error } = useQuery<any>({ queryKey: ["/api/wilayah/rw/aksi", tahun, bulan], queryFn: () => wil(`/api/wilayah/rw/aksi?tahun=${tahun}&bulan=${bulan}`, RW) });
-  const { data: koreksi } = useQuery<any[]>({ queryKey: ["/api/wilayah/koreksi", "rw"], queryFn: () => wil("/api/wilayah/koreksi", RW) });
   const { data: surat } = useQuery<any>({ queryKey: ["/api/wilayah/rw/surat-ringkasan"], queryFn: () => wil("/api/wilayah/rw/surat-ringkasan", RW) });
   const { data: lap } = useQuery<any>({ queryKey: ["/api/wilayah/laporan", "rw-konf", tahun, bulan], queryFn: () => wil(`/api/wilayah/laporan?tahun=${tahun}&bulan=${bulan}`, RW) });
   const [g, setG] = useState({ jenis: "rembug_rw", judul: "", tanggal: isoTanggal(new Date()), lokasi: "", rt: [1, 2, 3, 4, 5, 6, 7] });
   const [err, setErr] = useState<unknown>(null);
-  const segar = () => Promise.all(["/api/wilayah/rw/aksi", "/api/wilayah/koreksi", "/api/wilayah/laporan", "/api/wilayah/rw/ringkasan"].map((k) => qc.invalidateQueries({ queryKey: [k] })));
+  const segar = () => Promise.all(["/api/wilayah/rw/aksi", "/api/wilayah/laporan", "/api/wilayah/rw/ringkasan"].map((k) => qc.invalidateQueries({ queryKey: [k] })));
   const jalankan = async (fn: () => Promise<unknown>) => { setErr(null); try { await fn(); await segar(); } catch (e) { setErr(e); } };
   const tambah = useKirimSekali(async (kunci) => {
     await wil("/api/wilayah/kegiatan", { ...RW, body: { jenis: g.jenis, judul: g.judul, tanggal: g.tanggal, lokasi: g.lokasi || null, rtTerlibat: g.rt, idempotencyKey: kunci } });
@@ -242,7 +241,7 @@ function Aksi({ tahun, bulan }: { tahun: number; bulan: number }) {
         <div className="flex flex-wrap gap-2 text-sm items-center"><span>RT terlibat:</span>
           {[1, 2, 3, 4, 5, 6, 7].map((n) => <label key={n} className="flex items-center gap-1"><input type="checkbox" checked={g.rt.includes(n)} onChange={(e) => setG({ ...g, rt: e.target.checked ? [...g.rt, n] : g.rt.filter((x) => x !== n) })} />{String(n).padStart(2, "0")}</label>)}
         </div>
-        <p className="text-xs text-muted-foreground">Satu kegiatan RW = satu data. Tiap RT mengisi jumlah hadir warganya sendiri; rekap RW menghitung kegiatan satu kali.</p>
+        <p className="text-xs text-muted-foreground">Satu kegiatan RW = satu data. Jumlah hadir diisi per RT pada daftar di bawah; rekap RW menghitung kegiatan satu kali.</p>
         <Galat e={tambah.error} />
         <Button disabled={g.judul.trim().length < 3 || tambah.mengirim} onClick={() => tambah.kirim()}>Simpan kegiatan</Button>
       </section>
@@ -252,8 +251,17 @@ function Aksi({ tahun, bulan }: { tahun: number; bulan: number }) {
         <ul className="text-sm divide-y border rounded-lg">
           {data?.kegiatan.length === 0 && <li className="p-2 text-muted-foreground">Belum ada.</li>}
           {data?.kegiatan.map((k: any) => (
-            <li key={k.id} className="p-2">{k.tanggal} · <b>{k.judul}</b> · hadir: {k.peserta.length ? k.peserta.map((p: any) => `${rt2(p.rt)} ${p.hadir}`).join(", ") : "belum diisi RT"}
-              {" "}· belum mengisi: {(k.rt_terlibat as number[]).filter((r) => !k.peserta.some((p: any) => p.rt === r)).map((r) => String(r).padStart(2, "0")).join(", ") || "—"}</li>
+            <li key={k.id} className="p-2 space-y-1">
+              <p>{k.tanggal} · <b>{k.judul}</b> · hadir: {k.peserta.length ? k.peserta.map((p: any) => `${rt2(p.rt)} ${p.hadir}`).join(", ") : "belum diisi"}</p>
+              <div className="flex flex-wrap gap-1">
+                {(k.rt_terlibat as number[]).map((r) => (
+                  <Button key={r} size="sm" variant="outline" onClick={() => {
+                    const n = prompt(`Jumlah warga ${rt2(r)} yang hadir:`);
+                    if (n != null && n.trim() !== "") jalankan(() => wil(`/api/wilayah/rt/kegiatan/${k.id}/hadir`, { rt: r, body: { jumlahHadir: Number(n) } }));
+                  }}>Isi hadir {rt2(r)}</Button>
+                ))}
+              </div>
+            </li>
           ))}
         </ul>
       </section>
@@ -279,22 +287,6 @@ function Aksi({ tahun, bulan }: { tahun: number; bulan: number }) {
                   <Button size="sm" variant="outline" onClick={() => go(`/admin/surat-rw?kejadian=${k.id}`)}>Buat surat</Button>
                 </div>
               )}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section>
-        <h3 className="font-semibold mb-2">Usulan koreksi dari RT</h3>
-        <ul className="text-sm divide-y border rounded-lg">
-          {koreksi?.filter((k) => k.status === "baru").length === 0 && <li className="p-2 text-muted-foreground">Tidak ada.</li>}
-          {koreksi?.filter((k) => k.status === "baru").map((k) => (
-            <li key={k.id} className="p-2 flex flex-wrap justify-between gap-2">
-              <span>{rt2(k.rt_pengusul)} · {k.objek} #{k.objek_id}: {k.uraian}</span>
-              <span className="flex gap-2">
-                <Button size="sm" onClick={() => jalankan(() => wil(`/api/wilayah/rw/koreksi/${k.id}/putuskan`, { ...RW, body: { terima: true, jawaban: prompt("Jawaban untuk RT:") ?? "Diterima" } }))}>Terima</Button>
-                <Button size="sm" variant="outline" onClick={() => { const j = prompt("Alasan menolak:"); if (j) jalankan(() => wil(`/api/wilayah/rw/koreksi/${k.id}/putuskan`, { ...RW, body: { terima: false, jawaban: j } })); }}>Tolak</Button>
-              </span>
             </li>
           ))}
         </ul>

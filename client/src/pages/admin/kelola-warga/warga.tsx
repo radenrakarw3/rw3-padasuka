@@ -74,7 +74,7 @@ export default function Warga() {
     return (
       <div>
         <Judul kembali={() => setTambah(false)}>Keluarga baru</Judul>
-        <KeluargaBaru selesai={(id) => go(`/rt/keluarga/${id}?langkah=anggota`)} />
+        <KeluargaBaru selesai={(id) => go(`/keluarga/${id}?langkah=anggota`)} />
       </div>
     );
   }
@@ -82,7 +82,7 @@ export default function Warga() {
   return (
     <div>
       <Judul sub={aksi === "catat" ? "Pilih keluarga yang berubah" : perlu === "rumah" ? "Keluarga yang belum dihubungkan ke rumah" : perlu === "cek" ? "Buka keluarga untuk mengecek data lama" : undefined}>
-        Warga
+        Data warga & KK
       </Judul>
       <input value={cari} onChange={(e) => setCari(e.target.value)} placeholder="Cari nama kepala keluarga atau alamat…"
         className="w-full min-h-[56px] rounded-2xl border-2 border-gray-300 px-4 text-lg bg-white mb-3" aria-label="Cari" />
@@ -93,7 +93,7 @@ export default function Warga() {
       <ul className="bg-white rounded-2xl border-2 border-gray-200 divide-y-2 divide-gray-100">
         {daftar.map((k) => (
           <li key={k.id}>
-            <button type="button" onClick={() => go(`/rt/keluarga/${k.id}`)} className="w-full min-h-[76px] px-4 py-3 flex items-center gap-3 text-left active:bg-gray-50">
+            <button type="button" onClick={() => go(`/keluarga/${k.id}`)} className="w-full min-h-[76px] px-4 py-3 flex items-center gap-3 text-left active:bg-gray-50">
               <span className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold text-white shrink-0" style={{ backgroundColor: HIJAU }}>{inisial(k.kepala)}</span>
               <span className="flex-1 min-w-0">
                 <span className="block text-lg font-semibold truncate">{k.kepala ?? "Kepala keluarga belum dicatat"}</span>

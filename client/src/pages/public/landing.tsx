@@ -1,4 +1,4 @@
-import { Headphones, QrCode, UserCog } from "lucide-react";
+import { Headphones, QrCode } from "lucide-react";
 import { PublicKioskLayout } from "@/components/public-kiosk-layout";
 import { ServiceCard } from "@/components/gov/service-card";
 import { FeatureExplain } from "@/components/gov/feature-explain";
@@ -43,14 +43,6 @@ export default function PublicLanding() {
       />
       <Visitrw3VisaCard />
       <Rw3bizCard />
-      <ServiceCard
-        href="/rt"
-        icon={UserCog}
-        eyebrow="Khusus pengurus"
-        title="Portal Ketua RT"
-        description="Masuk dengan PIN untuk mengelola data warga, laporan bulanan, dan kartu QR"
-        variant="glass"
-      />
     </PublicKioskLayout>
   );
 }

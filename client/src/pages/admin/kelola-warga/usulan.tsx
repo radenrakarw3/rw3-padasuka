@@ -112,7 +112,6 @@ function Periksa({ id }: { id: number }) {
       : { aksi, catatan };
     const r = await wil<{ diterapkan: number }>(`/api/wilayah/rt/usulan/${id}/putuskan`, { body });
     await qc.invalidateQueries({ queryKey: ["/api/wilayah/rt/usulan"] });
-    await qc.invalidateQueries({ queryKey: ["/api/wilayah/rt/antrean"] });
     await qc.invalidateQueries({ queryKey: [`/api/wilayah/keluarga/${kkTujuan}`] });
     await qc.invalidateQueries({ queryKey: ["/api/wilayah/keluarga"] });
     return r;
@@ -130,7 +129,7 @@ function Periksa({ id }: { id: number }) {
     const cocokKk = (daftarKk ?? []).filter((k) => !q || (k.kepala ?? "").toLowerCase().includes(q) || k.alamat.toLowerCase().includes(q)).slice(0, 20);
     return (
       <div className="space-y-4">
-        <Judul kembali={() => go("/rt/usulan")} sub={`${asal} · ${new Date(usulan.dibuat).toLocaleDateString("id-ID")}`}>Keluarga belum terdaftar</Judul>
+        <Judul kembali={() => go("/usulan")} sub={`${asal} · ${new Date(usulan.dibuat).toLocaleDateString("id-ID")}`}>Keluarga belum terdaftar</Judul>
         <Pesan>
           Alamat: <b>{kb?.alamat}{kb?.noUnit ? ` No. ${kb.noUnit}` : ""}</b><br />
           Anggota: {usulan.isi.anggota.map((a) => `${a.nama} (${a.hubungan})`).join(", ")}
@@ -165,7 +164,7 @@ function Periksa({ id }: { id: number }) {
                   pilihan={[{ nilai: "klarifikasi", label: "Minta keluarga memperbaiki" }, { nilai: "tolak", label: "Tolak" }]} />
                 <IsianPanjang label="Pesan untuk keluarga (wajib)" nilai={catatan} onChange={setCatatan} />
                 {error && <Pesan jenis="error">{error}</Pesan>}
-                <TombolBesar memuat={mengirim} disabled={catatan.trim().length < 3} onClick={async () => { const r = await kirim(); if (r) go("/rt/usulan"); }}>Simpan keputusan</TombolBesar>
+                <TombolBesar memuat={mengirim} disabled={catatan.trim().length < 3} onClick={async () => { const r = await kirim(); if (r) go("/usulan"); }}>Simpan keputusan</TombolBesar>
               </>
             )}
           </>
@@ -178,7 +177,7 @@ function Periksa({ id }: { id: number }) {
 
   return (
     <div className="space-y-4">
-      <Judul kembali={() => go("/rt/usulan")} sub={`${asal} · ${new Date(usulan.dibuat).toLocaleDateString("id-ID")}`}>Periksa isian warga</Judul>
+      <Judul kembali={() => go("/usulan")} sub={`${asal} · ${new Date(usulan.dibuat).toLocaleDateString("id-ID")}`}>Periksa isian warga</Judul>
       {keluargaBaru && (
         <Pesan jenis="peringatan">
           Isian dicocokkan ke KK yang dipilih/didaftarkan. Setelah diterima, tambahkan anggotanya (dengan NIK) di halaman keluarga.{" "}
@@ -218,7 +217,7 @@ function Periksa({ id }: { id: number }) {
           <IsianPanjang label={aksi === "terima" ? "Catatan (boleh kosong)" : "Pesan untuk keluarga (wajib)"} nilai={catatan} onChange={setCatatan} />
           {error && <Pesan jenis="error">{error}</Pesan>}
           <TombolBesar memuat={mengirim} disabled={aksi !== "terima" && catatan.trim().length < 3}
-            onClick={async () => { const r = await kirim(); if (r) go(aksi === "terima" ? `/rt/keluarga/${kkTujuan}${keluargaBaru ? "?langkah=anggota" : ""}` : "/rt/usulan"); }}>
+            onClick={async () => { const r = await kirim(); if (r) go(aksi === "terima" ? `/keluarga/${kkTujuan}${keluargaBaru ? "?langkah=anggota" : ""}` : "/usulan"); }}>
             Simpan keputusan
           </TombolBesar>
         </>
@@ -236,7 +235,7 @@ export default function Usulan({ id }: { id?: number }) {
   if (id) return <Periksa id={id} />;
   return (
     <div className="space-y-4">
-      <Judul kembali={() => go("/rt")}>Isian warga</Judul>
+      <Judul kembali={() => go("/warga")}>Isian warga</Judul>
       <PilihTombol label="Tampilkan" belumTahu={false} nilai={status} onChange={(v) => v && setStatus(v)}
         pilihan={[{ nilai: "menunggu", label: "Perlu diperiksa" }, { nilai: "semua", label: "Semua" }]} />
       {isLoading && <Memuat />}
@@ -245,7 +244,7 @@ export default function Usulan({ id }: { id?: number }) {
       <ul className="bg-white rounded-2xl border-2 border-gray-200 divide-y-2 divide-gray-100">
         {data?.map((u) => (
           <li key={u.id}>
-            <button type="button" onClick={() => go(`/rt/usulan/${u.id}`)} className="w-full min-h-[72px] px-4 py-3 flex items-center gap-3 text-left">
+            <button type="button" onClick={() => go(`/usulan/${u.id}`)} className="w-full min-h-[72px] px-4 py-3 flex items-center gap-3 text-left">
               <span className="flex-1">
                 <span className="block text-lg font-semibold">
                   {u.keluarga_baru ? `Keluarga baru · ${u.alamat}` : u.kepala ?? "Keluarga"}

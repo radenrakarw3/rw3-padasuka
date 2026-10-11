@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useKirimSekali, wil } from "@/lib/wilayah-api";
-import { useRtjuaraAuth } from "@/lib/rtjuara-auth";
+import { useRtKelola } from "./konteks";
+import { WILAYAH_RT_NUMBERS } from "@shared/wilayah";
 import { BarisRingkas, IsianTeks, Judul, Langkah, Memuat, Pesan, PilihTombol, TombolBesar, rt2 } from "@/components/wilayah/ui";
 
 interface Serah {
@@ -11,7 +12,7 @@ interface Serah {
 }
 
 function Ajukan({ kkId, selesai, batal }: { kkId: number; selesai: () => void; batal: () => void }) {
-  const { sesi } = useRtjuaraAuth();
+  const rtKelola = useRtKelola();
   const { data } = useQuery<{ anggota: { id: number; nama: string }[] }>({ queryKey: [`/api/wilayah/keluarga/${kkId}`], queryFn: () => wil(`/api/wilayah/keluarga/${kkId}`) });
   const [i, setI] = useState(1);
   const [jenis, setJenis] = useState<"kk" | "warga">("kk");
@@ -32,7 +33,7 @@ function Ajukan({ kkId, selesai, batal }: { kkId: number; selesai: () => void; b
             pilihan={(data?.anggota ?? []).map((a) => ({ nilai: String(a.id), label: a.nama }))} />
         )}
         <PilihTombol label="Pindah ke RT" belumTahu={false} kolom={3} nilai={rtTujuan ? String(rtTujuan) : null} onChange={(v) => setRtTujuan(v ? Number(v) : null)}
-          pilihan={[1, 2, 3, 4, 5, 6, 7].filter((n) => n !== sesi?.rt).map((n) => ({ nilai: String(n), label: rt2(n) }))} />
+          pilihan={WILAYAH_RT_NUMBERS.filter((n) => n !== rtKelola).map((n) => ({ nilai: String(n), label: rt2(n) }))} />
         <IsianTeks label="Keterangan (boleh kosong)" nilai={alasan} onChange={setAlasan} />
       </Langkah>
     );
@@ -87,14 +88,13 @@ export default function Pindah() {
   const segar = async (p: string) => {
     await qc.invalidateQueries({ queryKey: ["/api/wilayah/serah-terima"] });
     await qc.invalidateQueries({ queryKey: ["/api/wilayah/keluarga"] });
-    await qc.invalidateQueries({ queryKey: ["/api/wilayah/rt/antrean"] });
     setAjukan(false);
     setInfo(p);
   };
-  if (ajukan && kk) return <div><Judul kembali={() => go(`/rt/keluarga/${kk}`)}>Pindah RT</Judul><Ajukan kkId={Number(kk)} batal={() => go(`/rt/keluarga/${kk}`)} selesai={() => segar("Pengajuan pindah terkirim.")} /></div>;
+  if (ajukan && kk) return <div><Judul kembali={() => go(`/keluarga/${kk}`)}>Pindah RT</Judul><Ajukan kkId={Number(kk)} batal={() => go(`/keluarga/${kk}`)} selesai={() => segar("Pengajuan pindah terkirim.")} /></div>;
   return (
     <div className="space-y-4">
-      <Judul kembali={() => go("/rt")}>Pindah RT</Judul>
+      <Judul kembali={() => go("/warga")}>Pindah RT</Judul>
       {info && <Pesan jenis="sukses">{info}</Pesan>}
       <Pesan>Untuk mengajukan pindah, buka keluarga di menu Warga lalu pilih “Pindah ke RT lain”.</Pesan>
       {isLoading && <Memuat />}

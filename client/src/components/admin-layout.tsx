@@ -6,7 +6,7 @@ import {
   CalendarDays,
   ClipboardList,
   FileText,
-  KeyRound,
+  Inbox,
   LogOut,
   Megaphone,
   Menu,
@@ -14,6 +14,9 @@ import {
   Settings,
   Users,
   X,
+  QrCode,
+  Truck,
+  UserPen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useVisitrw3AdminCounts } from "@/hooks/use-visitrw3-admin-counts";
@@ -24,11 +27,10 @@ import logoGold from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
 type NavItem = { path: string; icon: typeof Megaphone; label: string; badge?: number };
 type NavGroup = { judul?: string; items: NavItem[] };
 
-export const ADMIN_AKUN_RT_PATH = "/admin/akun-rt";
-
 function isNavActive(location: string, search: string, path: string): boolean {
   const [base, query] = path.split("?");
   if (base === "/admin/dashboard") return location === base;
+  if (base === "/admin/kelola-warga/warga" && location.startsWith("/admin/kelola-warga/keluarga/")) return true;
   if (query) return location === base && search === query;
   return location === base || location.startsWith(`${base}/`);
 }
@@ -111,7 +113,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       judul: "Kependudukan",
       items: [
         { path: "/admin/kependudukan", icon: Users, label: "Ringkasan warga" },
-        { path: ADMIN_AKUN_RT_PATH, icon: KeyRound, label: "Akun & PIN Ketua RT" },
+        { path: "/admin/kelola-warga/warga", icon: UserPen, label: "Data warga & KK" },
+        { path: "/admin/kelola-warga/usulan", icon: Inbox, label: "Isian QR warga" },
+        { path: "/admin/kelola-warga/cetak", icon: QrCode, label: "Cetak kartu QR" },
+        { path: "/admin/kelola-warga/pindah", icon: Truck, label: "Pindah RT" },
       ],
     },
   ];

@@ -6,7 +6,21 @@ export class WilayahApiError extends Error {
   }
 }
 
-type Opsi = { method?: string; body?: unknown; peran?: "rt" | "rw"; signal?: AbortSignal };
+type Peran = "rt" | "rw";
+type Opsi = { method?: string; body?: unknown; peran?: Peran; rt?: number; signal?: AbortSignal };
+
+let rtKelola: number | null = null;
+
+/** RT yang sedang dikelola admin RW. Dikirim sebagai X-Wilayah-Rt kecuali permintaan berperan "rw". */
+export function aturRtKelola(rt: number | null) {
+  rtKelola = rt;
+}
+
+function headerPeran(peran?: Peran, rt?: number): Record<string, string> {
+  if (peran === "rw") return { "X-Wilayah-Peran": "rw" };
+  const r = rt ?? rtKelola;
+  return r ? { "X-Wilayah-Rt": String(r) } : {};
+}
 
 /** Panggilan API wilayah. Selalu melempar error bila gagal — UI tidak boleh menyatakan berhasil. */
 export async function wil<T = any>(path: string, opsi: Opsi = {}): Promise<T> {
@@ -17,7 +31,7 @@ export async function wil<T = any>(path: string, opsi: Opsi = {}): Promise<T> {
       credentials: "include",
       headers: {
         ...(opsi.body !== undefined ? { "Content-Type": "application/json" } : {}),
-        ...(opsi.peran ? { "X-Wilayah-Peran": opsi.peran } : {}),
+        ...headerPeran(opsi.peran, opsi.rt),
       },
       body: opsi.body !== undefined ? JSON.stringify(opsi.body) : undefined,
       signal: opsi.signal,
@@ -37,8 +51,8 @@ export async function wil<T = any>(path: string, opsi: Opsi = {}): Promise<T> {
   return data as T;
 }
 
-export async function unduh(path: string, namaCadangan: string, peran?: "rt" | "rw") {
-  const res = await fetch(path, { credentials: "include", headers: peran ? { "X-Wilayah-Peran": peran } : {} });
+export async function unduh(path: string, namaCadangan: string, peran?: Peran) {
+  const res = await fetch(path, { credentials: "include", headers: headerPeran(peran) });
   if (!res.ok) {
     const t = await res.text();
     let m = `Gagal mengunduh (kode ${res.status})`;
@@ -61,10 +75,10 @@ export async function unduh(path: string, namaCadangan: string, peran?: "rt" | "
 }
 
 /** Buka berkas (PDF/foto) berotorisasi di tab baru. Tab dibuka dulu agar tidak diblokir browser. */
-export async function bukaBerkas(path: string, peran?: "rt" | "rw") {
+export async function bukaBerkas(path: string, peran?: Peran) {
   const w = window.open("", "_blank");
   try {
-    const res = await fetch(path, { credentials: "include", headers: peran ? { "X-Wilayah-Peran": peran } : {} });
+    const res = await fetch(path, { credentials: "include", headers: headerPeran(peran) });
     if (!res.ok) {
       let m = `Gagal membuka berkas (kode ${res.status})`;
       try {

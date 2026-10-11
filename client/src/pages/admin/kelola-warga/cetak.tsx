@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { Printer, QrCode } from "lucide-react";
 import { wil } from "@/lib/wilayah-api";
-import { useRtjuaraAuth } from "@/lib/rtjuara-auth";
+import { useRtKelola } from "./konteks";
 import { Judul, Memuat, Pesan, PilihTombol, TombolBesar, rt2 } from "@/components/wilayah/ui";
 import { FAKTA_BY_KUNCI, FAKTA_FORM_KK, FAKTA_FORM_RUMAH, FAKTA_FORM_WARGA, FAKTA_FORM_USAHA, HUBUNGAN_KELUARGA } from "@shared/wilayah";
 import logoBlack from "@assets/RW03-Cimahi-Logo-Black.svg";
@@ -110,7 +110,7 @@ function FormulirKertas() {
 export default function Cetak() {
   const [, go] = useLocation();
   const params = new URLSearchParams(useSearch());
-  const { sesi } = useRtjuaraAuth();
+  const rtKelola = useRtKelola();
   const kkParam = params.get("kk");
   const [mode, setMode] = useState<"kartu" | "formulir">("kartu");
   const [kartu, setKartu] = useState<Kartu[] | null>(null);
@@ -148,7 +148,7 @@ export default function Cetak() {
         @media print { body * { visibility: hidden; } #area-cetak, #area-cetak * { visibility: visible; } #area-cetak { position: absolute; left: 0; top: 0; } }
       `}</style>
       <div className="print:hidden space-y-4">
-        <Judul kembali={() => go("/rt")}>Cetak pemberitahuan</Judul>
+        <Judul kembali={() => go("/warga")}>Cetak pemberitahuan</Judul>
         <PilihTombol label="Yang dicetak" belumTahu={false} nilai={mode} onChange={(v) => v && setMode(v as typeof mode)}
           pilihan={[{ nilai: "kartu", label: "Kartu QR" }, { nilai: "formulir", label: "Formulir kertas" }]} />
         {mode === "kartu" && (
@@ -164,7 +164,7 @@ export default function Cetak() {
       </div>
       <div id="area-cetak" className="mt-4 overflow-x-auto">
         {mode === "kartu" && halaman.map((h, i) => (
-          <div key={i} className="lembar-a4 bg-white">{h.map((k) => <KartuA5 key={k.kkId} k={k} namaKetua={sesi?.namaKetua ?? null} />)}</div>
+          <div key={i} className="lembar-a4 bg-white">{h.map((k) => <KartuA5 key={k.kkId} k={k} namaKetua={null} />)}</div>
         ))}
         {mode === "formulir" && <FormulirKertas />}
       </div>

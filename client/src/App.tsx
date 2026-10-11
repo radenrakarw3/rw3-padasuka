@@ -38,12 +38,11 @@ const Rw3bizPerpanjang = lazy(() => import("@/pages/rw3biz/perpanjang"));
 const AdminLayout = lazy(() => import("@/components/admin-layout"));
 
 const AdminKependudukanRingkasan = lazy(() => import("@/pages/admin/kependudukan-ringkasan"));
-const AdminAkunRt = lazy(() => import("@/pages/admin/akun-rt"));
+const AdminKelolaWarga = lazy(() => import("@/pages/admin/kelola-warga"));
 
 const AdminSuratRw = lazy(() => import("@/pages/admin/surat-rw"));
 const AdminSuratSakti = lazy(() => import("@/pages/admin/surat-sakti"));
 const AdminRwDashboard = lazy(() => import("@/pages/admin/rw-dashboard"));
-const RtApp = lazy(() => import("@/pages/rt/app"));
 const PublicIsi = lazy(() => import("@/pages/public/isi"));
 
 const AdminVisitrw3Landing = lazy(() => import("@/pages/admin/visitrw3-landing"));
@@ -304,9 +303,11 @@ function AdminRoutes() {
           <Switch>
 
         <Route path="/admin/kependudukan" component={AdminKependudukanRingkasan} />
-        <Route path="/admin/akun-rt" component={AdminAkunRt} />
-        <Route path="/admin/rtjuara/:rest*">{() => <Redirect to="/admin/akun-rt" />}</Route>
-        <Route path="/admin/rtjuara">{() => <Redirect to="/admin/akun-rt" />}</Route>
+        <Route path="/admin/kelola-warga/*" component={AdminKelolaWarga} />
+        <Route path="/admin/kelola-warga" component={AdminKelolaWarga} />
+        <Route path="/admin/akun-rt">{() => <Redirect to="/admin/kelola-warga" />}</Route>
+        <Route path="/admin/rtjuara/:rest*">{() => <Redirect to="/admin/kelola-warga" />}</Route>
+        <Route path="/admin/rtjuara">{() => <Redirect to="/admin/kelola-warga" />}</Route>
 
         <Route path="/admin/dashboard" component={AdminRwDashboard} />
 
@@ -504,16 +505,8 @@ function AppContent() {
     return <BlusukanrwApp />;
   }
 
-  if (location.startsWith("/rtjuara")) {
-    return <Redirect to="/rt" />;
-  }
-
-  if (location === "/rt" || location.startsWith("/rt/")) {
-    return (
-      <Suspense fallback={<PageLoader />}>
-        <RtApp />
-      </Suspense>
-    );
+  if (location.startsWith("/rtjuara") || location === "/rt" || location.startsWith("/rt/")) {
+    return <Redirect to="/" />;
   }
 
   if (location === "/isi" || location.startsWith("/isi/")) {

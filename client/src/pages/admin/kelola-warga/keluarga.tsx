@@ -171,7 +171,6 @@ export default function Keluarga({ id }: { id: number }) {
   const segarkan = async (pesan?: string) => {
     await qc.invalidateQueries({ queryKey: key });
     await qc.invalidateQueries({ queryKey: ["/api/wilayah/keluarga"] });
-    await qc.invalidateQueries({ queryKey: ["/api/wilayah/rt/antrean"] });
     setMode({ m: "lihat" });
     if (pesan) setInfo(pesan);
     window.scrollTo(0, 0);
@@ -219,7 +218,7 @@ export default function Keluarga({ id }: { id: number }) {
     setAksiErr(null);
     try {
       await wil("/api/wilayah/rt/qr/cetak", { body: { kkIds: [d.kk.id], ganti: true } });
-      go(`/rt/cetak?kk=${d.kk.id}`);
+      go(`/cetak?kk=${d.kk.id}`);
     } catch (e) {
       setAksiErr((e as Error).message);
     }
@@ -227,12 +226,12 @@ export default function Keluarga({ id }: { id: number }) {
 
   return (
     <div className="space-y-4">
-      <Judul kembali={() => go("/rt/warga")} sub={`${d.kk.alamat}${d.kk.noUnit ? ` No. ${d.kk.noUnit}` : ""}`}>{kepala}</Judul>
+      <Judul kembali={() => go("/warga")} sub={`${d.kk.alamat}${d.kk.noUnit ? ` No. ${d.kk.noUnit}` : ""}`}>{kepala}</Judul>
       {info && <Pesan jenis="sukses">{info}</Pesan>}
       {aksiErr && <Pesan jenis="error">{aksiErr}</Pesan>}
 
       {d.usulan.some((u) => u.status === "menunggu") && (
-        <KartuMenu ikon={<CheckCircle2 className="w-7 h-7" />} judul="Ada isian baru dari keluarga" sub="Periksa dan putuskan" onClick={() => go(`/rt/usulan/${d.usulan.find((u) => u.status === "menunggu")!.id}`)} />
+        <KartuMenu ikon={<CheckCircle2 className="w-7 h-7" />} judul="Ada isian baru dari keluarga" sub="Periksa dan putuskan" onClick={() => go(`/usulan/${d.usulan.find((u) => u.status === "menunggu")!.id}`)} />
       )}
 
       {perluCek.length > 0 && (
@@ -280,9 +279,9 @@ export default function Keluarga({ id }: { id: number }) {
       <section className="space-y-3">
         <h2 className="text-xl font-bold">QR pemberitahuan</h2>
         <p className="text-lg">{d.qr ? `Kode kartu ${d.qr.kodeKartu} · berlaku sampai ${new Date(d.qr.berlakuSampai).toLocaleDateString("id-ID")}` : "Belum dibuat."}</p>
-        <TombolBesar ikon={<QrCode className="w-6 h-6" />} onClick={() => go(`/rt/cetak?kk=${d.kk.id}`)}>Cetak satu</TombolBesar>
+        <TombolBesar ikon={<QrCode className="w-6 h-6" />} onClick={() => go(`/cetak?kk=${d.kk.id}`)}>Cetak satu</TombolBesar>
         {d.qr && <TombolBesar varian="kedua" ikon={<RefreshCw className="w-6 h-6" />} onClick={gantiQr}>Ganti QR (kartu hilang)</TombolBesar>}
-        <TombolBesar varian="kedua" ikon={<Truck className="w-6 h-6" />} onClick={() => go(`/rt/pindah?kk=${d.kk.id}`)}>Pindah ke RT lain</TombolBesar>
+        <TombolBesar varian="kedua" ikon={<Truck className="w-6 h-6" />} onClick={() => go(`/pindah?kk=${d.kk.id}`)}>Pindah ke RT lain</TombolBesar>
       </section>
     </div>
   );

@@ -48,9 +48,6 @@ declare module "express-session" {
     adminNama?: string;
     blusukanAuth?: boolean;
     blusukanLoginAt?: number;
-    rtjuaraRt?: number;        // RT JUARA — nomor RT ketua RT yang sedang login
-    rtjuaraNama?: string;
-    rtjuaraLoginAt?: number;
   }
 }
 
@@ -154,17 +151,6 @@ export async function registerRoutes(
   // Endpoint admin RW3BIZ membaca req.session — wajib didaftarkan setelah middleware session.
   registerRw3bizRoutes(app);
 
-  // Master warga/KK dikelola Ketua RT (portal /rt). Endpoint lama milik admin RW & Blusukan hanya baca.
-  // IZINKAN_RW_EDIT_MASTER=true hanya untuk masa transisi darurat.
-  const { tolakUbahMasterOlehRw } = await import("./wilayah-auth");
-  const MASTER_LAMA = /^\/api\/(kk|warga|blusukan\/kk|blusukan\/warga)(\/\d+)?\/?$/;
-  app.use((req, res, next) => {
-    if (process.env.IZINKAN_RW_EDIT_MASTER === "true") return next();
-    if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") return next();
-    if (MASTER_LAMA.test(req.path)) return tolakUbahMasterOlehRw(req, res);
-    next();
-  });
-
   const { pastikanSkemaWilayah } = await import("./wilayah-skema");
   await pastikanSkemaWilayah();
   const { registerWilayahRoutes } = await import("./wilayah-routes");
@@ -172,9 +158,6 @@ export async function registerRoutes(
 
   const { registerBlusukanRoutes } = await import("./blusukan-routes");
   await registerBlusukanRoutes(app);
-
-  const { registerRtjuaraRoutes } = await import("./rtjuara-routes");
-  await registerRtjuaraRoutes(app);
   const pdfTempPublicDir = path.join(uploadsDir, "pdf-temp");
   fs.mkdirSync(pdfTempPublicDir, { recursive: true });
   const pdfTempTokens = new Map<string, { filePath: string; expires: number }>();
