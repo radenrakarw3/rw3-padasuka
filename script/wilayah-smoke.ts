@@ -10,7 +10,6 @@
  */
 import fs from "fs";
 import path from "path";
-import * as XLSX from "xlsx";
 
 process.env.QR_TOKEN_SECRET ||= "uji-rahasia-token-qr-minimal-32-karakter";
 const DB_UJI = process.env.WILAYAH_TEST_DATABASE_URL;
@@ -65,100 +64,53 @@ function semuaFile(dir: string, ext: RegExp, out: string[] = []): string[] {
 }
 
 async function main() {
-  const { INDIKATOR_KECAMATAN, BAGIAN_INDIKATOR, JUMLAH_INDIKATOR_RESMI, validasiRegistry } = await import("@shared/indikator-kecamatan");
-  const { hitungLaporan, hitungTotal } = await import("@shared/wilayah-hitung");
+  const W = await import("@shared/wilayah");
   const { looksLikeNik, maskNik } = await import("@shared/kontak");
   const { formatNomorSuratRw, JENIS_SURAT_RW } = await import("@shared/surat-nomor");
   const qr = await import("../server/wilayah-qr");
-  const lap = await import("../server/wilayah-laporan");
 
-  console.log("\n[Registry 119 indikator]");
-  await uji("jumlah indikator 119 dan per bagian sesuai format kecamatan", () => {
-    sama(INDIKATOR_KECAMATAN.length, JUMLAH_INDIKATOR_RESMI, "jumlah");
-    const harap: Record<string, number> = { B: 4, C: 13, D: 4, E: 11, F: 18, G: 24, H: 12, I: 7, J: 3, K: 5, L: 15, M: 3 };
-    for (const b of BAGIAN_INDIKATOR) {
-      sama(INDIKATOR_KECAMATAN.filter((i) => i.bagian === b.kode).length, harap[b.kode], `bagian ${b.kode}`);
-    }
-    sama(validasiRegistry().length, 0, "validasiRegistry");
+  console.log("\n[Standar data RW 03]");
+  await uji("isi awal: kunci unik berawalan s_, sasaran kk/warga, enam kelompok pilihan RW", () => {
+    const kunci = W.STANDAR_AWAL.map((d) => d.kunci);
+    sama(new Set(kunci).size, kunci.length, "kunci ganda");
+    pastikan(kunci.every((k) => /^s_[a-z0-9_]+$/.test(k)), "kunci tanpa awalan s_");
+    pastikan(W.STANDAR_AWAL.every((d) => d.subjek === "kk" || d.subjek === "warga"), "sasaran asing");
+    sama(JSON.stringify([...new Set(W.STANDAR_AWAL.map((d) => d.kelompok))].sort()), JSON.stringify([...W.KELOMPOK_STANDAR].sort()), "kelompok");
   });
-  await uji("setiap indikator punya sumber, pengisi, verifikator, dedup", () => {
-    for (const i of INDIKATOR_KECAMATAN) {
-      pastikan(i.sumber?.trim() && i.pengisi && i.pemverifikasi && i.dedup?.trim(), `indikator ${i.no} ${i.kode} tidak lengkap`);
-    }
-  });
-  await uji("lansia memakai batas 60 tahun", () => {
-    const l = INDIKATOR_KECAMATAN.find((i) => i.kode === "C.12")!;
-    pastikan(l.rumus.t === "umur" && l.rumus.minBulan === 720, "C.12 bukan 60+");
-  });
-
-  console.log("\n[Mesin hitung]");
-  const ACUAN = "2026-10-31";
-  const opsi = (rt: number | null) => ({ rt, tahun: 2026, bulan: 10, acuan: ACUAN });
-  const indFaktaKk = INDIKATOR_KECAMATAN.find((i) => i.rumus.t === "fakta_kk" && i.status === "siap")!;
-  const indListrik = INDIKATOR_KECAMATAN.find((i) => i.rumus.t === "fakta_rumah")!;
-  const indPosyandu = INDIKATOR_KECAMATAN.find((i) => i.rumus.t === "fasilitas" && i.rumus.jenis === "posyandu" && !i.rumus.kunci && !i.rumus.jumlahkan)!;
-  const nilaiListrik = (indListrik.rumus as { nilai: string[] }).nilai[0];
-  const dsDasar = () => ({
-    kk: [{ id: 1, rt: 1 }, { id: 2, rt: 1 }],
-    warga: [
-      { id: 11, kkId: 1, rt: 1, jk: "P" as const, tanggalLahir: "2026-05-15" },
-      { id: 12, kkId: 1, rt: 1, jk: "L" as const, tanggalLahir: "2025-10-31" },
-      { id: 21, kkId: 2, rt: 1, jk: "L" as const, tanggalLahir: "1966-10-31" },
-      { id: 22, kkId: 2, rt: 1, jk: "P" as const, tanggalLahir: "1966-11-30" },
-    ],
-    rumah: [{ id: 100, rt: 1 }],
-    usaha: [],
-    fasilitas: [{ id: 500, jenis: "posyandu", rtLokasi: 1, pengelola: "rw" as const, rtLayanan: [1, 2], mulai: null, sampai: null }],
-    kelompok: [],
-    kegiatan: [],
-    peserta: [],
-    kejadian: [],
-    fakta: [{ subjek: "rumah" as const, subjekId: 100, kunci: "listrik", nilai: nilaiListrik, mulai: "2026-01-01", sampai: null }],
-    konfirmasi: [],
-  });
-  const sel = (h: ReturnType<typeof hitungLaporan>, kode: string) => h.find((x) => x.kode === kode)!;
-
-  await uji("hasil selalu 119 baris", () => sama(hitungLaporan(dsDasar(), opsi(1)).length, 119, "baris"));
-  await uji("bayi 0–11 bulan: 5 bulan dihitung, tepat 12 bulan tidak", () => sama(sel(hitungLaporan(dsDasar(), opsi(1)), "C.5").nilai, 1, "C.5"));
-  await uji("lansia: tepat 60 tahun dihitung, 59 tahun 11 bulan tidak", () => sama(sel(hitungLaporan(dsDasar(), opsi(1)), "C.12").nilai, 1, "C.12"));
-  await uji("belum diketahui ≠ 0 (tanpa jawaban → null)", () => {
-    const h = hitungLaporan(dsDasar(), opsi(1)).find((x) => x.id === indFaktaKk.id)!;
-    sama(h.nilai, null, "nilai");
-    sama(h.status, "belum_diketahui", "status");
-  });
-  await uji("semua KK menjawab (tidak cocok) → 0 lengkap", () => {
-    const ds = dsDasar();
-    const r = indFaktaKk.rumus as { kunci: string; nilai: string[] };
-    const nilai = r.nilai.includes("tidak") ? "ya" : "tidak";
-    for (const id of [1, 2]) ds.fakta.push({ subjek: "kk" as any, subjekId: id, kunci: r.kunci, nilai, mulai: "2026-01-01", sampai: null });
-    const h = hitungLaporan(ds, opsi(1)).find((x) => x.id === indFaktaKk.id)!;
-    sama(h.nilai, 0, "nilai");
-    sama(h.status, "lengkap", "status");
-  });
-  await uji("dua KK dalam satu rumah dihitung satu rumah", () => {
-    const h = hitungLaporan(dsDasar(), opsi(1)).find((x) => x.id === indListrik.id)!;
-    sama(h.nilai, 1, "rumah");
-    sama(sel(hitungLaporan(dsDasar(), opsi(1)), "B.2").nilai, 2, "KK tetap 2");
-  });
-  await uji("fasilitas bersama RW dihitung sekali di rekap, tidak dobel ke RT", () => {
-    const rekap = hitungLaporan(dsDasar(), opsi(null)).find((x) => x.id === indPosyandu.id)!;
-    sama(rekap.nilai, 1, "rekap");
-    const rt1 = hitungLaporan(dsDasar(), opsi(1)).find((x) => x.id === indPosyandu.id)!;
-    sama(rt1.nilai, null, "sel RT");
-    sama(rt1.status, "needs_confirmation", "status RT");
-  });
-  await uji("indikator needs_confirmation tidak pernah memberi angka", () => {
-    for (const h of hitungLaporan(dsDasar(), opsi(1))) {
-      const ind = INDIKATOR_KECAMATAN.find((i) => i.id === h.id)!;
-      if (ind.status === "needs_confirmation") pastikan(h.nilai === null, `${ind.kode} memberi angka`);
+  await uji("isi awal: pilihan minimal dua, nilai unik, tanda perhatian sesuai pilihan", () => {
+    for (const d of W.STANDAR_AWAL) {
+      const sah = d.tipe === "yatidak" ? ["ya", "tidak"] : (d.pilihan ?? []).map((p) => p.nilai);
+      if (d.tipe === "pilihan" || d.tipe === "banyak") pastikan(sah.length >= 2 && new Set(sah).size === sah.length, `${d.kunci} pilihan`);
+      pastikan((d.perhatian ?? []).every((v) => sah.includes(v)), `${d.kunci} perhatian asing`);
     }
   });
-  await uji("RT lain tidak melihat warga RT 1", () => sama(sel(hitungLaporan(dsDasar(), opsi(2)), "B.1").nilai, 0, "B.1 RT2"));
-  await uji("TOTAL: kejadian dijumlah, populasi tidak, bulan kosong → null", () => {
-    sama(hitungTotal({ periode: "kejadian", status: "siap" }, [1, 2, 0, 3]).nilai, 6, "kejadian");
-    sama(hitungTotal({ periode: "kejadian", status: "siap" }, [1, null]).nilai, null, "kejadian ada null");
-    sama(hitungTotal({ periode: "stok", status: "siap" }, [10, 10, 10, 10]).nilai, null, "stok");
-    sama(hitungTotal({ periode: "kejadian", status: "needs_confirmation" }, [1]).nilai, null, "needs_confirmation");
+  const def = (k: string) => W.STANDAR_AWAL.find((d) => d.kunci === k)!;
+  await uji("validasi jawaban: pilih satu, pilih beberapa, ya/tidak, isian singkat", () => {
+    sama(W.validasiNilaiFakta(def("s_kondisi_rumah"), "rusak_berat"), null, "pilihan sah");
+    pastikan(W.validasiNilaiFakta(def("s_kondisi_rumah"), "roboh") !== null, "pilihan asal lolos");
+    sama(W.validasiNilaiFakta(def("s_bansos"), "pkh,bpnt"), null, "banyak sah");
+    pastikan(W.validasiNilaiFakta(def("s_bansos"), "pkh,pkh") !== null, "banyak ganda lolos");
+    pastikan(W.validasiNilaiFakta(def("s_bansos"), "pkh,emas") !== null, "banyak asing lolos");
+    pastikan(W.validasiNilaiFakta(def("s_air_cukup"), "mungkin") !== null, "ya/tidak asal lolos");
+    sama(W.validasiNilaiFakta(def("s_kontak_darurat"), "0812 3456 7890 (Bu Ani)"), null, "teks sah");
+    pastikan(W.validasiNilaiFakta(def("s_kontak_darurat"), "3277011234567890") !== null, "NIK di teks lolos");
+  });
+  await uji("tanda perhatian & label pilih beberapa", () => {
+    pastikan(W.kenaPerhatian(def("s_penyakit"), "tidak_ada,tbc"), "tbc tidak ditandai");
+    pastikan(!W.kenaPerhatian(def("s_penyakit"), "tidak_ada"), "tidak ada ditandai");
+    pastikan(!W.kenaPerhatian(def("s_penyakit"), null), "belum diketahui ditandai");
+    sama(W.labelNilaiFakta(def("s_bansos"), "pkh,blt"), "PKH, BLT", "label");
+  });
+  await uji("pertanyaan anggota menyesuaikan jenis kelamin dan usia (usia tak diketahui tetap tampil)", () => {
+    pastikan(!W.berlakuUntukWarga(def("s_hamil"), { jenisKelamin: "Laki-laki", umur: 30 }), "hamil untuk laki-laki");
+    pastikan(W.berlakuUntukWarga(def("s_hamil"), { jenisKelamin: "Perempuan", umur: 30 }), "hamil untuk perempuan 30");
+    pastikan(!W.berlakuUntukWarga(def("s_hamil"), { jenisKelamin: "Perempuan", umur: 70 }), "hamil untuk 70 th");
+    pastikan(W.berlakuUntukWarga(def("s_yatim"), { jenisKelamin: "Laki-laki", umur: null }), "usia tak diketahui");
+    pastikan(!W.berlakuUntukWarga(def("s_pekerjaan"), { jenisKelamin: "Laki-laki", umur: 4 }), "pekerjaan balita");
+  });
+  await uji("kelompok mengikuti urutan standar, kelompok baru di akhir", () => {
+    const g = W.kelompokkan([{ ...def("s_bansos"), kelompok: "Zzz baru" }, def("s_status_tinggal"), def("s_kondisi_rumah")]);
+    sama(g.map((x) => x.kelompok).join("|"), "Tempat tinggal & kontak|Rumah & fasilitas|Zzz baru", "urutan");
   });
 
   console.log("\n[Token QR & form usulan]");
@@ -181,18 +133,16 @@ async function main() {
   });
   const isiValid = {
     versiForm: 1 as const, namaPengisi: "Uji Pengisi", hubunganPengisi: "Kepala Keluarga", nomorHp: "081234567890",
-    rumahTangga: { air_bersih: "ya" },
+    rumahTangga: { s_internet: "ya" },
     anggota: [{ nama: "Uji Pengisi", hubungan: "Kepala Keluarga", jenisKelamin: "Laki-laki", tanggalLahir: "1980-01-01", jawaban: {} }],
-    usaha: [],
   };
   await uji("skema usulan menerima isian sah", () => {
     const r = qr.isiUsulanSchema.safeParse(isiValid);
     pastikan(r.success, JSON.stringify(!r.success && r.error.issues));
   });
-  await uji("skema usulan menolak pertanyaan asing, jawaban asal, dan NIK di kolom HP", () => {
-    pastikan(!qr.isiUsulanSchema.safeParse({ ...isiValid, rumahTangga: { nik: "1" } }).success, "kunci asing lolos");
-    pastikan(!qr.isiUsulanSchema.safeParse({ ...isiValid, rumahTangga: { air_bersih: "mungkin" } }).success, "nilai asal lolos");
+  await uji("skema usulan menolak NIK di kolom HP dan isian kosong", () => {
     pastikan(!qr.isiUsulanSchema.safeParse({ ...isiValid, nomorHp: "3277011234567890" }).success, "NIK lolos");
+    pastikan(!qr.isiUsulanSchema.safeParse({ ...isiValid, anggota: [] }).success, "tanpa anggota lolos");
   });
   await uji("batas laju menolak setelah kuota", () => {
     const k = `uji:${Date.now()}`;
@@ -200,7 +150,7 @@ async function main() {
     pastikan(qr.kenaBatas(k, 3, 60_000), "tidak ditolak");
   });
 
-  console.log("\n[Surat & ekspor]");
+  console.log("\n[Surat]");
   await uji("format nomor surat: urut/kode/RW03/bulan romawi/tahun untuk 8 jenis", () => {
     sama(JENIS_SURAT_RW.length, 8, "jumlah jenis");
     for (const j of JENIS_SURAT_RW) {
@@ -208,30 +158,6 @@ async function main() {
       pastikan(/^007\/[A-Z]+\/RW\.?03\/X\/2026$/.test(n) || /^0*7\/.+\/X\/2026$/.test(n), `format ${n}`);
     }
   });
-  await uji("XLSX: kolom NO SUB INDIKATOR SEPT OKT NOV DES TOTAL, 119 baris, sel kosong bukan 0, tanpa identitas", () => {
-    const hasil = hitungLaporan(dsDasar(), opsi(1));
-    const d = {
-      judul: "FORMAT LAPORAN RT TAHUN 2026", scope: "RT 01 / RW 03", tahun: 2026, bulan: [9, 10, 11, 12],
-      kolomBulan: ["SEPT", "OKT", "NOV", "DES"], bulanFinal: [true, true, true, true],
-      bagian: BAGIAN_INDIKATOR.map((b) => ({ kode: b.kode, judul: b.judul })),
-      baris: INDIKATOR_KECAMATAN.map((ind) => {
-        const h = hasil.find((x) => x.id === ind.id)!;
-        return { no: ind.no, bagian: ind.bagian, kode: ind.kode, label: ind.label, satuan: ind.satuan, nilai: [h.nilai, h.nilai, h.nilai, h.nilai], status: [h.status], total: null, catatanTotal: "", catatan: "" };
-      }),
-      dibuat: new Date().toISOString(),
-    };
-    const wb = XLSX.read(lap.eksporXlsx(d), { type: "buffer" });
-    const rows = XLSX.utils.sheet_to_json<(string | number)[]>(wb.Sheets.Laporan, { header: 1, defval: "" });
-    const hi = rows.findIndex((r) => r[0] === "NO");
-    sama(rows[hi].join("|"), "NO|SUB|INDIKATOR|SEPT|OKT|NOV|DES|TOTAL", "header");
-    const dataRows = rows.slice(hi + 1).filter((r) => typeof r[0] === "number");
-    sama(dataRows.length, 119, "baris indikator");
-    const barisBelum = dataRows.find((r) => r[1] === indFaktaKk.kode && r[2] === indFaktaKk.label)!;
-    sama(barisBelum[3], "", "belum diketahui tampil kosong");
-    const teks = JSON.stringify(rows);
-    pastikan(!/\d{16}/.test(teks) && !teks.includes("Uji"), "ada identitas di ekspor");
-  });
-
   console.log("\n[Pemeriksaan statis keamanan]");
   await uji("tidak ada generator QR eksternal", () => {
     const pola = /api\.qrserver|chart\.googleapis|quickchart\.io|goqr\.me/;
@@ -283,9 +209,8 @@ async function ujiDatabase() {
   const { PETA_JENIS } = await import("../shared/surat-sakti");
   draftUji = (kode, perihal, extra = {}) => ({ kodeJenis: kode, perihal, tanggalSurat: "2026-10-08", dataForm: contohData(PETA_JENIS[kode]), ...extra });
   hapusSuratUji = (await import("./surat-sakti-integrasi")).hapusSuratUji;
-  const lap = await import("../server/wilayah-laporan");
-  const { rows: cek } = await pool.query(`SELECT to_regclass('wil_fakta') AS t`);
-  if (!cek[0].t) {
+  const { rows: cek } = await pool.query(`SELECT to_regclass('wil_fakta') AS t, to_regclass('wil_pertanyaan') AS p`);
+  if (!cek[0].t || !cek[0].p) {
     console.log("  dilewati: migrasi wilayah belum diterapkan di database uji");
     return;
   }
@@ -323,9 +248,10 @@ async function ujiDatabase() {
       const [kartu] = await qr.kartuUntukCetak(rt7, [kkId], false);
       token = qr.normalisasiToken(kartu.tokenTampil)!;
       const buka = await qr.bukaToken(token);
-      sama(JSON.stringify(Object.keys(buka).sort()), JSON.stringify(["rt", "versiForm"]), "isi respons buka");
+      sama(JSON.stringify(Object.keys(buka).sort()), JSON.stringify(["pertanyaan", "rt", "versiForm"]), "isi respons buka");
+      pastikan(buka.pertanyaan.length > 0 && buka.pertanyaan.every((p: any) => p.aktif && p.diQr), "pertanyaan QR");
       const sebelum = JSON.stringify(await data.detailKeluarga(rt7, kkId).then((d) => [d.anggota, d.fakta]));
-      const body = { idempotencyKey: `uji-${acak()}-kunci`, isi: { versiForm: 1, namaPengisi: "Uji Satu", hubunganPengisi: "Kepala Keluarga", rumahTangga: { air_bersih: "ya" }, anggota: [{ nama: "Uji Satu", hubungan: "Kepala Keluarga", jenisKelamin: "Laki-laki", jawaban: {} }], usaha: [] } };
+      const body = { idempotencyKey: `uji-${acak()}-kunci`, isi: { versiForm: 1, namaPengisi: "Uji Satu", hubunganPengisi: "Kepala Keluarga", rumahTangga: { s_internet: "ya" }, anggota: [{ nama: "Uji Satu", hubungan: "Kepala Keluarga", jenisKelamin: "Laki-laki", jawaban: {} }] } };
       const a = await qr.kirimUsulan(token, body, "127.0.0.1");
       const b = await qr.kirimUsulan(token, body, "127.0.0.1");
       sama(b.kodeTerima, a.kodeTerima, "kirim ganda");
@@ -335,18 +261,6 @@ async function ujiDatabase() {
     await uji("token dicabut ditolak (410)", async () => {
       await qr.cabutToken(rt7, kkId);
       await harusGagal(() => qr.bukaToken(token), 410, "token dicabut");
-    });
-
-    await uji("snapshot laporan tidak berubah; koreksi wajib alasan dan jadi versi baru", async () => {
-      const v1 = await lap.finalkanLaporan(rt7, 2026, 9);
-      const { rows: r1 } = await pool.query(`SELECT hasil FROM wil_laporan WHERE id = $1`, [v1.id]);
-      await harusGagal(() => lap.finalkanLaporan(rt7, 2026, 9), 409, "final ulang tanpa alasan");
-      await data.tambahWarga(rt7, kkId, { nama: "Uji Tiga", nik: `9904${acak()}`, jenisKelamin: "Perempuan", tanggalLahir: "2026-08-01", kedudukan: "Anak", statusPerkawinan: "Belum Kawin" });
-      const v2 = await lap.finalkanLaporan(rt7, 2026, 9, "uji koreksi");
-      sama(v2.versi, v1.versi + 1, "versi");
-      const { rows: r1b } = await pool.query(`SELECT hasil FROM wil_laporan WHERE id = $1`, [v1.id]);
-      sama(JSON.stringify(r1b[0].hasil), JSON.stringify(r1[0].hasil), "snapshot lama berubah");
-      await pool.query(`DELETE FROM wil_laporan WHERE rt = 7 AND tahun = 2026 AND bulan = 9 AND dibuat_oleh = $1`, [rt7.label]);
     });
 
     await uji("nomor surat aman saat terbit bersamaan (tanpa duplikat)", async () => {
@@ -360,7 +274,7 @@ async function ujiDatabase() {
       await harusGagal(() => surat.simpanDraft(rt7, draftUji("c_undangan", "RT")), 403, "RT membuat surat");
     });
 
-    await alurLengkap({ pool, data, qr, surat, lap, rt7, rt6, rw, kkId: () => kkId, nik1, bersih, acak });
+    await alurLengkap({ pool, data, qr, surat, rt7, rt6, rw, kkId: () => kkId, nik1, bersih, acak });
   } finally {
     await hapusSuratUji(pool, bersih.surat);
     await pool.query(`DELETE FROM wil_usulan WHERE diinput_oleh = $1`, [rw.label]).catch(() => {});
@@ -377,89 +291,86 @@ async function ujiDatabase() {
 
 /** Setiap modul yang dipakai halaman RT/RW dijalankan sekali terhadap database sungguhan. */
 async function alurLengkap(k: any) {
-  const { pool, data, qr, surat, lap, rt7, rt6, rw, nik1, bersih, acak } = k;
-  const W = await import("@shared/wilayah");
+  const { pool, data, qr, surat, rt7, rt6, rw, nik1, bersih, acak } = k;
   const dash = await import("../server/wilayah-dashboard");
+  const standar = await import("../server/wilayah-standar");
   const kkId: number = k.kkId();
   const { rows: wr } = await pool.query(`SELECT id FROM warga WHERE nik = $1`, [nik1]);
   const wargaId: number = wr[0].id;
   const ids: Record<string, number> = {};
 
   await uji("fakta: simpan banyak, tidak berubah bila sama, riwayat", async () => {
-    const f = [{ subjek: "kk", subjekId: kkId, kunci: "air_bersih", nilai: "ya" }, { subjek: "warga", subjekId: wargaId, kunci: "hipertensi", nilai: "tidak", sumber: W.SUMBER_INFORMASI[0].nilai }];
+    const f = [{ subjek: "kk", subjekId: kkId, kunci: "s_internet", nilai: "ya" }, { subjek: "warga", subjekId: wargaId, kunci: "s_jaminan_kesehatan", nilai: "tidak_punya" }];
     sama((await data.simpanBanyakFakta(rt7, f)).disimpan, 2, "disimpan");
     sama((await data.simpanBanyakFakta(rt7, f)).tidakBerubah, 2, "tidak berubah");
     pastikan((await data.riwayatSubjek(rt7, "kk", kkId)).length >= 1, "riwayat kosong");
     await harusGagal(() => data.simpanBanyakFakta(rt6, f), 404, "RT lain menulis fakta");
+    await harusGagal(() => data.simpanFakta(rt7, { subjek: "kk", subjekId: kkId, kunci: "air_bersih", nilai: "ya" }), 400, "kunci kecamatan lama");
+    await harusGagal(() => data.simpanFakta(rw, f[0]), 403, "RW tanpa pilih RT");
   });
-  await uji("rumah: buat, hubungkan KK, fakta listrik", async () => {
+  await uji("kartu KK: kelengkapan dan tanda perhatian dari jawaban standar", async () => {
+    const k = (await data.daftarKeluarga(rt7, {})).find((x: any) => x.id === kkId);
+    pastikan(k && k.terjawab >= 2 && k.kelengkapan > 0 && k.pertanyaan > k.terjawab, "kelengkapan");
+    pastikan(k.perhatian.some((p: any) => p.kunci === "s_jaminan_kesehatan" && p.detail === "1 orang"), "perhatian BPJS");
+    sama(k.lansia, 1, "lansia (lahir 1960)");
+  });
+  await uji("standar: tambah, ubah, kunci tetap, jenis terkunci setelah ada jawaban, arsip & pulihkan", async () => {
+    const baru = await standar.tambahStandar(rw, standar.inputStandarSchema.parse({
+      subjek: "kk", kelompok: "Kelompok Uji", label: "Uji atap bocor", pertanyaan: "Apakah atap bocor?", tipe: "pilihan",
+      pilihan: [{ label: "Tidak bocor" }, { label: "Bocor sedikit" }, { label: "Bocor parah" }], perhatian: ["bocor_parah"],
+    }));
+    ids.tanya = baru.id!;
+    pastikan(baru.kunci.startsWith("s_uji_atap_bocor") && baru.perhatian!.includes("bocor_parah"), "kunci/perhatian");
+    await harusGagal(() => qr.validasiJawabanIsi({ ...{ versiForm: 1, namaPengisi: "x", hubunganPengisi: "x", anggota: [] }, rumahTangga: { [baru.kunci]: "roboh" } } as any), 400, "jawaban QR asal");
+    await data.simpanFakta(rt7, { subjek: "kk", subjekId: kkId, kunci: baru.kunci, nilai: "bocor_parah" });
+    const input = (p: any) => standar.inputStandarSchema.parse({ subjek: "kk", kelompok: "Kelompok Uji", label: "Uji atap", pertanyaan: "Atap?", ...p });
+    const ubah = await standar.ubahStandar(rw, baru.id!, input({ tipe: "pilihan", pilihan: baru.pilihan!.map((x: any) => ({ ...x, label: x.label + "!" })) }));
+    sama(ubah.kunci, baru.kunci, "kunci berubah");
+    await harusGagal(() => standar.ubahStandar(rw, baru.id!, input({ tipe: "yatidak" })), 409, "ganti jenis");
+    await harusGagal(() => standar.ubahStandar(rw, baru.id!, input({ tipe: "pilihan", pilihan: baru.pilihan!.slice(0, 2) })), 409, "hapus pilihan terpakai");
+    await harusGagal(() => standar.ubahStandar(rw, baru.id!, input({ subjek: "warga", tipe: "pilihan", pilihan: baru.pilihan })), 400, "ganti sasaran");
+    await standar.aturAktifStandar(rw, baru.id!, false);
+    await harusGagal(() => data.simpanFakta(rt7, { subjek: "kk", subjekId: kkId, kunci: baru.kunci, nilai: "tidak_bocor" }), 400, "tulis ke arsip");
+    pastikan(!(await qr.bukaToken(qr.normalisasiToken((await qr.kartuUntukCetak(rt7, [kkId], true))[0].tokenTampil)!)).pertanyaan.some((p: any) => p.kunci === baru.kunci), "arsip tampil di QR");
+    const { rows } = await pool.query(`SELECT COUNT(*)::int AS n FROM wil_fakta WHERE kunci = $1`, [baru.kunci]);
+    sama(rows[0].n, 1, "jawaban hilang saat arsip");
+    await standar.aturAktifStandar(rw, baru.id!, true);
+    const urut = (await standar.standarAktif("kk")).map((d: any) => d.id);
+    await standar.urutkanStandar(rw, [...urut].reverse());
+    sama((await standar.standarAktif("kk"))[0].id, urut[urut.length - 1], "urutan");
+    await standar.urutkanStandar(rw, urut);
+  });
+  await uji("rumah: buat dan hubungkan KK", async () => {
     ids.rumah = (await data.buatRumah(rt7, { alamat: "Jl. Uji Rumah" })).id;
     await data.hubungkanKkRumah(rt7, kkId, ids.rumah);
-    const listrik = W.FAKTA_BY_KUNCI.get("listrik")!.pilihan![1].nilai;
-    await data.simpanBanyakFakta(rt7, [{ subjek: "rumah", subjekId: ids.rumah, kunci: "listrik", nilai: listrik }]);
     const r = (await data.daftarRumah(rt7)).find((x: any) => x.id === ids.rumah);
-    pastikan(r && r.kk.length === 1 && r.listrik === listrik, "rumah tidak lengkap");
-  });
-  await uji("fasilitas & kelompok: RW bersama dan RT sendiri, nonaktifkan", async () => {
-    ids.fasRw = (await data.simpanFasilitas(rw, { jenis: "posyandu", nama: "Posyandu Uji", rtLokasi: 7, rtLayanan: [6, 7] })).id;
-    ids.fasRt = (await data.simpanFasilitas(rt7, { jenis: W.JENIS_FASILITAS[0].nilai, nama: "Pos Uji", rtLokasi: 7 })).id;
-    await harusGagal(() => data.simpanFasilitas(rt7, { jenis: "posyandu", nama: "Ubah", rtLayanan: [7] }, ids.fasRw), 403, "RT mengubah fasilitas RW");
-    await data.simpanBanyakFakta(rw, [{ subjek: "fasilitas", subjekId: ids.fasRw, kunci: "jumlah_kader", nilai: "5" }]);
-    ids.kel = (await data.simpanKelompok(rw, { jenis: W.JENIS_KELOMPOK[0].nilai, nama: "Kelompok Uji", rtTerlibat: [6, 7] })).id;
-    await data.nonaktifkanObjek(rt7, "fasilitas", ids.fasRt);
-    pastikan((await data.daftarFasilitas(rt7)).some((f: any) => f.id === ids.fasRw), "fasilitas RW tak terlihat RT");
-    pastikan((await data.daftarKelompok(rw)).some((x: any) => x.id === ids.kel), "kelompok");
-  });
-  await uji("kegiatan RW: RT terlibat mencatat peserta, RT lain ditolak, kirim ulang idempoten", async () => {
-    const isi = { jenis: W.JENIS_KEGIATAN[0].nilai, judul: "Kegiatan Uji", tanggal: "2026-10-05", rtTerlibat: [7], idempotencyKey: `keg-${acak()}` };
-    ids.keg = (await data.simpanKegiatan(rw, isi)).id;
-    sama((await data.simpanKegiatan(rw, isi)).id, ids.keg, "kegiatan ganda");
-    await data.catatKehadiran(rt7, ids.keg, 12);
-    await data.catatKehadiran(rt7, ids.keg, 15);
-    await harusGagal(() => data.catatKehadiran(rt6, ids.keg, 3), 404, "RT tak terlibat");
-    const { rows } = await pool.query(`SELECT COUNT(*)::int AS n, MAX(jumlah_hadir) AS j FROM wil_kegiatan_peserta WHERE kegiatan_id = $1`, [ids.keg]);
-    pastikan(rows[0].n === 1 && rows[0].j === 15, "peserta dobel");
-  });
-  await uji("konfirmasi kelengkapan: RT dan RW sesuai bagian", async () => {
-    const bRt = W.BAGIAN_KONFIRMASI.find((b) => b.scope === "rt")!.nilai;
-    const bRw = W.BAGIAN_KONFIRMASI.find((b) => b.scope === "rw")!.nilai;
-    await data.setKonfirmasi(rt7, 2026, 10, bRt, true);
-    await data.setKonfirmasi(rt7, 2026, 10, bRt, true);
-    await data.setKonfirmasi(rw, 2026, 10, bRw, true);
-    await harusGagal(() => data.setKonfirmasi(rt7, 2026, 10, bRw, true), 403, "RT konfirmasi bagian RW");
-    await data.setKonfirmasi(rt7, 2026, 10, bRt, false);
+    pastikan(r && r.kk.length === 1, "rumah tidak lengkap");
   });
   await uji("usulan warga: RT terima → fakta resmi berubah dengan sumber usulan", async () => {
     const [kartu] = await qr.kartuUntukCetak(rt7, [kkId], true);
     const token = qr.normalisasiToken(kartu.tokenTampil)!;
-    const isi = { versiForm: 1, namaPengisi: "Uji Satu", hubunganPengisi: "Kepala Keluarga", rumahTangga: { air_bersih: "tidak" }, anggota: [{ nama: "Uji Satu", hubungan: "Kepala Keluarga", jenisKelamin: "Laki-laki", jawaban: {} }], usaha: [] };
+    const isi = { versiForm: 1, namaPengisi: "Uji Satu", hubunganPengisi: "Kepala Keluarga", rumahTangga: { s_internet: "tidak" }, anggota: [{ nama: "Uji Satu", hubungan: "Kepala Keluarga", jenisKelamin: "Laki-laki", jawaban: { s_jaminan_kesehatan: "bpjs_pbi" } }] };
     const { kodeTerima } = await qr.kirimUsulan(token, { idempotencyKey: `usl-${acak()}-kunci`, isi }, "127.0.0.2");
     sama((await qr.statusUsulan(kodeTerima)).status, "menunggu", "status");
     const u = (await qr.daftarUsulan(rt7)).find((x: any) => x.kk_id === kkId);
     pastikan(u, "usulan tak muncul di antrean RT");
     await harusGagal(() => qr.detailUsulan(rt6, u.id), 404, "RT lain membuka usulan");
     await qr.detailUsulan(rt7, u.id);
-    await qr.putuskanUsulan(rt7, u.id, { aksi: "terima", fakta: [{ subjek: "kk", subjekId: kkId, kunci: "air_bersih", nilai: "tidak" }] });
+    await qr.putuskanUsulan(rt7, u.id, { aksi: "terima", fakta: [{ subjek: "kk", subjekId: kkId, kunci: "s_internet", nilai: "tidak" }] });
     const d = await data.detailKeluarga(rt7, kkId);
-    pastikan(d.fakta.some((f: any) => f.kunci === "air_bersih" && f.nilai === "tidak"), "fakta usulan tidak diterapkan");
+    pastikan(d.fakta.some((f: any) => f.kunci === "s_internet" && f.nilai === "tidak"), "fakta usulan tidak diterapkan");
     await harusGagal(() => qr.putuskanUsulan(rt7, u.id, { aksi: "tolak", catatan: "ulang" }), 409, "diputus dua kali");
   });
   await uji("semua fungsi baca halaman RT/RW berjalan", async () => {
     await Promise.all([
       data.daftarKeluarga(rt7, {}), data.daftarKeluarga(rw, { rt: 1 }), data.cariWarga(rt7, "Uji"),
-      data.daftarUsaha(rw, null), data.daftarKegiatan(rt7, {}), data.daftarKejadian(rw, {}),
-      data.daftarSerahTerima(rt7), qr.daftarUsulan(rt7, "semua"),
-      dash.ringkasanRw(2026, 10), dash.aksiRw(2026, 10), lap.statusLaporanSemuaRt(2026, 10),
-      lap.pratinjauLaporan(rt7, null, 2026, 10), lap.pratinjauLaporan(rw, null, 2026, 10), lap.pratinjauLaporan(rw, 1, 2026, 10),
-      lap.daftarVersi(rw, 7, 2026, 9),
+      data.daftarSerahTerima(rt7), qr.daftarUsulan(rt7, "semua"), standar.daftarStandar({ semua: true }),
       ...["draft", "belum_distribusi", "arsip"].map((b) => surat.daftarSurat(rw, { bagian: b })),
       surat.daftarSurat(rt7, {}), surat.ringkasan(rw), surat.daftarTindak(rw), surat.referensi(rw),
     ]);
-    const ex = await lap.dataEkspor(rw, null, 2026, [9, 10, 11, 12]);
-    sama(ex.baris.length, 119, "ekspor rekap");
-    pastikan(lap.eksporXlsx(ex).length > 1000, "xlsx kosong");
-    const fin = await lap.finalkanLaporan(rw, 2026, 10);
-    await pool.query(`DELETE FROM wil_laporan WHERE id = $1`, [fin.id]);
+    const r = await dash.ringkasanRw();
+    pastikan(r.total.kk >= 1 && r.perRt.some((x: any) => x.rt === 7) && r.sebaran.length > 0, "ringkasan RW");
+    pastikan(r.perhatian.some((p: any) => p.kunci === "s_jaminan_kesehatan"), "ringkasan perhatian");
   });
   await uji("surat: draft → lampiran → terbit → kirim berbukti → tindak → salin jadi draft baru", async () => {
     const s = await surat.simpanDraft(rw, draftUji("b_permohonan_instansi", "Pengantar uji"));
@@ -496,7 +407,7 @@ async function alurLengkap(k: any) {
     await harusGagal(() => data.ubahWarga(rt6, wargaId, { nomorHp: "3277011234567890" }), 400, "NIK di kolom HP");
     const { rows: pc } = await pool.query(
       `INSERT INTO wil_fakta (subjek, subjek_id, kunci, nilai, mulai, status_verifikasi, sumber, rt, dicatat_role, dicatat_oleh)
-       VALUES ('kk', $1, 'jamban', 'ya', current_date, 'perlu_cek', 'data_lama', 6, 'rt', 'uji') RETURNING id`, [kkId]);
+       VALUES ('kk', $1, 's_jamban', 'sendiri_septik', current_date, 'perlu_cek', 'data_lama', 6, 'rt', 'uji') RETURNING id`, [kkId]);
     await data.putuskanFaktaPerluCek(rt6, pc[0].id, true);
     pastikan((await qr.kartuUntukCetak(rt6, "semua", false)).length >= 1, "cetak semua kosong");
     const d1 = await surat.simpanDraft(rw, draftUji("c_edaran", "Edaran uji"));
@@ -509,6 +420,11 @@ async function alurLengkap(k: any) {
     await harusGagal(() => surat.batalkan(rw, d2.id, "x"), 400, "batal tanpa alasan");
     await surat.batalkan(rw, d2.id, "Salah tujuan surat");
   });
+  if (ids.tanya) {
+    const { rows } = await pool.query(`DELETE FROM wil_pertanyaan WHERE id = $1 RETURNING kunci`, [ids.tanya]);
+    if (rows[0]) await pool.query(`DELETE FROM wil_fakta WHERE kunci = $1`, [rows[0].kunci]);
+    standar.muatUlangStandar();
+  }
 }
 
 main().catch((e) => {

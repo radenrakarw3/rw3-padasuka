@@ -17,6 +17,7 @@ import {
   QrCode,
   Truck,
   UserPen,
+  ListChecks,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useVisitrw3AdminCounts } from "@/hooks/use-visitrw3-admin-counts";
@@ -117,6 +118,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         { path: "/admin/kelola-warga/usulan", icon: Inbox, label: "Isian QR warga" },
         { path: "/admin/kelola-warga/cetak", icon: QrCode, label: "Cetak kartu QR" },
         { path: "/admin/kelola-warga/pindah", icon: Truck, label: "Pindah RT" },
+        { path: "/admin/standar-data", icon: ListChecks, label: "Standar data" },
       ],
     },
   ];

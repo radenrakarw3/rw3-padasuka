@@ -5,7 +5,8 @@ import { CheckCircle2, Home, Pencil, QrCode, RefreshCw, Truck, UserPlus, XCircle
 import { useDraft, useKirimSekali, wil } from "@/lib/wilayah-api";
 import { BarisRingkas, IsianTeks, Judul, KartuMenu, Langkah, Memuat, Pesan, PilihTombol, TombolBesar } from "@/components/wilayah/ui";
 import { FormFakta, kunciAwal, type LangkahFakta } from "@/components/wilayah/form-fakta";
-import { FAKTA_BY_KUNCI, labelNilaiFakta } from "@shared/wilayah";
+import { berlakuUntukWarga, kelompokkan, labelNilaiFakta, type DefinisiFakta } from "@shared/wilayah";
+import { defStandar, useStandar } from "@/lib/standar";
 
 interface Fakta { id: number; kunci: string; nilai: string; mulai: string; sumber: string; statusVerifikasi: string; dicatatOleh: string | null }
 interface Anggota {
@@ -15,42 +16,24 @@ interface Anggota {
 interface Detail {
   kk: { id: number; rt: number; alamat: string; noUnit: string | null };
   anggota: Anggota[];
-  rumah: { id: number; alamat: string; noUnit: string | null; jumlahKk: number; fakta: Fakta[] } | null;
+  rumah: { id: number; alamat: string; noUnit: string | null; jumlahKk: number } | null;
   usaha: { id: number; nama: string }[];
   fakta: Fakta[];
   qr: { kodeKartu: string; berlakuSampai: string } | null;
   usulan: { id: number; status: string }[];
+  ringkas: { kelengkapan: number; terjawab: number; pertanyaan: number; perhatian: { kunci: string; label: string; detail: string }[] };
 }
 
 const KEDUDUKAN = ["Kepala Keluarga", "Istri", "Suami", "Anak", "Menantu", "Cucu", "Orang Tua", "Mertua", "Famili Lain", "Lainnya"];
 const KAWIN = ["Belum Kawin", "Kawin", "Cerai Hidup", "Cerai Mati"];
 
-function langkahWarga(a: Anggota): LangkahFakta[] {
-  const p = a.jenisKelamin === "Perempuan";
-  const usia = a.umur;
-  const s = (judul: string, kunci: string[], tampil?: LangkahFakta["tampil"]): LangkahFakta => ({ judul, subjek: "warga", subjekId: a.id, kunci, tampil });
-  const out: LangkahFakta[] = [
-    s("Pendidikan", ["pendidikan_terakhir", "sekolah_aktif", "buta_huruf"], (k) => k !== "sekolah_aktif" || usia == null || usia <= 30),
-    s("Kegiatan sehari-hari", ["status_kerja", "profesi_pendidik"], (k, j) => k !== "profesi_pendidik" || j.status_kerja === "bekerja"),
-  ];
-  const kes = ["hipertensi", "diabetes", "jantung", "kanker", "ppok_asma", "disabilitas"];
-  if (p && (usia == null || (usia >= 10 && usia <= 55))) kes.unshift("hamil", "nifas_menyusui");
-  if (usia == null || usia < 5) kes.push("stunting");
-  if (p && (usia == null || (usia >= 10 && usia <= 19))) kes.push("remaja_putri_gizi");
-  out.push(s("Kesehatan (yang sudah dikonfirmasi)", kes));
-  out.push(s("Kegiatan seni", ["pelaku_seni_musik", "pelaku_seni_tari", "pelaku_seni_pertunjukan", "pelaku_seni_suara_sastra", "pelaku_seni_beladiri"]));
-  return out;
+function langkahWarga(a: Anggota, standar: DefinisiFakta[]): LangkahFakta[] {
+  const berlaku = standar.filter((x) => x.subjek === "warga" && berlakuUntukWarga(x, { jenisKelamin: a.jenisKelamin, umur: a.umur }));
+  return kelompokkan(berlaku).map((g) => ({ judul: g.kelompok, subjek: "warga", subjekId: a.id, kunci: g.daftar.map((x) => x.kunci) }));
 }
 
-function langkahKeluarga(d: Detail): LangkahFakta[] {
-  const out: LangkahFakta[] = [
-    { judul: "Air & kebersihan", subjek: "kk", subjekId: d.kk.id, kunci: ["air_bersih", "rentan_kekeringan", "jamban", "septictank", "pilah_sampah"] },
-    { judul: "Internet & pangan", subjek: "kk", subjekId: d.kk.id, kunci: ["internet", "rawan_pangan", "miskin"] },
-    { judul: "Bantuan yang diterima", subjek: "kk", subjekId: d.kk.id, kunci: ["bantuan_blt", "bantuan_pbi_jk", "bantuan_pkh", "bantuan_pmt", "bantuan_rastrada", "bantuan_cpp", "bantuan_bpnt"] },
-    { judul: "Data posyandu keluarga", subjek: "kk", subjekId: d.kk.id, kunci: ["berisiko_stunting"] },
-  ];
-  if (d.rumah) out.push({ judul: "Listrik rumah", subjek: "rumah", subjekId: d.rumah.id, kunci: ["listrik"] });
-  return out;
+function langkahKeluarga(d: Detail, standar: DefinisiFakta[]): LangkahFakta[] {
+  return kelompokkan(standar.filter((x) => x.subjek === "kk")).map((g) => ({ judul: g.kelompok, subjek: "kk", subjekId: d.kk.id, kunci: g.daftar.map((x) => x.kunci) }));
 }
 
 function DataDasar({ a, kkId, selesai, batal }: { a: Anggota; kkId: number; selesai: () => void; batal: () => void }) {
@@ -168,6 +151,7 @@ export default function Keluarga({ id }: { id: number }) {
   const [aksiErr, setAksiErr] = useState<string | null>(null);
   const key = [`/api/wilayah/keluarga/${id}`];
   const { data: d, isLoading, error } = useQuery<Detail>({ queryKey: key, queryFn: () => wil(`/api/wilayah/keluarga/${id}`) });
+  const { data: standar, isLoading: memuatStandar } = useStandar();
   const segarkan = async (pesan?: string) => {
     await qc.invalidateQueries({ queryKey: key });
     await qc.invalidateQueries({ queryKey: ["/api/wilayah/keluarga"] });
@@ -176,8 +160,8 @@ export default function Keluarga({ id }: { id: number }) {
     window.scrollTo(0, 0);
   };
 
-  if (isLoading) return <Memuat />;
-  if (error || !d) return <Pesan jenis="error">{(error as Error)?.message ?? "Gagal memuat"}</Pesan>;
+  if (isLoading || memuatStandar) return <Memuat />;
+  if (error || !d || !standar) return <Pesan jenis="error">{(error as Error)?.message ?? "Gagal memuat"}</Pesan>;
   const kepala = d.anggota.find((a) => a.kedudukan === "Kepala Keluarga")?.nama ?? "Keluarga";
   const batal = () => setMode({ m: "lihat" });
 
@@ -185,7 +169,7 @@ export default function Keluarga({ id }: { id: number }) {
     return (
       <div>
         <Judul kembali={batal} sub={mode.a.umur != null ? `${mode.a.umur} tahun` : "Umur belum diketahui"}>{mode.a.nama}</Judul>
-        <FormFakta draftKey={`warga:${mode.a.id}`} langkah={langkahWarga(mode.a)} awal={kunciAwal("warga", mode.a.id, mode.a.fakta)}
+        <FormFakta draftKey={`warga:${mode.a.id}`} langkah={langkahWarga(mode.a, standar)} awal={kunciAwal("warga", mode.a.id, mode.a.fakta)}
           batal={batal} selesai={(n) => segarkan(n ? `${n} perubahan tersimpan.` : undefined)} />
       </div>
     );
@@ -194,16 +178,17 @@ export default function Keluarga({ id }: { id: number }) {
   if (mode.m === "anggota") return <div><Judul kembali={batal}>Tambah anggota</Judul><AnggotaBaru kkId={d.kk.id} batal={batal} selesai={() => segarkan("Anggota baru tersimpan.")} /></div>;
   if (mode.m === "rumah") return <div><Judul kembali={batal}>Hubungkan ke rumah</Judul><PilihRumah d={d} batal={batal} selesai={() => segarkan("Rumah terhubung.")} /></div>;
   if (mode.m === "keluarga") {
-    const awal = { ...kunciAwal("kk", d.kk.id, d.fakta), ...(d.rumah ? kunciAwal("rumah", d.rumah.id, d.rumah.fakta) : {}) };
+    const awal = kunciAwal("kk", d.kk.id, d.fakta);
     return (
       <div>
         <Judul kembali={batal}>Kondisi keluarga</Judul>
-        <FormFakta draftKey={`kk:${d.kk.id}`} langkah={langkahKeluarga(d)} awal={awal} batal={batal} selesai={(n) => segarkan(n ? `${n} perubahan tersimpan.` : undefined)} />
+        <FormFakta draftKey={`kk:${d.kk.id}`} langkah={langkahKeluarga(d, standar)} awal={awal} batal={batal} selesai={(n) => segarkan(n ? `${n} perubahan tersimpan.` : undefined)} />
       </div>
     );
   }
 
-  const perluCek = [...d.fakta, ...d.anggota.flatMap((a) => a.fakta), ...(d.rumah?.fakta ?? [])].filter((f) => f.statusVerifikasi === "perlu_cek");
+  const perluCek = [...d.fakta, ...d.anggota.flatMap((a) => a.fakta)].filter((f) => f.statusVerifikasi === "perlu_cek");
+  const persen = Math.round(d.ringkas.kelengkapan * 100);
   const putuskan = async (f: Fakta, terima: boolean) => {
     setAksiErr(null);
     try {
@@ -230,6 +215,23 @@ export default function Keluarga({ id }: { id: number }) {
       {info && <Pesan jenis="sukses">{info}</Pesan>}
       {aksiErr && <Pesan jenis="error">{aksiErr}</Pesan>}
 
+      <section className="bg-white rounded-2xl border-2 border-gray-200 p-4">
+        <div className="flex items-center justify-between text-base">
+          <span className="font-semibold">Kelengkapan data</span>
+          <span className="text-gray-600">{d.ringkas.terjawab}/{d.ringkas.pertanyaan} terjawab · {persen}%</span>
+        </div>
+        <div className="mt-2 h-2.5 rounded-full bg-gray-100 overflow-hidden">
+          <div className="h-full rounded-full" style={{ width: `${persen}%`, backgroundColor: persen >= 80 ? "hsl(163,55%,32%)" : persen >= 40 ? "hsl(40,70%,50%)" : "hsl(0,65%,55%)" }} />
+        </div>
+        {d.ringkas.perhatian.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {d.ringkas.perhatian.map((p) => (
+              <span key={p.kunci} className="rounded-full bg-rose-50 border border-rose-200 px-3 py-1 text-sm text-rose-800">{p.label}: {p.detail}</span>
+            ))}
+          </div>
+        )}
+      </section>
+
       {d.usulan.some((u) => u.status === "menunggu") && (
         <KartuMenu ikon={<CheckCircle2 className="w-7 h-7" />} judul="Ada isian baru dari keluarga" sub="Periksa dan putuskan" onClick={() => go(`/usulan/${d.usulan.find((u) => u.status === "menunggu")!.id}`)} />
       )}
@@ -238,7 +240,7 @@ export default function Keluarga({ id }: { id: number }) {
         <section className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4">
           <h2 className="text-xl font-bold mb-2">Data lama perlu dicek</h2>
           {perluCek.map((f) => {
-            const def = FAKTA_BY_KUNCI.get(f.kunci);
+            const def = defStandar(f.kunci);
             return (
               <div key={f.id} className="py-3 border-b border-amber-200 last:border-0">
                 <p className="text-lg">{def?.label ?? f.kunci}: <b>{labelNilaiFakta(def, f.nilai)}</b></p>
@@ -271,7 +273,7 @@ export default function Keluarga({ id }: { id: number }) {
 
       <section className="space-y-3">
         <h2 className="text-xl font-bold">Keluarga & rumah</h2>
-        <KartuMenu ikon={<Pencil className="w-7 h-7" />} judul="Kondisi keluarga" sub="Air, jamban, internet, bantuan, listrik" onClick={() => setMode({ m: "keluarga" })} />
+        <KartuMenu ikon={<Pencil className="w-7 h-7" />} judul="Kondisi keluarga" sub="Tempat tinggal, rumah, ekonomi, kerentanan" onClick={() => setMode({ m: "keluarga" })} />
         <KartuMenu ikon={<Home className="w-7 h-7" />} judul={d.rumah ? `Rumah: ${d.rumah.alamat}${d.rumah.noUnit ? ` No. ${d.rumah.noUnit}` : ""}` : "Belum terhubung ke rumah"}
           sub={d.rumah ? `${d.rumah.jumlahKk} KK di rumah ini · ketuk untuk ganti` : "Ketuk untuk menghubungkan"} onClick={() => setMode({ m: "rumah" })} />
       </section>

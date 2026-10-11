@@ -10,17 +10,8 @@ import { z } from "zod";
 import { pool } from "./db";
 import { catatAudit, WilayahError, type Aktor } from "./wilayah-auth";
 import { denganTransaksi, detailKeluarga, simpanFakta } from "./wilayah-data";
-import {
-  FAKTA_BY_KUNCI,
-  FAKTA_FORM_KK,
-  FAKTA_FORM_RUMAH,
-  FAKTA_FORM_USAHA,
-  FAKTA_FORM_WARGA,
-  HUBUNGAN_KELUARGA,
-  KATEGORI_USAHA,
-  validasiNilaiFakta,
-  type IsiUsulan,
-} from "@shared/wilayah";
+import { registri, standarAktif } from "./wilayah-standar";
+import { HUBUNGAN_KELUARGA, validasiNilaiFakta, type IsiUsulan } from "@shared/wilayah";
 import { looksLikeNik, normalizeNomorHp } from "@shared/kontak";
 
 const MASA_BERLAKU_HARI = 180;
@@ -206,23 +197,27 @@ async function cariToken(raw: string) {
 /** Hanya memberi tahu apakah kartu berlaku dan RT-nya. Tidak ada data keluarga. */
 export async function bukaToken(raw: string) {
   const t = await cariToken(raw);
-  if (!t) throw new WilayahError(404, "Kode kartu tidak dikenal. Periksa kembali atau hubungi Ketua RT.");
-  if (t.status !== "aktif") throw new WilayahError(410, t.status === "dicabut" ? "Kartu ini sudah diganti. Minta kartu baru ke Ketua RT." : "Kartu ini sudah kedaluwarsa. Minta kartu baru ke Ketua RT.");
-  return { rt: t.rt, versiForm: 1 };
+  if (!t) throw new WilayahError(404, "Kode kartu tidak dikenal. Periksa kembali atau hubungi pengurus RW.");
+  if (t.status !== "aktif") throw new WilayahError(410, t.status === "dicabut" ? "Kartu ini sudah diganti. Minta kartu baru ke pengurus RW." : "Kartu ini sudah kedaluwarsa. Minta kartu baru ke pengurus RW.");
+  const pertanyaan = (await standarAktif()).filter((d) => d.diQr);
+  return { rt: t.rt, versiForm: 1, pertanyaan };
 }
 
-const ytOrPilihan = (kunci: string) => z.string().refine((v) => {
-  const def = FAKTA_BY_KUNCI.get(kunci);
-  return !!def && validasiNilaiFakta(def, v) === null;
-}, `Jawaban ${kunci} tidak valid`);
+const jawabanSchema = z.record(z.string().max(60), z.string().max(300));
 
-function jawabanSchema(kunciDiizinkan: readonly string[]) {
-  return z.record(z.string(), z.string()).superRefine((obj, ctx) => {
-    for (const [k, v] of Object.entries(obj)) {
-      if (!kunciDiizinkan.includes(k)) ctx.addIssue({ code: "custom", message: `Pertanyaan ${k} tidak dikenal` });
-      else if (!ytOrPilihan(k).safeParse(v).success) ctx.addIssue({ code: "custom", message: `Jawaban untuk ${k} tidak valid` });
+/** Periksa jawaban isian terhadap standar aktif (kunci, sasaran, dan nilai). */
+export async function validasiJawabanIsi(isi: IsiUsulan) {
+  const peta = await registri();
+  const cek = (jawaban: Record<string, string>, subjek: "kk" | "warga") => {
+    for (const [k, v] of Object.entries(jawaban)) {
+      const def = peta.get(k);
+      if (!def || !def.aktif || def.subjek !== subjek) throw new WilayahError(400, "Ada pertanyaan yang sudah tidak berlaku. Muat ulang halaman lalu isi kembali.");
+      const err = validasiNilaiFakta(def, v);
+      if (err) throw new WilayahError(400, `${def.label}: ${err}`);
     }
-  });
+  };
+  cek(isi.rumahTangga, "kk");
+  for (const a of isi.anggota) cek(a.jawaban, "warga");
 }
 
 const tanggalOpsional = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional();
@@ -232,21 +227,15 @@ export const isiUsulanSchema: z.ZodType<IsiUsulan> = z.object({
   namaPengisi: z.string().trim().min(2).max(100),
   hubunganPengisi: z.string().trim().min(2).max(40),
   nomorHp: z.string().trim().max(20).nullable().optional(),
-  rumahTangga: jawabanSchema([...FAKTA_FORM_KK, ...FAKTA_FORM_RUMAH]),
+  rumahTangga: jawabanSchema,
   anggota: z.array(z.object({
     nama: z.string().trim().min(2).max(100),
     hubungan: z.enum(HUBUNGAN_KELUARGA),
     jenisKelamin: z.enum(["Laki-laki", "Perempuan"]),
     tanggalLahir: tanggalOpsional,
-    jawaban: jawabanSchema(FAKTA_FORM_WARGA),
+    jawaban: jawabanSchema,
     keterangan: z.enum(["tetap", "baru", "pindah", "meninggal"]).optional(),
   })).min(1, "Isi minimal satu anggota keluarga").max(20),
-  usaha: z.array(z.object({
-    nama: z.string().trim().min(2).max(100),
-    kategori: z.enum(KATEGORI_USAHA.map((k) => k.nilai) as [string, ...string[]]).nullable(),
-    pemilik: z.string().trim().min(2).max(100),
-    jawaban: jawabanSchema(FAKTA_FORM_USAHA),
-  })).max(5),
   catatan: z.string().trim().max(1000).nullable().optional(),
 }).superRefine((v, ctx) => {
   if (v.nomorHp) {
@@ -257,16 +246,17 @@ export const isiUsulanSchema: z.ZodType<IsiUsulan> = z.object({
 
 export async function kirimUsulan(raw: string, body: unknown, ip: string) {
   const d = z.object({ idempotencyKey: z.string().regex(/^[A-Za-z0-9-]{16,64}$/), isi: isiUsulanSchema }).parse(body);
+  await validasiJawabanIsi(d.isi);
   const t = await cariToken(raw);
   if (!t) throw new WilayahError(404, "Kode kartu tidak dikenal");
-  if (t.status !== "aktif") throw new WilayahError(410, "Kartu ini sudah tidak berlaku. Minta kartu baru ke Ketua RT.");
+  if (t.status !== "aktif") throw new WilayahError(410, "Kartu ini sudah tidak berlaku. Minta kartu baru ke pengurus RW.");
 
   const { rows: ulang } = await pool.query(`SELECT kode_terima, token_id FROM wil_usulan WHERE idempotency_key = $1`, [d.idempotencyKey]);
   if (ulang[0]) {
     if (ulang[0].token_id !== t.id) throw new WilayahError(409, "Pengiriman ganda terdeteksi");
     return { kodeTerima: ulang[0].kode_terima as string, ulang: true };
   }
-  if (kenaBatas(`usulan:token:${t.id}`, 5, 24 * 3600_000)) throw new WilayahError(429, "Kartu ini sudah dipakai mengirim beberapa kali hari ini. Coba besok atau hubungi Ketua RT.");
+  if (kenaBatas(`usulan:token:${t.id}`, 5, 24 * 3600_000)) throw new WilayahError(429, "Kartu ini sudah dipakai mengirim beberapa kali hari ini. Coba besok atau hubungi pengurus RW.");
 
   const ipHash = crypto.createHmac("sha256", rahasia()).update(ip).digest("hex").slice(0, 32);
   const kodeTerima = acak(10);
@@ -348,7 +338,7 @@ const putusanSchema = z.discriminatedUnion("aksi", [
     kkId: z.number().int().positive().optional(),
     /** Jawaban yang dipilih RT untuk diterapkan (subjek & ID resmi dipilih RT, bukan dari warga). */
     fakta: z.array(z.object({
-      subjek: z.enum(["warga", "kk", "rumah", "usaha"]),
+      subjek: z.enum(["warga", "kk"]),
       subjekId: z.number().int().positive(),
       kunci: z.string(),
       nilai: z.string(),
@@ -389,12 +379,10 @@ export async function putuskanUsulan(aktor: Aktor, id: number, input: unknown) {
 
     const { rows: anggota } = await c.query(`SELECT id FROM warga WHERE kk_id = $1`, [kkId]);
     const idAnggota = new Set(anggota.map((a) => a.id));
-    const { rows: rumah } = await c.query(`SELECT rumah_id FROM wil_rumah_kk WHERE kk_id = $1 AND sampai IS NULL`, [kkId]);
     let n = 0;
     for (const f of d.fakta) {
       if (f.subjek === "warga" && !idAnggota.has(f.subjekId)) throw new WilayahError(400, "Jawaban hanya boleh diterapkan ke anggota KK ini");
       if (f.subjek === "kk" && f.subjekId !== kkId) throw new WilayahError(400, "Jawaban rumah tangga hanya untuk KK ini");
-      if (f.subjek === "rumah" && rumah[0]?.rumah_id !== f.subjekId) throw new WilayahError(400, "Hubungkan KK ke rumah terlebih dahulu");
       const r = await simpanFakta(aktor, { ...f, sumber: "usulan_warga", catatan: `Usulan warga #${id}` }, c);
       if (!r.tidakBerubah) n++;
     }

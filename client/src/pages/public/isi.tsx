@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { wil } from "@/lib/wilayah-api";
 import { HIJAU, IsianTeks, Memuat, Pesan, TombolBesar, rt2 } from "@/components/wilayah/ui";
 import { FormIsiKeluarga } from "@/components/wilayah/form-isi-keluarga";
+import type { DefinisiFakta } from "@shared/wilayah";
 
 const KUNCI_TOKEN = "isi-token";
 
@@ -33,7 +34,7 @@ function CekStatus() {
   const [hasil, setHasil] = useState<{ status: string; pesanRt: string | null } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [proses, setProses] = useState(false);
-  const label: Record<string, string> = { menunggu: "Menunggu diperiksa Ketua RT", diterima: "Sudah diterima", ditolak: "Tidak diterima", klarifikasi: "Ketua RT meminta perbaikan", digantikan: "Digantikan kiriman yang lebih baru" };
+  const label: Record<string, string> = { menunggu: "Menunggu diperiksa pengurus RW", diterima: "Sudah diterima", ditolak: "Tidak diterima", klarifikasi: "Pengurus RW meminta perbaikan", digantikan: "Digantikan kiriman yang lebih baru" };
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">Cek status kiriman</h1>
@@ -43,7 +44,7 @@ function CekStatus() {
         try { setHasil(await wil(`/api/isi/status/${encodeURIComponent(kode.replace(/\W/g, ""))}`)); } catch (e) { setErr((e as Error).message); } finally { setProses(false); }
       }}>Cek</TombolBesar>
       {err && <Pesan jenis="error">{err}</Pesan>}
-      {hasil && <Pesan jenis={hasil.status === "diterima" ? "sukses" : "info"}>{label[hasil.status] ?? hasil.status}{hasil.pesanRt ? <><br />Pesan RT: {hasil.pesanRt}</> : null}</Pesan>}
+      {hasil && <Pesan jenis={hasil.status === "diterima" ? "sukses" : "info"}>{label[hasil.status] ?? hasil.status}{hasil.pesanRt ? <><br />Pesan pengurus: {hasil.pesanRt}</> : null}</Pesan>}
     </div>
   );
 }
@@ -54,6 +55,7 @@ export default function IsiPage({ token: tokenUrl, status }: { token?: string; s
   const [token, setToken] = useState<string | null>(null);
   const [ketik, setKetik] = useState("");
   const [rt, setRt] = useState<number | null>(null);
+  const [pertanyaan, setPertanyaan] = useState<DefinisiFakta[]>([]);
   const [memuat, setMemuat] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [kodeTerima, setKodeTerima] = useState<string | null>(null);
@@ -62,10 +64,11 @@ export default function IsiPage({ token: tokenUrl, status }: { token?: string; s
     setMemuat(true);
     setErr(null);
     try {
-      const r = await wil<{ rt: number }>("/api/isi/buka", { body: { token: t } });
+      const r = await wil<{ rt: number; pertanyaan: DefinisiFakta[] }>("/api/isi/buka", { body: { token: t } });
       sessionStorage.setItem(KUNCI_TOKEN, t);
       setToken(t);
       setRt(r.rt);
+      setPertanyaan(r.pertanyaan ?? []);
     } catch (e) {
       sessionStorage.removeItem(KUNCI_TOKEN);
       setErr((e as Error).message);
@@ -86,7 +89,7 @@ export default function IsiPage({ token: tokenUrl, status }: { token?: string; s
     return (
       <Bingkai>
         <div className="space-y-4">
-          <Pesan jenis="sukses">Terima kasih! Isian Anda sudah terkirim dan akan diperiksa Ketua RT.</Pesan>
+          <Pesan jenis="sukses">Terima kasih! Isian Anda sudah terkirim dan akan diperiksa pengurus RW.</Pesan>
           <p className="text-lg">Kode tanda terima (simpan / foto layar ini):</p>
           <p className="text-3xl font-bold tracking-widest text-center bg-white rounded-2xl border-2 p-4">{kodeTerima}</p>
           <TombolBesar varian="kedua" onClick={() => go("/isi/status")}>Cek status kiriman</TombolBesar>
@@ -100,7 +103,8 @@ export default function IsiPage({ token: tokenUrl, status }: { token?: string; s
       <Bingkai>
         <FormIsiKeluarga
           draftKey={`isi:${token.slice(-6)}`}
-          pembuka={<Pesan>Kartu ini untuk keluarga di {rt2(rt)} / RW 03. Isian Anda diperiksa Ketua RT sebelum data resmi diubah.</Pesan>}
+          pertanyaan={pertanyaan}
+          pembuka={<Pesan>Kartu ini untuk keluarga di {rt2(rt)} / RW 03. Isian Anda diperiksa pengurus RW sebelum data resmi diubah.</Pesan>}
           kirimKe={(isi, kunci) => wil<{ kodeTerima: string }>("/api/isi/kirim", { body: { token, idempotencyKey: kunci, isi } })}
           selesai={(k) => { sessionStorage.removeItem(KUNCI_TOKEN); setKodeTerima(k); }}
         />
@@ -111,7 +115,7 @@ export default function IsiPage({ token: tokenUrl, status }: { token?: string; s
     <Bingkai>
       <div className="space-y-4">
         <h1 className="text-2xl font-bold">Masukkan kode kartu</h1>
-        <p>Ketik kode 16 huruf/angka yang tertulis di kartu pemberitahuan dari Ketua RT.</p>
+        <p>Ketik kode 16 huruf/angka yang tertulis di kartu pemberitahuan dari pengurus RW.</p>
         {err && <Pesan jenis="error">{err}</Pesan>}
         <IsianTeks label="Kode" nilai={ketik} onChange={(v) => setKetik(v.toUpperCase())} placeholder="XXXX-XXXX-XXXX-XXXX" />
         <TombolBesar disabled={ketik.replace(/[^0-9A-Za-z]/g, "").length !== 16} onClick={() => buka(ketik)}>Buka formulir</TombolBesar>

@@ -4,7 +4,8 @@ import { Printer, QrCode } from "lucide-react";
 import { wil } from "@/lib/wilayah-api";
 import { useRtKelola } from "./konteks";
 import { Judul, Memuat, Pesan, PilihTombol, TombolBesar, rt2 } from "@/components/wilayah/ui";
-import { FAKTA_BY_KUNCI, FAKTA_FORM_KK, FAKTA_FORM_RUMAH, FAKTA_FORM_WARGA, FAKTA_FORM_USAHA, HUBUNGAN_KELUARGA } from "@shared/wilayah";
+import { HUBUNGAN_KELUARGA, kelompokkan, type DefinisiFakta } from "@shared/wilayah";
+import { useStandar } from "@/lib/standar";
 import logoBlack from "@assets/RW03-Cimahi-Logo-Black.svg";
 
 interface Kartu { kkId: number; rt: number; kepala: string; alamatSingkat: string; kodeKartu: string; tokenTampil: string; url: string; qrSvg: string; berlakuSampai: string }
@@ -64,45 +65,57 @@ function Kotak({ teks }: { teks: string }) {
   return <span className="inline-flex items-center gap-1 mr-3"><span className="inline-block w-[4mm] h-[4mm] border border-black" />{teks}</span>;
 }
 
-function PertanyaanKertas({ kunci }: { kunci: string }) {
-  const def = FAKTA_BY_KUNCI.get(kunci);
-  if (!def) return null;
+function PertanyaanKertas({ def }: { def: DefinisiFakta }) {
   const pilihan = def.tipe === "yatidak" ? ["Ya", "Tidak"] : (def.pilihan ?? []).map((p) => p.label);
+  const syarat = [def.khususPerempuan ? "perempuan" : null, def.usiaMin != null ? `usia ≥ ${def.usiaMin}` : null, def.usiaMax != null ? `usia ≤ ${def.usiaMax}` : null].filter(Boolean);
   return (
     <div className="mb-[2mm] break-inside-avoid">
-      <p>{def.pertanyaan}</p>
-      <p className="pl-2">{pilihan.map((p) => <Kotak key={p} teks={p} />)}<Kotak teks="Belum tahu" /></p>
+      <p>{def.pertanyaan}{syarat.length ? <span className="italic text-[8.5pt]"> ({syarat.join(", ")})</span> : null}{def.tipe === "banyak" ? <span className="italic text-[8.5pt]"> — boleh lebih dari satu</span> : null}</p>
+      {def.tipe === "angka" || def.tipe === "teks"
+        ? <p className="pl-2">______________________________</p>
+        : <p className="pl-2">{pilihan.map((p) => <Kotak key={p} teks={p} />)}<Kotak teks="Belum tahu" /></p>}
     </div>
+  );
+}
+
+function DaftarKertas({ defs }: { defs: DefinisiFakta[] }) {
+  return (
+    <>
+      {kelompokkan(defs).map((g) => (
+        <div key={g.kelompok} className="break-inside-avoid">
+          <p className="font-semibold underline mt-1">{g.kelompok}</p>
+          <div className="columns-2 gap-[8mm]">{g.daftar.map((d) => <PertanyaanKertas key={d.kunci} def={d} />)}</div>
+        </div>
+      ))}
+    </>
   );
 }
 
 /** Formulir kertas: pertanyaan dan pilihan sama persis dengan form digital (/isi). */
 function FormulirKertas() {
+  const { data: standar } = useStandar();
+  if (!standar) return <Memuat />;
+  const kk = standar.filter((d) => d.subjek === "kk" && d.diQr);
+  const warga = standar.filter((d) => d.subjek === "warga" && d.diQr);
   return (
     <div className="formulir bg-white text-black p-[12mm] text-[10pt] leading-snug">
       <Kop />
       <p className="text-center text-[13pt] font-bold my-2">FORMULIR PENDATAAN KELUARGA</p>
       <p>Kode kartu: ______________ &nbsp; Nama pengisi: ____________________ &nbsp; Hubungan: ______________</p>
       <p className="mb-2">Nomor HP (bukan NIK): ____________________</p>
-      <p className="font-bold mt-3 mb-1">A. RUMAH TANGGA</p>
-      <div className="columns-2 gap-[8mm]">{[...FAKTA_FORM_KK, ...FAKTA_FORM_RUMAH].map((k) => <PertanyaanKertas key={k} kunci={k} />)}</div>
+      <p className="font-bold mt-3 mb-1">A. KELUARGA & RUMAH</p>
+      <DaftarKertas defs={kk} />
       {[1, 2, 3, 4].map((n) => (
         <div key={n} className="mt-3 border-t border-black pt-2 break-inside-avoid">
           <p className="font-bold">B{n}. ANGGOTA KELUARGA</p>
           <p>Nama: ______________________________ &nbsp; Tgl lahir: ____ / ____ / ________</p>
           <p>Hubungan: {HUBUNGAN_KELUARGA.slice(0, 6).map((h) => <Kotak key={h} teks={h} />)}</p>
           <p><Kotak teks="Laki-laki" /><Kotak teks="Perempuan" /> &nbsp; Keterangan: <Kotak teks="Tetap" /><Kotak teks="Baru" /><Kotak teks="Pindah" /><Kotak teks="Meninggal" /></p>
-          <div className="columns-2 gap-[8mm] mt-1">{FAKTA_FORM_WARGA.map((k) => <PertanyaanKertas key={k} kunci={k} />)}</div>
-          <p className="text-[8.5pt] italic">Kesehatan: isi “Ya” hanya bila sudah dinyatakan tenaga kesehatan.</p>
+          <DaftarKertas defs={warga} />
         </div>
       ))}
-      <div className="mt-3 border-t border-black pt-2 break-inside-avoid">
-        <p className="font-bold">C. USAHA (bila ada)</p>
-        <p>Nama usaha: ________________________ &nbsp; Pemilik: ____________________</p>
-        <div className="columns-2 gap-[8mm]">{FAKTA_FORM_USAHA.map((k) => <PertanyaanKertas key={k} kunci={k} />)}</div>
-      </div>
       <p className="mt-3">Catatan: ____________________________________________________________</p>
-      <p className="mt-4 text-[9pt]">Serahkan ke Ketua RT. Ketua RT akan memeriksa sebelum data resmi diubah.</p>
+      <p className="mt-4 text-[9pt]">Serahkan ke pengurus RT/RW. Pengurus RW memeriksa sebelum data resmi diubah.</p>
     </div>
   );
 }

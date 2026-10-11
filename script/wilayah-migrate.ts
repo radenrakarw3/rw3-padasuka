@@ -1,5 +1,5 @@
 /**
- * Migrasi modul wilayah (0023–0025, termasuk Surat Sakti v2). Default DRY-RUN: SQL dijalankan dalam transaksi lalu ROLLBACK.
+ * Migrasi modul wilayah (0023–0026, termasuk Surat Sakti v2 dan standar data RW 03). Default DRY-RUN: SQL dijalankan dalam transaksi lalu ROLLBACK.
  *
  *   npm run wilayah:migrate                 # dry-run + laporan rekonsiliasi
  *   npm run wilayah:migrate -- --apply      # commit
@@ -23,6 +23,7 @@ const TABEL_BARU = [
   "wil_konfirmasi", "wil_laporan", "wil_kk_token", "wil_usulan", "wil_audit", "wil_surat_counter", "wil_surat_lampiran",
   "wil_surat_kirim", "wil_surat_tindak", "wil_permintaan_surat",
   "wil_surat_rangkaian", "wil_surat_berkas", "wil_surat_tindak_update", "wil_surat_masuk", "wil_surat_bantuan", "wil_surat_fakta",
+  "wil_pertanyaan",
 ];
 
 /** Pemetaan nilai lama → fakta. Nilai lama punya default (mis. "PDAM"), jadi hasilnya wajib dicek RT. */
@@ -42,7 +43,7 @@ async function main() {
     ssl: process.env.DATABASE_URL.includes("sslmode=") ? undefined : process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined,
   });
   await client.connect();
-  const sql = ["0023_wilayah.sql", "0024_wilayah_input_rw.sql", "0025_surat_sakti.sql"]
+  const sql = ["0023_wilayah.sql", "0024_wilayah_input_rw.sql", "0025_surat_sakti.sql", "0026_wilayah_standar.sql"]
     .map((f) => fs.readFileSync(path.join(process.cwd(), "migrations", f), "utf8"))
     .join("\n");
 

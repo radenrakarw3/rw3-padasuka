@@ -4,6 +4,8 @@ Migrasi `migrations/0023_wilayah.sql` bersifat **additive dan idempoten**: hanya
 
 `migrations/0024_wilayah_input_rw.sql` (formulir dari RW) juga additive: `wil_usulan.token_id`/`kk_id` boleh kosong, dan ditambah kolom `sumber`, `diinput_oleh`, `keluarga_baru`. Saat server menyala, `server/wilayah-skema.ts` memasang migrasi wilayah yang belum ada secara otomatis (dengan advisory lock). Matikan dengan `WILAYAH_AUTO_MIGRATE=false`.
 
+`migrations/0026_wilayah_standar.sql` (standar data RW 03) juga additive: hanya membuat tabel `wil_pertanyaan`. Saat tabel kosong, server mengisi pertanyaan awal. Jawaban lama di `wil_fakta` tidak diubah; kunci lama hanya tidak ditampilkan. Rollback: `psql "$DATABASE_URL" -f migrations/0026_wilayah_standar.down.sql` (menghapus daftar pertanyaan saja, jawaban tetap ada).
+
 ## Langkah (hanya atas instruksi Ketua RW)
 
 1. **Backup**: `pg_dump "$DATABASE_URL" -Fc -f backup-sebelum-wilayah.dump`

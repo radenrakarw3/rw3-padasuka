@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { ChevronLeft, Loader2 } from "lucide-react";
-import { FAKTA_BY_KUNCI, type DefinisiFakta } from "@shared/wilayah";
+import { nilaiBanyak, type DefinisiFakta } from "@shared/wilayah";
+import { defStandar } from "@/lib/standar";
 
 export const HIJAU = "hsl(163,55%,22%)";
 export const EMAS = "hsl(40,45%,55%)";
@@ -113,22 +114,66 @@ export function PilihTombol({
   );
 }
 
-export function PilihFakta({ kunci, nilai, onChange }: { kunci: string; nilai: string | null | undefined; onChange: (v: string | null) => void }) {
-  const def = FAKTA_BY_KUNCI.get(kunci) as DefinisiFakta | undefined;
+const PILIHAN_TUNGGAL = ["tidak_ada", "tidak"];
+
+/** Pilih beberapa. Pilihan "Tidak ada" otomatis menghapus pilihan lain (dan sebaliknya). */
+export function PilihBanyak({
+  label, nilai, pilihan, onChange, bantuan,
+}: {
+  label: string; nilai: string | null | undefined; pilihan: { nilai: string; label: string }[]; onChange: (v: string | null) => void; bantuan?: string | null;
+}) {
+  const terpilih = nilaiBanyak(nilai);
+  const ubah = (v: string) => {
+    let baru = terpilih.includes(v) ? terpilih.filter((x) => x !== v) : [...terpilih, v];
+    if (!terpilih.includes(v)) baru = PILIHAN_TUNGGAL.includes(v) ? [v] : baru.filter((x) => !PILIHAN_TUNGGAL.includes(x));
+    onChange(baru.length ? pilihan.map((p) => p.nilai).filter((x) => baru.includes(x)).join(",") : null);
+  };
+  return (
+    <fieldset className="mb-5">
+      <legend className="text-lg font-semibold text-gray-900 mb-1">{label}</legend>
+      <p className="text-base text-gray-600 mb-2">{bantuan || "Boleh pilih lebih dari satu."}</p>
+      <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
+        {pilihan.map((p) => {
+          const aktif = terpilih.includes(p.nilai);
+          return (
+            <button key={p.nilai} type="button" aria-pressed={aktif} onClick={() => ubah(p.nilai)}
+              className={`min-h-[52px] rounded-xl border-2 px-3 py-2 text-lg font-medium text-left flex items-center gap-3 ${aktif ? "text-white" : "bg-white text-gray-900 border-gray-300"}`}
+              style={aktif ? { backgroundColor: HIJAU, borderColor: HIJAU } : undefined}>
+              <span className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 text-sm ${aktif ? "border-white" : "border-gray-400"}`}>{aktif ? "✓" : ""}</span>
+              {p.label}
+            </button>
+          );
+        })}
+      </div>
+      {terpilih.length > 0 && (
+        <button type="button" onClick={() => onChange(null)} className="mt-2 text-base text-gray-600 underline">Kosongkan (belum tahu)</button>
+      )}
+    </fieldset>
+  );
+}
+
+export function PilihFakta({ kunci, def: defProp, nilai, onChange }: { kunci: string; def?: DefinisiFakta; nilai: string | null | undefined; onChange: (v: string | null) => void }) {
+  const def = defProp ?? defStandar(kunci);
   if (!def) return null;
-  if (def.tipe === "angka") {
+  if (def.tipe === "angka" || def.tipe === "teks") {
+    const angka = def.tipe === "angka";
     return (
       <IsianTeks
         label={def.pertanyaan}
-        bantuan="Kosongkan bila belum tahu. Isi 0 bila memang tidak ada."
+        bantuan={def.bantuan || (angka ? "Kosongkan bila belum tahu. Isi 0 bila memang tidak ada." : "Kosongkan bila belum tahu.")}
         nilai={nilai ?? ""}
-        inputMode="numeric"
-        onChange={(v) => onChange(v.replace(/\D/g, "") === "" ? null : v.replace(/\D/g, ""))}
+        inputMode={angka ? "numeric" : "text"}
+        maks={angka ? 6 : 200}
+        onChange={(v) => {
+          const bersih = angka ? v.replace(/\D/g, "") : v;
+          onChange(bersih.trim() === "" ? null : bersih);
+        }}
       />
     );
   }
+  if (def.tipe === "banyak") return <PilihBanyak label={def.pertanyaan} bantuan={def.bantuan} nilai={nilai} pilihan={def.pilihan ?? []} onChange={onChange} />;
   const pilihan = def.tipe === "yatidak" ? [{ nilai: "ya", label: "Ya" }, { nilai: "tidak", label: "Tidak" }] : def.pilihan ?? [];
-  return <PilihTombol label={def.pertanyaan} nilai={nilai} pilihan={pilihan} onChange={onChange} kolom={pilihan.length > 4 ? 1 : 2} />;
+  return <PilihTombol label={def.pertanyaan} bantuan={def.bantuan ?? undefined} nilai={nilai} pilihan={pilihan} onChange={onChange} kolom={pilihan.length > 4 ? 1 : 2} />;
 }
 
 export function IsianTeks({

@@ -5,13 +5,13 @@ import { ChevronRight } from "lucide-react";
 import { useKirimSekali, wil } from "@/lib/wilayah-api";
 import { IsianPanjang, IsianTeks, Judul, Memuat, Pesan, PilihTombol, TombolBesar } from "@/components/wilayah/ui";
 import { KeluargaBaru } from "./warga";
-import { FAKTA_BY_KUNCI, labelNilaiFakta, type IsiUsulan } from "@shared/wilayah";
+import { labelNilaiFakta, type IsiUsulan } from "@shared/wilayah";
+import { defStandar, useStandar } from "@/lib/standar";
 
 interface Fakta { kunci: string; nilai: string; statusVerifikasi: string }
 interface Resmi {
   kk: { id: number };
   anggota: { id: number; nama: string; tanggalLahir: string | null; kedudukan: string; fakta: Fakta[] }[];
-  rumah: { id: number; fakta: Fakta[] } | null;
   fakta: Fakta[];
 }
 interface Detail {
@@ -38,7 +38,9 @@ function Centang({ aktif, onClick, children }: { aktif: boolean; onClick: () => 
 function Periksa({ id }: { id: number }) {
   const [, go] = useLocation();
   const qc = useQueryClient();
-  const { data, isLoading, error: galatMuat } = useQuery<Detail>({ queryKey: [`/api/wilayah/rt/usulan/${id}`], queryFn: () => wil(`/api/wilayah/rt/usulan/${id}`) });
+  const { data, isLoading: memuatUsulan, error: galatMuat } = useQuery<Detail>({ queryKey: [`/api/wilayah/rt/usulan/${id}`], queryFn: () => wil(`/api/wilayah/rt/usulan/${id}`) });
+  const { data: standar, isLoading: memuatStandar } = useStandar();
+  const isLoading = memuatUsulan || memuatStandar;
   const [pilih, setPilih] = useState<Record<string, boolean>>({});
   const [cocok, setCocok] = useState<Record<number, string>>({});
   const [catatan, setCatatan] = useState("");
@@ -71,13 +73,12 @@ function Periksa({ id }: { id: number }) {
     if (!usulan || !resmi) return [];
     const out: { key: string; label: string; dari: string; ke: string; fakta?: { subjek: string; subjekId: number; kunci: string; nilai: string }; tgl?: { wargaId: number; tanggalLahir: string }; hp?: { wargaId: number; nomorHp: string } }[] = [];
     for (const [kunci, nilai] of Object.entries(usulan.isi.rumahTangga)) {
-      const def = FAKTA_BY_KUNCI.get(kunci);
-      const rumah = def?.subjek === "rumah";
-      if (rumah && !resmi.rumah) continue;
-      const lama = rumah ? nilaiResmi(resmi.rumah!.fakta, kunci) : nilaiResmi(resmi.fakta, kunci);
+      const def = defStandar(kunci);
+      if (def?.subjek !== "kk") continue;
+      const lama = nilaiResmi(resmi.fakta, kunci);
       if (lama === nilai) continue;
-      out.push({ key: `kk:${kunci}`, label: def?.label ?? kunci, dari: labelNilaiFakta(def, lama), ke: labelNilaiFakta(def, nilai),
-        fakta: { subjek: rumah ? "rumah" : "kk", subjekId: rumah ? resmi.rumah!.id : resmi.kk.id, kunci, nilai } });
+      out.push({ key: `kk:${kunci}`, label: def.label, dari: labelNilaiFakta(def, lama), ke: labelNilaiFakta(def, nilai),
+        fakta: { subjek: "kk", subjekId: resmi.kk.id, kunci, nilai } });
     }
     usulan.isi.anggota.forEach((a, i) => {
       const wid = Number(cocokFinal[i]);
@@ -87,17 +88,18 @@ function Periksa({ id }: { id: number }) {
         out.push({ key: `tgl:${i}`, label: `${w.nama}: tanggal lahir`, dari: w.tanggalLahir ?? "Belum diketahui", ke: a.tanggalLahir, tgl: { wargaId: w.id, tanggalLahir: a.tanggalLahir } });
       }
       for (const [kunci, nilai] of Object.entries(a.jawaban)) {
-        const def = FAKTA_BY_KUNCI.get(kunci);
+        const def = defStandar(kunci);
+        if (def?.subjek !== "warga") continue;
         const lama = nilaiResmi(w.fakta, kunci);
         if (lama === nilai) continue;
-        out.push({ key: `w:${i}:${kunci}`, label: `${w.nama}: ${def?.label ?? kunci}`, dari: labelNilaiFakta(def, lama), ke: labelNilaiFakta(def, nilai),
+        out.push({ key: `w:${i}:${kunci}`, label: `${w.nama}: ${def.label}`, dari: labelNilaiFakta(def, lama), ke: labelNilaiFakta(def, nilai),
           fakta: { subjek: "warga", subjekId: w.id, kunci, nilai } });
       }
     });
     const kepala = resmi.anggota.find((a) => a.kedudukan === "Kepala Keluarga");
     if (usulan.isi.nomorHp && kepala) out.push({ key: "hp", label: `Nomor HP ${kepala.nama}`, dari: "—", ke: usulan.isi.nomorHp, hp: { wargaId: kepala.id, nomorHp: usulan.isi.nomorHp } });
     return out;
-  }, [usulan, resmi, cocokFinal]);
+  }, [usulan, resmi, cocokFinal, standar]);
 
   const terpilih = (k: string) => pilih[k] ?? true;
   const { kirim, mengirim, error } = useKirimSekali(async () => {
@@ -207,7 +209,6 @@ function Periksa({ id }: { id: number }) {
 
       {baru.length > 0 && <Pesan jenis="peringatan">Anggota baru ({baru.map((a) => a.nama).join(", ")}) ditambahkan lewat “Tambah anggota” di halaman keluarga karena perlu NIK.</Pesan>}
       {keluar.length > 0 && <Pesan jenis="peringatan">Dilaporkan pindah/meninggal: {keluar.map((a) => `${a.nama} (${a.keterangan})`).join(", ")}. Ubah lewat “Data dasar” setelah dipastikan.</Pesan>}
-      {usulan.isi.usaha.length > 0 && <Pesan>Usaha dilaporkan: {usulan.isi.usaha.map((u) => u.nama).join(", ")}. Tambahkan di menu Usaha bila benar.</Pesan>}
       {usulan.isi.catatan && <Pesan>Catatan warga: {usulan.isi.catatan}</Pesan>}
 
       {terbuka ? (

@@ -43,6 +43,7 @@ const AdminKelolaWarga = lazy(() => import("@/pages/admin/kelola-warga"));
 const AdminSuratRw = lazy(() => import("@/pages/admin/surat-rw"));
 const AdminSuratSakti = lazy(() => import("@/pages/admin/surat-sakti"));
 const AdminRwDashboard = lazy(() => import("@/pages/admin/rw-dashboard"));
+const AdminStandarData = lazy(() => import("@/pages/admin/standar-data"));
 const PublicIsi = lazy(() => import("@/pages/public/isi"));
 
 const AdminVisitrw3Landing = lazy(() => import("@/pages/admin/visitrw3-landing"));
@@ -310,6 +311,7 @@ function AdminRoutes() {
         <Route path="/admin/rtjuara">{() => <Redirect to="/admin/kelola-warga" />}</Route>
 
         <Route path="/admin/dashboard" component={AdminRwDashboard} />
+        <Route path="/admin/standar-data" component={AdminStandarData} />
 
         <Route path="/admin/surat-rw-lama" component={AdminSuratRw} />
         <Route path="/admin/surat-rw" component={AdminSuratSakti} />

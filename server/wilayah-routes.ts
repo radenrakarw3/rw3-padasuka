@@ -3,13 +3,12 @@ import { z } from "zod";
 import { kirimError, requireRtAtauRw, requireRtWilayah, requireRwWilayah, WilayahError } from "./wilayah-auth";
 import * as data from "./wilayah-data";
 import * as qr from "./wilayah-qr";
-import * as lap from "./wilayah-laporan";
+import * as standar from "./wilayah-standar";
 import * as surat from "./wilayah-surat";
 import * as layanan from "./surat-sakti/layanan";
 import * as tindak from "./surat-sakti/tindak";
-import { aksiRw, ringkasanRw } from "./wilayah-dashboard";
-import { bulanPeriodeEkspor, isBulanValid, isWilayahRt, type SubjekFakta } from "@shared/wilayah";
-import { INDIKATOR_KECAMATAN } from "@shared/indikator-kecamatan";
+import { ringkasanRw } from "./wilayah-dashboard";
+import { isWilayahRt, type SubjekFakta } from "@shared/wilayah";
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 
@@ -28,14 +27,6 @@ function idParam(req: Request, nama = "id"): number {
   const n = Number(req.params[nama]);
   if (!Number.isInteger(n) || n <= 0) throw new WilayahError(400, "ID tidak valid");
   return n;
-}
-
-function bulanQuery(req: Request): { tahun: number; bulan: number } {
-  const now = new Date();
-  const tahun = req.query.tahun ? Number(req.query.tahun) : now.getFullYear();
-  const bulan = req.query.bulan ? Number(req.query.bulan) : now.getMonth() + 1;
-  if (!isBulanValid(tahun, bulan)) throw new WilayahError(400, "Bulan tidak valid");
-  return { tahun, bulan };
 }
 
 function rtQuery(req: Request): number | null {
@@ -75,65 +66,13 @@ export function registerWilayahRoutes(app: Express) {
   // ------------------------------------------------------------------ bersama (RW; dengan X-Wilayah-Rt dibatasi ke RT yang dikelola)
   const RR = requireRtAtauRw;
   app.get("/api/wilayah/saya", RR, h(async (req) => req.aktor));
-  app.get("/api/wilayah/indikator", RR, h(async () => INDIKATOR_KECAMATAN));
+  app.get("/api/wilayah/standar", RR, h(async (req) => standar.daftarStandar({ semua: req.query.semua === "1" })));
   app.get("/api/wilayah/keluarga", RR, h(async (req) => data.daftarKeluarga(req.aktor!, { rt: rtQuery(req), cari: String(req.query.cari ?? ""), batas: Number(req.query.batas) || undefined })));
   app.get("/api/wilayah/keluarga/:id", RR, h(async (req) => data.detailKeluarga(req.aktor!, idParam(req))));
   app.get("/api/wilayah/cari-warga", RR, h(async (req) => data.cariWarga(req.aktor!, String(req.query.q ?? ""))));
   app.get("/api/wilayah/riwayat/:subjek/:id", RR, h(async (req) => data.riwayatSubjek(req.aktor!, req.params.subjek as SubjekFakta, idParam(req))));
   app.get("/api/wilayah/rumah", RR, h(async (req) => data.daftarRumah(req.aktor!, rtQuery(req))));
-  app.get("/api/wilayah/usaha", RR, h(async (req) => data.daftarUsaha(req.aktor!, rtQuery(req))));
-  app.get("/api/wilayah/fasilitas", RR, h(async (req) => data.daftarFasilitas(req.aktor!)));
-  app.get("/api/wilayah/kelompok", RR, h(async (req) => data.daftarKelompok(req.aktor!)));
-  app.get("/api/wilayah/kegiatan", RR, h(async (req) => data.daftarKegiatan(req.aktor!, { dari: req.query.dari as string | undefined, sampai: req.query.sampai as string | undefined })));
-  app.get("/api/wilayah/kejadian", RR, h(async (req) => data.daftarKejadian(req.aktor!, { status: req.query.status as string | undefined, rt: rtQuery(req) })));
   app.get("/api/wilayah/serah-terima", RR, h(async (req) => data.daftarSerahTerima(req.aktor!)));
-  app.post("/api/wilayah/fasilitas", RR, h(async (req) => data.simpanFasilitas(req.aktor!, req.body)));
-  app.patch("/api/wilayah/fasilitas/:id", RR, h(async (req) => data.simpanFasilitas(req.aktor!, req.body, idParam(req))));
-  app.post("/api/wilayah/fasilitas/:id/nonaktif", RR, h(async (req) => data.nonaktifkanObjek(req.aktor!, "fasilitas", idParam(req))));
-  app.post("/api/wilayah/kelompok", RR, h(async (req) => data.simpanKelompok(req.aktor!, req.body)));
-  app.patch("/api/wilayah/kelompok/:id", RR, h(async (req) => data.simpanKelompok(req.aktor!, req.body, idParam(req))));
-  app.post("/api/wilayah/kelompok/:id/nonaktif", RR, h(async (req) => data.nonaktifkanObjek(req.aktor!, "kelompok", idParam(req))));
-  // RT: subjek di RT-nya; RW: hanya fasilitas yang dikelola RW (dicek di simpanFakta).
-  app.post("/api/wilayah/fakta/banyak", RR, h(async (req) => data.simpanBanyakFakta(req.aktor!, req.body)));
-  app.post("/api/wilayah/kegiatan", RR, h(async (req) => data.simpanKegiatan(req.aktor!, req.body)));
-  app.post("/api/wilayah/kejadian/:id/tindak", RR, h(async (req) => data.tindakLanjutKejadian(req.aktor!, idParam(req), req.body)));
-  app.post("/api/wilayah/konfirmasi", RR, h(async (req) => {
-    const b = z.object({ tahun: z.number().int(), bulan: z.number().int(), bagian: z.string(), aktif: z.boolean() }).parse(req.body);
-    return data.setKonfirmasi(req.aktor!, b.tahun, b.bulan, b.bagian, b.aktif);
-  }));
-
-  // Laporan (RT = laporan RT sesi; RW = rekap atau per RT, baca)
-  app.get("/api/wilayah/laporan", RR, h(async (req) => {
-    const { tahun, bulan } = bulanQuery(req);
-    return lap.pratinjauLaporan(req.aktor!, rtQuery(req), tahun, bulan);
-  }, "Gagal menghitung laporan"));
-  app.get("/api/wilayah/laporan/versi", RR, h(async (req) => {
-    const { tahun, bulan } = bulanQuery(req);
-    return lap.daftarVersi(req.aktor!, rtQuery(req), tahun, bulan);
-  }));
-  app.post("/api/wilayah/laporan/final", RR, h(async (req) => {
-    const b = z.object({ tahun: z.number().int(), bulan: z.number().int(), alasanKoreksi: z.string().max(500).optional() }).parse(req.body);
-    if (!isBulanValid(b.tahun, b.bulan)) throw new WilayahError(400, "Bulan tidak valid");
-    return lap.finalkanLaporan(req.aktor!, b.tahun, b.bulan, b.alasanKoreksi);
-  }, "Gagal memfinalkan laporan"));
-  app.get("/api/wilayah/laporan/ekspor", RR, h(async (req, res) => {
-    const tahun = Number(req.query.tahun) || new Date().getFullYear();
-    const dari = req.query.dari ? Number(req.query.dari) : undefined;
-    const sampai = req.query.sampai ? Number(req.query.sampai) : undefined;
-    const bulan = bulanPeriodeEkspor(tahun, dari, sampai);
-    if (!bulan.length) throw new WilayahError(400, "Periode tidak valid");
-    const rt = req.aktor!.role === "rt" ? req.aktor!.rt : rtQuery(req);
-    const d = await lap.dataEkspor(req.aktor!, rt, tahun, bulan);
-    if (req.query.format === "xlsx") {
-      const buf = lap.eksporXlsx(d);
-      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-      res.setHeader("Content-Disposition", `attachment; filename="${lap.namaFileEkspor(d, rt, "xlsx")}"`);
-      res.end(buf);
-      return;
-    }
-    return d;
-  }, "Gagal membuat ekspor"));
-
   // ------------------------------------------------------------------ RW mengelola data satu RT (X-Wilayah-Rt)
   const RT = requireRtWilayah;
   app.post("/api/wilayah/rt/keluarga", RT, h(async (req) => data.tambahKeluarga(req.aktor!, req.body)));
@@ -143,7 +82,6 @@ export function registerWilayahRoutes(app: Express) {
   app.post("/api/wilayah/rt/fakta/banyak", RT, h(async (req) => data.simpanBanyakFakta(req.aktor!, req.body)));
   app.post("/api/wilayah/rt/fakta/:id/putuskan", RT, h(async (req) => data.putuskanFaktaPerluCek(req.aktor!, idParam(req), req.body?.terima === true)));
   app.post("/api/wilayah/rt/rumah", RT, h(async (req) => data.buatRumah(req.aktor!, req.body)));
-  app.post("/api/wilayah/rt/kegiatan/:id/hadir", RT, h(async (req) => data.catatKehadiran(req.aktor!, idParam(req), Number(req.body?.jumlahHadir))));
   app.post("/api/wilayah/rt/keluarga/:id/rumah", RT, h(async (req) => data.hubungkanKkRumah(req.aktor!, idParam(req), Number(req.body?.rumahId))));
   app.post("/api/wilayah/rt/serah-terima", RT, h(async (req) => data.ajukanSerahTerima(req.aktor!, req.body)));
   app.post("/api/wilayah/rt/serah-terima/:id/putuskan", RT, h(async (req) => data.putuskanSerahTerima(req.aktor!, idParam(req), req.body)));
@@ -157,17 +95,15 @@ export function registerWilayahRoutes(app: Express) {
   app.post("/api/wilayah/rt/usulan/:id/putuskan", RT, h(async (req) => qr.putuskanUsulan(req.aktor!, idParam(req), req.body)));
   // ------------------------------------------------------------------ khusus Ketua RW
   const RW = requireRwWilayah;
-  app.get("/api/wilayah/rw/ringkasan", RW, h(async (req) => {
-    const { tahun, bulan } = bulanQuery(req);
-    return ringkasanRw(tahun, bulan);
-  }, "Gagal memuat dashboard"));
-  app.get("/api/wilayah/rw/aksi", RW, h(async (req) => {
-    const { tahun, bulan } = bulanQuery(req);
-    return aksiRw(tahun, bulan);
-  }));
-  app.get("/api/wilayah/rw/laporan-status", RW, h(async (req) => {
-    const { tahun, bulan } = bulanQuery(req);
-    return lap.statusLaporanSemuaRt(tahun, bulan);
+  app.get("/api/wilayah/rw/ringkasan", RW, h(async () => ringkasanRw(), "Gagal memuat dashboard"));
+  app.post("/api/wilayah/rw/standar", RW, h(async (req) => standar.tambahStandar(req.aktor!, standar.inputStandarSchema.parse(req.body))));
+  app.patch("/api/wilayah/rw/standar/:id", RW, h(async (req) => standar.ubahStandar(req.aktor!, idParam(req), standar.inputStandarSchema.parse(req.body))));
+  app.delete("/api/wilayah/rw/standar/:id", RW, h(async (req) => standar.aturAktifStandar(req.aktor!, idParam(req), false)));
+  app.post("/api/wilayah/rw/standar/:id/pulihkan", RW, h(async (req) => standar.aturAktifStandar(req.aktor!, idParam(req), true)));
+  app.post("/api/wilayah/rw/standar-urutan", RW, h(async (req) => {
+    const b = z.object({ ids: z.array(z.number().int().positive()).min(1).max(300) }).parse(req.body);
+    await standar.urutkanStandar(req.aktor!, b.ids);
+    return { ok: true };
   }));
   // ------------------------------------------------------------------ Surat Sakti (RW mengelola; RT membaca yang relevan)
   const kirimBerkas = (gagal: string, fn: (req: Request) => Promise<{ buffer: Buffer; nama: string; mime?: string }>, unduh = false) =>

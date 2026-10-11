@@ -33,6 +33,13 @@ export const MIGRASI_WILAYAH: { file: string; terpasang: () => Promise<boolean> 
       return rows[0].n === 3;
     },
   },
+  {
+    file: "0026_wilayah_standar.sql",
+    terpasang: async () => {
+      const { rows } = await pool.query(`SELECT to_regclass('wil_pertanyaan') IS NOT NULL AS ada`);
+      return rows[0].ada === true;
+    },
+  },
 ];
 
 function bacaSql(file: string): string | null {
