@@ -1,7 +1,7 @@
 /**
  * QR pendataan keluarga.
  * - Token = Crockford base32 dari HMAC(secret, kk:nonce), 80 bit. DB hanya menyimpan SHA-256 token + nonce acak.
- * - Token hanya membuka form usulan; tidak pernah mengembalikan data keluarga.
+ * - Token hanya membuka form usulan + ringkasan apa yang sudah terisi (nama/hubungan anggota); tanpa NIK, nomor KK, atau nilai jawaban.
  * - Usulan tidak mengubah data resmi sampai Ketua RT menerimanya.
  */
 import crypto from "crypto";
@@ -9,9 +9,9 @@ import QRCode from "qrcode";
 import { z } from "zod";
 import { pool } from "./db";
 import { catatAudit, WilayahError, type Aktor } from "./wilayah-auth";
-import { denganTransaksi, detailKeluarga, ringkasKeluarga, simpanFakta } from "./wilayah-data";
+import { denganTransaksi, detailKeluarga, indukKeluarga, ringkasKeluarga, simpanFakta } from "./wilayah-data";
 import { registri, standarAktif } from "./wilayah-standar";
-import { HUBUNGAN_KELUARGA, validasiNilaiFakta, type IsiUsulan } from "@shared/wilayah";
+import { HUBUNGAN_KELUARGA, isoTanggal, umurTahun, validasiNilaiFakta, type IsiUsulan } from "@shared/wilayah";
 import { looksLikeNik, normalizeNomorHp } from "@shared/kontak";
 
 const MASA_BERLAKU_HARI = 180;
@@ -166,7 +166,7 @@ export async function paketUntukCetak(aktor: Aktor, kkIds: number[] | "semua"): 
   const ids = kartu.map((k) => k.kkId);
   if (!ids.length) return [];
   const kunci = (await standarAktif()).map((d) => d.kunci);
-  const [{ rows: orang }, { rows: fakta }, ringkas] = await Promise.all([
+  const [{ rows: orang }, { rows: fakta }, ringkas, induk] = await Promise.all([
     pool.query(
       `SELECT id, kk_id, nama_lengkap, kedudukan_keluarga, jenis_kelamin, tanggal_lahir
          FROM warga WHERE kk_id = ANY($1) AND status_kependudukan = 'Aktif'
@@ -181,15 +181,82 @@ export async function paketUntukCetak(aktor: Aktor, kkIds: number[] | "semua"): 
       [ids, kunci],
     ),
     ringkasKeluarga(ids),
+    indukKeluarga(ids),
   ]);
-  return kartu.map((k) => ({
-    ...k,
-    anggota: orang.filter((o) => o.kk_id === k.kkId).map((o) => ({
-      id: o.id, nama: o.nama_lengkap, hubungan: o.kedudukan_keluarga, jenisKelamin: o.jenis_kelamin, tanggalLahir: o.tanggal_lahir || null,
+  return kartu.map((k) => {
+    const milik = orang.filter((o) => o.kk_id === k.kkId);
+    const awalan = [`kk:${k.kkId}:`, ...milik.map((o) => `warga:${o.id}:`)];
+    const jawaban: Record<string, string> = {};
+    for (const [kunci, nilai] of induk.jawaban) if (awalan.some((a) => kunci.startsWith(a))) jawaban[kunci] = nilai;
+    for (const f of fakta) if (f.kk_id === k.kkId) jawaban[`${f.subjek}:${f.subjek_id}:${f.kunci}`] = f.nilai;
+    return {
+      ...k,
+      anggota: milik.map((o) => ({
+        id: o.id, nama: o.nama_lengkap, hubungan: o.kedudukan_keluarga, jenisKelamin: o.jenis_kelamin, tanggalLahir: o.tanggal_lahir || null,
+      })),
+      jawaban,
+      kelengkapan: ringkas.get(k.kkId)?.kelengkapan ?? 0,
+    };
+  });
+}
+
+export interface AnggotaLengkapi {
+  nama: string;
+  hubungan: string;
+  jenisKelamin: string | null;
+  umur: number | null;
+  adaTanggalLahir: boolean;
+  /** Kunci pertanyaan yang sudah terjawab (tanpa nilainya). */
+  terisi: string[];
+}
+export interface KeluargaLengkapi {
+  anggota: AnggotaLengkapi[];
+  terisiKk: string[];
+  adaWa: boolean;
+  kelengkapan: number;
+  terjawab: number;
+  pertanyaan: number;
+}
+
+/** Ringkasan apa yang sudah/belum terisi untuk form "lengkapi data". Tanpa NIK, nomor KK, tanggal, atau nilai jawaban. */
+async function keluargaUntukLengkapi(kkId: number): Promise<KeluargaLengkapi> {
+  const kunci = (await standarAktif()).map((d) => d.kunci);
+  const [{ rows: orang }, { rows: fakta }, ringkas, induk] = await Promise.all([
+    pool.query(
+      `SELECT id, nama_lengkap, kedudukan_keluarga, jenis_kelamin, tanggal_lahir
+         FROM warga WHERE kk_id = $1 AND status_kependudukan = 'Aktif'
+        ORDER BY CASE WHEN kedudukan_keluarga = 'Kepala Keluarga' THEN 0 ELSE 1 END, tanggal_lahir NULLS LAST, id`,
+      [kkId],
+    ),
+    pool.query(
+      `SELECT f.subjek, f.subjek_id, f.kunci
+         FROM wil_fakta f LEFT JOIN warga w ON f.subjek = 'warga' AND w.id = f.subjek_id
+        WHERE f.sampai IS NULL AND f.status_verifikasi IN ('terverifikasi', 'perlu_cek') AND f.kunci = ANY($2)
+          AND ((f.subjek = 'kk' AND f.subjek_id = $1) OR (f.subjek = 'warga' AND w.kk_id = $1))`,
+      [kkId, kunci],
+    ),
+    ringkasKeluarga([kkId]),
+    indukKeluarga([kkId]),
+  ]);
+  const ada = new Set<string>([...induk.jawaban.keys(), ...fakta.map((f) => `${f.subjek}:${f.subjek_id}:${f.kunci}`)]);
+  const terisi = (awalan: string) => kunci.filter((k) => ada.has(awalan + k));
+  const acuan = isoTanggal(new Date());
+  const r = ringkas.get(kkId);
+  return {
+    anggota: orang.map((o) => ({
+      nama: o.nama_lengkap,
+      hubungan: (HUBUNGAN_KELUARGA as readonly string[]).includes(o.kedudukan_keluarga) ? o.kedudukan_keluarga : "Lainnya",
+      jenisKelamin: o.jenis_kelamin === "Laki-laki" || o.jenis_kelamin === "Perempuan" ? o.jenis_kelamin : null,
+      umur: umurTahun(o.tanggal_lahir, acuan),
+      adaTanggalLahir: !!o.tanggal_lahir,
+      terisi: terisi(`warga:${o.id}:`),
     })),
-    jawaban: Object.fromEntries(fakta.filter((f) => f.kk_id === k.kkId).map((f) => [`${f.subjek}:${f.subjek_id}:${f.kunci}`, f.nilai])),
-    kelengkapan: ringkas.get(k.kkId)?.kelengkapan ?? 0,
-  }));
+    terisiKk: terisi(`kk:${kkId}:`),
+    adaWa: induk.punyaWa.has(kkId),
+    kelengkapan: r?.kelengkapan ?? 0,
+    terjawab: r?.terjawab ?? 0,
+    pertanyaan: r?.pertanyaan ?? 0,
+  };
 }
 
 /** Cari KK dari kode kartu (untuk input formulir kertas). Hanya di RT yang sedang dikelola. */
@@ -247,13 +314,19 @@ async function cariToken(raw: string) {
   return { status: "aktif" as const, id: t.id as number, kkId: t.kk_id as number, rt: t.rt as number };
 }
 
-/** Hanya memberi tahu apakah kartu berlaku dan RT-nya. Tidak ada data keluarga. */
+/**
+ * Status kartu, RT, pertanyaan, dan ringkasan apa yang sudah terisi (nama & hubungan anggota, tanpa NIK/nilai)
+ * agar warga hanya melengkapi yang kurang.
+ */
 export async function bukaToken(raw: string) {
   const t = await cariToken(raw);
   if (!t) throw new WilayahError(404, "Kode kartu tidak dikenal. Periksa kembali atau hubungi pengurus RW.");
   if (t.status !== "aktif") throw new WilayahError(410, t.status === "dicabut" ? "Kartu ini sudah diganti. Minta kartu baru ke pengurus RW." : "Kartu ini sudah kedaluwarsa. Minta kartu baru ke pengurus RW.");
-  const pertanyaan = (await standarAktif()).filter((d) => d.diQr);
-  return { rt: t.rt, versiForm: 1, pertanyaan };
+  const [pertanyaan, keluarga] = await Promise.all([
+    standarAktif().then((d) => d.filter((x) => x.diQr)),
+    keluargaUntukLengkapi(t.kkId),
+  ]);
+  return { rt: t.rt, versiForm: 1, pertanyaan, keluarga };
 }
 
 const jawabanSchema = z.record(z.string().max(60), z.string().max(300));

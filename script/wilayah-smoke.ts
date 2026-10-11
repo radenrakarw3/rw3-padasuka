@@ -247,11 +247,17 @@ async function ujiDatabase() {
     });
 
     let token = "";
-    await uji("QR: buka token hanya memberi RT, usulan tidak mengubah data resmi, kirim ulang idempoten", async () => {
+    await uji("QR: buka token tanpa NIK/nilai, usulan tidak mengubah data resmi, kirim ulang idempoten", async () => {
       const [kartu] = await qr.kartuUntukCetak(rt7, [kkId], false);
       token = qr.normalisasiToken(kartu.tokenTampil)!;
       const buka = await qr.bukaToken(token);
-      sama(JSON.stringify(Object.keys(buka).sort()), JSON.stringify(["pertanyaan", "rt", "versiForm"]), "isi respons buka");
+      sama(JSON.stringify(Object.keys(buka).sort()), JSON.stringify(["keluarga", "pertanyaan", "rt", "versiForm"]), "isi respons buka");
+      const teksBuka = JSON.stringify(buka.keluarga);
+      pastikan(!teksBuka.includes(nik1) && !teksBuka.includes(nomorKk), "tidak ada NIK / nomor KK");
+      pastikan(buka.keluarga.anggota.length > 0 && buka.keluarga.anggota[0].adaTanggalLahir, "anggota tercatat ikut");
+      pastikan(!/\d{4}-\d{2}-\d{2}/.test(teksBuka), "tidak ada tanggal lahir");
+      pastikan(buka.keluarga.anggota.every((a: any) => Object.keys(a).sort().join() === "adaTanggalLahir,hubungan,jenisKelamin,nama,terisi,umur"), "field anggota terbatas");
+      pastikan(buka.keluarga.anggota.every((a: any) => a.terisi.every((k: string) => typeof k === "string" && !k.includes(":"))), "terisi hanya kunci");
       pastikan(buka.pertanyaan.length > 0 && buka.pertanyaan.every((p: any) => p.aktif && p.diQr), "pertanyaan QR");
       const sebelum = JSON.stringify(await data.detailKeluarga(rt7, kkId).then((d) => [d.anggota, d.fakta]));
       const body = { idempotencyKey: `uji-${acak()}-kunci`, isi: { versiForm: 1, namaPengisi: "Uji Satu", hubunganPengisi: "Kepala Keluarga", nomorHp: "081234567890", rumahTangga: { s_internet: "ya" }, anggota: [{ nama: "Uji Satu", hubungan: "Kepala Keluarga", jenisKelamin: "Laki-laki", jawaban: {} }] } };

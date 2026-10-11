@@ -239,12 +239,36 @@ export default function Visitrw3Pengajuan() {
   return <PengajuanForm product="visit" />;
 }
 
+/** Penyewa ber-KTP RW 03 didata lewat pendataan warga, bukan Visit RW3. */
+function AturanKtpRw3({ tegas, className = "" }: { tegas?: boolean; className?: string }) {
+  return (
+    <div className={`rounded-lg border p-3 text-sm ${tegas ? "border-amber-400 bg-amber-50 text-amber-950" : "border-[hsl(40,45%,55%)] bg-[hsl(40,60%,96%)]"} ${className}`}>
+      {tegas ? (
+        <p>
+          <b>Tidak perlu daftar Visit RW3.</b> Penghuni kost/kontrakan yang KTP-nya RW 03 didata sebagai warga.
+          Isi lewat kode kartu pendataan keluarga di{" "}
+          <Link href="/isi" className="font-semibold text-brand underline">halaman pendataan warga</Link>, atau minta
+          pengurus RT/RW memperbarui data (status tinggal: kost/kontrak).
+        </p>
+      ) : (
+        <ul className="space-y-1">
+          <li>✅ Kost/kontrak, <b>KTP luar RW 03</b> → daftar di sini (Visit RW3).</li>
+          <li>➡️ Kost/kontrak, <b>KTP RW 03</b> → bukan di sini; didata sebagai warga lewat{" "}
+            <Link href="/isi" className="font-semibold text-brand underline">pendataan warga</Link>.
+          </li>
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function PengajuanForm({ product }: { product: PengajuanProduct }) {
   const { toast } = useToast();
   const search = useSearch();
   const rawJenis = useMemo(() => parseJenisWargaFromSearch(search), [search]);
   const redirectToRw3biz = product === "visit" && rawJenis === "jualan";
   const petugas = useMemo(() => new URLSearchParams(search).get("petugas") === "1", [search]);
+  const [ktpRw3, setKtpRw3] = useState<boolean | null>(null);
 
   const jenisWarga: JenisWarga | "" =
     product === "rw3biz" ? "jualan" : isVisitRw3Jenis(rawJenis) ? rawJenis : "";
@@ -639,14 +663,15 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
       <Shell title="Pengajuan baru" backHref={hubHref}>
         <FeatureExplain title="Pilih jenis tinggal" className="mb-4">
           <p>
-            Visit RW3 hanya untuk <strong>ngontrak</strong> dan <strong>ngekost</strong>. Untuk
-            jualan/usaha, gunakan{" "}
+            Visit RW3 hanya untuk <strong>ngontrak</strong> dan <strong>ngekost</strong> dengan{" "}
+            <strong>KTP luar RW 03</strong>. Untuk jualan/usaha, gunakan{" "}
             <Link href={RW3BIZ_ROUTES.hub} className="text-brand font-medium underline">
               RW3BIZ
             </Link>
             .
           </p>
         </FeatureExplain>
+        <AturanKtpRw3 className="mb-4" />
         <div className="space-y-2">
           {JENIS_CHOICES_VISIT.map((opt) => {
             const Icon = opt.icon;
@@ -694,6 +719,28 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
           <BookOpen className="w-4 h-4" />
           Baca panduan dulu
         </Link>
+      </Shell>
+    );
+  }
+
+  if (product === "visit" && (jenisWarga === "kontrak" || jenisWarga === "kost") && ktpRw3 !== false) {
+    return (
+      <Shell title={`Pengajuan — ${JENIS_WARGA_LABEL[jenisWarga]}`} backHref={hubHref}>
+        <div className="rounded-xl border border-border bg-card p-4 space-y-4">
+          <p className="font-semibold">Sebelum mulai: KTP {petugas ? "penghuni" : "Anda"} beralamat di mana?</p>
+          <p className="text-sm text-muted-foreground">
+            Visit RW3 khusus penghuni kost/kontrakan dengan KTP luar RW 03. Penghuni ber-KTP RW 03 didata sebagai warga.
+          </p>
+          <div className="grid gap-2">
+            <Button variant="outline" className="h-auto justify-start py-3 text-left whitespace-normal" onClick={() => setKtpRw3(true)}>
+              KTP RW 03 Kelurahan Padasuka
+            </Button>
+            <Button className="h-auto justify-start py-3 text-left whitespace-normal" onClick={() => setKtpRw3(false)}>
+              KTP luar RW 03 (daerah lain) — lanjut isi Visit RW3
+            </Button>
+          </div>
+          {ktpRw3 === true && <AturanKtpRw3 tegas />}
+        </div>
       </Shell>
     );
   }

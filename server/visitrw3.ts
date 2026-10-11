@@ -303,6 +303,19 @@ async function assertNikAvailable(nik: string) {
   if (pending) throw new Error(`NIK ${maskNik(nik)} sedang dalam pengajuan lain`);
 }
 
+/** Penyewa kost/kontrakan ber-KTP RW 03 didata sebagai warga (Kependudukan), bukan Visit RW3. */
+async function assertBukanWargaKtpRw3(nik: string) {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM warga WHERE nik = $1 AND status_kependudukan = 'Aktif' LIMIT 1`,
+    [nik],
+  );
+  if (rows[0]) {
+    throw new Error(
+      `NIK ${maskNik(nik)} sudah tercatat sebagai warga ber-KTP RW 03. Penyewa kost/kontrakan yang KTP-nya RW 03 tidak perlu daftar Visit RW3 — cukup perbarui data keluarga lewat kartu/QR pendataan atau hubungi pengurus RT/RW.`,
+    );
+  }
+}
+
 /** @deprecated Alur pemilik properti dihapus — selalu kosong. */
 export async function getPemilikKostPublic(_rt: number, _keperluan: "tinggal" | "bisnis") {
   return [];
@@ -369,6 +382,7 @@ export async function createPengajuanBaru(input: z.infer<typeof pengajuanBaruSch
   validatePenghuni(penghuniNorm, jenisWarga);
   for (const p of penghuniNorm) {
     if (!p.isAnak && p.nik) await assertNikAvailable(p.nik);
+    if (!p.isAnak && p.nik) await assertBukanWargaKtpRw3(p.nik);
     if (!p.isAnak && p.fotoKtpPath?.trim()) {
       const data = resolveFotoKtpData(p.fotoKtpPath);
       if (!data) {

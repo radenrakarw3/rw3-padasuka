@@ -69,11 +69,16 @@ export const KELOMPOK_STANDAR = ["Tempat tinggal & kontak", "Rumah & fasilitas",
 
 const p = (pasangan: [string, string][]) => pasangan.map(([nilai, label]) => ({ nilai, label }));
 
+/** Aturan pendataan penyewa: KTP RW 03 → data warga; KTP luar → Visit RW3. */
+export const BANTUAN_STATUS_TINGGAL =
+  "Kost/kontrak dengan KTP RW 03 tetap didata di sini. Kost/kontrak dengan KTP luar daerah mendaftar lewat Visit RW3.";
+
 const AWAL: DefinisiFakta[] = [
   // --- Keluarga ---
   {
     kunci: "s_status_tinggal", subjek: "kk", kelompok: "Tempat tinggal & kontak", label: "Status tinggal", tipe: "pilihan",
     pertanyaan: "Keluarga ini tinggal di RW 03 sebagai…",
+    bantuan: BANTUAN_STATUS_TINGGAL,
     pilihan: p([["tetap_ktp", "Warga tetap (KTP RW 03)"], ["tetap_luar", "Tinggal tetap, KTP luar RW 03"], ["kontrak", "Kontrak / sewa rumah"], ["kost", "Kost"], ["menumpang", "Menumpang di rumah keluarga"]]),
   },
   {

@@ -19,8 +19,32 @@ import {
   type SubjekFakta,
 } from "@shared/wilayah";
 import { isNomorHpValid, looksLikeNik, maskNik, normalizeNomorHp } from "@shared/kontak";
+import { jawabanIndukKk, jawabanIndukWarga } from "@shared/wilayah-induk";
 
 type Q = { query: PoolClient["query"] };
+
+/**
+ * Jawaban dari data induk (kunci `kk:<id>:<kunci>` / `warga:<id>:<kunci>`) dan KK yang sudah punya nomor WA sah.
+ * Hanya cadangan: fakta tercatat selalu didahulukan oleh pemanggil.
+ */
+export async function indukKeluarga(kkIds: number[], q: Q = pool) {
+  const jawaban = new Map<string, string>();
+  const punyaWa = new Set<number>();
+  if (!kkIds.length) return { jawaban, punyaWa };
+  const [{ rows: kk }, { rows: orang }] = await Promise.all([
+    q.query(`SELECT id, penghasilan_bulanan FROM kartu_keluarga WHERE id = ANY($1)`, [kkIds]),
+    q.query(
+      `SELECT id, kk_id, pekerjaan, pendidikan, nomor_whatsapp FROM warga WHERE kk_id = ANY($1) AND status_kependudukan = 'Aktif'`,
+      [kkIds],
+    ),
+  ]);
+  for (const k of kk) for (const [kunci, nilai] of Object.entries(jawabanIndukKk(k))) jawaban.set(`kk:${k.id}:${kunci}`, nilai);
+  for (const o of orang) {
+    for (const [kunci, nilai] of Object.entries(jawabanIndukWarga(o))) jawaban.set(`warga:${o.id}:${kunci}`, nilai);
+    if (isNomorHpValid(o.nomor_whatsapp)) punyaWa.add(o.kk_id);
+  }
+  return { jawaban, punyaWa };
+}
 
 const hariIni = () => isoTanggal(new Date());
 const tanggalSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal YYYY-MM-DD");
@@ -109,7 +133,7 @@ export async function ringkasKeluarga(kkIds: number[]) {
   const kunci = defs.map((d) => d.kunci);
   const acuan = hariIni();
 
-  const [{ rows: anggota }, { rows: fakta }] = await Promise.all([
+  const [{ rows: anggota }, { rows: fakta }, induk] = await Promise.all([
     pool.query(
       `SELECT id, kk_id, jenis_kelamin, tanggal_lahir
          FROM warga WHERE kk_id = ANY($1) AND status_kependudukan = 'Aktif'`,
@@ -123,6 +147,7 @@ export async function ringkasKeluarga(kkIds: number[]) {
           AND ((f.subjek = 'kk' AND f.subjek_id = ANY($1)) OR (f.subjek = 'warga' AND w.kk_id = ANY($1)))`,
       [kkIds, kunci],
     ),
+    indukKeluarga(kkIds),
   ]);
 
   const faktaPerKk = new Map<number, FaktaRingkas[]>();
@@ -136,11 +161,20 @@ export async function ringkasKeluarga(kkIds: number[]) {
 
   for (const kkId of kkIds) {
     const list = faktaPerKk.get(kkId) ?? [];
-    const ada = new Set(list.map((f) => `${f.subjek}:${f.subjekId}:${f.kunci}`));
     const nilai = new Map(list.map((f) => [`${f.subjek}:${f.subjekId}:${f.kunci}`, f.nilai]));
     const orang = anggotaPerKk.get(kkId) ?? [];
-    let pertanyaan = defKk.length;
-    let terjawab = defKk.filter((d) => ada.has(`kk:${kkId}:${d.kunci}`)).length;
+    for (const k of [`kk:${kkId}:`, ...orang.map((o) => `warga:${o.id}:`)]) {
+      for (const d of defs) {
+        const v = induk.jawaban.get(k + d.kunci);
+        if (v != null && !nilai.has(k + d.kunci)) nilai.set(k + d.kunci, v);
+      }
+    }
+    const ada = new Set(nilai.keys());
+    // Data dasar: nomor WA keluarga + tanggal lahir tiap anggota.
+    let pertanyaan = defKk.length + 1 + orang.length;
+    let terjawab = defKk.filter((d) => ada.has(`kk:${kkId}:${d.kunci}`)).length
+      + (induk.punyaWa.has(kkId) ? 1 : 0)
+      + orang.filter((o) => !!o.tanggal_lahir).length;
     let lakiLaki = 0, perempuan = 0, balita = 0, anak = 0, lansia = 0;
     for (const o of orang) {
       if (o.jenis_kelamin === "Laki-laki") lakiLaki++;

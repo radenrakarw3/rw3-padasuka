@@ -2,10 +2,25 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { wil } from "@/lib/wilayah-api";
 import { HIJAU, IsianTeks, Memuat, Pesan, TombolBesar, rt2 } from "@/components/wilayah/ui";
-import { FormIsiKeluarga } from "@/components/wilayah/form-isi-keluarga";
+import { FormIsiKeluarga, type KeluargaTercatat } from "@/components/wilayah/form-isi-keluarga";
 import type { DefinisiFakta } from "@shared/wilayah";
 
 const KUNCI_TOKEN = "isi-token";
+
+/** Aturan penyewa: KTP RW 03 → pendataan warga di sini; KTP luar → Visit RW3. */
+function AturanPenyewa() {
+  return (
+    <div className="mt-3 rounded-2xl border-2 border-[hsl(40,45%,55%)] bg-[hsl(40,60%,96%)] px-4 py-3 text-base text-gray-900">
+      <p className="font-bold">Ngekost atau ngontrak di RW 03?</p>
+      <ul className="mt-1 space-y-1">
+        <li>✅ <b>KTP RW 03 Padasuka</b> → isi di formulir ini (pendataan warga).</li>
+        <li>➡️ <b>KTP luar RW 03</b> → daftar lewat{" "}
+          <a href="/visitrw3" className="font-semibold text-[hsl(163,55%,22%)] underline">Visit RW3</a>, bukan di sini.
+        </li>
+      </ul>
+    </div>
+  );
+}
 
 function useNoReferrer() {
   useEffect(() => {
@@ -56,6 +71,7 @@ export default function IsiPage({ token: tokenUrl, status }: { token?: string; s
   const [ketik, setKetik] = useState("");
   const [rt, setRt] = useState<number | null>(null);
   const [pertanyaan, setPertanyaan] = useState<DefinisiFakta[]>([]);
+  const [keluarga, setKeluarga] = useState<KeluargaTercatat | null>(null);
   const [memuat, setMemuat] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [kodeTerima, setKodeTerima] = useState<string | null>(null);
@@ -64,11 +80,12 @@ export default function IsiPage({ token: tokenUrl, status }: { token?: string; s
     setMemuat(true);
     setErr(null);
     try {
-      const r = await wil<{ rt: number; pertanyaan: DefinisiFakta[] }>("/api/isi/buka", { body: { token: t } });
+      const r = await wil<{ rt: number; pertanyaan: DefinisiFakta[]; keluarga?: KeluargaTercatat }>("/api/isi/buka", { body: { token: t } });
       sessionStorage.setItem(KUNCI_TOKEN, t);
       setToken(t);
       setRt(r.rt);
       setPertanyaan(r.pertanyaan ?? []);
+      setKeluarga(r.keluarga ?? null);
     } catch (e) {
       sessionStorage.removeItem(KUNCI_TOKEN);
       setErr((e as Error).message);
@@ -102,9 +119,10 @@ export default function IsiPage({ token: tokenUrl, status }: { token?: string; s
     return (
       <Bingkai>
         <FormIsiKeluarga
-          draftKey={`isi:${token.slice(-6)}`}
+          draftKey={`isi:v2:${token.slice(-6)}`}
           pertanyaan={pertanyaan}
-          pembuka={<Pesan>Kartu ini untuk keluarga di {rt2(rt)} / RW 03. Isian Anda diperiksa pengurus RW sebelum data resmi diubah.</Pesan>}
+          keluarga={keluarga}
+          pembuka={<><Pesan>Kartu ini untuk keluarga di {rt2(rt)} / RW 03. Isian Anda diperiksa pengurus RW sebelum data resmi diubah.</Pesan><AturanPenyewa /></>}
           kirimKe={(isi, kunci) => wil<{ kodeTerima: string }>("/api/isi/kirim", { body: { token, idempotencyKey: kunci, isi } })}
           selesai={(k) => { sessionStorage.removeItem(KUNCI_TOKEN); setKodeTerima(k); }}
         />
@@ -120,6 +138,7 @@ export default function IsiPage({ token: tokenUrl, status }: { token?: string; s
         <IsianTeks label="Kode" nilai={ketik} onChange={(v) => setKetik(v.toUpperCase())} placeholder="XXXX-XXXX-XXXX-XXXX" />
         <TombolBesar disabled={ketik.replace(/[^0-9A-Za-z]/g, "").length !== 16} onClick={() => buka(ketik)}>Buka formulir</TombolBesar>
         <TombolBesar varian="kedua" onClick={() => go("/isi/status")}>Cek status kiriman</TombolBesar>
+        <AturanPenyewa />
       </div>
     </Bingkai>
   );
