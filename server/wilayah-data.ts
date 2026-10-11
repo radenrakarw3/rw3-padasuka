@@ -129,9 +129,20 @@ export interface KeluargaRingkas {
 
 type FaktaRingkas = { subjek: "kk" | "warga"; subjekId: number; kunci: string; nilai: string; mulai: string };
 
-/** Hitung kelengkapan & tanda perhatian per keluarga dari standar aktif. */
-export async function ringkasKeluarga(kkIds: number[]) {
-  const hasil = new Map<number, Omit<KeluargaRingkas, "id" | "rt" | "kepala" | "alamat" | "noUnit" | "punyaRumah" | "punyaQr" | "usulanMenunggu">>();
+/** Label data yang belum terisi; kunci `anggota` = id warga. */
+export interface KekuranganKeluarga {
+  keluarga: string[];
+  anggota: Map<number, string[]>;
+}
+
+type RingkasKeluarga = Omit<KeluargaRingkas, "id" | "rt" | "kepala" | "alamat" | "noUnit" | "punyaRumah" | "punyaQr" | "usulanMenunggu"> & {
+  /** Hanya terisi bila dipanggil dengan `rinci: true`. */
+  kurang?: KekuranganKeluarga;
+};
+
+/** Hitung kelengkapan & tanda perhatian per keluarga dari standar aktif. `rinci` = sertakan label data yang belum terisi. */
+export async function ringkasKeluarga(kkIds: number[], opsi: { rinci?: boolean } = {}) {
+  const hasil = new Map<number, RingkasKeluarga>();
   if (!kkIds.length) return hasil;
   const defs = await standarAktif();
   const defKk = defs.filter((d) => d.subjek === "kk");
@@ -141,7 +152,7 @@ export async function ringkasKeluarga(kkIds: number[]) {
 
   const [{ rows: anggota }, { rows: fakta }, induk] = await Promise.all([
     pool.query(
-      `SELECT id, kk_id, jenis_kelamin, tanggal_lahir
+      `SELECT id, kk_id, nik, jenis_kelamin, tanggal_lahir
          FROM warga WHERE kk_id = ANY($1) AND status_kependudukan = 'Aktif'`,
       [kkIds],
     ),
@@ -181,6 +192,15 @@ export async function ringkasKeluarga(kkIds: number[]) {
     let terjawab = defKk.filter((d) => ada.has(`kk:${kkId}:${d.kunci}`)).length
       + (induk.punyaWa.has(kkId) ? 1 : 0)
       + orang.filter((o) => !!o.tanggal_lahir).length;
+    const kurang: KekuranganKeluarga | undefined = opsi.rinci
+      ? {
+        keluarga: [
+          ...(induk.punyaWa.has(kkId) ? [] : ["Nomor WhatsApp keluarga"]),
+          ...defKk.filter((d) => !ada.has(`kk:${kkId}:${d.kunci}`)).map((d) => d.label),
+        ],
+        anggota: new Map(),
+      }
+      : undefined;
     let lakiLaki = 0, perempuan = 0, balita = 0, anak = 0, lansia = 0;
     for (const o of orang) {
       if (o.jenis_kelamin === "Laki-laki") lakiLaki++;
@@ -190,11 +210,19 @@ export async function ringkasKeluarga(kkIds: number[]) {
       if (kelompok === "balita") balita++;
       else if (kelompok === "anak") anak++;
       else if (kelompok === "lansia") lansia++;
+      const kurangOrang: string[] = [];
+      if (kurang) {
+        if (String(o.nik ?? "").replace(/\D/g, "").length !== 16) kurangOrang.push("NIK 16 digit");
+        if (!o.jenis_kelamin) kurangOrang.push("Jenis kelamin");
+        if (!o.tanggal_lahir) kurangOrang.push("Tanggal lahir");
+      }
       for (const d of defWarga) {
         if (!berlakuUntukWarga(d, { jenisKelamin: o.jenis_kelamin, umur })) continue;
         pertanyaan++;
         if (ada.has(`warga:${o.id}:${d.kunci}`)) terjawab++;
+        else if (kurang) kurangOrang.push(d.label);
       }
+      if (kurang && kurangOrang.length) kurang.anggota.set(o.id, kurangOrang);
     }
     const perhatian: PerhatianKeluarga[] = [];
     for (const d of defKk) {
@@ -209,6 +237,7 @@ export async function ringkasKeluarga(kkIds: number[]) {
     hasil.set(kkId, {
       anggota: orang.length, lakiLaki, perempuan, balita, anak, lansia,
       kelengkapan: pertanyaan ? Math.min(1, terjawab / pertanyaan) : 0, terjawab, pertanyaan, perhatian, diperbarui,
+      ...(kurang ? { kurang } : {}),
     });
   }
   return hasil;

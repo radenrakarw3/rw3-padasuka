@@ -13,11 +13,11 @@ import {
   Megaphone,
   PieChart,
   Search,
-  Store,
   Users,
   QrCode,
   Truck,
   UserPen,
+  UserSearch,
   ListChecks,
   ClipboardPen,
   Printer,
@@ -119,6 +119,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     {
       items: [
         { path: "/admin/dashboard", icon: BarChart3, label: "Dashboard" },
+        { path: "/admin/cek-warga", icon: UserSearch, label: "Cek Warga" },
         { path: "/admin/pusat-cetak", icon: Printer, label: "Pusat cetak F4" },
         { path: "/admin/surat-rw", icon: FileText, label: "Surat RW" },
       ],
@@ -167,13 +168,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { path: "/admin/dashboard", icon: Home, label: "Beranda" },
     { path: "/admin/kelola-warga/warga", icon: UserPen, label: "Warga" },
     { path: VISITRW3_ROUTES.admin.antrianSurvey, icon: ClipboardList, label: "Hunian", badge: visit.surveyMenunggu },
-    { path: RW3BIZ_ROUTES.admin.antrianSurvey, icon: Store, label: "Usaha", badge: biz.surveyMenunggu },
+    { path: "/admin/cek-warga", icon: UserSearch, label: "Cek Warga" },
   ];
 
   const semua = grup.flatMap((g) => g.items);
   const aktif = semua.find((i) => isNavActive(location, search, i.path));
   const bawahAktif = bawah.some((i) => isNavActive(location, search, i.path));
-  const badgeMenu = (biz.keberatanMenunggu ?? 0) + (biz.aduanMenunggu ?? 0);
+  const badgeMenu = (biz.keberatanMenunggu ?? 0) + (biz.aduanMenunggu ?? 0) + (biz.surveyMenunggu ?? 0);
 
   const q = cari.trim().toLowerCase();
   const grupTersaring = q

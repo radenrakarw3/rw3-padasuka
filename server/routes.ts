@@ -24,6 +24,7 @@ import {
 } from "./wa-notify";
 import { buildKependudukanStats } from "./kependudukan-stats";
 import { daftarStatistikWarga, statistikWarga } from "./statistik-warga";
+import { cekWarga, pastikanIndexCekWarga } from "./cek-warga";
 import { isKategoriDaftar, perluNilai } from "@shared/statistik-warga";
 import { ACTIVE_RT_NUMBERS } from "@shared/rt";
 
@@ -550,6 +551,19 @@ export async function registerRoutes(
     const data = await storage.getAllWargaWithKkPemukiman();
     cache.set(key, data, TTL.WARGA_WITH_KK);
     res.json(data);
+  });
+
+  pastikanIndexCekWarga().catch((e) => console.error("[cek-warga] gagal membuat index:", e.message));
+
+  app.get("/api/admin/cek-warga", requireAdmin, async (req, res) => {
+    const q = typeof req.query.q === "string" ? req.query.q.slice(0, 100) : "";
+    res.setHeader("Cache-Control", "no-store");
+    try {
+      res.json(await cekWarga(q));
+    } catch (error: any) {
+      console.error("[cek-warga]", error);
+      res.status(500).json({ message: "Gagal mengecek warga. Coba lagi." });
+    }
   });
 
   const publicWargaIdentitySchema = z.object({
