@@ -306,6 +306,7 @@ export function validateLokasiWargaSinggah(input: {
   alamat: string;
   jenisWarga: string;
   nomorUnit?: string;
+  ukuranTinggal?: string;
 }): string | null {
   if (!input.rt) return "Pilih RT";
   if (!input.alamat.trim() || input.alamat.trim().length < 5) {
@@ -317,6 +318,9 @@ export function validateLokasiWargaSinggah(input: {
   }
   if (input.jenisWarga === "kost" && !input.nomorUnit?.trim()) {
     return "Nomor kamar/unit wajib diisi";
+  }
+  if ((input.jenisWarga === "kost" || input.jenisWarga === "kontrak") && !input.ukuranTinggal) {
+    return input.jenisWarga === "kost" ? "Pilih ukuran kamar kost" : "Pilih jumlah kamar tidur kontrakan";
   }
   return null;
 }

@@ -2,48 +2,122 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { ChevronsDown } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { formatRupiah, labelUkuranProperti, parseKontribusiSettings } from "@/lib/visitrw3-kontribusi";
+import {
+  formatRupiah,
+  infoUkuranTinggal,
+  isUkuranTinggal,
+  parseKontribusiSettings,
+  tarifTinggalPerBulan,
+  UKURAN_TINGGAL_VALUES,
+  type UkuranProperti,
+} from "@/lib/visitrw3-kontribusi";
+
+type SettingsRows = { key: string; value: string }[];
+
+/** Pilihan ukuran kamar kost / jumlah kamar tidur kontrakan beserta tarif per bulan. */
+export function PilihUkuranTinggal({
+  jenis,
+  settingsRows,
+  value,
+  onChange,
+  disabled,
+}: {
+  jenis: "kost" | "kontrak";
+  settingsRows: SettingsRows;
+  value: string;
+  onChange: (v: UkuranProperti) => void;
+  disabled?: boolean;
+}) {
+  const s = parseKontribusiSettings(settingsRows);
+  return (
+    <div className="grid gap-2" role="radiogroup">
+      {UKURAN_TINGGAL_VALUES.map((u) => {
+        const info = infoUkuranTinggal(jenis, u);
+        const aktif = value === u;
+        return (
+          <button
+            key={u}
+            type="button"
+            role="radio"
+            aria-checked={aktif}
+            disabled={disabled}
+            onClick={() => onChange(u)}
+            className={`flex items-center justify-between gap-3 rounded-lg border-2 px-3 py-2.5 text-left transition-colors ${
+              aktif ? "border-brand bg-brand/5" : "border-border hover:border-brand/40"
+            }`}
+          >
+            <span className="min-w-0">
+              <span className="block text-sm font-medium">{info.judul}</span>
+              <span className="block text-xs text-muted-foreground">{info.ket}</span>
+            </span>
+            <span className="text-sm tabular-nums whitespace-nowrap">
+              {formatRupiah(tarifTinggalPerBulan(jenis, u, s))}
+              <span className="text-xs text-muted-foreground">/bln</span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 export function KontribusiTinggalInfo({
   jenis,
   settingsRows,
   terminBulan,
+  ukuran,
 }: {
   jenis: "kost" | "kontrak";
-  settingsRows: { key: string; value: string }[];
+  settingsRows: SettingsRows;
   terminBulan: number;
+  ukuran?: string | null;
 }) {
   const s = parseKontribusiSettings(settingsRows);
-  const tarif =
-    jenis === "kost"
-      ? { kecil: s.feeKostKecilPerUnitBulan, sedang: s.feeKostSedangPerUnitBulan, besar: s.feeKostBesarPerUnitBulan }
-      : {
-          kecil: s.feeKontrakanKecilPerUnitBulan,
-          sedang: s.feeKontrakanSedangPerUnitBulan,
-          besar: s.feeKontrakanBesarPerUnitBulan,
-        };
-  const min = Math.min(tarif.kecil, tarif.sedang, tarif.besar);
-  const max = Math.max(tarif.kecil, tarif.sedang, tarif.besar);
   const termin = Number.isFinite(terminBulan) && terminBulan > 0 ? terminBulan : 1;
+  const tarif = Object.fromEntries(
+    UKURAN_TINGGAL_VALUES.map((u) => [u, tarifTinggalPerBulan(jenis, u, s)]),
+  ) as Record<UkuranProperti, number>;
+  const terpilih = isUkuranTinggal(ukuran) ? ukuran : null;
+  const nilai = Object.values(tarif);
+  const min = Math.min(...nilai);
+  const max = Math.max(...nilai);
   const rentang = (a: number, b: number) => (a === b ? formatRupiah(a) : `${formatRupiah(a)}–${formatRupiah(b)}`);
 
   return (
     <div className="rounded-xl border-2 border-brand/30 bg-card p-4 space-y-3 text-sm">
-      <p className="font-semibold">Kontribusi {jenis === "kost" ? "kost" : "kontrakan"} per unit / bulan</p>
+      <p className="font-semibold">
+        Kontribusi {jenis === "kost" ? "kost per kamar" : "kontrakan per unit"} / bulan
+      </p>
       <ul className="space-y-1">
-        {(["kecil", "sedang", "besar"] as const).map((u) => (
-          <li key={u} className="flex justify-between gap-3">
-            <span className="text-muted-foreground">Properti {labelUkuranProperti(u, s)}</span>
-            <span className="tabular-nums">{formatRupiah(tarif[u])}</span>
-          </li>
-        ))}
+        {UKURAN_TINGGAL_VALUES.map((u) => {
+          const info = infoUkuranTinggal(jenis, u);
+          return (
+            <li
+              key={u}
+              className={`flex justify-between gap-3 ${terpilih === u ? "font-semibold text-foreground" : ""}`}
+            >
+              <span className={terpilih === u ? "" : "text-muted-foreground"}>
+                {info.judul} ({info.ket}){terpilih === u ? " ✓" : ""}
+              </span>
+              <span className="tabular-nums">{formatRupiah(tarif[u])}</span>
+            </li>
+          );
+        })}
       </ul>
       <div className="flex items-baseline justify-between border-t pt-2">
-        <span className="font-semibold">Termin {termin} bulan</span>
-        <span className="text-lg font-bold text-brand tabular-nums">{rentang(min * termin, max * termin)}</span>
+        <span className="font-semibold">
+          {terpilih ? `${formatRupiah(tarif[terpilih])} × ${termin} bulan` : `Termin ${termin} bulan`}
+        </span>
+        <span className="text-lg font-bold text-brand tabular-nums">
+          {terpilih ? formatRupiah(tarif[terpilih] * termin) : rentang(min * termin, max * termin)}
+        </span>
       </div>
       <p className="text-xs text-muted-foreground">
-        Besaran pasti mengikuti jumlah pintu properti tempat Anda tinggal dan ditetapkan pengurus RW setelah survey.
+        {terpilih
+          ? "Besaran mengikuti ukuran tempat yang Anda pilih. Pengurus RW mencocokkannya saat survey dan dapat mengoreksi bila tidak sesuai."
+          : jenis === "kost"
+            ? "Besaran mengikuti ukuran kamar yang Anda tempati."
+            : "Besaran mengikuti jumlah kamar tidur kontrakan yang Anda tempati."}
       </p>
     </div>
   );

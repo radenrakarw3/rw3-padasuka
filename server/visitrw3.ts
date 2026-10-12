@@ -15,7 +15,13 @@ import {
 } from "@shared/schema";
 import { storage } from "./storage";
 import { ACTIVE_RT_NUMBERS } from "@shared/rt";
-import { hitungTanggalBerlaku } from "@shared/visitrw3-kontribusi";
+import {
+  hitungKontribusiTinggal,
+  hitungTanggalBerlaku,
+  isUkuranTinggal,
+  UKURAN_TINGGAL_VALUES,
+  type UkuranProperti,
+} from "@shared/visitrw3-kontribusi";
 import { stringifyKategoriUsaha } from "@shared/visitrw3-kategori-usaha";
 import {
   getChecklistSurveyPengajuan,
@@ -50,7 +56,7 @@ import {
 import { isPengajuanRw3biz, isPengajuanVisitRw3 } from "@shared/visitrw3-produk";
 
 export { emptyVisitrw3DashboardStats } from "@shared/visitrw3-analytics";
-import { seedVisitrw3Settings } from "./visitrw3-settings";
+import { getKontribusiSettings, getSettingsVersi, seedVisitrw3Settings } from "./visitrw3-settings";
 import {
   notifyVisitrw3PengajuanBaru,
   notifyVisitrw3Perpanjang,
@@ -180,6 +186,7 @@ export const pengajuanBaruSchema = z.object({
   alamatUsaha: z.string().optional().nullable(),
   penanggungJawab: z.string().optional().nullable(),
   nomorUnit: z.string().optional().nullable(),
+  ukuranTinggal: z.enum(UKURAN_TINGGAL_VALUES).optional().nullable(),
   jumlahPenghuni: z.number().int().min(1, "Minimal 1 penghuni").max(20, "Maksimal 20 penghuni"),
   tanggalBayar: z.string().regex(DATE_REGEX, "Tanggal bayar wajib diisi"),
   terminBulan: z.number().refine(
@@ -243,7 +250,24 @@ export const perpanjangSchema = z.object({
 export const approveVisitrw3SurveySchema = z.object({
   catatanSurvey: z.string().optional().nullable(),
   checklistSurvey: z.record(z.string(), z.boolean()).optional(),
+  /** Koreksi ukuran tempat hasil survey; kosong = pakai pilihan penghuni. */
+  ukuranTinggal: z.enum(UKURAN_TINGGAL_VALUES).optional().nullable(),
 });
+
+/** Kolom kontribusi penghuni kost/kontrakan menurut ukuran tempat yang ditempati. */
+async function kolomKontribusiTinggal(jenisWarga: string | null, ukuran: UkuranProperti | null, terminBulan: number) {
+  if (!ukuran || (jenisWarga !== "kost" && jenisWarga !== "kontrak")) {
+    return { ukuranTinggal: ukuran, estimasiKontribusi: null, rincianKontribusi: null, settingsVersi: null };
+  }
+  const [settings, settingsVersi] = await Promise.all([getKontribusiSettings(), getSettingsVersi()]);
+  const rincian = hitungKontribusiTinggal({ jenisWarga, ukuran, terminBulan, settings });
+  return {
+    ukuranTinggal: ukuran,
+    estimasiKontribusi: rincian.total,
+    rincianKontribusi: JSON.stringify(rincian),
+    settingsVersi,
+  };
+}
 
 function assertChecklistSurvey(items: SurveyChecklistItem[], checked?: Record<string, boolean>) {
   const err = validateSurveyChecklist(items, checked);
@@ -402,6 +426,9 @@ export async function createPengajuanBaru(input: z.infer<typeof pengajuanBaruSch
   } else if (jenisWarga === "kost" && !parsed.nomorUnit?.trim()) {
     throw new Error("Nomor kamar / unit kost wajib diisi");
   }
+  if ((jenisWarga === "kost" || jenisWarga === "kontrak") && !parsed.ukuranTinggal) {
+    throw new Error(jenisWarga === "kost" ? "Pilih ukuran kamar kost" : "Pilih jumlah kamar tidur kontrakan");
+  }
 
   // Normalisasi payload sesuai jenis (hindari data usaha menempel di kontrak/kost).
   const namaUsaha = jenisWarga === "jualan" ? parsed.namaUsaha?.trim() || null : null;
@@ -453,6 +480,7 @@ export async function createPengajuanBaru(input: z.infer<typeof pengajuanBaruSch
   const fotoKk = fotoKkRaw ? parseGambarDataUrl(fotoKkRaw, "kk") : null;
 
   const tanggalBerlakuSampai = hitungTanggalBerlaku(parsed.tanggalBayar, parsed.terminBulan);
+  const kontribusi = await kolomKontribusiTinggal(jenisWarga, parsed.ukuranTinggal ?? null, parsed.terminBulan);
   const nomorVisitrw3 = await generateNomorVisitrw3();
   const alamat = parsed.alamat.trim();
   const isJualan = jenisWarga === "jualan";
@@ -485,6 +513,7 @@ export async function createPengajuanBaru(input: z.infer<typeof pengajuanBaruSch
         persetujuanTetangga: null,
         penanggungJawab: isJualan ? parsed.penanggungJawab || null : null,
         nomorUnit: parsed.nomorUnit?.trim() || null,
+        ...kontribusi,
         jumlahPenghuni: parsed.jumlahPenghuni,
         tanggalBayar: parsed.tanggalBayar,
         terminBulan: parsed.terminBulan,
@@ -577,6 +606,8 @@ export async function createPerpanjang(input: z.infer<typeof perpanjangSchema>) 
     (await db.select({ id: wargaSinggah.id }).from(wargaSinggah).where(eq(wargaSinggah.nomorVisitrw3, nomor)).limit(1))[0]?.id;
 
   const tanggalBerlakuSampai = hitungTanggalBerlaku(parsed.tanggalBayar, parsed.terminBulan);
+  const ukuranLama = isUkuranTinggal(approved.ukuranTinggal) ? approved.ukuranTinggal : null;
+  const kontribusi = await kolomKontribusiTinggal(approved.jenisWarga, ukuranLama, parsed.terminBulan);
   const nomorBaru = await generateNomorVisitrw3();
 
   const [pengajuan] = await db
@@ -590,6 +621,8 @@ export async function createPerpanjang(input: z.infer<typeof perpanjangSchema>) 
       pemilikKostId: null,
       rt: approved.rt,
       alamat: approved.alamat,
+      nomorUnit: approved.nomorUnit,
+      ...kontribusi,
       namaUsaha: approved.namaUsaha,
       jenisUsaha: approved.jenisUsaha,
       penanggungJawab: approved.penanggungJawab,
@@ -903,11 +936,21 @@ export async function approvePengajuan(
     parsedSurvey.checklistSurvey,
   );
 
+  const ukuranSurvey = parsedSurvey.ukuranTinggal ?? null;
+  const koreksiUkuran =
+    ukuranSurvey && ukuranSurvey !== pengajuan.ukuranTinggal
+      ? await kolomKontribusiTinggal(pengajuan.jenisWarga, ukuranSurvey, pengajuan.terminBulan)
+      : {};
+  if ((pengajuan.jenisWarga === "kost" || pengajuan.jenisWarga === "kontrak") && !ukuranSurvey && !pengajuan.ukuranTinggal) {
+    throw new Error("Tentukan ukuran tempat tinggal hasil survey sebelum menyetujui");
+  }
+
   const baseUpdate = {
     status: "disetujui" as const,
     catatanSurvey: parsedSurvey.catatanSurvey || null,
     reviewedAt: new Date(),
     reviewedBy: adminUsername,
+    ...koreksiUkuran,
   };
 
   if (pengajuan.tipe === "perpanjang") {
@@ -1353,6 +1396,7 @@ export async function ensureVisitrw3Schema() {
     ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS estimasi_kontribusi integer;
     ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS rincian_kontribusi text;
     ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS kas_rw_id integer;
+    ALTER TABLE visitrw3_pengajuan ADD COLUMN IF NOT EXISTS ukuran_tinggal text;
     ALTER TABLE visitrw3_pengajuan ALTER COLUMN pemilik_kost_id DROP NOT NULL;
   `);
 

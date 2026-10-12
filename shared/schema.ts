@@ -421,6 +421,8 @@ export const visitrw3Pengajuan = pgTable("visitrw3_pengajuan", {
   persetujuanTetangga: text("persetujuan_tetangga"),
   penanggungJawab: text("penanggung_jawab"),
   nomorUnit: text("nomor_unit"),
+  /** kecil | sedang | besar — ukuran kamar kost / jumlah kamar tidur kontrakan (dasar kontribusi penghuni). */
+  ukuranTinggal: text("ukuran_tinggal"),
   jumlahPenghuni: integer("jumlah_penghuni").notNull(),
   tanggalBayar: text("tanggal_bayar").notNull(),
   terminBulan: integer("termin_bulan").notNull(),

@@ -423,6 +423,7 @@ export async function buatPdf(o: OpsiPdf): Promise<{ buffer: Buffer; halaman: nu
         p.font("italic", 9.5);
         for (const l of p.pecah(b.teks, CW)) p.baris(l, ML);
         p.font();
+        p.y += 1.5 * p.k;
         break;
     }
   }

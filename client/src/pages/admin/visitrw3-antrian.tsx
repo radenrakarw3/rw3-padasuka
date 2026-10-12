@@ -35,6 +35,8 @@ import { labelJenisTempatUsahaAdmin, labelKategoriUsahaAdmin } from "@/lib/visit
 import { VISITRW3_ROUTES } from "@/lib/visitrw3-routes";
 import { RW3BIZ_ROUTES } from "@/lib/rw3biz-routes";
 import type { PengajuanProduct } from "@/lib/visitrw3-produk-ui";
+import { KontribusiTinggalInfo, PilihUkuranTinggal } from "@/components/gov/visitrw3-syarat-panel";
+import { formatRupiah, isUkuranTinggal, labelUkuranTinggal } from "@/lib/visitrw3-kontribusi";
 
 type LolosView = "belum" | "sudah";
 type HasilPengajuan = "disetujui" | "ditolak";
@@ -133,6 +135,17 @@ export default function AdminVisitrw3Antrian({
   const [checklist, setChecklist] = useState<Record<string, boolean>>({});
   const [catatanSurvey, setCatatanSurvey] = useState("");
   const [alasanTolak, setAlasanTolak] = useState("");
+  const [ukuranSurvey, setUkuranSurvey] = useState("");
+
+  const { data: settingsRows = [] } = useQuery<{ key: string; value: string }[]>({
+    queryKey: ["/api/public/visitrw3/settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/public/visitrw3/settings");
+      if (!res.ok) throw new Error("Gagal memuat pengaturan");
+      return res.json();
+    },
+    enabled: product !== "rw3biz",
+  });
 
   const produkQuery = product === "rw3biz" ? "rw3biz" : "visit";
   const pengajuanStatus = lolosView === "belum" ? "menunggu_survey" : hasilPengajuan;
@@ -232,10 +245,12 @@ export default function AdminVisitrw3Antrian({
     setChecklist(initChecklistState(items));
     setCatatanSurvey("");
     setAlasanTolak("");
+    setUkuranSurvey(detail.pengajuan.ukuranTinggal ?? "");
   }, [
     detailId,
     detail?.pengajuan?.status,
     detail?.pengajuan?.keperluanPengajuan,
+    detail?.pengajuan?.ukuranTinggal,
   ]);
 
   function openDetail(id: number) {
@@ -249,10 +264,15 @@ export default function AdminVisitrw3Antrian({
     mutationFn: async (id: number) => {
       const err = validateSurveyChecklist(checklistPengajuanItems, checklist);
       if (err) throw new Error(err);
-      const body: { catatanSurvey?: string; checklistSurvey: Record<string, boolean> } = {
+      const body: { catatanSurvey?: string; checklistSurvey: Record<string, boolean>; ukuranTinggal?: string } = {
         checklistSurvey: checklist,
       };
       if (catatanSurvey.trim()) body.catatanSurvey = catatanSurvey.trim();
+      const jenis = detail?.pengajuan?.jenisWarga;
+      if (jenis === "kost" || jenis === "kontrak") {
+        if (!ukuranSurvey) throw new Error("Pilih ukuran tempat tinggal hasil survey");
+        body.ukuranTinggal = ukuranSurvey;
+      }
       const res = await apiRequest("PATCH", `/api/admin/visitrw3/pengajuan/${id}/approve`, body);
       return readJsonSafely(res);
     },
@@ -497,6 +517,17 @@ export default function AdminVisitrw3Antrian({
                     {p.nomorUnit}
                   </p>
                 )}
+                {(p.jenisWarga === "kost" || p.jenisWarga === "kontrak") && (
+                  <p>
+                    <span className="text-muted-foreground">Ukuran tempat: </span>
+                    {isUkuranTinggal(p.ukuranTinggal)
+                      ? labelUkuranTinggal(p.jenisWarga, p.ukuranTinggal)
+                      : "— (belum dipilih, tentukan saat survey)"}
+                    {p.estimasiKontribusi != null && (
+                      <span className="text-muted-foreground"> · kontribusi {formatRupiah(p.estimasiKontribusi)}</span>
+                    )}
+                  </p>
+                )}
                 <p>
                   <span className="text-muted-foreground">Masa berlaku: </span>
                   {p.tanggalBayar} — {p.tanggalBerlakuSampai}
@@ -703,6 +734,30 @@ export default function AdminVisitrw3Antrian({
                       setChecklist((s) => ({ ...s, [id]: value }))
                     }
                   />
+                  {(p.jenisWarga === "kost" || p.jenisWarga === "kontrak") && (
+                    <div className="space-y-2">
+                      <Label>
+                        {p.jenisWarga === "kost" ? "Ukuran kamar hasil survey" : "Jumlah kamar tidur hasil survey"}
+                      </Label>
+                      <PilihUkuranTinggal
+                        jenis={p.jenisWarga}
+                        settingsRows={settingsRows}
+                        value={ukuranSurvey}
+                        onChange={setUkuranSurvey}
+                      />
+                      {p.ukuranTinggal && ukuranSurvey && ukuranSurvey !== p.ukuranTinggal && (
+                        <p className="text-xs text-amber-700">
+                          Berbeda dari pilihan penghuni — kontribusi akan dihitung ulang saat disetujui.
+                        </p>
+                      )}
+                      <KontribusiTinggalInfo
+                        jenis={p.jenisWarga}
+                        settingsRows={settingsRows}
+                        terminBulan={p.terminBulan ?? 1}
+                        ukuran={ukuranSurvey}
+                      />
+                    </div>
+                  )}
                   <div className="space-y-2">
                     <Label>Catatan survey (opsional)</Label>
                     <Textarea

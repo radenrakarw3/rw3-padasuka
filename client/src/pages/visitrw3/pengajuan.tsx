@@ -60,9 +60,9 @@ import {
 import { PlatNomorInput } from "@/components/gov/plat-nomor-input";
 import { FormStepper } from "@/components/gov/form-stepper";
 import { SuccessPanel } from "@/components/gov/success-panel";
-import { KontribusiTinggalInfo, Visitrw3SyaratPanel } from "@/components/gov/visitrw3-syarat-panel";
+import { KontribusiTinggalInfo, PilihUkuranTinggal, Visitrw3SyaratPanel } from "@/components/gov/visitrw3-syarat-panel";
 import { FeatureExplain } from "@/components/gov/feature-explain";
-import { settingsRowsToMap } from "@/lib/visitrw3-kontribusi";
+import { isUkuranTinggal, labelUkuranTinggal, settingsRowsToMap } from "@/lib/visitrw3-kontribusi";
 import { buildKategoriUsahaPayload } from "@shared/visitrw3-kategori-usaha";
 import {
   VISITRW3_ROUTES,
@@ -650,6 +650,7 @@ type DraftPengajuan = {
   rt: string;
   alamat: string;
   nomorUnit: string;
+  ukuranTinggal?: string;
   namaUsaha: string;
   jenisTempatUsaha: string;
   jenisTempatUsahaLain: string;
@@ -869,6 +870,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
   const [rt, setRt] = useState("");
   const [alamat, setAlamat] = useState("");
   const [nomorUnit, setNomorUnit] = useState("");
+  const [ukuranTinggal, setUkuranTinggal] = useState("");
   const [namaUsaha, setNamaUsaha] = useState("");
   const [jenisTempatUsaha, setJenisTempatUsaha] = useState("");
   const [jenisTempatUsahaLain, setJenisTempatUsahaLain] = useState("");
@@ -935,6 +937,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
     setRt(d?.rt ?? "");
     setAlamat(d?.alamat ?? "");
     setNomorUnit(d?.nomorUnit ?? "");
+    setUkuranTinggal(d?.ukuranTinggal ?? "");
     setNamaUsaha(d?.namaUsaha ?? "");
     setJenisTempatUsaha(d?.jenisTempatUsaha ?? "");
     setJenisTempatUsahaLain(d?.jenisTempatUsahaLain ?? "");
@@ -992,6 +995,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
         rt,
         alamat,
         nomorUnit,
+        ukuranTinggal,
         namaUsaha,
         jenisTempatUsaha,
         jenisTempatUsahaLain,
@@ -1015,7 +1019,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
     }, 400);
     return () => window.clearTimeout(t);
   }, [
-    draftKey, draftSiapKey, nomorHasil, step, ktpRw3, rt, alamat, nomorUnit, namaUsaha,
+    draftKey, draftSiapKey, nomorHasil, step, ktpRw3, rt, alamat, nomorUnit, ukuranTinggal, namaUsaha,
     jenisTempatUsaha, jenisTempatUsahaLain, kategoriUsaha, kategoriUsahaLain, penanggungJawab,
     jamBuka, jamTutup, alamatUsaha, jumlahDewasa, jumlahAnak, penghuni, penghuniIndex,
     tanggalBayar, terminBulan, catatan, setujuTataTertib, fotoKk, bizKontribusi,
@@ -1287,6 +1291,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
         alamat: alamat.trim(),
         nomorUnit:
           formProfile.nomorUnitMode === "hidden" ? null : nomorUnit.trim() || null,
+        ukuranTinggal: jenisWarga === "kost" || jenisWarga === "kontrak" ? ukuranTinggal || null : null,
         namaUsaha: null,
         jenisTempatUsaha: null,
         jenisTempatUsahaLain: null,
@@ -1622,6 +1627,21 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
               <p className="text-xs text-muted-foreground">{formProfile.nomorUnitHint}</p>
             </div>
           )}
+          {(jenisWarga === "kost" || jenisWarga === "kontrak") && (
+            <div className="space-y-2">
+              <Label>{jenisWarga === "kost" ? "Ukuran kamar kost" : "Jumlah kamar tidur kontrakan"}</Label>
+              <PilihUkuranTinggal
+                jenis={jenisWarga}
+                settingsRows={settingsRows}
+                value={ukuranTinggal}
+                onChange={setUkuranTinggal}
+              />
+              <p className="text-xs text-muted-foreground">
+                Kontribusi dihitung dari ukuran tempat yang Anda tempati, bukan jumlah pintu bangunan. Pengurus RW
+                mencocokkannya saat survey.
+              </p>
+            </div>
+          )}
           <PesanGalat pesan={errMsg} />
           <div className="flex gap-2">
             <Link href={hubHref}>
@@ -1637,6 +1657,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                   alamat,
                   jenisWarga,
                   nomorUnit,
+                  ukuranTinggal,
                 });
                 if (err) return showErr(err);
                 goStep(1);
@@ -2268,6 +2289,11 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                   RT {rt ? rt.padStart(2, "0") : "—"} · {alamat.trim() || "—"}
                   {nomorUnit.trim() ? ` · ${nomorUnit.trim()}` : ""}
                 </p>
+                {(jenisWarga === "kost" || jenisWarga === "kontrak") && (
+                  <p className="text-xs text-muted-foreground">
+                    {isUkuranTinggal(ukuranTinggal) ? labelUkuranTinggal(jenisWarga, ukuranTinggal) : "Ukuran belum dipilih"}
+                  </p>
+                )}
               </div>
               <Button type="button" variant="ghost" size="sm" className="h-auto px-2 py-1 text-brand" onClick={() => lompatKe("lokasi")}>
                 Ubah
@@ -2357,6 +2383,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                   jenis={jenisWarga}
                   settingsRows={settingsRows}
                   terminBulan={parseInt(terminBulan, 10)}
+                  ukuran={ukuranTinggal}
                 />
               ) : null
             }
@@ -2382,7 +2409,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                   setujuTataTertib,
                 );
                 if (err) return showErr(err);
-                const errLokasi = validateLokasiWargaSinggah({ rt, alamat, jenisWarga, nomorUnit });
+                const errLokasi = validateLokasiWargaSinggah({ rt, alamat, jenisWarga, nomorUnit, ukuranTinggal });
                 if (errLokasi) {
                   lompatKe("lokasi");
                   return showErr(errLokasi, { step: indeksLangkah("lokasi") });

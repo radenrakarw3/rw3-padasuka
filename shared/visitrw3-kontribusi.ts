@@ -19,6 +19,73 @@ export function hitungTanggalBerlaku(tanggalBayar: string, terminBulan: number):
 
 export type UkuranProperti = "kecil" | "sedang" | "besar";
 
+/**
+ * Ukuran tempat yang ditempati penghuni (dasar kontribusi penghuni).
+ * Jumlah pintu bangunan hanya dipakai untuk kontribusi pemilik.
+ */
+export const UKURAN_TINGGAL_VALUES = ["kecil", "sedang", "besar"] as const satisfies readonly UkuranProperti[];
+
+const UKURAN_TINGGAL_INFO: Record<"kost" | "kontrak", Record<UkuranProperti, { judul: string; ket: string }>> = {
+  kost: {
+    kecil: { judul: "Kamar kecil", ket: "sampai 3 × 3 m" },
+    sedang: { judul: "Kamar sedang", ket: "lebih dari 3 × 3 m, sampai 3 × 4 m" },
+    besar: { judul: "Kamar besar", ket: "lebih dari 3 × 4 m" },
+  },
+  kontrak: {
+    kecil: { judul: "Kontrakan kecil", ket: "1 kamar tidur" },
+    sedang: { judul: "Kontrakan sedang", ket: "2 kamar tidur" },
+    besar: { judul: "Kontrakan besar", ket: "3 kamar tidur atau lebih" },
+  },
+};
+
+function jenisTinggal(jenis: string | null | undefined): "kost" | "kontrak" {
+  return jenis === "kontrak" || jenis === "kontrakan" ? "kontrak" : "kost";
+}
+
+export function isUkuranTinggal(v: unknown): v is UkuranProperti {
+  return typeof v === "string" && (UKURAN_TINGGAL_VALUES as readonly string[]).includes(v);
+}
+
+export function infoUkuranTinggal(jenis: string | null | undefined, ukuran: UkuranProperti) {
+  return UKURAN_TINGGAL_INFO[jenisTinggal(jenis)][ukuran];
+}
+
+/** Mis. "Kamar kecil (sampai 3 × 3 m)". */
+export function labelUkuranTinggal(jenis: string | null | undefined, ukuran: UkuranProperti): string {
+  const i = infoUkuranTinggal(jenis, ukuran);
+  return `${i.judul} (${i.ket})`;
+}
+
+export function tarifTinggalPerBulan(
+  jenis: string | null | undefined,
+  ukuran: UkuranProperti,
+  settings: KontribusiSettings,
+): number {
+  return feeTinggalPerUnitBulan(jenisTinggal(jenis) === "kontrak" ? "kontrakan" : "kost", ukuran, settings);
+}
+
+/** Kontribusi penghuni kost/kontrakan: tarif ukuran tempat × jumlah bulan masa berlaku. */
+export function hitungKontribusiTinggal(params: {
+  jenisWarga: string | null | undefined;
+  ukuran: UkuranProperti;
+  terminBulan: number;
+  settings: KontribusiSettings;
+}): KontribusiRincian {
+  const jenis = jenisTinggal(params.jenisWarga);
+  const tarifSatuan = tarifTinggalPerBulan(jenis, params.ukuran, params.settings);
+  const jenisLabel = jenis === "kontrak" ? "kontrakan" : "kost";
+  return {
+    jenis: jenisLabel,
+    label: `Kontribusi ${jenisLabel} (per ${jenis === "kontrak" ? "unit" : "kamar"}/bulan)`,
+    kelompok: labelUkuranTinggal(jenis, params.ukuran),
+    ukuranProperti: params.ukuran,
+    terminBulan: params.terminBulan,
+    tarifSatuan,
+    satuanLabel: "bulan",
+    total: params.terminBulan * tarifSatuan,
+  };
+}
+
 export type KontribusiRincian = {
   jenis: string;
   label: string;
@@ -170,6 +237,7 @@ export function hitungEstimasiPenyewa(params: {
   jenisProperti?: string | null;
   jenisTempatUsaha?: string | null;
   jumlahPintu?: number | null;
+  ukuranTinggal?: string | null;
   tanggalBayar: string;
   tanggalBerlakuSampai: string;
   terminBulan: number;
@@ -180,6 +248,7 @@ export function hitungEstimasiPenyewa(params: {
     jenisProperti,
     jenisTempatUsaha,
     jumlahPintu,
+    ukuranTinggal,
     tanggalBayar,
     tanggalBerlakuSampai,
     terminBulan,
@@ -207,6 +276,10 @@ export function hitungEstimasiPenyewa(params: {
       satuanLabel: "hari",
       total: jumlahHari * tarifSatuan,
     };
+  }
+
+  if (isUkuranTinggal(ukuranTinggal)) {
+    return hitungKontribusiTinggal({ jenisWarga: jenisProperti, ukuran: ukuranTinggal, terminBulan, settings });
   }
 
   const pintu = jumlahPintu ?? 1;

@@ -31,6 +31,7 @@ export default function Visitrw3Perpanjang() {
   const [setujuTataTertib, setSetujuTataTertib] = useState(false);
   const [keperluan, setKeperluan] = useState<"tinggal" | "bisnis" | "">("");
   const [jenisWarga, setJenisWarga] = useState("");
+  const [ukuranTinggal, setUkuranTinggal] = useState("");
   const [result, setResult] = useState<{ nomorVisitrw3: string; nomorLama: string } | null>(null);
 
   const { data: settingsRows = [], isLoading: settingsLoading } = useQuery({
@@ -49,6 +50,7 @@ export default function Visitrw3Perpanjang() {
     if (nomor.length < 8) {
       setKeperluan("");
       setJenisWarga("");
+      setUkuranTinggal("");
       return;
     }
     let cancelled = false;
@@ -58,6 +60,7 @@ export default function Visitrw3Perpanjang() {
         if (cancelled || !data?.pengajuan) return;
         setKeperluan(data.pengajuan.keperluanPengajuan);
         setJenisWarga(data.pengajuan.jenisWarga ?? "");
+        setUkuranTinggal(data.pengajuan.ukuranTinggal ?? "");
       })
       .catch(() => {});
     return () => {
@@ -222,6 +225,7 @@ export default function Visitrw3Perpanjang() {
                   jenis={jenisWarga}
                   settingsRows={settingsRows}
                   terminBulan={parseInt(terminBulan, 10)}
+                  ukuran={ukuranTinggal}
                 />
               ) : null
             }
