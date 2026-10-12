@@ -2,6 +2,7 @@ import { jsPDF } from "jspdf";
 import fs from "fs";
 import path from "path";
 import { F4 } from "@shared/kertas";
+import { tulisRata } from "./surat-sakti/pdf";
 
 const logoPath = path.join(process.cwd(), "attached_assets", "RW3-Cimahi-Logo-Green@16x_1772999415502.png");
 let logoBase64: string | null = null;
@@ -181,9 +182,9 @@ export function generateSuratPDFBuffer(options: {
     sigEstLines += 1;
   }
 
-  const fixedFs = 10;
-  const fixedLh = 4.8;
-  const titleFs = 12;
+  const fixedFs = 11;
+  const fixedLh = 5.6;
+  const titleFs = 13.5;
 
   let bodyLineCount = 0;
   let fixedLineCount = 0;
@@ -247,11 +248,11 @@ export function generateSuratPDFBuffer(options: {
   const printBody = (text: string) => {
     doc.setFontSize(bodyFs);
     doc.setFont("helvetica", "normal");
-    const wrapped = doc.splitTextToSize(text, contentWidth);
-    for (const wl of wrapped) {
-      doc.text(wl, marginLeft, y);
+    const wrapped: string[] = doc.splitTextToSize(text, contentWidth);
+    wrapped.forEach((wl, i) => {
+      tulisRata(doc, wl, marginLeft, y, contentWidth, i === wrapped.length - 1);
       y += bodyLh;
-    }
+    });
   };
 
   const printCentered = (text: string, bold?: boolean, size?: number) => {

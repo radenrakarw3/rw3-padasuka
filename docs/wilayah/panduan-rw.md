@@ -20,7 +20,7 @@ Masuk admin, lalu buka menu utama **Dashboard** dan **Surat RW**.
 Semua bahan cetak memakai kertas F4 215 × 330 mm, hitam-putih hemat tinta. Buka **Pusat cetak F4** di menu.
 - **Pengaturan printer** (ada di setiap halaman cetak): ukuran kertas F4 (buat ukuran khusus 215 × 330 mm bila belum ada), skala 100%, margin Default, matikan header/footer, kualitas Standar/Draf, Grayscale.
 - **Paket per KK** (*Kependudukan › Cetak untuk warga*): surat pemberitahuan dengan QR + formulir yang sudah terisi data tersimpan (tanpa NIK dan nomor KK). Setiap KK dibuat genap halamannya; cetak bolak-balik manual: halaman ganjil dulu, balik tumpukan kertas, lalu halaman genap.
-- Mode lain: **Kartu QR** (2 per lembar, gunting di garis), **Formulir kosong** (keluarga baru), **Rekap keliling RT** (daftar ceklis antar/kembali).
+- Mode lain: **Kartu QR** (3 per lembar, gunting di garis), **Formulir kosong** (keluarga baru), **Rekap keliling RT** (daftar ceklis antar/kembali).
 - **Input dari kertas**: ketik kode kartu di pojok kanan atas formulir, ubah jawaban yang dikoreksi warga, lalu **Simpan & lanjut**. Perubahan tercatat bersumber "formulir kertas".
 - **Warga kost/kontrakan/usaha**: cetak formulir dari Pusat cetak; setelah kembali, buka *Isi atas nama warga* di antrean Visit RW3 / RW3 Biz dan salin isinya. Pengajuan ditandai "diisi petugas dari formulir kertas".
 - **Poster & stiker QR** untuk ditempel di kost, kontrakan, warung, dan pos RT.

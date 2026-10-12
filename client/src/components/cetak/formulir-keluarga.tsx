@@ -198,29 +198,29 @@ export function SuratPemberitahuan({ p, batas, kontak }: { p: PaketKk; batas: st
 /** Kartu QR setengah F4 (2 kartu per lembar). */
 export function KartuQr({ k }: { k: Pick<PaketKk, "rt" | "kepala" | "alamatSingkat" | "kodeKartu" | "tokenTampil" | "qrSvg" | "berlakuSampai"> }) {
   return (
-    <div style={{ height: "50%", boxSizing: "border-box", padding: "4mm 3mm", display: "flex", flexDirection: "column" }}>
+    <div style={{ height: "100%", boxSizing: "border-box", padding: "3mm 3mm 2.5mm", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <KopHemat kecil />
-      <p style={{ textAlign: "center", fontSize: "13pt", fontWeight: 700, marginTop: "3mm" }}>KARTU DATA KELUARGA</p>
-      <div className="flex gap-[6mm]" style={{ marginTop: "3mm", flex: 1 }}>
-        <div style={{ flex: 1, fontSize: "10.5pt", lineHeight: 1.45 }}>
-          <p>Kepada Yth.<br /><b style={{ fontSize: "12pt" }}>Bapak/Ibu {k.kepala}</b></p>
+      <p style={{ textAlign: "center", fontSize: "16pt", fontWeight: 700, marginTop: "1.5mm", lineHeight: 1.25 }}>KARTU DATA KELUARGA</p>
+      <div className="flex items-center gap-[5mm]" style={{ marginTop: "1mm", flex: 1, minHeight: 0 }}>
+        <div style={{ flex: 1, fontSize: "12.5pt", lineHeight: 1.3 }}>
+          <p>Kepada Yth.<br /><b style={{ fontSize: "14pt" }}>Bapak/Ibu {k.kepala}</b></p>
           <p>{rt2(k.rt)} / RW 03 · {k.alamatSingkat}</p>
           <p style={{ marginTop: "2mm" }}>Mohon perbarui data keluarga:</p>
-          <ol style={{ listStyle: "decimal", paddingLeft: "5mm", fontWeight: 700 }}>
+          <ol style={{ listStyle: "decimal", paddingLeft: "6mm", fontWeight: 700 }}>
             <li>Scan QR dengan kamera HP</li>
             <li>Jawab pertanyaan</li>
             <li>Tekan Kirim</li>
           </ol>
-          <p style={{ fontSize: "9.5pt", marginTop: "2mm" }}>Tanpa scan: buka <b>{SITUS_PENDEK}/isi</b>, ketik kode:<br /><b style={{ fontSize: "11pt", letterSpacing: "1px" }}>{k.tokenTampil}</b></p>
-          <p style={{ fontSize: "9pt", marginTop: "1mm" }}>Tidak punya HP? Minta formulir kertas ke pengurus RT/RW.</p>
+          <p style={{ fontSize: "11pt", marginTop: "2mm" }}>Tanpa scan: buka <b>{SITUS_PENDEK}/isi</b>, ketik kode:<br /><b style={{ fontSize: "13pt", letterSpacing: "1px" }}>{k.tokenTampil}</b></p>
+          <p style={{ fontSize: "10pt", marginTop: "1mm" }}>Tidak punya HP? Minta formulir kertas ke pengurus RT/RW.</p>
         </div>
-        <div style={{ width: "54mm", textAlign: "center" }}>
-          <div className="qr" style={{ width: "52mm", height: "52mm", margin: "0 auto" }} dangerouslySetInnerHTML={{ __html: k.qrSvg }} />
-          <p style={{ fontSize: "8.5pt" }}>Kode kartu: <b>{k.kodeKartu}</b></p>
-          <p style={{ fontSize: "7.5pt" }}>Berlaku s.d. {tglId(k.berlakuSampai)}</p>
+        <div style={{ width: "62mm", textAlign: "center" }}>
+          <div className="qr" style={{ width: "60mm", height: "60mm", margin: "0 auto" }} dangerouslySetInnerHTML={{ __html: k.qrSvg }} />
+          <p style={{ fontSize: "10pt", marginTop: "0.5mm" }}>Kode kartu: <b>{k.kodeKartu}</b></p>
+          <p style={{ fontSize: "8.5pt" }}>Berlaku s.d. {tglId(k.berlakuSampai)}</p>
         </div>
       </div>
-      <p style={{ fontSize: "7.5pt" }}>Kartu ini tidak memuat NIK atau nomor KK. Jangan bagikan kode ke orang lain.</p>
+      <p style={{ fontSize: "8.5pt" }}>Kartu ini tidak memuat NIK atau nomor KK. Jangan bagikan kode ke orang lain.</p>
     </div>
   );
 }

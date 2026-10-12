@@ -13,7 +13,7 @@ import { maskNik } from "@shared/kontak";
 import { labelJenisWarga } from "@shared/visitrw3-jenis-warga";
 import { formatKendaraanBaris, parseKendaraan } from "@shared/visitrw3-kendaraan";
 import { barisKeperluan, parseDetailKeperluan } from "@shared/visitrw3-keperluan";
-import { bersihkan, muatLogo } from "./surat-sakti/pdf";
+import { bersihkan, muatLogo, SKALA_SURAT, tulisRata } from "./surat-sakti/pdf";
 
 /** Batas pengajuan perpanjang: H-7 sebelum masa berlaku habis (selaras pengingat WA H-7). */
 export const HARI_BATAS_PERPANJANG = 7;
@@ -186,10 +186,14 @@ export async function buatPdfSuratVisitrw3(
   const p = d.pengajuan;
   const doc = new jsPDF({ unit: "mm", format: [W, H], compress: true });
   doc.setProperties({ title: `Surat Izin Tinggal ${p.nomorVisitrw3}`, creator: IDENTITAS_RW.penerbit });
-  const font = (gaya: "normal" | "bold" | "italic" = "normal", size = 11) => {
+  type Gaya = "normal" | "bold" | "italic";
+  const K = SKALA_SURAT;
+  const fontTetap = (gaya: Gaya, size: number) => {
     doc.setFont("times", gaya);
     doc.setFontSize(size);
   };
+  /** Ukuran isi surat; kop, kaki, dan watermark memakai `fontTetap`. */
+  const font = (gaya: Gaya = "normal", size = 11) => fontTetap(gaya, size * K);
   const pecah = (t: string, w: number) => doc.splitTextToSize(bersihkan(t), w) as string[];
   let y = 48;
   const ruang = (h: number) => {
@@ -197,11 +201,11 @@ export async function buatPdfSuratVisitrw3(
     const { fontStyle } = doc.getFont();
     const ukuran = doc.getFontSize();
     doc.addPage([W, H]);
-    font("italic", 9);
+    fontTetap("italic", 9);
     doc.setTextColor(110);
     doc.text(bersihkan(`Lanjutan Surat Izin Tinggal Sementara No. ${p.nomorVisitrw3}`), ML, 14);
     doc.setTextColor(0);
-    font(fontStyle as "normal" | "bold" | "italic", ukuran);
+    fontTetap(fontStyle as Gaya, ukuran);
     y = 22;
   };
 
@@ -215,13 +219,13 @@ export async function buatPdfSuratVisitrw3(
     }
   }
   const cx = W / 2 + 8;
-  font("bold", 14);
+  fontTetap("bold", 14);
   doc.text(IDENTITAS_RW.baris1, cx, 16, { align: "center" });
-  font("bold", 13);
+  fontTetap("bold", 13);
   doc.text(IDENTITAS_RW.baris2, cx, 22, { align: "center" });
-  font("normal", 11);
+  fontTetap("normal", 11);
   doc.text(IDENTITAS_RW.baris3, cx, 27.5, { align: "center" });
-  font("normal", 8.5);
+  fontTetap("normal", 8.5);
   doc.text(bersihkan(IDENTITAS_RW.alamat), cx, 32, { align: "center", maxWidth: 150 });
   doc.setLineWidth(0.8);
   doc.line(ML - 4, 37, W - MR + 3, 37);
@@ -235,27 +239,29 @@ export async function buatPdfSuratVisitrw3(
   const wj = doc.getTextWidth(judul);
   doc.setLineWidth(0.35);
   doc.line(W / 2 - wj / 2, y + 1.2, W / 2 + wj / 2, y + 1.2);
-  y += 6;
+  y += 6 * K;
   font("bold", 10.5);
   doc.setTextColor(...HIJAU);
   doc.text("VISIT RW3 - WARGA SINGGAH RW 03 PADASUKA", W / 2, y, { align: "center" });
   doc.setTextColor(0);
-  y += 5.5;
+  y += 5.5 * K;
   font("normal", 11);
   doc.text(`Nomor: ${p.nomorVisitrw3}`, W / 2, y, { align: "center" });
-  y += 9;
+  y += 10;
 
   font("normal", 11);
+  const lh = 5.2 * K;
   const jenis = labelJenisWarga(p.jenisWarga);
   const pembuka =
     `Ketua Rukun Warga 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi menerangkan bahwa ` +
     `orang yang namanya tercantum di bawah ini telah didata dan diizinkan tinggal sementara ` +
     `(${jenis.toLowerCase()}) di wilayah RW 03 dengan keterangan sebagai berikut:`;
-  for (const l of pecah(pembuka, CW)) {
-    doc.text(l, ML, y);
-    y += 5.2;
-  }
-  y += 2;
+  const barisPembuka = pecah(pembuka, CW);
+  barisPembuka.forEach((l, i) => {
+    tulisRata(doc, l, ML, y, CW, i === barisPembuka.length - 1);
+    y += lh;
+  });
+  y += 2.5;
 
   const label: [string, string][] = [
     ["Jenis tinggal", jenis],
@@ -270,24 +276,25 @@ export async function buatPdfSuratVisitrw3(
       ? `Perpanjangan${d.nomorSebelumnya ? ` (menggantikan No. ${d.nomorSebelumnya})` : ""}`
       : "Terbitan pertama",
   ]);
-  const lw = 40;
+  const lw = 40 * K;
   for (const [a, v] of label) {
     const kanan = pecah(v, CW - lw - 4);
     doc.text(a, ML, y);
     doc.text(":", ML + lw, y);
-    kanan.forEach((l, i) => doc.text(l, ML + lw + 3, y + i * 5.2));
-    y += 5.2 * Math.max(1, kanan.length);
+    kanan.forEach((l, i) => doc.text(l, ML + lw + 3, y + i * lh));
+    y += lh * Math.max(1, kanan.length);
   }
-  y += 3;
+  y += 3.5;
 
   // Tabel pemegang izin
   const kolom = ["No", "Nama lengkap", "NIK", "L/P", "Tgl. lahir", "Keterangan"];
   const lebar = [9, 50, 38, 10, 25, CW - 132];
   const xs = lebar.reduce<number[]>((acc, w, i) => [...acc, i === 0 ? ML : acc[i - 1] + lebar[i - 1]], []);
+  const lhTabel = 4.2 * K;
   const barisTabel = (sel: string[], tebal: boolean, isi?: boolean) => {
     font(tebal ? "bold" : "normal", 9.5);
     const pecahan = sel.map((s, i) => pecah(s, lebar[i] - 2.4));
-    const h = Math.max(...pecahan.map((x) => x.length)) * 4.2 + 2.6;
+    const h = Math.max(...pecahan.map((x) => x.length)) * lhTabel + 2.8;
     ruang(h);
     font(tebal ? "bold" : "normal", 9.5);
     if (isi) {
@@ -297,7 +304,7 @@ export async function buatPdfSuratVisitrw3(
     doc.setLineWidth(0.2);
     pecahan.forEach((ls, i) => {
       doc.rect(xs[i], y, lebar[i], h);
-      ls.forEach((l, j) => doc.text(l, xs[i] + 1.2, y + 4 + j * 4.2));
+      ls.forEach((l, j) => doc.text(l, xs[i] + 1.2, y + 4 * K + j * lhTabel));
     });
     y += h;
   };
@@ -318,27 +325,28 @@ export async function buatPdfSuratVisitrw3(
     ruang(14);
     font("bold", 11);
     doc.text("Rincian keperluan tinggal dan kendaraan:", ML, y);
-    y += 5.6;
+    y += 5.6 * K;
     const ind = ML + 6;
     font("normal", 9.5);
     const lwR = Math.min(
-      62,
+      62 * K,
       Math.max(30, ...dewasa.flatMap(({ x }) => [...x.keperluan.map(([a]) => a), "Kendaraan 10"]).map((a) => doc.getTextWidth(bersihkan(a)))) + 2,
     );
+    const lhR = 4.6 * K;
     const tulisBaris = (a: string, v: string) => {
       font("normal", 9.5);
       const kanan = pecah(v, CW - (ind - ML) - lwR - 4);
-      ruang(4.6 * kanan.length);
+      ruang(lhR * kanan.length);
       doc.text(bersihkan(a), ind, y);
       doc.text(":", ind + lwR, y);
-      kanan.forEach((l, j) => doc.text(l, ind + lwR + 3, y + j * 4.6));
-      y += 4.6 * Math.max(1, kanan.length);
+      kanan.forEach((l, j) => doc.text(l, ind + lwR + 3, y + j * lhR));
+      y += lhR * Math.max(1, kanan.length);
     };
     for (const { x, no } of dewasa) {
-      ruang(14);
+      ruang(14 * K);
       font("bold", 10);
       doc.text(bersihkan(`${no}. ${x.nama}`), ML + 1, y);
-      y += 5;
+      y += 5 * K;
       if (x.keperluan.length) x.keperluan.forEach(([a, v]) => tulisBaris(a, v));
       else tulisBaris("Keperluan", "-");
       if (x.kendaraan === null) tulisBaris("Kendaraan", "Belum didata");
@@ -350,7 +358,7 @@ export async function buatPdfSuratVisitrw3(
   }
 
   // Kotak masa berlaku (gaya visa)
-  const kotakH = 34;
+  const kotakH = 37;
   ruang(kotakH + 4);
   doc.setDrawColor(...HIJAU);
   doc.setLineWidth(0.9);
@@ -369,19 +377,19 @@ export async function buatPdfSuratVisitrw3(
     const tx = ML + kol * i + kol / 2;
     font("bold", 8);
     doc.setTextColor(...HIJAU);
-    doc.text(k, tx, y + 8, { align: "center" });
+    doc.text(k, tx, y + 8.5, { align: "center" });
     doc.setTextColor(0);
     font("bold", utama ? 14 : 11.5);
-    doc.text(bersihkan(v), tx, y + 15.5, { align: "center" });
+    doc.text(bersihkan(v), tx, y + 16.5, { align: "center" });
   });
   doc.setLineWidth(0.2);
-  doc.line(ML + 6, y + 20, ML + CW - 6, y + 20);
+  doc.line(ML + 6, y + 21.5, ML + CW - 6, y + 21.5);
   font("bold", 10.5);
   doc.setTextColor(170, 30, 30);
   doc.text(
     bersihkan(`WAJIB PERPANJANG paling lambat ${formatTanggalSurat(d.perpanjangPalingLambat)}`),
     W / 2,
-    y + 26,
+    y + 27.5,
     { align: "center" },
   );
   doc.setTextColor(0);
@@ -389,16 +397,16 @@ export async function buatPdfSuratVisitrw3(
   doc.text(
     bersihkan(`Ajukan di ${situs().replace(/^https?:\/\//, "")}/visitrw3/perpanjang dengan nomor ${p.nomorVisitrw3}`),
     W / 2,
-    y + 30.5,
+    y + 32.5,
     { align: "center" },
   );
-  y += kotakH + 7;
+  y += kotakH + 8;
 
   // Ketentuan
   ruang(20);
   font("bold", 11);
   doc.text("Ketentuan:", ML, y);
-  y += 5.2;
+  y += 5.2 * K;
   font("normal", 10);
   const ketentuan = [
     "Surat ini hanya berlaku untuk orang dan alamat yang tercantum di atas, sampai tanggal BERLAKU SAMPAI.",
@@ -407,31 +415,54 @@ export async function buatPdfSuratVisitrw3(
     "Pemegang wajib mematuhi tata tertib lingkungan dan menjaga ketertiban di wilayah RW 03.",
     "Simpan surat ini dan tunjukkan bila diminta oleh pengurus RT/RW atau petugas.",
   ];
+  const lhK = 4.8 * K;
+  const indK = 7 * K;
+  const jarakTtd = 6;
+  const tinggiTtd = 5.5 * K + 24 + 9;
   ketentuan.forEach((k, i) => {
-    const ls = pecah(k, CW - 7);
-    ruang(4.8 * ls.length);
+    const ls = pecah(k, CW - indK);
+    // Butir terakhir ikut pindah halaman bersama tanda tangan agar tanda tangan tidak sendirian.
+    ruang(lhK * ls.length + (i === ketentuan.length - 1 ? jarakTtd + tinggiTtd : 0));
     ls.forEach((l, j) => {
       if (j === 0) doc.text(`${i + 1}.`, ML + 1, y);
-      doc.text(l, ML + 7, y);
-      y += 4.8;
+      tulisRata(doc, l, ML + indK, y, CW - indK, j === ls.length - 1);
+      y += lhK;
     });
+    y += 0.8;
   });
-  y += 6;
+  y += jarakTtd;
 
-  // Tanda tangan basah + QR tetap satu halaman
-  ruang(70);
+  // Tanda tangan basah, QR verifikasi di tengah
+  ruang(tinggiTtd);
   font("normal", 11);
   const utama = d.pemegang.find((x) => !x.anak) ?? d.pemegang[0];
   const kiriX = ML + CW / 4;
   const kananX = ML + (CW * 3) / 4;
   doc.text(bersihkan(`${IDENTITAS_RW.tempat}, ${formatTanggalSurat(d.tanggalTerbit)}`), kananX, y, { align: "center" });
-  y += 5.5;
+  y += 5.5 * K;
   doc.text("Pemegang izin,", kiriX, y, { align: "center" });
   doc.text(bersihkan(IDENTITAS_RW.ketua.jabatan) + ",", kananX, y, { align: "center" });
+
+  const urlCek = `${situs()}/visitrw3/status?nomor=${encodeURIComponent(p.nomorVisitrw3)}`;
+  const ukuranQr = 20;
+  const qrX = ML + CW / 2 - ukuranQr / 2;
+  const qrY = y - 3;
+  try {
+    const qr = await QRCode.toDataURL(urlCek, { margin: 0, width: 240 });
+    doc.addImage(qr, "PNG", qrX, qrY, ukuranQr, ukuranQr);
+  } catch {
+    /* QR opsional */
+  }
+  fontTetap("italic", 7.5);
+  doc.setTextColor(90);
+  doc.text("Pindai untuk cek", ML + CW / 2, qrY + ukuranQr + 3, { align: "center" });
+  doc.text("keaslian surat", ML + CW / 2, qrY + ukuranQr + 6, { align: "center" });
+  doc.setTextColor(0);
+
   y += 24;
   font("bold", 11);
   const ttdNama = (nama: string, x: number) => {
-    const n = pecah(nama, CW / 2 - 8)[0] ?? "";
+    const n = pecah(nama, CW / 2 - 26)[0] ?? "";
     doc.text(n, x, y, { align: "center" });
     const w = doc.getTextWidth(n);
     doc.setLineWidth(0.2);
@@ -439,24 +470,11 @@ export async function buatPdfSuratVisitrw3(
   };
   ttdNama(utama?.nama ?? "(...........................)", kiriX);
   ttdNama(IDENTITAS_RW.ketua.nama, kananX);
-  y += 10;
-
-  // QR verifikasi
-  const urlCek = `${situs()}/visitrw3/status?nomor=${encodeURIComponent(p.nomorVisitrw3)}`;
-  const ukuranQr = 22;
-  const yQr = Math.min(y, H - 20 - ukuranQr);
-  try {
-    const qr = await QRCode.toDataURL(urlCek, { margin: 0, width: 240 });
-    doc.addImage(qr, "PNG", ML, yQr, ukuranQr, ukuranQr);
-  } catch {
-    /* QR opsional */
-  }
+  y += 8;
   font("italic", 8.5);
-  [
-    "Pindai untuk memeriksa keaslian, masa berlaku, dan status surat ini.",
-    bersihkan(urlCek.replace(/^https?:\/\//, "")),
-    "Kode QR bukan tanda tangan elektronik. Surat sah bila ditandatangani basah.",
-  ].forEach((t, i) => doc.text(t, ML + ukuranQr + 3, yQr + 5 + i * 4.2));
+  doc.setTextColor(90);
+  doc.text("Kode QR bukan tanda tangan elektronik. Surat sah bila ditandatangani basah.", W / 2, y, { align: "center" });
+  doc.setTextColor(0);
 
   const tidakBerlaku = d.digantiOleh
     ? `DIGANTI ${d.digantiOleh}`
@@ -468,7 +486,7 @@ export async function buatPdfSuratVisitrw3(
     doc.setPage(hal);
     if (tidakBerlaku) {
       doc.setTextColor(170, 30, 30);
-      font("bold", 40);
+      fontTetap("bold", 40);
       try {
         const GState = (doc as any).GState;
         if (GState) doc.setGState(new GState({ opacity: 0.16 }));
@@ -476,7 +494,7 @@ export async function buatPdfSuratVisitrw3(
         /* tanpa transparansi */
       }
       doc.text("TIDAK BERLAKU", W / 2, H / 2, { align: "center", angle: 35 });
-      font("bold", 18);
+      fontTetap("bold", 18);
       doc.text(bersihkan(tidakBerlaku), W / 2 + 8, H / 2 + 14, { align: "center", angle: 35 });
       try {
         const GState = (doc as any).GState;
@@ -486,7 +504,7 @@ export async function buatPdfSuratVisitrw3(
       }
     }
     doc.setTextColor(110);
-    font("normal", 8);
+    fontTetap("normal", 8);
     doc.text(bersihkan(`No. ${p.nomorVisitrw3}${jumlahHal > 1 ? ` - hal. ${hal}/${jumlahHal}` : ""}`), ML, H - 10);
     doc.text(bersihkan(`Dicetak ${formatTanggalSurat(tanggalWib(new Date()))}`), W - MR, H - 10, { align: "right" });
     doc.setTextColor(0);

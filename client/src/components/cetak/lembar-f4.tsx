@@ -8,12 +8,14 @@ import logoBlack from "@assets/RW03-Cimahi-Logo-Black.svg";
  * Gaya cetak F4 bersama. Hanya isi `.area-cetak` yang tercetak; sisanya (sidebar, tombol) disembunyikan.
  * Di layar, lembar diperkecil supaya terlihat utuh sebagai pratinjau.
  */
-export function GayaCetakF4() {
+export function GayaCetakF4({ margin = F4.margin }: { margin?: number } = {}) {
+  const isiW = F4.w - 2 * margin;
+  const isiH = F4.h - 2 * margin;
   return (
     <style>{`
-      @page { size: ${F4.w}mm ${F4.h}mm; margin: ${F4.margin}mm; }
-      .lembar-f4 { width: ${ISI_W}mm; height: ${ISI_H}mm; box-sizing: border-box; overflow: hidden; background: #fff; color: #000; position: relative; break-after: page; page-break-after: always; display: flex; flex-direction: column; }
-      .alir-f4 { width: ${ISI_W}mm; box-sizing: border-box; background: #fff; color: #000; break-after: page; page-break-after: always; }
+      @page { size: ${F4.w}mm ${F4.h}mm; margin: ${margin}mm; }
+      .lembar-f4 { width: ${isiW}mm; height: ${isiH}mm; box-sizing: border-box; overflow: hidden; background: #fff; color: #000; position: relative; break-after: page; page-break-after: always; display: flex; flex-direction: column; }
+      .alir-f4 { width: ${isiW}mm; box-sizing: border-box; background: #fff; color: #000; break-after: page; page-break-after: always; }
       .lembar-f4:last-child, .alir-f4:last-child { break-after: auto; page-break-after: auto; }
       .area-cetak { font-family: Arial, Helvetica, sans-serif; color: #000; font-size: 10pt; line-height: 1.35; }
       .area-cetak svg { display: block; }
@@ -21,8 +23,8 @@ export function GayaCetakF4() {
       .jaga { break-inside: avoid; page-break-inside: avoid; }
       @media screen {
         .area-cetak { overflow-x: auto; padding-bottom: 8px; }
-        .lembar-f4, .alir-f4 { zoom: 0.42; margin: 0 auto 12px; box-sizing: content-box; padding: ${F4.margin}mm; box-shadow: 0 0 0 1px #d6d3d1, 0 4px 14px rgba(0,0,0,.08); }
-        .alir-f4 { min-height: ${ISI_H}mm; }
+        .lembar-f4, .alir-f4 { zoom: 0.42; margin: 0 auto 12px; box-sizing: content-box; padding: ${margin}mm; box-shadow: 0 0 0 1px #d6d3d1, 0 4px 14px rgba(0,0,0,.08); }
+        .alir-f4 { min-height: ${isiH}mm; }
         @media (min-width: 1024px) { .lembar-f4, .alir-f4 { zoom: 0.6; } }
       }
       @media print {
@@ -114,8 +116,12 @@ export function PanduanPrinter({ bolakBalik = false, buka: bukaAwal = false }: {
           <ol className="list-decimal space-y-1 pl-5">
             <li>Masukkan kertas F4 ke baki belakang, geser pemandu kertas sampai pas.</li>
             <li>Tekan <b>Cetak</b>, lalu pilih printer <b>EPSON L3210</b>.</li>
-            <li>Ukuran kertas: <b>F4 215 × 330</b>. Jika belum ada: <i>Preferensi/Properti printer › Ukuran kertas › Ditetapkan pengguna</i>, isi lebar 215 mm, tinggi 330 mm, simpan dengan nama "F4".</li>
-            <li>Skala <b>100% / Ukuran sebenarnya</b> (jangan "Sesuaikan"). Margin: <b>Default</b> (sudah diatur 1 cm).</li>
+            <li>
+              Ukuran kertas: <b>F4 215 × 330</b>. Jika belum ada di daftar, buat sekali di Windows: <i>Pengaturan › Bluetooth &amp; perangkat › Printer &amp; pemindai › Properti server cetak › tab Formulir</i>,
+              centang <b>Buat formulir baru</b>, nama "F4", lebar 21,5 cm, tinggi 33 cm, <b>Simpan formulir</b>, lalu tutup dan buka lagi browser.
+              Sementara belum dibuat, pilih <b>Indian Legal 215 × 345</b>: isi tetap tercetak benar, hanya sisa 1,5 cm di bawah yang tidak terpakai.
+            </li>
+            <li>Skala <b>100% / Ukuran sebenarnya</b> (jangan "Sesuaikan dengan halaman"). Margin: <b>Default</b> (sudah diatur dari halaman ini).</li>
             <li>Matikan <b>Header dan footer</b> browser. Grafik latar boleh dimatikan (hemat tinta).</li>
             <li>Kualitas: <b>Standar</b> untuk surat, <b>Draf/Cepat</b> untuk formulir dan rekap. Warna: <b>Skala abu-abu / Hitam</b>.</li>
             {bolakBalik && <li><b>Bolak-balik manual</b> (L3210 tidak bisa otomatis): cetak <b>Halaman ganjil</b> dulu, balik tumpukan kertas (sisi tercetak menghadap ke depan, bagian atas tetap di atas), masukkan lagi, lalu cetak <b>Halaman genap</b>. Coba 1 lembar dulu.</li>}

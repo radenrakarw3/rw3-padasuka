@@ -10,15 +10,18 @@ import { AlirF4, AreaCetak, GayaCetakF4, ISI_H, KopHemat, LembarF4, PanduanPrint
 import { FormulirKeluarga, KartuQr, SuratPemberitahuan, type PaketKk } from "@/components/cetak/formulir-keluarga";
 
 type Mode = "paket" | "kartu" | "kosong" | "rekap";
+const KARTU_PER_LEMBAR = 3;
+/** Kartu dipotong, jadi margin cukup batas minimal printer (Epson L3210 ±3 mm). */
+const MARGIN_KARTU = 5;
 const MODE: { nilai: Mode; label: string }[] = [
   { nilai: "paket", label: "Paket per KK (surat + formulir terisi)" },
-  { nilai: "kartu", label: "Kartu QR (2 per lembar)" },
+  { nilai: "kartu", label: "Kartu QR (3 per lembar)" },
   { nilai: "kosong", label: "Formulir kosong" },
   { nilai: "rekap", label: "Rekap keliling RT" },
 ];
 const KETERANGAN: Record<Mode, string> = {
   paket: "Depan: surat pemberitahuan + QR. Belakang: formulir yang sudah terisi data kami, warga cukup mengoreksi. Cetak bolak-balik manual.",
-  kartu: "Satu lembar F4 berisi dua kartu QR. Potong di garis putus-putus. Kartu tidak memuat NIK atau nomor KK.",
+  kartu: "Satu lembar F4 berisi tiga kartu QR. Potong di garis putus-putus. Kartu tidak memuat NIK atau nomor KK.",
   kosong: "Untuk keluarga baru atau yang belum tercatat. Pertanyaan sama persis dengan formulir QR.",
   rekap: "Daftar KK untuk pengurus keliling: catat kapan surat diantar dan formulir kembali.",
 };
@@ -123,13 +126,13 @@ export default function Cetak() {
 
   const butuhData = mode !== "kosong";
   const halamanKartu: PaketKk[][] = [];
-  for (let i = 0; i < (paket?.length ?? 0); i += 2) halamanKartu.push(paket!.slice(i, i + 2));
+  for (let i = 0; i < (paket?.length ?? 0); i += KARTU_PER_LEMBAR) halamanKartu.push(paket!.slice(i, i + KARTU_PER_LEMBAR));
   const siap = butuhData ? !!paket : !!standar;
   const label = mode === "paket" ? `Cetak paket ${paket?.length ?? 0} KK` : mode === "kartu" ? `Cetak ${paket?.length ?? 0} kartu (${halamanKartu.length} lembar)` : mode === "rekap" ? "Cetak rekap" : "Cetak formulir kosong";
 
   return (
     <div>
-      <GayaCetakF4 />
+      <GayaCetakF4 margin={mode === "kartu" ? MARGIN_KARTU : undefined} />
       <div className="print:hidden space-y-4">
         <Judul kembali={() => go("/warga")} sub={`${rt2(rtKelola)} · kertas F4`}>Cetak untuk warga</Judul>
         <PilihTombol label="Yang dicetak" belumTahu={false} nilai={mode} onChange={(v) => v && setMode(v as Mode)} pilihan={MODE} kolom={1} />
@@ -163,7 +166,11 @@ export default function Cetak() {
         {mode === "paket" && paket && <DaftarPaket paket={paket} batas={batas} kontak={kontak} />}
         {mode === "kartu" && halamanKartu.map((h, i) => (
           <LembarF4 key={i}>
-            {h.map((k, j) => <div key={k.kkId} style={{ height: "50%", borderBottom: j === 0 ? "1px dashed #000" : undefined }}><KartuQr k={k} /></div>)}
+            {h.map((k, j) => (
+              <div key={k.kkId} style={{ height: `${100 / KARTU_PER_LEMBAR}%`, flexShrink: 0, boxSizing: "border-box", borderBottom: j < KARTU_PER_LEMBAR - 1 ? "1px dashed #000" : undefined }}>
+                <KartuQr k={k} />
+              </div>
+            ))}
           </LembarF4>
         ))}
         {mode === "kosong" && standar && <FormulirKeluarga defs={standar} />}

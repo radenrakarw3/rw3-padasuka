@@ -18,6 +18,8 @@ const MB = 20;
 const CW = W - ML - MR;
 const LH = 5.4;
 const ATAS_LANJUTAN = 20;
+/** Isi surat 11,5 pt x 1,13 = 13 pt: nyaman dibaca warga di kertas F4. */
+export const SKALA_SURAT = 1.13;
 
 let logo: string | null | undefined;
 export function muatLogo(): string | null {
@@ -45,18 +47,50 @@ export function bersihkan(s: string): string {
     .replace(/[^\x09\x0A\x20-\x7E\u00A0-\u00FF]/g, "");
 }
 
+/** Satu baris hasil splitTextToSize, rata kiri-kanan; baris terakhir paragraf tidak diregangkan. */
+export function tulisRata(doc: jsPDF, l: string, x: number, y: number, lebar: number, terakhir: boolean) {
+  const kata = l.trim().split(/\s+/);
+  if (terakhir || kata.length < 2) {
+    doc.text(l, x, y);
+    return;
+  }
+  const isi = kata.reduce((a, k) => a + doc.getTextWidth(k), 0);
+  const sela = (lebar - isi) / (kata.length - 1);
+  // Baris yang terlalu renggang (sedikit kata panjang) lebih rapi dibiarkan rata kiri.
+  if (sela > doc.getTextWidth(" ") * 4) {
+    doc.text(l, x, y);
+    return;
+  }
+  let cx = x;
+  for (const k of kata) {
+    doc.text(k, cx, y);
+    cx += doc.getTextWidth(k) + sela;
+  }
+}
+
 export interface OpsiPdf {
   bloks: Blok[];
   nomor: string | null;
   draft: boolean;
   verifikasiUrl?: string | null;
   judul?: string;
+  /** Pengali ukuran huruf dan jarak baris isi surat (kop tetap). Default `SKALA_SURAT` (isi 13 pt). */
+  skala?: number;
+  /** Rata kiri-kanan untuk paragraf, daftar, dan isian label. Default true. */
+  rata?: boolean;
 }
 
 class Penulis {
   doc = new jsPDF({ unit: "mm", format: [F4.w, F4.h], compress: true });
   y = 0;
-  constructor(private nomor: string | null) {}
+  readonly lh: number;
+  constructor(
+    private nomor: string | null,
+    readonly k = 1,
+    readonly rata = false,
+  ) {
+    this.lh = LH * k;
+  }
 
   get bawah() {
     return H - MB;
@@ -73,6 +107,11 @@ class Penulis {
 
   font(gaya: "normal" | "bold" | "italic" = "normal", size = 11.5) {
     this.doc.setFont("times", gaya);
+    this.doc.setFontSize(size * this.k);
+  }
+
+  fontKop(gaya: "normal" | "bold", size: number) {
+    this.doc.setFont("times", gaya);
     this.doc.setFontSize(size);
   }
 
@@ -81,9 +120,14 @@ class Penulis {
   }
 
   baris(teks: string, x: number, opsi?: { align?: "left" | "center" | "right" }) {
-    this.pastikan(LH);
+    this.pastikan(this.lh);
     this.doc.text(bersihkan(teks), x, this.y, opsi);
-    this.y += LH;
+    this.y += this.lh;
+  }
+
+  tulis(l: string, x: number, y: number, lebar: number, terakhir: boolean) {
+    if (this.rata) tulisRata(this.doc, l, x, y, lebar, terakhir);
+    else this.doc.text(l, x, y);
   }
 
   kop() {
@@ -97,13 +141,13 @@ class Penulis {
     }
     const cx = W / 2 + 8;
     this.doc.setTextColor(0);
-    this.font("bold", 14);
+    this.fontKop("bold", 14);
     this.doc.text(IDENTITAS_RW.baris1, cx, 16, { align: "center" });
-    this.font("bold", 13);
+    this.fontKop("bold", 13);
     this.doc.text(IDENTITAS_RW.baris2, cx, 22, { align: "center" });
-    this.font("normal", 11);
+    this.fontKop("normal", 11);
     this.doc.text(IDENTITAS_RW.baris3, cx, 27.5, { align: "center" });
-    this.font("normal", 8.5);
+    this.fontKop("normal", 8.5);
     this.doc.text(bersihkan(IDENTITAS_RW.alamat), cx, 32, { align: "center", maxWidth: 150 });
     this.doc.setLineWidth(0.8);
     this.doc.line(ML - 5, 37, W - MR + 3, 37);
@@ -115,62 +159,71 @@ class Penulis {
   paragraf(teks: string) {
     this.font();
     for (const p of bersihkan(teks).split("\n")) {
-      for (const l of this.pecah(p, CW)) this.baris(l, ML);
+      const ls = this.pecah(p, CW);
+      ls.forEach((l, i) => {
+        this.pastikan(this.lh);
+        this.tulis(l, ML, this.y, CW, i === ls.length - 1);
+        this.y += this.lh;
+      });
     }
-    this.y += 1.5;
+    this.y += 1.5 * this.k;
   }
 
   judul(teks: string, sub: string[] = []) {
-    this.pastikan(LH * (2 + sub.length));
+    this.pastikan(this.lh * (2 + sub.length));
     this.font("bold", 12.5);
     for (const l of this.pecah(teks, CW)) {
       this.doc.text(l, W / 2, this.y, { align: "center" });
       const w = this.doc.getTextWidth(l);
       this.doc.setLineWidth(0.3);
       this.doc.line(W / 2 - w / 2, this.y + 1, W / 2 + w / 2, this.y + 1);
-      this.y += LH + 0.6;
+      this.y += this.lh + 0.6;
     }
     this.font("normal", 11.5);
     for (const s of sub) for (const l of this.pecah(s, CW)) this.baris(l, W / 2, { align: "center" });
-    this.y += 2;
+    this.y += 2 * this.k;
   }
 
   label(baris: [string, string][], lebarLabel?: number) {
     this.font();
-    const lw = lebarLabel ?? Math.min(55, Math.max(22, ...baris.map(([a]) => this.doc.getTextWidth(bersihkan(a)) + 3)));
+    const lw = lebarLabel ?? Math.min(55 * this.k, Math.max(22, ...baris.map(([a]) => this.doc.getTextWidth(bersihkan(a)) + 3)));
+    const lebarKanan = CW - lw - 4;
     for (const [a, v] of baris) {
       const kiri = this.pecah(a, lw - 2);
-      const kanan = this.pecah(v || "-", CW - lw - 4);
+      const kanan = this.pecah(v || "-", lebarKanan);
       const n = Math.max(kiri.length, kanan.length);
       for (let i = 0; i < n; i++) {
-        this.pastikan(LH);
+        this.pastikan(this.lh);
         if (kiri[i]) this.doc.text(kiri[i], ML, this.y);
         if (i === 0) this.doc.text(":", ML + lw, this.y);
-        if (kanan[i]) this.doc.text(kanan[i], ML + lw + 3, this.y);
-        this.y += LH;
+        if (kanan[i]) this.tulis(kanan[i], ML + lw + 3, this.y, lebarKanan, i === kanan.length - 1);
+        this.y += this.lh;
       }
+      if (this.rata) this.y += 1;
     }
-    this.y += 1.5;
+    this.y += 1.5 * this.k;
   }
 
   daftar(item: string[], bernomor = true) {
     this.font();
+    const indent = 9 * this.k;
     item.forEach((it, i) => {
-      const ls = this.pecah(it, CW - 9);
+      const ls = this.pecah(it, CW - indent);
       ls.forEach((l, j) => {
-        this.pastikan(LH);
+        this.pastikan(this.lh);
         if (j === 0) this.doc.text(bernomor ? `${i + 1}.` : "-", ML + 2, this.y);
-        this.doc.text(l, ML + 9, this.y);
-        this.y += LH;
+        this.tulis(l, ML + indent, this.y, CW - indent, j === ls.length - 1);
+        this.y += this.lh;
       });
+      if (this.rata) this.y += 0.8;
     });
-    this.y += 1.5;
+    this.y += 1.5 * this.k;
   }
 
   tabel(kolom: string[], baris: string[][], lebar?: number[], total?: string[]) {
     const fs = 9.5;
-    const lh = 4.3;
-    const pad = 1.4;
+    const lh = 4.3 * this.k;
+    const pad = 1.4 * this.k;
     const bobot = lebar && lebar.length === kolom.length ? lebar : kolom.map(() => 1);
     const jml = bobot.reduce((a, b) => a + b, 0);
     const lw = bobot.map((b) => (b / jml) * CW);
@@ -217,21 +270,24 @@ class Penulis {
         tinggiMin = 0;
       }
     });
-    this.y += 3;
+    this.y += this.rata ? 5.5 : 3;
   }
 
   ttd(kolom: { atas: string; nama: string; jabatan?: string }[], tempatTanggal?: string) {
     this.font();
     const perBaris = kolom.length === 1 ? 1 : Math.min(3, kolom.length);
-    const tinggi = LH * 4 + 20;
+    const lh = this.lh;
     for (let i = 0; i < kolom.length; i += perBaris) {
       const grup = kolom.slice(i, i + perBaris);
-      this.pastikan(tinggi + (i === 0 && tempatTanggal ? LH : 0) + 4);
       const lebar = perBaris === 1 ? CW / 2 : CW / grup.length;
+      this.font("normal", 11);
+      const barisAtas = Math.max(1, ...grup.map((k) => this.pecah(k.atas, lebar - 4).length));
+      const tinggi = (barisAtas + 2) * lh + 22;
+      this.pastikan(tinggi + (i === 0 && tempatTanggal ? lh + 1 : 0));
       const x0 = perBaris === 1 ? ML + CW / 2 : ML;
       if (i === 0 && tempatTanggal) {
         this.doc.text(bersihkan(tempatTanggal), perBaris === 1 ? x0 + lebar / 2 : ML + CW, this.y, { align: perBaris === 1 ? "center" : "right" });
-        this.y += LH + 1;
+        this.y += lh + 1;
       }
       const yAwal = this.y;
       grup.forEach((k, j) => {
@@ -240,7 +296,7 @@ class Penulis {
         this.font("normal", 11);
         for (const l of this.pecah(k.atas, lebar - 4)) {
           this.doc.text(l, cx, y, { align: "center" });
-          y += LH;
+          y += lh;
         }
         y += 20;
         this.font("bold", 11);
@@ -250,7 +306,7 @@ class Penulis {
         this.doc.setLineWidth(0.2);
         this.doc.line(cx - w / 2, y + 0.8, cx + w / 2, y + 0.8);
         this.font("normal", 10.5);
-        if (k.jabatan) this.doc.text(this.pecah(k.jabatan, lebar - 4)[0] ?? "", cx, y + LH, { align: "center" });
+        if (k.jabatan) this.doc.text(this.pecah(k.jabatan, lebar - 4)[0] ?? "", cx, y + lh, { align: "center" });
       });
       this.y = yAwal + tinggi;
     }
@@ -309,7 +365,7 @@ class Penulis {
 }
 
 export async function buatPdf(o: OpsiPdf): Promise<{ buffer: Buffer; halaman: number }> {
-  const p = new Penulis(o.nomor);
+  const p = new Penulis(o.nomor, o.skala ?? SKALA_SURAT, o.rata ?? true);
   if (o.judul) p.doc.setProperties({ title: bersihkan(o.judul), creator: IDENTITAS_RW.penerbit });
   p.kop();
   for (let i = 0; i < o.bloks.length; i++) {
@@ -322,9 +378,9 @@ export async function buatPdf(o: OpsiPdf): Promise<{ buffer: Buffer; halaman: nu
         if (b.tempatTanggal) {
           p.font();
           p.doc.text(bersihkan(b.tempatTanggal), W - MR, p.y, { align: "right" });
-          p.y += LH + 1;
+          p.y += p.lh + 1;
         }
-        p.label(b.baris, 24);
+        p.label(b.baris, 24 * p.k);
         break;
       case "alamat":
         p.font();
@@ -332,7 +388,8 @@ export async function buatPdf(o: OpsiPdf): Promise<{ buffer: Buffer; halaman: nu
         p.y += 2;
         break;
       case "sub":
-        p.pastikan(LH * 3);
+        if (p.rata) p.y += 2.5;
+        p.pastikan(p.lh * 3);
         p.font("bold", 11.5);
         p.baris(b.teks, ML);
         p.font();
@@ -354,7 +411,7 @@ export async function buatPdf(o: OpsiPdf): Promise<{ buffer: Buffer; halaman: nu
         p.ttd(b.kolom, b.tempatTanggal);
         break;
       case "tembusan":
-        p.pastikan(LH * 2);
+        p.pastikan(p.lh * 2);
         p.font("bold", 10.5);
         p.baris("Tembusan:", ML);
         p.font("normal", 10.5);

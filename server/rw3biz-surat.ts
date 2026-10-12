@@ -48,7 +48,7 @@ import {
   type RentangOmzet,
   type StatusTempatBiz,
 } from "@shared/rw3biz-kontribusi";
-import { bersihkan, muatLogo } from "./surat-sakti/pdf";
+import { bersihkan, muatLogo, SKALA_SURAT, tulisRata } from "./surat-sakti/pdf";
 import { dataUsahaDariBaris, loadTarif, parseRincianTersimpan } from "./rw3biz-kontribusi";
 import type { getDataKwitansiRazia } from "./rw3biz-razia";
 import type { getDataKwitansiPelanggaran } from "./rw3biz-pelanggaran";
@@ -121,11 +121,16 @@ class Lembar {
   doc = new jsPDF({ unit: "mm", format: [W, H], compress: true });
   y = 14;
 
-  constructor(private lanjutan: string, judulDokumen: string) {
+  /** @param k pengali ukuran huruf & jarak baris isi (kop, kaki, watermark tetap). */
+  constructor(private lanjutan: string, judulDokumen: string, readonly k = SKALA_SURAT) {
     this.doc.setProperties({ title: judulDokumen, creator: IDENTITAS_RW.penerbit });
   }
 
   font(gaya: Gaya = "normal", size = 11) {
+    this.fontTetap(gaya, size * this.k);
+  }
+
+  fontTetap(gaya: Gaya, size: number) {
     this.doc.setFont("times", gaya);
     this.doc.setFontSize(size);
   }
@@ -139,11 +144,11 @@ class Lembar {
     const { fontStyle } = this.doc.getFont();
     const ukuran = this.doc.getFontSize();
     this.doc.addPage([W, H]);
-    this.font("italic", 9);
+    this.fontTetap("italic", 9);
     this.doc.setTextColor(110);
     this.doc.text(bersihkan(this.lanjutan), ML, 14);
     this.doc.setTextColor(0);
-    this.font(fontStyle as Gaya, ukuran);
+    this.fontTetap(fontStyle as Gaya, ukuran);
     this.y = 22;
   }
 
@@ -160,13 +165,13 @@ class Lembar {
     }
     const cx = W / 2 + 8;
     const s = kecil ? 0.8 : 1;
-    this.font("bold", 14 * s);
+    this.fontTetap("bold", 14 * s);
     d.text(IDENTITAS_RW.baris1, cx, atas + 7 * s, { align: "center" });
-    this.font("bold", 13 * s);
+    this.fontTetap("bold", 13 * s);
     d.text(IDENTITAS_RW.baris2, cx, atas + 13 * s, { align: "center" });
-    this.font("normal", 11 * s);
+    this.fontTetap("normal", 11 * s);
     d.text(IDENTITAS_RW.baris3, cx, atas + 18.5 * s, { align: "center" });
-    this.font("normal", 8.5 * s);
+    this.fontTetap("normal", 8.5 * s);
     d.text(bersihkan(IDENTITAS_RW.alamat), cx, atas + 23 * s, { align: "center", maxWidth: 150 });
     const garis = atas + 28 * s;
     d.setLineWidth(0.8);
@@ -183,34 +188,36 @@ class Lembar {
     const wj = d.getTextWidth(teks);
     d.setLineWidth(0.35);
     d.line(W / 2 - wj / 2, this.y + 1.2, W / 2 + wj / 2, this.y + 1.2);
-    this.y += 6;
+    this.y += 6 * this.k;
     if (sub) {
       this.font("bold", 10.5);
       d.setTextColor(...HIJAU);
       d.text(bersihkan(sub), W / 2, this.y, { align: "center" });
       d.setTextColor(0);
-      this.y += 5.5;
+      this.y += 5.5 * this.k;
     }
     if (nomor) {
       this.font("normal", 11);
       d.text(bersihkan(nomor), W / 2, this.y, { align: "center" });
-      this.y += 5.5;
+      this.y += 5.5 * this.k;
     }
     this.y += 3;
   }
 
   paragraf(teks: string, size = 11, lh = 5.2) {
     this.font("normal", size);
-    for (const l of this.pecah(teks, CW)) {
-      this.ruang(lh);
-      this.doc.text(l, ML, this.y);
-      this.y += lh;
-    }
+    const tinggi = lh * this.k;
+    const ls = this.pecah(teks, CW);
+    ls.forEach((l, i) => {
+      this.ruang(tinggi);
+      tulisRata(this.doc, l, ML, this.y, CW, i === ls.length - 1);
+      this.y += tinggi;
+    });
   }
 
   subjudul(teks: string) {
-    this.ruang(12);
-    this.y += 2;
+    this.ruang(12 * this.k);
+    this.y += 3;
     this.font("bold", 11);
     this.doc.setTextColor(...HIJAU);
     this.doc.text(bersihkan(teks), ML, this.y);
@@ -219,10 +226,12 @@ class Lembar {
     this.doc.setLineWidth(0.3);
     this.doc.line(ML, this.y + 1.3, ML + CW, this.y + 1.3);
     this.doc.setDrawColor(0);
-    this.y += 6;
+    this.y += 6.5 * this.k;
   }
 
-  labelNilai(rows: [string, string][], lw = 50, size = 10.5, lh = 5) {
+  labelNilai(rows: [string, string][], lebarLabel = 50, size = 10.5, lhDasar = 5) {
+    const lw = lebarLabel * this.k;
+    const lh = lhDasar * this.k;
     for (const [a, v] of rows) {
       this.font("normal", size);
       const kanan = this.pecah(v || "-", CW - lw - 4);
@@ -234,14 +243,15 @@ class Lembar {
     }
   }
 
-  tabel(kolom: string[], lebar: number[], baris: string[][], size = 9) {
+  tabel(kolom: string[], lebar: number[], baris: string[][], sizeDasar = 9) {
     const xs = lebar.reduce<number[]>((acc, w, i) => [...acc, i === 0 ? ML : acc[i - 1] + lebar[i - 1]], []);
+    const size = sizeDasar * this.k;
     const tulis = (sel: string[], tebal: boolean, isi?: boolean) => {
-      this.font(tebal ? "bold" : "normal", size);
+      this.fontTetap(tebal ? "bold" : "normal", size);
       const pecahan = sel.map((s, i) => this.pecah(s || "-", lebar[i] - 2.4));
       const h = Math.max(...pecahan.map((x) => x.length)) * (size * 0.43) + 2.6;
       this.ruang(h);
-      this.font(tebal ? "bold" : "normal", size);
+      this.fontTetap(tebal ? "bold" : "normal", size);
       if (isi) {
         this.doc.setFillColor(235, 243, 240);
         this.doc.rect(ML, this.y, lebar.reduce((s, w) => s + w, 0), h, "F");
@@ -255,31 +265,34 @@ class Lembar {
     };
     tulis(kolom, true, true);
     for (const b of baris) tulis(b, false);
-    this.y += 3;
+    this.y += 4;
   }
 
-  daftarBernomor(items: string[], size = 10) {
+  /** @param ikutAkhir tinggi blok sesudahnya (mis. tanda tangan) yang harus satu halaman dengan butir terakhir. */
+  daftarBernomor(items: string[], size = 10, ikutAkhir = 0) {
     this.font("normal", size);
-    const lh = size * 0.48;
+    const lh = size * this.k * 0.48;
+    const indent = 7 * this.k;
     items.forEach((k, i) => {
-      const ls = this.pecah(k, CW - 7);
-      this.ruang(lh * ls.length);
+      const ls = this.pecah(k, CW - indent);
+      this.ruang(lh * ls.length + (i === items.length - 1 ? ikutAkhir : 0));
       ls.forEach((l, j) => {
         if (j === 0) this.doc.text(`${i + 1}.`, ML + 1, this.y);
-        this.doc.text(l, ML + 7, this.y);
+        tulisRata(this.doc, l, ML + indent, this.y, CW - indent, j === ls.length - 1);
         this.y += lh;
       });
+      this.y += 0.8;
     });
   }
 
   /** Blok tanda tangan berjajar; nama kosong = garis titik untuk ditulis tangan. */
   tandaTangan(kolom: { jabatan: string; nama?: string | null }[], tempatTanggal?: string) {
-    this.ruang(44);
+    this.ruang(44 * this.k);
     const lebar = CW / kolom.length;
     this.font("normal", 10.5);
     if (tempatTanggal) {
       this.doc.text(bersihkan(tempatTanggal), ML + lebar * (kolom.length - 0.5), this.y, { align: "center" });
-      this.y += 5;
+      this.y += 5 * this.k;
     }
     kolom.forEach((k, i) => this.doc.text(bersihkan(k.jabatan), ML + lebar * (i + 0.5), this.y, { align: "center" }));
     this.y += 22;
@@ -294,7 +307,7 @@ class Lembar {
         this.doc.line(x - w / 2, this.y + 0.8, x + w / 2, this.y + 0.8);
       }
     });
-    this.y += 8;
+    this.y += 8 * this.k;
   }
 
   async qr(url: string, baris: string[], ukuran = 22) {
@@ -307,7 +320,7 @@ class Lembar {
       /* QR opsional */
     }
     this.font("italic", 8.5);
-    baris.forEach((t, i) => this.doc.text(bersihkan(t), ML + ukuran + 3, yQr + 5 + i * 4.2));
+    baris.forEach((t, i) => this.doc.text(bersihkan(t), ML + ukuran + 3, yQr + 5 + i * 4.2 * this.k));
     this.y = yQr + ukuran + 3;
   }
 
@@ -316,7 +329,7 @@ class Lembar {
     for (let hal = 1; hal <= d.getNumberOfPages(); hal++) {
       d.setPage(hal);
       d.setTextColor(170, 30, 30);
-      this.font("bold", 40);
+      this.fontTetap("bold", 40);
       try {
         const GState = (d as any).GState;
         if (GState) d.setGState(new GState({ opacity: 0.16 }));
@@ -325,7 +338,7 @@ class Lembar {
       }
       d.text(bersihkan(teks), W / 2, H / 2, { align: "center", angle: 35 });
       if (sub) {
-        this.font("bold", 18);
+        this.fontTetap("bold", 18);
         d.text(bersihkan(sub), W / 2 + 8, H / 2 + 14, { align: "center", angle: 35 });
       }
       try {
@@ -344,7 +357,7 @@ class Lembar {
     for (let hal = 1; hal <= n; hal++) {
       d.setPage(hal);
       d.setTextColor(110);
-      this.font("normal", 8);
+      this.fontTetap("normal", 8);
       d.text(bersihkan(`${kiri}${n > 1 ? ` - hal. ${hal}/${n}` : ""}`), ML, H - 10);
       d.text(bersihkan(`Dicetak ${tgl(tanggalWib(new Date()))}`), W - MR, H - 10, { align: "right" });
       d.setTextColor(0);
@@ -493,18 +506,18 @@ export async function buatPdfSuratUsaha(d: DataSuratUsaha, opsi: { nikLengkap: b
   L.judul("SURAT IZIN USAHA", "RW3BIZ - IZIN USAHA DI WILAYAH RW 03 PADASUKA", `Nomor: ${p.nomorBiz}`);
 
   // Nomor induk menonjol: dipakai untuk cek status, bayar, dan perpanjang
-  const kotakNiuH = 13;
+  const kotakNiuH = 15;
   L.doc.setDrawColor(...HIJAU);
   L.doc.setLineWidth(0.6);
-  L.doc.roundedRect(W / 2 - 45, L.y - 4, 90, kotakNiuH, 2, 2);
+  L.doc.roundedRect(W / 2 - 50, L.y - 4.5, 100, kotakNiuH, 2, 2);
   L.doc.setDrawColor(0);
   L.font("bold", 8);
   L.doc.setTextColor(...HIJAU);
   L.doc.text("NOMOR INDUK USAHA RW3", W / 2, L.y, { align: "center" });
   L.doc.setTextColor(0);
   L.font("bold", 15);
-  L.doc.text(bersihkan(niu), W / 2, L.y + 6.5, { align: "center" });
-  L.y += kotakNiuH + 4;
+  L.doc.text(bersihkan(niu), W / 2, L.y + 7.5, { align: "center" });
+  L.y += kotakNiuH + 5;
 
   L.paragraf(
     `Ketua Rukun Warga 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi menerangkan bahwa usaha ` +
@@ -545,12 +558,13 @@ export async function buatPdfSuratUsaha(d: DataSuratUsaha, opsi: { nikLengkap: b
   L.subjudul("Pemilik, penanggung jawab, dan pegawai terdaftar");
   L.tabel(
     ["No", "Nama lengkap", "NIK", "L/P", "Tgl. lahir", "Peran", "Asal"],
-    [8, 40, 31, 9, 20, 29, CW - 137],
+    [8, 37, 34, 9, 21, 28, CW - 137],
     d.orang.map((o, i) => [String(i + 1), ...baris(o, opsi.nikLengkap, false, false)]),
   );
 
   // Kotak masa berlaku
-  const kotakH = 34;
+  const kotakH = 37;
+  L.y += 2;
   L.ruang(kotakH + 4);
   const y = L.y;
   L.doc.setDrawColor(...HIJAU);
@@ -569,31 +583,31 @@ export async function buatPdfSuratUsaha(d: DataSuratUsaha, opsi: { nikLengkap: b
     const tx = ML + kol * i + kol / 2;
     L.font("bold", 8);
     L.doc.setTextColor(...HIJAU);
-    L.doc.text(k, tx, y + 8, { align: "center" });
+    L.doc.text(k, tx, y + 8.5, { align: "center" });
     L.doc.setTextColor(0);
     L.font("bold", utama ? 14 : 11.5);
-    L.doc.text(bersihkan(v), tx, y + 15.5, { align: "center" });
+    L.doc.text(bersihkan(v), tx, y + 16.5, { align: "center" });
   });
   L.doc.setLineWidth(0.2);
-  L.doc.line(ML + 6, y + 20, ML + CW - 6, y + 20);
+  L.doc.line(ML + 6, y + 21.5, ML + CW - 6, y + 21.5);
   L.font("bold", 10.5);
   L.doc.setTextColor(170, 30, 30);
-  L.doc.text(bersihkan(`WAJIB DIPERBARUI paling lambat ${tgl(d.perbaruiPalingLambat)}`), W / 2, y + 26, { align: "center" });
+  L.doc.text(bersihkan(`WAJIB DIPERBARUI paling lambat ${tgl(d.perbaruiPalingLambat)}`), W / 2, y + 27.5, { align: "center" });
   L.doc.setTextColor(0);
   L.font("normal", 8.5);
   L.doc.text(
     bersihkan(`Perbarui di ${situs().replace(/^https?:\/\//, "")}/rw3biz/perpanjang dengan Nomor Induk ${niu}`),
     W / 2,
-    y + 30.5,
+    y + 32.5,
     { align: "center" },
   );
-  L.y = y + kotakH + 7;
+  L.y = y + kotakH + 8;
 
   const tarif = await loadTarif();
   L.ruang(20);
   L.font("bold", 11);
   L.doc.text("Ketentuan:", ML, L.y);
-  L.y += 5.2;
+  L.y += 5.2 * L.k;
   L.daftarBernomor([
     "Surat ini hanya berlaku untuk usaha, lokasi, pegawai, dan kendaraan yang tercantum, sampai tanggal BERLAKU SAMPAI.",
     `Surat wajib diperbarui sebelum masa berlaku habis (paling lambat ${tgl(d.perbaruiPalingLambat)}) sekaligus memperbarui data pegawai dan kendaraan operasional. Setelah disetujui, terbit surat baru dan surat ini tidak berlaku lagi. Nomor Induk Usaha tetap sama.`,
@@ -604,7 +618,7 @@ export async function buatPdfSuratUsaha(d: DataSuratUsaha, opsi: { nikLengkap: b
     "Pelanggaran (sampah tercecer, kebisingan, parkir menghalangi jalan, limbah/bau, melanggar jam operasional, merusak fasilitas umum, data tidak sesuai, dll) dari aduan warga yang terbukti atau temuan petugas dikenai teguran / denda: denda dasar x tingkat (ringan/sedang/berat) x pengulangan dalam 12 bulan. Denda disetor ke Kas RW 03 dengan kwitansi.",
     "Bila kontribusi dan denda yang terkumpul dalam sebulan melebihi kebutuhan anggaran RW, kelebihannya dijadikan voucher belanja bagi warga RW 03 yang hanya dapat dibelanjakan di usaha RW3BIZ yang tertib berkontribusi. Voucher yang diterima usaha ditukar ke Kas RW 03 senilai nominalnya.",
     "Simpan surat ini di tempat usaha dan tunjukkan bila diminta oleh pengurus RT/RW atau petugas.",
-  ]);
+  ], 10, 5 + 44 * L.k);
   L.y += 5;
 
   L.tandaTangan(
@@ -714,7 +728,7 @@ export async function buatPdfFormulir(
   L.subjudul(`D. Pemilik, penanggung jawab, dan pegawai (${orang.length} orang)`);
   L.tabel(
     ["No", "Nama lengkap", "NIK", "L/P", "Tgl. lahir", "Peran", "Asal / domisili", "WhatsApp"],
-    [8, 34, 28, 8, 19, 26, 28, CW - 151],
+    [8, 31, 31, 8, 19, 26, 28, CW - 151],
     orang.map((o, i) => [String(i + 1), ...baris(o, opsi.lengkap, opsi.lengkap)]),
     8.5,
   );
@@ -732,7 +746,7 @@ export async function buatPdfFormulir(
     L.font("bold", 11);
     L.ruang(6);
     L.doc.text(bersihkan(`Kontribusi per bulan: ${formatRp(total)}`), ML, L.y);
-    L.y += 5;
+    L.y += 5 * L.k;
     L.font("italic", 9.5);
     L.paragraf(`(${rupiahTerbilang(total)})`, 9.5, 4.6);
     if (p.status !== "disetujui") {
@@ -763,6 +777,7 @@ export async function buatPdfFormulir(
   }
   L.y += 3;
 
+  L.ruang(4.6 * L.k * 2 + 3 + 44 * L.k);
   L.paragraf(
     "Dengan menandatangani formulir ini, pemohon menyatakan data di atas benar, bersedia disurvey, dan sanggup membayar kontribusi bulanan ke Kas RW 03 sesuai ketentuan.",
     9.5,
@@ -883,7 +898,8 @@ async function pdfKwitansi(o: {
   catatanKaki: string;
 }) {
   const nomor = o.nomor;
-  const L = new Lembar(`Kwitansi ${nomor}`, `Kwitansi ${nomor}`);
+  // Dua salinan per lembar: skala lebih kecil agar tiap salinan tetap muat setengah halaman.
+  const L = new Lembar(`Kwitansi ${nomor}`, `Kwitansi ${nomor}`, 1.08);
   const tinggiSalinan = (H - 16) / 2;
 
   const salinan = async (atas: number, untuk: string) => {

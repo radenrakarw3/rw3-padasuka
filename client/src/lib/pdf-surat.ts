@@ -214,6 +214,26 @@ function hasTwoColumnSig(sigLines: string[]): boolean {
   return count >= 2;
 }
 
+/** Rata kiri-kanan per baris; baris terakhir paragraf dan baris yang terlalu renggang tetap rata kiri. */
+function tulisRata(doc: jsPDF, line: string, x: number, y: number, width: number, last: boolean) {
+  const words = line.trim().split(/\s+/);
+  if (last || words.length < 2) {
+    doc.text(line, x, y);
+    return;
+  }
+  const filled = words.reduce((a, w) => a + doc.getTextWidth(w), 0);
+  const gap = (width - filled) / (words.length - 1);
+  if (gap > doc.getTextWidth(" ") * 4) {
+    doc.text(line, x, y);
+    return;
+  }
+  let cx = x;
+  for (const w of words) {
+    doc.text(w, cx, y);
+    cx += doc.getTextWidth(w) + gap;
+  }
+}
+
 export async function generateSuratPDF(options: {
   id?: number;
   nomorSurat?: string | null;
@@ -312,9 +332,9 @@ export async function generateSuratPDF(options: {
     sigEstLines += 1;
   }
 
-  const fixedFs = 9.6;
-  const fixedLh = 5.1;
-  const titleFs = 13;
+  const fixedFs = 11;
+  const fixedLh = 5.8;
+  const titleFs = 14;
 
   let bodyLineCount = 0;
   let fixedLineCount = 0;
@@ -345,10 +365,10 @@ export async function generateSuratPDF(options: {
   let bodyScale = 1;
   if (bodyNeeded > bodyAvailable && bodyAvailable > 0) {
     bodyScale = bodyAvailable / bodyNeeded;
-    if (bodyScale < 0.92) bodyScale = 0.92;
+    if (bodyScale < 0.82) bodyScale = 0.82;
   }
 
-  const bodyFs = Math.max(8.8, Math.round(fixedFs * bodyScale * 10) / 10);
+  const bodyFs = Math.max(9, Math.round(fixedFs * bodyScale * 10) / 10);
   const bodyLh = fixedLh * bodyScale;
 
   const drawKop = () => {
@@ -390,10 +410,10 @@ export async function generateSuratPDF(options: {
     }
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.5);
+    doc.setFontSize(8.5);
     doc.text("VERIFIKASI DOKUMEN", marginLeft + qrSize + 5, footerY + 3);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(6.7);
+    doc.setFontSize(7.6);
     doc.text("Pindai QR untuk memeriksa keabsahan surat RW 03.", marginLeft + qrSize + 5, footerY + 7.5);
     if (nomorSurat) {
       doc.text(`Nomor: ${nomorSurat}`, marginLeft + qrSize + 5, footerY + 11.8);
@@ -407,11 +427,11 @@ export async function generateSuratPDF(options: {
   const printBody = (text: string) => {
     doc.setFontSize(bodyFs);
     doc.setFont("helvetica", "normal");
-    const wrapped = doc.splitTextToSize(text, contentWidth);
-    for (const wl of wrapped) {
-      doc.text(wl, marginLeft, y);
+    const wrapped: string[] = doc.splitTextToSize(text, contentWidth);
+    wrapped.forEach((wl, i) => {
+      tulisRata(doc, wl, marginLeft, y, contentWidth, i === wrapped.length - 1);
       y += bodyLh;
-    }
+    });
   };
 
   const printCentered = (text: string, bold?: boolean, size?: number) => {
@@ -651,9 +671,9 @@ export async function generateSuratRekomendasiBansosPDF(options: {
   const marginLeft = 20;
   const marginRight = 20;
   const contentWidth = pageWidth - marginLeft - marginRight;
-  const colonMM = 45;
-  const fixedFs = 10;
-  const fixedLh = 5.5;
+  const colonMM = 50;
+  const fixedFs = 11.5;
+  const fixedLh = 6.3;
 
   const compressedLogo2 = await getCompressedLogo();
 
@@ -684,7 +704,7 @@ export async function generateSuratRekomendasiBansosPDF(options: {
   const title = isCoret ? "SURAT REKOMENDASI PENCORETAN PENERIMA BANSOS" : "SURAT REKOMENDASI CALON PENERIMA BANSOS";
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
+  doc.setFontSize(12.5);
   const titleW = doc.getTextWidth(title);
   doc.text(title, (pageWidth - titleW) / 2, y);
   y += fixedLh;
@@ -712,11 +732,11 @@ export async function generateSuratRekomendasiBansosPDF(options: {
   y += fixedLh * 1.5;
 
   const intro = `Yang bertanda tangan di bawah ini, Ketua RW 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi, dengan ini menyampaikan surat rekomendasi ${isCoret ? "pencoretan" : "calon penerima"} bantuan sosial sebagai berikut:`;
-  const introLines = doc.splitTextToSize(intro, contentWidth);
-  for (const line of introLines) {
-    doc.text(line, marginLeft, y);
+  const introLines: string[] = doc.splitTextToSize(intro, contentWidth);
+  introLines.forEach((line, i) => {
+    tulisRata(doc, line, marginLeft, y, contentWidth, i === introLines.length - 1);
     y += fixedLh;
-  }
+  });
   y += fixedLh * 0.5;
 
   function drawBioLine(label: string, value: string) {
@@ -746,19 +766,19 @@ export async function generateSuratRekomendasiBansosPDF(options: {
   doc.text("Alasan:", marginLeft, y);
   y += fixedLh;
   doc.setFont("helvetica", "normal");
-  const alasanLines = doc.splitTextToSize(alasan, contentWidth);
-  for (const line of alasanLines) {
-    doc.text(line, marginLeft, y);
+  const alasanLines: string[] = doc.splitTextToSize(alasan, contentWidth);
+  alasanLines.forEach((line, i) => {
+    tulisRata(doc, line, marginLeft, y, contentWidth, i === alasanLines.length - 1);
     y += fixedLh;
-  }
+  });
   y += fixedLh;
 
   const closing = `Demikian surat rekomendasi ini kami buat dengan sebenarnya untuk dapat ditindaklanjuti sebagaimana mestinya. Atas perhatian dan kerjasamanya, kami ucapkan terima kasih.`;
-  const closingLines = doc.splitTextToSize(closing, contentWidth);
-  for (const line of closingLines) {
-    doc.text(line, marginLeft, y);
+  const closingLines: string[] = doc.splitTextToSize(closing, contentWidth);
+  closingLines.forEach((line, i) => {
+    tulisRata(doc, line, marginLeft, y, contentWidth, i === closingLines.length - 1);
     y += fixedLh;
-  }
+  });
   y += fixedLh * 2;
 
   const sigColW = contentWidth / 2;
