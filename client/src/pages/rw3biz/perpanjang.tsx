@@ -16,7 +16,7 @@ import { FeatureExplain } from "@/components/gov/feature-explain";
 import { FormStepper } from "@/components/gov/form-stepper";
 import { settingsRowsToMap } from "@/lib/visitrw3-kontribusi";
 import { RW3BIZ_ROUTES } from "@/lib/rw3biz-routes";
-import { hitungTanggalBerlaku } from "@shared/visitrw3-kontribusi";
+import { PilihTermin } from "@/components/gov/pilih-termin";
 import {
   EstimasiKontribusiCard,
   JENIS_TEMPAT_BIZ_OPTIONS,
@@ -109,11 +109,6 @@ function validasiOrangBaru(o: OrangBaruForm): string | null {
   return validateOrangKontribusi(o);
 }
 
-function hariIni() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
 export default function Rw3bizPerpanjang() {
   const { toast } = useToast();
   const awal = useMemo(() => (new URLSearchParams(window.location.search).get("nomor") ?? "").trim().toUpperCase(), []);
@@ -127,7 +122,6 @@ export default function Rw3bizPerpanjang() {
   const [biz, setBiz] = useState<BizKontribusiForm | null>(null);
   const [orangLama, setOrangLama] = useState<OrangLamaForm[]>([]);
   const [orangBaru, setOrangBaru] = useState<OrangBaruForm[]>([]);
-  const [tanggalBayar, setTanggalBayar] = useState(hariIni);
   const [terminBulan, setTerminBulan] = useState("6");
   const [catatan, setCatatan] = useState("");
   const [setuju, setSetuju] = useState(false);
@@ -143,10 +137,6 @@ export default function Rw3bizPerpanjang() {
     },
   });
   const settingsMap = useMemo(() => settingsRowsToMap(settingsRows), [settingsRows]);
-  const previewSampai = useMemo(
-    () => (tanggalBayar ? hitungTanggalBerlaku(tanggalBayar, parseInt(terminBulan, 10)) : ""),
-    [tanggalBayar, terminBulan],
-  );
 
   const muat = useMutation({
     mutationFn: async () =>
@@ -217,7 +207,6 @@ export default function Rw3bizPerpanjang() {
       const res = await apiRequest("POST", "/api/public/rw3biz/perpanjang", {
         nomorBiz: lama.nomorInduk ?? lama.nomorBiz,
         nomorWhatsapp: wa,
-        tanggalBayar,
         terminBulan: parseInt(terminBulan, 10),
         catatanPemohon: catatan.trim() || null,
         setujuTataTertib: true as const,
@@ -467,28 +456,7 @@ export default function Rw3bizPerpanjang() {
 
         {langkah === 3 && lama && (
           <>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Mulai berlaku *</Label>
-                <Input type="date" className="h-12" value={tanggalBayar} onChange={(e) => setTanggalBayar(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label>Masa berlaku *</Label>
-                <Select value={terminBulan} onValueChange={setTerminBulan}>
-                  <SelectTrigger className="h-12"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {TERMIN_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            {previewSampai && (
-              <p className="text-sm rounded-lg bg-muted p-3">
-                Surat baru berlaku sampai <span className="font-semibold">{previewSampai}</span>
-              </p>
-            )}
+            <PilihTermin value={terminBulan} onChange={setTerminBulan} />
             <div className="space-y-2">
               <Label>Catatan (opsional)</Label>
               <Textarea rows={2} maxLength={900} value={catatan} onChange={(e) => setCatatan(e.target.value)} placeholder="Misalnya: tambah 1 kolbak sejak bulan lalu" />
@@ -506,7 +474,7 @@ export default function Rw3bizPerpanjang() {
               <Button variant="outline" className="touch-target" onClick={() => setLangkah(2)}>
                 <ChevronLeft className="w-4 h-4" />
               </Button>
-              <Button className="flex-1 touch-target" disabled={kirim.isPending || !setuju || !tanggalBayar} onClick={() => kirim.mutate()}>
+              <Button className="flex-1 touch-target" disabled={kirim.isPending || !setuju} onClick={() => kirim.mutate()}>
                 {kirim.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Kirim pembaruan"}
               </Button>
             </div>

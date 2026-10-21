@@ -5,6 +5,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, getApiErrorMessage, readJsonSafely } from "@/lib/queryClient";
 import { invalidateVisitrw3Queries } from "@/lib/visitrw3-invalidate";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Visitrw3SurveyChecklist } from "@/components/gov/visitrw3-survey-checklist";
@@ -37,6 +38,7 @@ import { RW3BIZ_ROUTES } from "@/lib/rw3biz-routes";
 import type { PengajuanProduct } from "@/lib/visitrw3-produk-ui";
 import { KontribusiTinggalInfo, PilihUkuranTinggal } from "@/components/gov/visitrw3-syarat-panel";
 import { formatRupiah, isUkuranTinggal, labelUkuranTinggal } from "@/lib/visitrw3-kontribusi";
+import { hariIniWib } from "@shared/visitrw3-kontribusi";
 
 type LolosView = "belum" | "sudah";
 type HasilPengajuan = "disetujui" | "ditolak";
@@ -136,6 +138,7 @@ export default function AdminVisitrw3Antrian({
   const [catatanSurvey, setCatatanSurvey] = useState("");
   const [alasanTolak, setAlasanTolak] = useState("");
   const [ukuranSurvey, setUkuranSurvey] = useState("");
+  const [tanggalBayar, setTanggalBayar] = useState(hariIniWib);
 
   const { data: settingsRows = [] } = useQuery<{ key: string; value: string }[]>({
     queryKey: ["/api/public/visitrw3/settings"],
@@ -246,6 +249,7 @@ export default function AdminVisitrw3Antrian({
     setCatatanSurvey("");
     setAlasanTolak("");
     setUkuranSurvey(detail.pengajuan.ukuranTinggal ?? "");
+    setTanggalBayar(hariIniWib());
   }, [
     detailId,
     detail?.pengajuan?.status,
@@ -264,8 +268,10 @@ export default function AdminVisitrw3Antrian({
     mutationFn: async (id: number) => {
       const err = validateSurveyChecklist(checklistPengajuanItems, checklist);
       if (err) throw new Error(err);
-      const body: { catatanSurvey?: string; checklistSurvey: Record<string, boolean>; ukuranTinggal?: string } = {
+      if (!tanggalBayar) throw new Error("Isi tanggal uang kontribusi diterima");
+      const body: { catatanSurvey?: string; checklistSurvey: Record<string, boolean>; ukuranTinggal?: string; tanggalBayar: string } = {
         checklistSurvey: checklist,
+        tanggalBayar,
       };
       if (catatanSurvey.trim()) body.catatanSurvey = catatanSurvey.trim();
       const jenis = detail?.pengajuan?.jenisWarga;
@@ -528,11 +534,18 @@ export default function AdminVisitrw3Antrian({
                     )}
                   </p>
                 )}
-                <p>
-                  <span className="text-muted-foreground">Masa berlaku: </span>
-                  {p.tanggalBayar} — {p.tanggalBerlakuSampai}
-                  {p.terminBulan != null ? ` · ${p.terminBulan} bln` : ""}
-                </p>
+                {p.status === "menunggu_survey" ? (
+                  <p>
+                    <span className="text-muted-foreground">Termin diminta: </span>
+                    {p.terminBulan ?? 1} bulan (mulai berlaku dari tanggal bayar saat disetujui)
+                  </p>
+                ) : (
+                  <p>
+                    <span className="text-muted-foreground">Masa berlaku: </span>
+                    {p.tanggalBayar} — {p.tanggalBerlakuSampai}
+                    {p.terminBulan != null ? ` · ${p.terminBulan} bln` : ""}
+                  </p>
+                )}
               </div>
 
               {isJualan && (
@@ -758,6 +771,18 @@ export default function AdminVisitrw3Antrian({
                       />
                     </div>
                   )}
+                  <div className="space-y-2">
+                    <Label htmlFor="visitrw3-tanggal-bayar">Tanggal uang kontribusi diterima</Label>
+                    <Input
+                      id="visitrw3-tanggal-bayar"
+                      type="date"
+                      value={tanggalBayar}
+                      onChange={(e) => setTanggalBayar(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Masa berlaku {p.terminBulan ?? 1} bulan dihitung dari tanggal ini.
+                    </p>
+                  </div>
                   <div className="space-y-2">
                     <Label>Catatan survey (opsional)</Label>
                     <Textarea

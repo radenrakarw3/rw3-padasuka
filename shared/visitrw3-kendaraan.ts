@@ -100,21 +100,22 @@ export function serializeKendaraan(list: KendaraanData[]): string | null {
 
 const PLAT_REGEX = /^[A-Z]{1,3} \d{1,5} [A-Z]{1,4}$/;
 
-/** Validasi lengkap untuk pengajuan baru; `no` = nomor urut kendaraan (1-based). */
+/** Sepeda tidak punya plat nomor. */
+export function kendaraanBerplat(jenis: string | null | undefined): boolean {
+  return jenis?.trim().toLowerCase() !== "sepeda";
+}
+
+/**
+ * Validasi pengajuan baru: pemohon cukup mengisi jenis + plat.
+ * Merek, warna, status kepemilikan, dan nama di STNK dicocokkan petugas saat survey.
+ */
 export function validateKendaraan(k: KendaraanData, no: number): string | null {
   const ke = `kendaraan #${no}`;
   if (!k.jenis?.trim()) return `Pilih jenis ${ke}`;
-  if (!k.merek?.trim()) return `Isi merek/tipe ${ke} (contoh: Honda Beat)`;
-  if (!k.warna?.trim()) return `Isi warna ${ke}`;
+  if (!kendaraanBerplat(k.jenis)) return null;
   const plat = k.platNomor?.trim().toUpperCase() ?? "";
   if (!plat) return `Lengkapi plat nomor ${ke}`;
   if (!PLAT_REGEX.test(plat)) return `Plat nomor ${ke} harus kode daerah, nomor, dan akhiran (contoh D 1234 ABC)`;
-  if (!k.status || !isStatusKendaraan(k.status)) return `Pilih status kepemilikan ${ke} (lunas, cicilan, dll.)`;
-  if (!k.atasNama?.trim() || k.atasNama.trim().length < 2) return `Isi nama pemilik sesuai STNK untuk ${ke}`;
-  if (k.status === "cicilan") {
-    if (!k.leasing?.trim()) return `Isi nama leasing/finance untuk ${ke} yang masih cicilan`;
-    if (!k.lunasPada || !/^\d{4}-\d{2}$/.test(k.lunasPada)) return `Isi perkiraan bulan lunas cicilan ${ke}`;
-  }
   return null;
 }
 

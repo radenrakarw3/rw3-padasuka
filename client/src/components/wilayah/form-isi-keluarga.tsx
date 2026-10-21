@@ -1,5 +1,5 @@
 import { CheckCircle2, Plus, Trash2 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useDraft, useKirimSekali } from "@/lib/wilayah-api";
 import { BarisRingkas, HIJAU, IsianPanjang, IsianTeks, Langkah, Pesan, PilihFakta, PilihTombol, TombolBesar } from "@/components/wilayah/ui";
 import {
@@ -35,6 +35,24 @@ function galatNomorWa(v: string): string | null {
   return normalizeNomorHp(v) ? null : "Nomor belum benar. Awali dengan 08 atau +62, panjang 10–13 angka.";
 }
 const nomorWaSah = (v: string) => !looksLikeNik(v) && normalizeNomorHp(v) !== null;
+
+const HUBUNGAN_UTAMA = ["Kepala Keluarga", "Istri", "Suami", "Anak"];
+
+/** Empat hubungan yang paling sering tampil dulu; sisanya dibuka lewat "Lainnya". */
+function PilihHubungan({ label, nilai, onChange }: { label: string; nilai: string; onChange: (v: string) => void }) {
+  const [semua, setSemua] = useState(() => !HUBUNGAN_UTAMA.includes(nilai));
+  const daftar = semua ? HUBUNGAN_KELUARGA : HUBUNGAN_UTAMA;
+  return (
+    <div>
+      <PilihTombol label={label} belumTahu={false} nilai={nilai} onChange={(v) => v && onChange(v)} pilihan={daftar.map((h) => ({ nilai: h, label: h }))} />
+      {!semua && (
+        <button type="button" onClick={() => setSemua(true)} className="-mt-3 mb-5 text-base font-semibold text-[hsl(163,55%,22%)] underline">
+          Lainnya (menantu, cucu, orang tua, …)
+        </button>
+      )}
+    </div>
+  );
+}
 
 function Kelompok({ judul }: { judul: string }) {
   return <h3 className="mt-6 mb-3 text-sm font-bold uppercase tracking-wide text-[hsl(163,55%,22%)] border-b border-[hsl(163,55%,22%)]/20 pb-1 first:mt-0">{judul}</h3>;
@@ -138,7 +156,7 @@ function FormAnggota({ a, ubah, pertanyaan, info }: { a: AnggotaDraft; ubah: (a:
     <div>
       <IsianTeks label="Nama lengkap" wajib autoComplete="off" nilai={a.nama} onChange={(v) => ubah({ ...a, nama: v })}
         galat={a.nama.length > 0 && a.nama.trim().length < 2 ? "Nama minimal 2 huruf." : null} />
-      <PilihTombol label="Hubungan dalam keluarga" belumTahu={false} nilai={a.hubungan} onChange={(v) => v && ubah({ ...a, hubungan: v })} pilihan={HUBUNGAN_KELUARGA.map((h) => ({ nilai: h, label: h }))} />
+      <PilihHubungan label="Hubungan dalam keluarga" nilai={a.hubungan} onChange={(v) => ubah({ ...a, hubungan: v })} />
       <PilihTombol label="Jenis kelamin" belumTahu={false} nilai={a.jenisKelamin} onChange={(v) => v && ubah({ ...a, jenisKelamin: v as UsulanAnggota["jenisKelamin"] })}
         pilihan={[{ nilai: "Laki-laki", label: "Laki-laki" }, { nilai: "Perempuan", label: "Perempuan" }]} />
       <IsianTeks label="Tanggal lahir" tipe="date" nilai={a.tanggalLahir ?? ""} onChange={(v) => ubah({ ...a, tanggalLahir: v || null })} bantuan="Kosongkan bila tidak ingat. Pertanyaan menyesuaikan usia." />
@@ -250,10 +268,9 @@ export function FormIsiKeluarga({ draftKey, pembuka, pertanyaan: pertanyaanMenta
             <p className="text-base text-gray-700">Keluarga ini sudah tercatat dengan <b>{tercatat.anggota.length} anggota</b>. Anda cukup <b>melengkapi yang belum ada</b> — data yang sudah tercatat tidak ditanyakan lagi.</p>
           </div>
         )}
-        <p className="mt-3 text-base text-gray-600">Isian tersimpan otomatis di HP ini. Bila terputus, buka lagi tautan atau kode yang sama.</p>
         <div className="mt-4" />
         <IsianTeks label={labelPengisi} wajib autoComplete="name" nilai={d.isi.namaPengisi} onChange={(v) => setIsi({ namaPengisi: v })} />
-        <PilihTombol label="Hubungan dengan keluarga" belumTahu={false} nilai={d.isi.hubunganPengisi} onChange={(v) => v && setIsi({ hubunganPengisi: v })} pilihan={HUBUNGAN_KELUARGA.map((h) => ({ nilai: h, label: h }))} />
+        <PilihHubungan label="Anda di keluarga ini sebagai" nilai={d.isi.hubunganPengisi} onChange={(v) => setIsi({ hubunganPengisi: v })} />
         <IsianTeks label="Nomor WhatsApp" wajib tipe="tel" inputMode="tel" autoComplete="tel" maks={20} nilai={nomorWa}
           onChange={(v) => setIsi({ nomorHp: v.replace(/[^\d+\s-]/g, "") })} placeholder="0812 3456 7890"
           bantuan="Pengurus RW menghubungi lewat nomor ini bila ada data yang perlu dicek. Jangan isi dengan NIK."
@@ -277,7 +294,7 @@ export function FormIsiKeluarga({ draftKey, pembuka, pertanyaan: pertanyaanMenta
           <SudahLengkap>Data keluarga & rumah sudah lengkap. Langsung lanjut ke anggota keluarga.</SudahLengkap>
         ) : (
           <>
-            <p className="mb-1 text-base text-gray-600">Jawab yang Anda ketahui. Pilih “Belum tahu” bila ragu.</p>
+            <p className="mb-1 text-base text-gray-600">Jawab yang Anda ketahui saja. Yang ragu boleh dilewati.</p>
             {sudahAda > 0 && <p className="mb-1 text-base text-green-800">✓ {sudahAda} pertanyaan sudah terisi dari data sebelumnya — tidak ditanyakan lagi.</p>}
             <p className="mb-4 text-base font-semibold text-[hsl(163,55%,22%)]">{terjawab} dari {tanyaKk.length} pertanyaan terjawab</p>
             {kelompokkan(tanyaKk).map((g) => (

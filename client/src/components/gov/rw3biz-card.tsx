@@ -99,7 +99,7 @@ export function Rw3bizCard({ href = RW3BIZ_ROUTES.hub, className }: Rw3bizCardPr
             RW3<span className="text-[hsl(40,58%,68%)]">BIZ</span>
           </p>
           <p className="text-xs text-white/60 mt-2 max-w-[260px]">
-            Daftar usaha / lapak di RW 03 — terpisah dari izin tinggal Visit RW3
+            Daftar usaha, warung, atau lapak di RW 03
           </p>
         </div>
 

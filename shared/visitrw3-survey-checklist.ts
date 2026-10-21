@@ -336,8 +336,8 @@ export function getChecklistSurveyPengajuan(
         id: "kendaraan_stnk_cocok",
         kategori: "administrasi",
         sdg: 16,
-        label: "STNK tiap kendaraan dicocokkan: plat, nama pemilik, dan status lunas/cicilan",
-        hint: "Kendaraan milik orang lain/cicilan: tanyakan bukti (izin pemilik, kartu angsuran). Tidak punya kendaraan: langsung centang.",
+        label: "STNK tiap kendaraan dicocokkan: plat, merek, warna, nama pemilik, dan status lunas/cicilan",
+        hint: "Pemohon hanya mengisi jenis & plat — sisanya dicek dari STNK. Milik orang lain/cicilan: tanyakan bukti (izin pemilik, kartu angsuran). Tidak punya kendaraan: langsung centang.",
       }),
     );
   }

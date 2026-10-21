@@ -1,6 +1,7 @@
 import { joinPlatNomor, parsePlatNomor, type PlatParts } from "./visitrw3-plat";
 import {
   formatKendaraanBaris,
+  kendaraanBerplat,
   parseKendaraan,
   serializeKendaraan,
   validateKendaraan,
@@ -34,7 +35,7 @@ export function kendaraanWithPlatParts(row: Partial<KendaraanRow> & { jenis?: st
 export function kendaraanRowKeData(k: KendaraanRow): KendaraanData {
   return {
     jenis: k.jenis.trim(),
-    platNomor: (joinPlatNomor(k.platParts) || k.plat).trim() || null,
+    platNomor: kendaraanBerplat(k.jenis) ? (joinPlatNomor(k.platParts) || k.plat).trim() || null : null,
     merek: k.merek,
     warna: k.warna,
     status: k.status || null,

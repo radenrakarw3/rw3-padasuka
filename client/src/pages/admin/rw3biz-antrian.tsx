@@ -4,6 +4,7 @@ import { TombolIsiPetugas } from "@/components/cetak/isi-petugas";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, getApiErrorMessage, readJsonSafely } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -43,6 +44,7 @@ import {
   formatRp,
   type HasilKontribusi,
 } from "@shared/rw3biz-kontribusi";
+import { hariIniWib } from "@shared/visitrw3-kontribusi";
 
 function bacaRincian(raw: unknown): HasilKontribusi | null {
   if (typeof raw !== "string" || !raw) return null;
@@ -112,6 +114,7 @@ export default function AdminRw3bizAntrian() {
   const [koreksiAktif, setKoreksiAktif] = useState(false);
   const [dataKoreksi, setDataKoreksi] = useState<DataKontribusiEdit | null>(null);
   const [orangKoreksi, setOrangKoreksi] = useState<OrangKontribusiEdit[]>([]);
+  const [tanggalBayar, setTanggalBayar] = useState(hariIniWib);
 
   const status = lolosView === "belum" ? "menunggu_survey" : hasil;
 
@@ -175,7 +178,8 @@ export default function AdminRw3bizAntrian() {
     mutationFn: async (id: number) => {
       const res = await apiRequest("PATCH", `/api/admin/rw3biz/pengajuan/${id}/approve`, {
         catatanSurvey: catatanSurvey.trim() || null,
-        ...((koreksiAktif || !rincianDiajukan) && dataKoreksi ? { koreksi: koreksiPayload(dataKoreksi, orangKoreksi) } : {}),
+        tanggalBayar,
+        ...((koreksiAktif || wajibSurvey) && dataKoreksi ? { koreksi: koreksiPayload(dataKoreksi, orangKoreksi) } : {}),
       });
       return readJsonSafely(res);
     },
@@ -222,10 +226,13 @@ export default function AdminRw3bizAntrian() {
     wargaId?: number | null;
   }[];
   const rincianDiajukan = bacaRincian(p?.rincianKontribusi);
+  /** Pengajuan lama tanpa rincian, atau pengajuan baru yang data survey-nya belum diisi petugas. */
+  const wajibSurvey = !rincianDiajukan || !p?.statusTempat;
 
   useEffect(() => {
     if (!detail?.pengajuan) return;
     setKoreksiAktif(false);
+    setTanggalBayar(hariIniWib());
     setDataKoreksi(dataKontribusiDariBaris(detail.pengajuan));
     setOrangKoreksi(orangKontribusiDariBaris(detail.orang ?? []));
   }, [detail]);
@@ -385,7 +392,9 @@ export default function AdminRw3bizAntrian() {
                 <p><span className="text-muted-foreground">Alamat: </span>{p.alamat}</p>
               </div>
               <div className="rounded-lg border border-brand/30 p-3 space-y-2">
-                <p className="text-xs font-semibold">Data penentu kontribusi (isian pemohon)</p>
+                <p className="text-xs font-semibold">
+                  Data penentu kontribusi {p.statusTempat ? "(isian pemohon)" : "— diisi petugas saat survey"}
+                </p>
                 <div className="grid grid-cols-1 gap-x-3 gap-y-1 text-xs sm:grid-cols-2 sm:gap-y-0.5">
                   <p><span className="text-muted-foreground">Status tempat: </span>{labelDari(STATUS_TEMPAT_BIZ_LABEL, p.statusTempat)}</p>
                   <p><span className="text-muted-foreground">Luas: </span>{p.luasM2 ?? "—"} m²</p>
@@ -411,7 +420,12 @@ export default function AdminRw3bizAntrian() {
                   )}
                   <p><span className="text-muted-foreground">Usaha baru: </span>{p.usahaBaru ? "ya" : "tidak"}</p>
                 </div>
-                {rincianDiajukan ? (
+                {rincianDiajukan && !p.statusTempat ? (
+                  <p className="text-xs text-muted-foreground">
+                    Perkiraan awal dari omzet & jumlah orang:{" "}
+                    <strong>{formatRp(rincianDiajukan.total)}</strong>/bulan. Isi hasil survey di bawah sebelum menyetujui.
+                  </p>
+                ) : rincianDiajukan ? (
                   <RincianKontribusi hasil={rincianDiajukan} />
                 ) : (
                   <p className="text-xs text-muted-foreground">Belum ada rincian (pengajuan lama) — isi koreksi survey sebelum menyetujui.</p>
@@ -463,13 +477,15 @@ export default function AdminRw3bizAntrian() {
                       <input
                         type="checkbox"
                         className="h-5 w-5 shrink-0 accent-[hsl(163,55%,22%)] sm:h-4 sm:w-4"
-                        checked={koreksiAktif || !rincianDiajukan}
-                        disabled={!rincianDiajukan}
+                        checked={koreksiAktif || wajibSurvey}
+                        disabled={wajibSurvey}
                         onChange={(e) => setKoreksiAktif(e.target.checked)}
                       />
-                      Koreksi hasil survey lapangan (isian pemohon berbeda dengan kondisi nyata)
+                      {wajibSurvey
+                        ? "Isi data hasil survey lapangan (wajib)"
+                        : "Koreksi hasil survey lapangan (isian pemohon berbeda dengan kondisi nyata)"}
                     </label>
-                    {(koreksiAktif || !rincianDiajukan) && dataKoreksi && (
+                    {(koreksiAktif || wajibSurvey) && dataKoreksi && (
                       <KoreksiKontribusiEditor
                         data={dataKoreksi}
                         orang={orangKoreksi}
@@ -481,13 +497,25 @@ export default function AdminRw3bizAntrian() {
                     )}
                   </div>
                   <div className="space-y-1">
+                    <Label htmlFor="rw3biz-tanggal-bayar">Tanggal uang kontribusi diterima</Label>
+                    <Input
+                      id="rw3biz-tanggal-bayar"
+                      type="date"
+                      value={tanggalBayar}
+                      onChange={(e) => setTanggalBayar(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Masa berlaku {p.terminBulan} bulan dihitung dari tanggal ini.
+                    </p>
+                  </div>
+                  <div className="space-y-1">
                     <Label>Catatan survey (opsional)</Label>
                     <Textarea value={catatanSurvey} onChange={(e) => setCatatanSurvey(e.target.value)} rows={2} />
                   </div>
                   <div className="flex gap-2">
                     <Button
                       className="flex-1 gap-1"
-                      disabled={approveMutation.isPending}
+                      disabled={approveMutation.isPending || !tanggalBayar}
                       onClick={() => approveMutation.mutate(p.id)}
                     >
                       <Check className="w-4 h-4" /> Setujui

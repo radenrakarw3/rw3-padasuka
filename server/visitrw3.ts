@@ -16,6 +16,7 @@ import {
 import { storage } from "./storage";
 import { ACTIVE_RT_NUMBERS } from "@shared/rt";
 import {
+  hariIniWib,
   hitungKontribusiTinggal,
   hitungTanggalBerlaku,
   isUkuranTinggal,
@@ -188,7 +189,8 @@ export const pengajuanBaruSchema = z.object({
   nomorUnit: z.string().optional().nullable(),
   ukuranTinggal: z.enum(UKURAN_TINGGAL_VALUES).optional().nullable(),
   jumlahPenghuni: z.number().int().min(1, "Minimal 1 penghuni").max(20, "Maksimal 20 penghuni"),
-  tanggalBayar: z.string().regex(DATE_REGEX, "Tanggal bayar wajib diisi"),
+  /** Perkiraan mulai berlaku; tanggal bayar sebenarnya dicatat admin saat menyetujui. */
+  tanggalBayar: z.string().regex(DATE_REGEX, "Tanggal bayar tidak valid").optional().default(() => hariIniWib()),
   terminBulan: z.number().refine(
     (n): n is (typeof TERMIN_VALUES)[number] => TERMIN_VALUES.includes(n as (typeof TERMIN_VALUES)[number]),
     "Pilih termin 1, 3, 6, atau 12 bulan",
@@ -241,7 +243,7 @@ function validateJumlahByJenisForm(
 
 export const perpanjangSchema = z.object({
   nomorVisitrw3: z.string().min(8),
-  tanggalBayar: z.string().regex(DATE_REGEX),
+  tanggalBayar: z.string().regex(DATE_REGEX).optional().default(() => hariIniWib()),
   terminBulan: z.number().refine((n): n is (typeof TERMIN_VALUES)[number] => TERMIN_VALUES.includes(n as (typeof TERMIN_VALUES)[number])),
   catatanPemohon: z.string().optional().nullable(),
   setujuTataTertib: z.literal(true, { errorMap: () => ({ message: "Persetujuan syarat wajib" }) }),
@@ -252,6 +254,8 @@ export const approveVisitrw3SurveySchema = z.object({
   checklistSurvey: z.record(z.string(), z.boolean()).optional(),
   /** Koreksi ukuran tempat hasil survey; kosong = pakai pilihan penghuni. */
   ukuranTinggal: z.enum(UKURAN_TINGGAL_VALUES).optional().nullable(),
+  /** Tanggal uang kontribusi diterima; masa berlaku dihitung ulang dari tanggal ini. */
+  tanggalBayar: z.string().regex(DATE_REGEX, "Tanggal bayar tidak valid").optional().nullable(),
 });
 
 /** Kolom kontribusi penghuni kost/kontrakan menurut ukuran tempat yang ditempati. */
@@ -925,8 +929,16 @@ export async function approvePengajuan(
   const parsedSurvey = approveVisitrw3SurveySchema.parse(survey);
   const detail = await getPengajuanDetailAdmin(id);
   if (!detail) throw new Error("Pengajuan tidak ditemukan");
-  const { pengajuan, penghuni } = detail;
-  if (pengajuan.status !== "menunggu_survey") throw new Error("Pengajuan sudah diproses");
+  const { penghuni } = detail;
+  if (detail.pengajuan.status !== "menunggu_survey") throw new Error("Pengajuan sudah diproses");
+
+  const masaBerlaku = parsedSurvey.tanggalBayar
+    ? {
+        tanggalBayar: parsedSurvey.tanggalBayar,
+        tanggalBerlakuSampai: hitungTanggalBerlaku(parsedSurvey.tanggalBayar, detail.pengajuan.terminBulan),
+      }
+    : {};
+  const pengajuan = { ...detail.pengajuan, ...masaBerlaku };
 
   assertChecklistSurvey(
     getChecklistSurveyPengajuan(
@@ -951,6 +963,7 @@ export async function approvePengajuan(
     reviewedAt: new Date(),
     reviewedBy: adminUsername,
     ...koreksiUkuran,
+    ...masaBerlaku,
   };
 
   if (pengajuan.tipe === "perpanjang") {

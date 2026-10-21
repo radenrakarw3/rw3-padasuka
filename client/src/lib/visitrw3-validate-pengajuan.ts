@@ -346,20 +346,18 @@ export function validateJumlahByJenis(
   return null;
 }
 
+/** Penanggung jawab ditentukan dari peran tiap orang di langkah data orang. */
 export function validateJualanFields(input: {
   namaUsaha: string;
   jenisTempatUsaha: string;
   jenisTempatUsahaLain: string;
   kategoriUsaha: string[];
   kategoriUsahaLain: string;
-  penanggungJawab: string;
   jamBuka?: string;
   jamTutup?: string;
-  alamatUsaha?: string;
   requireJamOperasional?: boolean;
 }): string | null {
   if (!input.namaUsaha.trim()) return "Nama usaha wajib diisi";
-  if (!input.penanggungJawab.trim()) return "Penanggung jawab wajib diisi";
   const kategoriErr = validateKategoriUsaha(input.kategoriUsaha, input.kategoriUsahaLain);
   if (kategoriErr) return kategoriErr;
   if (!input.jenisTempatUsaha) return "Pilih jenis tempat usaha (lapak, kiosk, atau lainnya)";
@@ -385,16 +383,8 @@ export function validateJualanFields(input: {
   return null;
 }
 
-export function validateStepBayar(
-  tanggalBayar: string,
-  terminBulan: string,
-  _nomorUnit?: string,
-  _catatan?: string,
-  _keperluan?: string,
-  setujuTataTertib?: boolean,
-) {
+export function validateStepBayar(terminBulan: string, setujuTataTertib: boolean) {
   if (!setujuTataTertib) return "Lengkapi langkah syarat terlebih dahulu";
-  if (!tanggalBayar || !/^\d{4}-\d{2}-\d{2}$/.test(tanggalBayar)) return "Tanggal bayar wajib diisi";
-  if (!terminBulan) return "Termin pembayaran wajib dipilih";
+  if (!terminBulan) return "Pilih mau bayar untuk berapa lama";
   return null;
 }

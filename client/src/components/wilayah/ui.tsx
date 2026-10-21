@@ -111,7 +111,10 @@ function kelasPilihan(r: boolean) {
   return r ? "min-h-[38px] rounded-lg border px-2.5 py-1.5 text-sm font-medium text-left" : "min-h-[52px] rounded-xl border-2 px-3 py-2 text-lg font-medium text-left";
 }
 
-/** Pilihan berupa tombol besar. `null` = belum diketahui (berbeda dari "tidak" atau 0). */
+/**
+ * Pilihan berupa tombol besar. `null` = belum diketahui (berbeda dari "tidak" atau 0):
+ * cukup dilewati, atau dikosongkan lagi lewat tautan di bawah tombol.
+ */
 export function PilihTombol({
   label, nilai, pilihan, onChange, belumTahu = true, kolom = 2, bantuan,
 }: {
@@ -119,7 +122,6 @@ export function PilihTombol({
   onChange: (v: string | null) => void; belumTahu?: boolean; kolom?: 1 | 2 | 3; bantuan?: string;
 }) {
   const r = useRingkas();
-  const semua = belumTahu ? [...pilihan, { nilai: "__null", label: "Belum tahu" }] : pilihan;
   const grid = r
     ? kolom === 1 ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 sm:grid-cols-3"
     : kolom === 1 ? "grid-cols-1" : kolom === 3 ? "grid-cols-3" : "grid-cols-2";
@@ -128,15 +130,15 @@ export function PilihTombol({
       <legend className={kelasLegend(r)}>{label}</legend>
       {bantuan && <p className={kelasBantuan(r)}>{bantuan}</p>}
       <div className={`grid ${r ? "gap-1.5" : "gap-2"} ${grid}`}>
-        {semua.map((p) => {
-          const aktif = p.nilai === "__null" ? nilai == null : nilai === p.nilai;
+        {pilihan.map((p) => {
+          const aktif = nilai === p.nilai;
           return (
             <button
               key={p.nilai}
               type="button"
               aria-pressed={aktif}
-              onClick={() => onChange(p.nilai === "__null" ? null : p.nilai)}
-              className={`${kelasPilihan(r)} ${aktif ? "text-white" : "bg-white text-gray-900 border-gray-300"} ${p.nilai === "__null" && !aktif ? "text-gray-600 border-dashed" : ""}`}
+              onClick={() => onChange(p.nilai)}
+              className={`${kelasPilihan(r)} ${aktif ? "text-white" : "bg-white text-gray-900 border-gray-300"}`}
               style={aktif ? { backgroundColor: HIJAU, borderColor: HIJAU } : undefined}
             >
               {p.label}
@@ -144,6 +146,11 @@ export function PilihTombol({
           );
         })}
       </div>
+      {belumTahu && nilai != null && (
+        <button type="button" onClick={() => onChange(null)} className={`mt-2 text-gray-600 underline ${r ? "text-xs" : "text-base"}`}>
+          Kosongkan (belum tahu)
+        </button>
+      )}
     </fieldset>
   );
 }

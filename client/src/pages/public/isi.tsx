@@ -7,6 +7,12 @@ import type { DefinisiFakta } from "@shared/wilayah";
 
 const KUNCI_TOKEN = "isi-token";
 
+/** Huruf besar, tanpa simbol, dikelompokkan per 4: ABCD-EFGH-… */
+function formatKode(v: string) {
+  const bersih = v.toUpperCase().replace(/[^0-9A-Z]/g, "").slice(0, 16);
+  return bersih.match(/.{1,4}/g)?.join("-") ?? "";
+}
+
 /** Aturan penyewa: KTP RW 03 → pendataan warga di sini; KTP luar → Visit RW3. */
 function AturanPenyewa() {
   return (
@@ -122,7 +128,7 @@ export default function IsiPage({ token: tokenUrl, status }: { token?: string; s
           draftKey={`isi:v2:${token.slice(-6)}`}
           pertanyaan={pertanyaan}
           keluarga={keluarga}
-          pembuka={<><Pesan>Kartu ini untuk keluarga di {rt2(rt)} / RW 03. Isian Anda diperiksa pengurus RW sebelum data resmi diubah.</Pesan><AturanPenyewa /></>}
+          pembuka={<Pesan>Keluarga di {rt2(rt)} / RW 03. Isian diperiksa pengurus RW dulu, dan tersimpan otomatis di HP ini bila terputus.</Pesan>}
           kirimKe={(isi, kunci) => wil<{ kodeTerima: string }>("/api/isi/kirim", { body: { token, idempotencyKey: kunci, isi } })}
           selesai={(k) => { sessionStorage.removeItem(KUNCI_TOKEN); setKodeTerima(k); }}
         />
@@ -133,9 +139,9 @@ export default function IsiPage({ token: tokenUrl, status }: { token?: string; s
     <Bingkai>
       <div className="space-y-4">
         <h1 className="text-2xl font-bold">Masukkan kode kartu</h1>
-        <p>Ketik kode 16 huruf/angka yang tertulis di kartu pemberitahuan dari pengurus RW.</p>
+        <p>Scan QR di kartu dari pengurus RW dengan kamera HP. Atau ketik 16 huruf/angka yang tertulis di kartu.</p>
         {err && <Pesan jenis="error">{err}</Pesan>}
-        <IsianTeks label="Kode" nilai={ketik} onChange={(v) => setKetik(v.toUpperCase())} placeholder="XXXX-XXXX-XXXX-XXXX" />
+        <IsianTeks label="Kode" nilai={ketik} onChange={(v) => setKetik(formatKode(v))} placeholder="XXXX-XXXX-XXXX-XXXX" autoComplete="off" />
         <TombolBesar disabled={ketik.replace(/[^0-9A-Za-z]/g, "").length !== 16} onClick={() => buka(ketik)}>Buka formulir</TombolBesar>
         <TombolBesar varian="kedua" onClick={() => go("/isi/status")}>Cek status kiriman</TombolBesar>
         <AturanPenyewa />

@@ -13,7 +13,7 @@ import {
   type Rw3bizUsaha,
 } from "@shared/schema";
 import { ACTIVE_RT_NUMBERS } from "@shared/rt";
-import { hitungTanggalBerlaku } from "@shared/visitrw3-kontribusi";
+import { hariIniWib, hitungTanggalBerlaku } from "@shared/visitrw3-kontribusi";
 import { stringifyKategoriUsaha } from "@shared/visitrw3-kategori-usaha";
 import {
   notifyRw3bizPengajuanBaru,
@@ -150,8 +150,19 @@ const orangInputSchema = z.object({
   fotoKtpPath: z.string().optional().nullable(),
 }).merge(orangKontribusiSchema);
 
+/** Pemohon cukup mengisi omzet (+ jenis tempat & jam); sisanya diisi petugas saat survey. */
 const dataUsahaPengajuanSchema = dataUsahaSchema
   .omit({ jenisTempatUsaha: true, operasionalMalam: true })
+  .partial({
+    statusTempat: true,
+    luasM2: true,
+    hariOperasional: true,
+    sampahKantongHari: true,
+    pakaiBahuJalan: true,
+    kendaraanMotor: true,
+    kendaraanMobil: true,
+    usahaBaru: true,
+  })
   .extend({ operasionalMalam: dataUsahaSchema.shape.operasionalMalam.optional().nullable() });
 
 export const pengajuanBaruSchema = dataUsahaPengajuanSchema.extend({
@@ -167,7 +178,8 @@ export const pengajuanBaruSchema = dataUsahaPengajuanSchema.extend({
   alamatUsaha: z.string().optional().nullable(),
   pjSetujuNotifikasi: z.boolean().default(true),
   jumlahOrang: z.number().int().min(1).max(MAKS_TOTAL_ORANG),
-  tanggalBayar: z.string().regex(DATE_REGEX),
+  /** Perkiraan mulai berlaku; tanggal bayar sebenarnya dicatat admin saat menyetujui. */
+  tanggalBayar: z.string().regex(DATE_REGEX).optional().default(() => hariIniWib()),
   terminBulan: z.number().refine((n): n is (typeof TERMIN_VALUES)[number] => TERMIN_VALUES.includes(n as (typeof TERMIN_VALUES)[number]), "Termin tidak valid"),
   catatanPemohon: z.string().optional().nullable(),
   orang: z.array(orangInputSchema).min(1, "Minimal satu orang penanggung jawab").max(MAKS_TOTAL_ORANG),
@@ -179,7 +191,7 @@ export const perpanjangSchema = z.object({
   nomorBiz: z.string().min(8),
   /** Verifikasi: harus sama dengan WA penanggung jawab terdaftar. */
   nomorWhatsapp: z.string().trim().min(8, "Isi nomor WhatsApp penanggung jawab"),
-  tanggalBayar: z.string().regex(DATE_REGEX),
+  tanggalBayar: z.string().regex(DATE_REGEX).optional().default(() => hariIniWib()),
   terminBulan: z.number().refine((n): n is (typeof TERMIN_VALUES)[number] => TERMIN_VALUES.includes(n as (typeof TERMIN_VALUES)[number]), "Termin tidak valid"),
   catatanPemohon: z.string().optional().nullable(),
   setujuTataTertib: z.literal(true, { errorMap: () => ({ message: "Persetujuan tata tertib wajib" }) }),
@@ -294,8 +306,20 @@ export async function createPengajuanBaru(input: z.infer<typeof pengajuanBaruSch
   const dataUsaha: DataUsaha = {
     ...parsed,
     jenisTempatUsaha: parsed.jenisTempatUsaha,
+    statusTempat: parsed.statusTempat ?? "sewa",
+    luasM2: parsed.luasM2 ?? 0,
+    hariOperasional: parsed.hariOperasional ?? 7,
+    sampahKantongHari: parsed.sampahKantongHari ?? 0,
+    pakaiBahuJalan: parsed.pakaiBahuJalan ?? false,
+    kendaraanMotor: parsed.kendaraanMotor ?? 0,
+    kendaraanMobil: parsed.kendaraanMobil ?? 0,
+    usahaBaru: parsed.usahaBaru ?? false,
     operasionalMalam: parsed.operasionalMalam ?? turunkanOperasionalMalam(parsed.jamBuka, parsed.jamTutup),
   };
+  /** Kolom yang belum diisi pemohon tetap null sampai petugas mengisinya saat survey. */
+  const belumSurvey = parsed.statusTempat
+    ? {}
+    : { statusTempat: null, luasM2: null, hariOperasional: null, sampahKantongHari: null };
   const orangFinal = await cocokkanOrangInput(parsed.orang);
   const tarif = await loadTarif();
   const rincian = hitungRincian(dataUsaha, orangFinal, tarif);
@@ -328,6 +352,7 @@ export async function createPengajuanBaru(input: z.infer<typeof pengajuanBaruSch
         catatanPemohon: parsed.catatanPemohon?.trim() || null,
         setujuTataTertib: true,
         ...kolomDataUsaha(dataUsaha),
+        ...belumSurvey,
         ...kolomKontribusi(rincian),
       })
       .returning();
@@ -596,6 +621,8 @@ export async function getPengajuanDetailAdmin(id: number) {
 export const approveSchema = z.object({
   catatanSurvey: z.string().optional().nullable(),
   koreksi: koreksiSurveySchema.optional(),
+  /** Tanggal uang kontribusi diterima; masa berlaku & tagihan dihitung ulang dari tanggal ini. */
+  tanggalBayar: z.string().regex(DATE_REGEX, "Tanggal bayar tidak valid").optional().nullable(),
 });
 
 /** Terapkan koreksi survey ke pengajuan + orang, lalu hitung ulang kontribusi final. */
@@ -625,13 +652,21 @@ async function terapkanKoreksiSurvey(
 }
 
 export async function approvePengajuan(id: number, adminUsername: string, input?: z.infer<typeof approveSchema>) {
-  const { catatanSurvey, koreksi } = approveSchema.parse(input ?? {});
+  const { catatanSurvey, koreksi, tanggalBayar } = approveSchema.parse(input ?? {});
   const tarif = await loadTarif();
 
   const { updated, usaha } = await db.transaction(async (tx) => {
-    const [pengajuan] = await tx.select().from(rw3bizPengajuan).where(eq(rw3bizPengajuan.id, id)).for("update");
-    if (!pengajuan) throw new Error("Pengajuan tidak ditemukan");
-    if (pengajuan.status !== "menunggu_survey") throw new Error("Pengajuan sudah diproses");
+    const [awal] = await tx.select().from(rw3bizPengajuan).where(eq(rw3bizPengajuan.id, id)).for("update");
+    if (!awal) throw new Error("Pengajuan tidak ditemukan");
+    if (awal.status !== "menunggu_survey") throw new Error("Pengajuan sudah diproses");
+    if (!awal.statusTempat && !koreksi?.statusTempat) {
+      throw new Error("Isi data hasil survey (status tempat, luas, sampah, dll.) sebelum menyetujui");
+    }
+    const masaBerlaku = tanggalBayar
+      ? { tanggalBayar, tanggalBerlakuSampai: hitungTanggalBerlaku(tanggalBayar, awal.terminBulan) }
+      : null;
+    if (masaBerlaku) await tx.update(rw3bizPengajuan).set(masaBerlaku).where(eq(rw3bizPengajuan.id, id));
+    const pengajuan = { ...awal, ...masaBerlaku };
 
     const kolom = await terapkanKoreksiSurvey(tx, pengajuan, koreksi);
     const periodeMulai = pengajuan.tanggalBayar.slice(0, 7);
@@ -721,6 +756,14 @@ export async function approvePengajuan(id: number, adminUsername: string, input?
 export const previewKontribusiSchema = dataUsahaSchema
   .omit({ operasionalMalam: true, kendaraanOperasional: true })
   .extend({
+    statusTempat: dataUsahaSchema.shape.statusTempat.default("sewa"),
+    luasM2: dataUsahaSchema.shape.luasM2.default(0),
+    hariOperasional: dataUsahaSchema.shape.hariOperasional.default(7),
+    sampahKantongHari: dataUsahaSchema.shape.sampahKantongHari.default(0),
+    pakaiBahuJalan: dataUsahaSchema.shape.pakaiBahuJalan.default(false),
+    kendaraanMotor: dataUsahaSchema.shape.kendaraanMotor.default(0),
+    kendaraanMobil: dataUsahaSchema.shape.kendaraanMobil.default(0),
+    usahaBaru: dataUsahaSchema.shape.usahaBaru.default(false),
     operasionalMalam: dataUsahaSchema.shape.operasionalMalam.optional().nullable(),
     jamBuka: z.string().optional().nullable(),
     jamTutup: z.string().optional().nullable(),

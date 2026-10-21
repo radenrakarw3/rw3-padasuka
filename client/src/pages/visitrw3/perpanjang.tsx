@@ -4,30 +4,20 @@ import { Visitrw3Shell } from "@/components/visitrw3-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, getApiErrorMessage, readJsonSafely } from "@/lib/queryClient";
 import { Loader2 } from "lucide-react";
 import { SuccessPanel } from "@/components/gov/success-panel";
 import { KontribusiTinggalInfo, Visitrw3SyaratPanel } from "@/components/gov/visitrw3-syarat-panel";
-import { FeatureExplain } from "@/components/gov/feature-explain";
+import { PilihTermin } from "@/components/gov/pilih-termin";
 import { settingsRowsToMap } from "@/lib/visitrw3-kontribusi";
-
-const TERMIN_OPTIONS = [
-  { value: "1", label: "Bulanan (1 bulan)" },
-  { value: "3", label: "3 bulan" },
-  { value: "6", label: "6 bulan" },
-  { value: "12", label: "1 tahun" },
-];
 
 export default function Visitrw3Perpanjang() {
   const { toast } = useToast();
   const [nomorLama, setNomorLama] = useState(
     () => (new URLSearchParams(window.location.search).get("nomor") ?? "").trim().toUpperCase(),
   );
-  const [tanggalBayar, setTanggalBayar] = useState("");
   const [terminBulan, setTerminBulan] = useState("3");
-  const [previewSampai, setPreviewSampai] = useState("");
   const [setujuTataTertib, setSetujuTataTertib] = useState(false);
   const [keperluan, setKeperluan] = useState<"tinggal" | "bisnis" | "">("");
   const [jenisWarga, setJenisWarga] = useState("");
@@ -72,7 +62,6 @@ export default function Visitrw3Perpanjang() {
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/public/visitrw3/perpanjang", {
         nomorVisitrw3: nomorLama.trim(),
-        tanggalBayar,
         terminBulan: parseInt(terminBulan, 10),
         setujuTataTertib: true as const,
       });
@@ -86,24 +75,6 @@ export default function Visitrw3Perpanjang() {
       toast({ title: "Gagal", description: getApiErrorMessage(e), variant: "destructive" });
     },
   });
-
-  async function updatePreview() {
-    if (!tanggalBayar || !terminBulan) return;
-    try {
-      const res = await apiRequest("POST", "/api/public/visitrw3/preview-berlaku", {
-        tanggalBayar,
-        terminBulan: parseInt(terminBulan, 10),
-      });
-      const data = await res.json();
-      setPreviewSampai(data.tanggalBerlakuSampai);
-    } catch {
-      setPreviewSampai("");
-    }
-  }
-
-  useEffect(() => {
-    void updatePreview();
-  }, [tanggalBayar, terminBulan]);
 
   useEffect(() => {
     setSetujuTataTertib(false);
@@ -133,27 +104,16 @@ export default function Visitrw3Perpanjang() {
 
   return (
     <Visitrw3Shell title="Perpanjang izin" backHref="/visitrw3">
-      <FeatureExplain title="Kapan pakai perpanjang?" className="mb-4">
-        <p>
-          Hanya untuk izin Visit RW3 yang <strong>sudah pernah disetujui</strong> dan ingin
-          diperpanjang masa berlakunya. Masukkan nomor <strong>VRW3-…</strong> lama, lalu isi tanggal
-          bayar & termin baru.
-        </p>
-        <p>
-          <strong>Bukan untuk pengajuan pertama.</strong> Kalau belum punya nomor VRW3, gunakan menu
-          Pengajuan baru. Perpanjang tetap diverifikasi admin setelah survey.
-        </p>
-      </FeatureExplain>
+      <p className="mb-4 text-base">
+        Untuk izin Visit RW3 yang <strong>sudah pernah disetujui</strong>. Belum punya nomor VRW3? Daftar baru dari
+        halaman Visit RW3.
+      </p>
       <form
         className="space-y-4"
         onSubmit={(e) => {
           e.preventDefault();
           if (!nomorLama.trim()) {
             toast({ title: "Lengkapi data", description: "Nomor Visit RW3 wajib diisi", variant: "destructive" });
-            return;
-          }
-          if (!tanggalBayar || !terminBulan) {
-            toast({ title: "Lengkapi data", description: "Tanggal bayar dan termin wajib diisi", variant: "destructive" });
             return;
           }
           if (!setujuTataTertib) {
@@ -184,38 +144,10 @@ export default function Visitrw3Perpanjang() {
               value={nomorLama}
               onChange={(e) => setNomorLama(e.target.value.toUpperCase())}
               placeholder="VRW3-..."
-              className="font-mono"
+              className="h-12 font-mono"
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="tanggal-bayar">Tanggal bayar</Label>
-            <Input
-              id="tanggal-bayar"
-              type="date"
-              value={tanggalBayar}
-              onChange={(e) => setTanggalBayar(e.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Termin pembayaran</Label>
-            <Select value={terminBulan} onValueChange={setTerminBulan}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {TERMIN_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {previewSampai && (
-            <p className="text-sm rounded-lg bg-muted p-3" role="status">
-              Berlaku sampai: <span className="font-semibold">{previewSampai}</span>
-            </p>
-          )}
+          <PilihTermin value={terminBulan} onChange={setTerminBulan} />
           <Visitrw3SyaratPanel
             tataMasyarakat={settingsMap.tata_tertib_masyarakat ?? ""}
             tataKhusus={settingsMap.tata_tertib_penyewa ?? ""}

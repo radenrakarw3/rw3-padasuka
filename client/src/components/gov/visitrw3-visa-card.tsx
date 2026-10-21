@@ -92,7 +92,7 @@ export function Visitrw3VisaCard({ href = "/visitrw3", className }: Visitrw3Visa
             Visit<span className="text-[hsl(40,58%,68%)]">RW3</span>
           </p>
           <p className="text-xs text-white/60 mt-2 max-w-[240px]">
-            Izin tinggal: ngontrak atau ngekost di RW 03
+            Ngontrak / ngekost di RW 03 dengan KTP luar RW 03
           </p>
         </div>
 

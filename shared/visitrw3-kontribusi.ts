@@ -17,6 +17,11 @@ export function hitungTanggalBerlaku(tanggalBayar: string, terminBulan: number):
   return `${tahunHasil}-${pad(bulanHasil + 1)}-${pad(Math.min(hari, hariMaks))}`;
 }
 
+/** YYYY-MM-DD hari ini (WIB). */
+export function hariIniWib(now = new Date()): string {
+  return now.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+}
+
 export type UkuranProperti = "kecil" | "sedang" | "besar";
 
 /**

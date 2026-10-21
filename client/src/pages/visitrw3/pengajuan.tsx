@@ -3,7 +3,6 @@ import { Link, useSearch, Redirect } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { compressDokumen, dataUrlBytes, formatBytes } from "@/lib/image-compress";
 import { normalizeNomorHp } from "@shared/kontak";
-import { hitungTanggalBerlaku } from "@shared/visitrw3-kontribusi";
 import { Visitrw3Shell } from "@/components/visitrw3-shell";
 import { Rw3bizShell } from "@/components/rw3biz-shell";
 import { Button } from "@/components/ui/button";
@@ -47,7 +46,7 @@ import {
   serializeKendaraanForApi,
   type KendaraanRow,
 } from "@/lib/visitrw3-kendaraan";
-import { bulanIni, STATUS_KENDARAAN, type StatusKendaraan } from "@shared/visitrw3-kendaraan";
+import { bulanIni, kendaraanBerplat } from "@shared/visitrw3-kendaraan";
 import { aturanKeperluan, barisKeperluan, type DetailKeperluan } from "@shared/visitrw3-keperluan";
 import { joinPlatNomor } from "@/lib/visitrw3-plat";
 import {
@@ -82,17 +81,16 @@ import {
   EstimasiKontribusiCard,
   JENIS_TEMPAT_BIZ_OPTIONS,
   OrangKontribusiFields,
-  UsahaKontribusiFields,
-  bizKontribusiPayload,
-  emptyBizKontribusi,
-  validateBizKontribusi,
   validateOrangKontribusi,
-  type BizKontribusiForm,
 } from "@/components/rw3biz/kontribusi-form";
+import { PilihTermin } from "@/components/gov/pilih-termin";
 
 import {
   ASAL_ORANG_BIZ_LABEL,
   PERAN_ORANG_BIZ_LABEL,
+  RENTANG_OMZET,
+  RENTANG_OMZET_LABEL,
+  turunkanOperasionalMalam,
   type AsalOrangBiz,
   type PeranOrangBiz,
 } from "@shared/rw3biz-kontribusi";
@@ -123,19 +121,14 @@ const JENIS_CHOICES_VISIT: {
   },
 ];
 
+/** Kost tidak punya langkah jumlah: sendiri/berdua dipilih di langkah lokasi. */
 function buildPengajuanSteps(jenis: JenisWarga): StepDef[] {
   const steps: StepDef[] = [{ id: "lokasi", label: "Lokasi" }];
   if (jenis === "jualan") steps.push({ id: "usaha", label: "Usaha" });
+  if (jenis !== "kost") steps.push({ id: "jumlah", label: jenis === "jualan" ? "Pegawai" : "Keluarga" });
   steps.push(
-    {
-      id: "jumlah",
-      label: jenis === "jualan" ? "Pegawai" : jenis === "kost" ? "Isi kamar" : "Keluarga",
-    },
-    {
-      id: "penghuni",
-      label: jenis === "jualan" ? "Data pegawai" : "Data diri",
-    },
-    { id: "bayar", label: "Berlaku & setuju" },
+    { id: "penghuni", label: jenis === "jualan" ? "Data orang" : "Data diri" },
+    { id: "bayar", label: "Kirim" },
   );
   return steps;
 }
@@ -224,13 +217,6 @@ function JumlahStepper({
     </div>
   );
 }
-
-const TERMIN_OPTIONS = [
-  { value: "1", label: "Bulanan (1 bulan)" },
-  { value: "3", label: "3 bulan" },
-  { value: "6", label: "6 bulan" },
-  { value: "12", label: "1 tahun" },
-];
 
 type PenghuniForm = {
   namaLengkap: string;
@@ -463,7 +449,7 @@ function KendaraanFields({
       <div className="space-y-1">
         <Label>Punya kendaraan yang dibawa/dipakai di RW 03? *</Label>
         <p className="text-xs text-muted-foreground">
-          Untuk keamanan lingkungan (mencegah kendaraan curian). Siapkan STNK, akan dicocokkan saat survey.
+          Untuk keamanan lingkungan. Cukup jenis dan plat nomor — STNK diperiksa petugas saat survey.
         </p>
       </div>
       <div className="grid grid-cols-2 gap-2">
@@ -507,98 +493,32 @@ function KendaraanFields({
                     </Button>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Jenis *</Label>
-                    <Select value={k.jenis} onValueChange={(v) => onUbah(ki, { jenis: v })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Pilih" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {jenisKendaraanOptions.map((o) => (
-                          <SelectItem key={o} value={o}>
-                            {o}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor={`${id}-warna`} className="text-xs">Warna *</Label>
-                    <Input
-                      id={`${id}-warna`}
-                      placeholder="Hitam"
-                      value={k.warna}
-                      onChange={(e) => onUbah(ki, { warna: e.target.value })}
-                    />
+                <div className="space-y-1">
+                  <Label className="text-xs">Jenis *</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {jenisKendaraanOptions.map((o) => (
+                      <Button
+                        key={o}
+                        type="button"
+                        variant={k.jenis === o ? "default" : "outline"}
+                        className="h-auto min-h-11 whitespace-normal px-2 py-2 text-sm leading-tight"
+                        aria-pressed={k.jenis === o}
+                        onClick={() => onUbah(ki, { jenis: o })}
+                      >
+                        {o}
+                      </Button>
+                    ))}
                   </div>
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor={`${id}-merek`} className="text-xs">Merek / tipe *</Label>
-                  <Input
-                    id={`${id}-merek`}
-                    placeholder="Contoh: Honda Beat, Toyota Avanza"
-                    value={k.merek}
-                    onChange={(e) => onUbah(ki, { merek: e.target.value })}
+                {kendaraanBerplat(k.jenis) && (
+                  <PlatNomorInput
+                    required
+                    large
+                    idPrefix={`${id}-plat`}
+                    value={k.platParts}
+                    onChange={(platParts) => onUbah(ki, { platParts })}
                   />
-                </div>
-                <PlatNomorInput
-                  required
-                  idPrefix={`${id}-plat`}
-                  value={k.platParts}
-                  onChange={(platParts) => onUbah(ki, { platParts })}
-                />
-                <div className="space-y-1">
-                  <Label className="text-xs">Status kepemilikan *</Label>
-                  <Select value={k.status} onValueChange={(v) => onUbah(ki, { status: v as StatusKendaraan })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Lunas, cicilan, atau milik orang lain?" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {STATUS_KENDARAAN.map((s) => (
-                        <SelectItem key={s.value} value={s.value}>
-                          {s.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {k.status === "cicilan" && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <Label htmlFor={`${id}-leasing`} className="text-xs">Leasing / finance *</Label>
-                      <Input
-                        id={`${id}-leasing`}
-                        placeholder="Adira, FIF, BAF…"
-                        value={k.leasing}
-                        onChange={(e) => onUbah(ki, { leasing: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor={`${id}-lunas`} className="text-xs">Perkiraan lunas *</Label>
-                      <Input
-                        id={`${id}-lunas`}
-                        type="month"
-                        value={k.lunasPada}
-                        onChange={(e) => onUbah(ki, { lunasPada: e.target.value })}
-                      />
-                    </div>
-                  </div>
                 )}
-                <div className="space-y-1">
-                  <Label htmlFor={`${id}-stnk`} className="text-xs">Nama pemilik di STNK *</Label>
-                  <Input
-                    id={`${id}-stnk`}
-                    placeholder="Sesuai yang tertulis di STNK"
-                    value={k.atasNama}
-                    onChange={(e) => onUbah(ki, { atasNama: e.target.value })}
-                  />
-                  {k.status && k.status !== "lunas" && k.status !== "cicilan" && (
-                    <p className="text-xs text-muted-foreground">
-                      Kendaraan bukan milik sendiri: tulis nama pemilik di STNK, bukan nama Anda.
-                    </p>
-                  )}
-                </div>
               </div>
             );
           })}
@@ -629,24 +549,9 @@ function hariIniLokal() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-function formatTanggalPanjang(iso: string) {
-  const d = new Date(`${iso}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
-}
-
-function hitungBerlakuAman(tanggalBayar: string, terminBulan: string) {
-  try {
-    return tanggalBayar ? hitungTanggalBerlaku(tanggalBayar, parseInt(terminBulan, 10)) : "";
-  } catch {
-    return "";
-  }
-}
-
 type DraftPengajuan = {
   v: 1;
   step: number;
-  ktpRw3: boolean | null;
   rt: string;
   alamat: string;
   nomorUnit: string;
@@ -656,20 +561,19 @@ type DraftPengajuan = {
   jenisTempatUsahaLain: string;
   kategoriUsaha: string[];
   kategoriUsahaLain: string;
-  penanggungJawab: string;
   jamBuka: string;
   jamTutup: string;
-  alamatUsaha: string;
   jumlahDewasa: number;
   jumlahAnak: number;
   penghuni: PenghuniForm[];
   penghuniIndex: number;
-  tanggalBayar: string;
   terminBulan: string;
   catatan: string;
   setujuTataTertib: boolean;
   fotoKk?: string;
-  bizKontribusi?: BizKontribusiForm;
+  rentangOmzet?: string;
+  /** Draf lama: hanya `rentangOmzet` yang masih dipakai. */
+  bizKontribusi?: { rentangOmzet?: string };
 };
 
 function bacaDraft(key: string): DraftPengajuan | null {
@@ -827,24 +731,15 @@ export default function Visitrw3Pengajuan() {
 }
 
 /** Penyewa ber-KTP RW 03 didata lewat pendataan warga, bukan Visit RW3. */
-function AturanKtpRw3({ tegas, className = "" }: { tegas?: boolean; className?: string }) {
+function AturanKtpRw3({ className = "" }: { className?: string }) {
   return (
-    <div className={`rounded-lg border p-3 text-sm ${tegas ? "border-amber-400 bg-amber-50 text-amber-950" : "border-[hsl(40,45%,55%)] bg-[hsl(40,60%,96%)]"} ${className}`}>
-      {tegas ? (
-        <p>
-          <b>Tidak perlu daftar Visit RW3.</b> Penghuni kost/kontrakan yang KTP-nya RW 03 didata sebagai warga.
-          Isi lewat kode kartu pendataan keluarga di{" "}
-          <Link href="/isi" className="font-semibold text-brand underline">halaman pendataan warga</Link>, atau minta
-          pengurus RT/RW memperbarui data (status tinggal: kost/kontrak).
-        </p>
-      ) : (
-        <ul className="space-y-1">
-          <li>✅ Kost/kontrak, <b>KTP luar RW 03</b> → daftar di sini (Visit RW3).</li>
-          <li>➡️ Kost/kontrak, <b>KTP RW 03</b> → bukan di sini; didata sebagai warga lewat{" "}
-            <Link href="/isi" className="font-semibold text-brand underline">pendataan warga</Link>.
-          </li>
-        </ul>
-      )}
+    <div className={`rounded-lg border border-[hsl(40,45%,55%)] bg-[hsl(40,60%,96%)] p-3 text-sm ${className}`}>
+      <ul className="space-y-1">
+        <li>✅ Kost/kontrak, <b>KTP luar RW 03</b> → daftar di sini (Visit RW3).</li>
+        <li>➡️ Kost/kontrak, <b>KTP RW 03</b> → bukan di sini; didata sebagai warga lewat{" "}
+          <Link href="/isi" className="font-semibold text-brand underline">pendataan warga</Link>.
+        </li>
+      </ul>
     </div>
   );
 }
@@ -855,7 +750,6 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
   const rawJenis = useMemo(() => parseJenisWargaFromSearch(search), [search]);
   const redirectToRw3biz = product === "visit" && rawJenis === "jualan";
   const petugas = useMemo(() => new URLSearchParams(search).get("petugas") === "1", [search]);
-  const [ktpRw3, setKtpRw3] = useState<boolean | null>(null);
 
   const jenisWarga: JenisWarga | "" =
     product === "rw3biz" ? "jualan" : isVisitRw3Jenis(rawJenis) ? rawJenis : "";
@@ -876,16 +770,14 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
   const [jenisTempatUsahaLain, setJenisTempatUsahaLain] = useState("");
   const [kategoriUsaha, setKategoriUsaha] = useState<string[]>([]);
   const [kategoriUsahaLain, setKategoriUsahaLain] = useState("");
-  const [penanggungJawab, setPenanggungJawab] = useState("");
   const [jamBuka, setJamBuka] = useState("");
   const [jamTutup, setJamTutup] = useState("");
-  const [alamatUsaha, setAlamatUsaha] = useState("");
+  const [rentangOmzet, setRentangOmzet] = useState("");
   const [jumlahDewasa, setJumlahDewasa] = useState(1);
   const [jumlahAnak, setJumlahAnak] = useState(0);
   const jumlah = jumlahDewasa + jumlahAnak;
   const aturanKk = product === "visit" ? aturanFotoKk(jenisWarga, jumlahAnak) : "tidak";
   const [penghuni, setPenghuni] = useState<PenghuniForm[]>([emptyPenghuni(false)]);
-  const [tanggalBayar, setTanggalBayar] = useState(hariIniLokal);
   const [terminBulan, setTerminBulan] = useState("3");
   const [catatan, setCatatan] = useState("");
   const [setujuTataTertib, setSetujuTataTertib] = useState(false);
@@ -894,15 +786,8 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
   const [galat, setGalat] = useState<{ pesan: string; step: number; idx: number } | null>(null);
   const [fotoDiproses, setFotoDiproses] = useState<number | null>(null);
   const [fotoKk, setFotoKk] = useState("");
-  const [bizKontribusi, setBizKontribusi] = useState<BizKontribusiForm>(emptyBizKontribusi);
-  const ubahBizKontribusi = (patch: Partial<BizKontribusiForm>) =>
-    setBizKontribusi((prev) => ({ ...prev, ...patch }));
   const [kkDiproses, setKkDiproses] = useState(false);
   const [draftDipulihkan, setDraftDipulihkan] = useState(false);
-  const previewSampai = useMemo(
-    () => hitungBerlakuAman(tanggalBayar, terminBulan),
-    [tanggalBayar, terminBulan],
-  );
 
   const catatanKirim = () => {
     const isi = catatan.trim();
@@ -933,7 +818,6 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
 
   function terapkanDraft(d: DraftPengajuan | null) {
     setStep(d?.step ?? 0);
-    setKtpRw3(d?.ktpRw3 ?? null);
     setRt(d?.rt ?? "");
     setAlamat(d?.alamat ?? "");
     setNomorUnit(d?.nomorUnit ?? "");
@@ -943,10 +827,9 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
     setJenisTempatUsahaLain(d?.jenisTempatUsahaLain ?? "");
     setKategoriUsaha(d?.kategoriUsaha ?? []);
     setKategoriUsahaLain(d?.kategoriUsahaLain ?? "");
-    setPenanggungJawab(d?.penanggungJawab ?? "");
     setJamBuka(d?.jamBuka ?? "");
     setJamTutup(d?.jamTutup ?? "");
-    setAlamatUsaha(d?.alamatUsaha ?? "");
+    setRentangOmzet(d?.rentangOmzet ?? d?.bizKontribusi?.rentangOmzet ?? "");
     setJumlahDewasa(d?.jumlahDewasa ?? 1);
     setJumlahAnak(d?.jumlahAnak ?? 0);
     setPenghuni(
@@ -964,12 +847,10 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
         : [emptyPenghuni(false)],
     );
     setPenghuniIndex(d?.penghuniIndex ?? 0);
-    setTanggalBayar(d?.tanggalBayar || hariIniLokal());
     if (d?.terminBulan) setTerminBulan(d.terminBulan);
     setCatatan(d?.catatan ?? "");
     setSetujuTataTertib(false);
     setFotoKk(d?.fotoKk ?? "");
-    setBizKontribusi({ ...emptyBizKontribusi(), ...(d?.bizKontribusi ?? {}) });
   }
 
   // Dideklarasikan setelah efek formProfile agar nilai draf menimpa nilai bawaan.
@@ -991,7 +872,6 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
       simpanDraft(draftKey, {
         v: 1,
         step,
-        ktpRw3,
         rt,
         alamat,
         nomorUnit,
@@ -1001,28 +881,25 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
         jenisTempatUsahaLain,
         kategoriUsaha,
         kategoriUsahaLain,
-        penanggungJawab,
         jamBuka,
         jamTutup,
-        alamatUsaha,
+        rentangOmzet,
         jumlahDewasa,
         jumlahAnak,
         penghuni,
         penghuniIndex,
-        tanggalBayar,
         terminBulan,
         catatan,
         setujuTataTertib,
         fotoKk,
-        bizKontribusi,
       });
     }, 400);
     return () => window.clearTimeout(t);
   }, [
-    draftKey, draftSiapKey, nomorHasil, step, ktpRw3, rt, alamat, nomorUnit, ukuranTinggal, namaUsaha,
-    jenisTempatUsaha, jenisTempatUsahaLain, kategoriUsaha, kategoriUsahaLain, penanggungJawab,
-    jamBuka, jamTutup, alamatUsaha, jumlahDewasa, jumlahAnak, penghuni, penghuniIndex,
-    tanggalBayar, terminBulan, catatan, setujuTataTertib, fotoKk, bizKontribusi,
+    draftKey, draftSiapKey, nomorHasil, step, rt, alamat, nomorUnit, ukuranTinggal, namaUsaha,
+    jenisTempatUsaha, jenisTempatUsahaLain, kategoriUsaha, kategoriUsahaLain,
+    jamBuka, jamTutup, rentangOmzet, jumlahDewasa, jumlahAnak, penghuni, penghuniIndex,
+    terminBulan, catatan, setujuTataTertib, fotoKk,
   ]);
 
   function mulaiUlang() {
@@ -1105,7 +982,8 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
       const anakPrev = prev.filter((p) => p.isAnak);
       const dewasa = Array.from({ length: jumlahDewasa }, (_, i) => {
         const row = dewasaPrev[i] ?? emptyPenghuni(false);
-        return { ...row, isAnak: false };
+        const peran = product === "rw3biz" && i === 0 && !row.peran ? "pemilik" : row.peran;
+        return { ...row, peran, isAnak: false };
       });
       const anak = Array.from({ length: jumlahAnak }, (_, i) => {
         const row = anakPrev[i] ?? emptyPenghuni(true);
@@ -1113,12 +991,15 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
       });
       return [...dewasa, ...anak];
     });
-  }, [jumlahDewasa, jumlahAnak]);
+  }, [jumlahDewasa, jumlahAnak, product]);
 
   function penghuniHeading(p: PenghuniForm, index: number) {
     const sameTypeBefore = penghuni.slice(0, index).filter((x) => x.isAnak === p.isAnak).length;
     const n = sameTypeBefore + 1;
-    return p.isAnak ? `Anak ${n}` : `Dewasa ${n}`;
+    if (p.isAnak) return `Anak ${n}`;
+    if (jenisWarga === "kost") return n === 1 ? "Data diri Anda" : "Teman sekamar";
+    if (product === "rw3biz") return n === 1 ? "Data Anda (pemilik)" : `Orang ke-${n}`;
+    return n === 1 ? "Data diri Anda" : `Dewasa ${n}`;
   }
 
   function clampJumlahDewasa(n: number) {
@@ -1184,10 +1065,15 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
     return ada ? null : "Minimal satu orang berperan Pemilik atau Penanggung jawab, lengkap dengan nomor WhatsApp";
   }
 
+  /** Pemohon hanya mengisi omzet; luas, sampah, parkir, dan kendaraan diisi petugas saat survey. */
+  const dataUsahaAwal = useMemo(
+    () => ({ rentangOmzet, operasionalMalam: turunkanOperasionalMalam(jamBuka, jamTutup) }),
+    [rentangOmzet, jamBuka, jamTutup],
+  );
+
   /** Perkiraan sejak langkah Usaha: orang yang belum diisi dianggap pegawai dari luar RW 03. */
   const previewSementaraPayload = useMemo(() => {
-    if (product !== "rw3biz" || !jenisTempatUsaha) return null;
-    if (validateBizKontribusi(bizKontribusi, jenisTempatUsaha)) return null;
+    if (product !== "rw3biz" || !jenisTempatUsaha || !rentangOmzet) return null;
     const orang = penghuni
       .filter((p) => !p.isAnak)
       .map((p, idx) => ({
@@ -1198,26 +1084,25 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
       }));
     return {
       jenisTempatUsaha,
-      ...bizKontribusiPayload(bizKontribusi, jamBuka, jamTutup),
+      ...dataUsahaAwal,
       jamBuka: jamBuka || null,
       jamTutup: jamTutup || null,
       orang: orang.length ? orang : [{ isAnak: false, peran: "pemilik", asal: "luar", domisili: null }],
     };
-  }, [product, jenisTempatUsaha, bizKontribusi, penghuni, jamBuka, jamTutup]);
+  }, [product, jenisTempatUsaha, rentangOmzet, dataUsahaAwal, penghuni, jamBuka, jamTutup]);
 
   const previewKontribusiPayload = useMemo(() => {
-    if (product !== "rw3biz" || !jenisTempatUsaha) return null;
-    if (validateBizKontribusi(bizKontribusi, jenisTempatUsaha)) return null;
+    if (product !== "rw3biz" || !jenisTempatUsaha || !rentangOmzet) return null;
     const orang = penghuni.map((p) => ({ isAnak: p.isAnak, ...orangKontribusiPayload(p) }));
     if (orang.some((o) => !o.isAnak && (!o.peran || !o.asal))) return null;
     return {
       jenisTempatUsaha,
-      ...bizKontribusiPayload(bizKontribusi, jamBuka, jamTutup),
+      ...dataUsahaAwal,
       jamBuka: jamBuka || null,
       jamTutup: jamTutup || null,
       orang: orang.filter((o) => !o.isAnak),
     };
-  }, [product, jenisTempatUsaha, bizKontribusi, penghuni, jamBuka, jamTutup]);
+  }, [product, jenisTempatUsaha, rentangOmzet, dataUsahaAwal, penghuni, jamBuka, jamTutup]);
 
   const kunciKontribusi = `${terminBulan}|${JSON.stringify(previewKontribusiPayload)}`;
   useEffect(() => {
@@ -1229,12 +1114,11 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
       if (!jenisWarga || !formProfile) throw new Error("Pilih jenis warga dulu");
 
       if (product === "rw3biz") {
+        const idxPj = penghuni.findIndex(
+          (x) => !x.isAnak && (x.peran === "pemilik" || x.peran === "penanggung_jawab") && x.nomorWhatsapp.trim(),
+        );
         const orang = penghuniPayload.map((p, idx) => {
-          const isPj =
-            !p.isAnak &&
-            (penanggungJawab.trim()
-              ? p.namaLengkap.trim().toLowerCase() === penanggungJawab.trim().toLowerCase()
-              : idx === 0);
+          const isPj = idx === idxPj;
           return {
             namaLengkap: p.namaLengkap,
             tanggalLahir: p.tanggalLahir,
@@ -1268,11 +1152,9 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
           kategoriUsaha: buildKategoriUsahaPayload(kategoriUsaha, kategoriUsahaLain),
           jamBuka: jamBuka.trim(),
           jamTutup: jamTutup.trim(),
-          ...bizKontribusiPayload(bizKontribusi, jamBuka, jamTutup),
-          alamatUsaha: alamatUsaha.trim() || null,
+          ...dataUsahaAwal,
           pjSetujuNotifikasi: true,
           jumlahOrang: jumlah,
-          tanggalBayar,
           terminBulan: parseInt(terminBulan, 10),
           catatanPemohon: catatanKirim(),
           orang,
@@ -1281,10 +1163,6 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
         return readJsonSafely<{ nomorBiz: string; nomorVisitrw3?: string }>(res);
       }
 
-      const payloadPenghuni = penghuniPayload.map((p) => {
-        if (p.isAnak) return p;
-        return p;
-      });
       const res = await apiRequest("POST", pengajuanApi, {
         jenisWarga,
         rt: parseInt(rt, 10),
@@ -1301,10 +1179,9 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
         alamatUsaha: null,
         penanggungJawab: null,
         jumlahPenghuni: jumlah,
-        tanggalBayar,
         terminBulan: parseInt(terminBulan, 10),
         catatanPemohon: catatanKirim(),
-        penghuni: payloadPenghuni,
+        penghuni: penghuniPayload,
         fotoKk: aturanKk === "tidak" ? null : fotoKk || null,
         setujuTataTertib: true as const,
       });
@@ -1372,7 +1249,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
         kendaraanList: punya
           ? row.kendaraanList.length > 0
             ? row.kendaraanList
-            : [emptyKendaraanRow(row.namaLengkap.trim())]
+            : [emptyKendaraanRow()]
           : [],
       };
       return next;
@@ -1406,7 +1283,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
       const next = [...prev];
       next[i] = {
         ...next[i],
-        kendaraanList: [...next[i].kendaraanList, emptyKendaraanRow(next[i].namaLengkap.trim())],
+        kendaraanList: [...next[i].kendaraanList, emptyKendaraanRow()],
       };
       return next;
     });
@@ -1517,54 +1394,35 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
     );
   }
 
-  if (product === "visit" && (jenisWarga === "kontrak" || jenisWarga === "kost") && ktpRw3 !== false) {
-    return (
-      <Shell title={`Pengajuan — ${JENIS_WARGA_LABEL[jenisWarga]}`} backHref={hubHref}>
-        <div className="rounded-xl border border-border bg-card p-4 space-y-4">
-          <p className="font-semibold">Sebelum mulai: KTP {petugas ? "penghuni" : "Anda"} beralamat di mana?</p>
-          <p className="text-sm text-muted-foreground">
-            Visit RW3 khusus penghuni kost/kontrakan dengan KTP luar RW 03. Penghuni ber-KTP RW 03 didata sebagai warga.
-          </p>
-          <div className="grid gap-2">
-            <Button variant="outline" className="h-auto justify-start py-3 text-left whitespace-normal" onClick={() => setKtpRw3(true)}>
-              KTP RW 03 Kelurahan Padasuka
-            </Button>
-            <Button className="h-auto justify-start py-3 text-left whitespace-normal" onClick={() => setKtpRw3(false)}>
-              KTP luar RW 03 (daerah lain) — lanjut isi Visit RW3
-            </Button>
-          </div>
-          {ktpRw3 === true && <AturanKtpRw3 tegas />}
-        </div>
-      </Shell>
-    );
-  }
-
   return (
     <Shell
       title={
         product === "rw3biz"
-          ? "Pengajuan izin usaha"
-          : `Pengajuan — ${JENIS_WARGA_LABEL[jenisWarga]}`
+          ? "Daftarkan usaha"
+          : `Daftar — ${JENIS_WARGA_LABEL[jenisWarga]}`
       }
       backHref={hubHref}
     >
-      {step === 0 && (
-        <>
-          <FeatureExplain title="Sebelum mulai" className="mb-3">
-            <p>{formProfile?.explainSebelum}</p>
+      {step === 0 && !draftDipulihkan && (
+        <div className="mb-4 space-y-2 rounded-lg border border-brand/20 bg-brand/5 p-3 text-sm">
+          <p>
+            <strong>Siapkan:</strong>{" "}
+            {product === "rw3biz"
+              ? "KTP pemilik dan data orang yang bekerja di usaha."
+              : "KTP setiap orang dewasa yang tinggal" + (jenisWarga === "kontrak" ? " (dan KK bila ada anak)." : ".")}{" "}
+            Isian tersimpan otomatis di HP ini.
+          </p>
+          {product === "visit" && (
             <p>
-              Isi form langkah demi langkah — tekan <strong>Lanjut</strong> setelah setiap bagian.
-              Isian tersimpan otomatis di HP ini, jadi aman bila halaman tertutup.
+              Khusus <strong>KTP luar RW 03</strong>. KTP RW 03?{" "}
+              <Link href="/isi" className="font-semibold text-brand underline">Isi data keluarga</Link> saja.
             </p>
-          </FeatureExplain>
-          <Link
-            href={panduanHref}
-            className="inline-flex items-center gap-1.5 text-sm text-brand font-medium mb-4 hover:underline"
-          >
+          )}
+          <Link href={panduanHref} className="inline-flex items-center gap-1.5 font-medium text-brand hover:underline">
             <BookOpen className="w-4 h-4" />
-            Bingung? Baca panduan
+            Baca panduan
           </Link>
-        </>
+        </div>
       )}
       {petugas && (
         <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
@@ -1592,18 +1450,20 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
           />
           <div className="space-y-2">
             <Label>RT</Label>
-            <Select value={rt} onValueChange={setRt}>
-              <SelectTrigger className="h-12">
-                <SelectValue placeholder="Pilih RT" />
-              </SelectTrigger>
-              <SelectContent>
-                {rtOptions.map((n) => (
-                  <SelectItem key={n} value={String(n)}>
-                    RT {String(n).padStart(2, "0")}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="grid grid-cols-4 gap-2">
+              {rtOptions.map((n) => (
+                <Button
+                  key={n}
+                  type="button"
+                  variant={rt === String(n) ? "default" : "outline"}
+                  className="h-12 text-base"
+                  aria-pressed={rt === String(n)}
+                  onClick={() => setRt(String(n))}
+                >
+                  {String(n).padStart(2, "0")}
+                </Button>
+              ))}
+            </div>
           </div>
           <div className="space-y-2">
             <Label>{formProfile.alamatLabel}</Label>
@@ -1642,6 +1502,28 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
               </p>
             </div>
           )}
+          {jenisWarga === "kost" && (
+            <div className="space-y-2">
+              <Label>Tinggal di kamar ini</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { n: 1, label: "Sendiri" },
+                  { n: 2, label: "Berdua" },
+                ].map((o) => (
+                  <Button
+                    key={o.n}
+                    type="button"
+                    variant={jumlahDewasa === o.n ? "default" : "outline"}
+                    className="h-12 text-base"
+                    aria-pressed={jumlahDewasa === o.n}
+                    onClick={() => setJumlahDewasa(o.n)}
+                  >
+                    {o.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
           <PesanGalat pesan={errMsg} />
           <div className="flex gap-2">
             <Link href={hubHref}>
@@ -1660,6 +1542,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                   ukuranTinggal,
                 });
                 if (err) return showErr(err);
+                setPenghuniIndex(0);
                 goStep(1);
               }}
             >
@@ -1675,7 +1558,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
             current={1}
             total={1}
             title="Data usaha"
-            hint="Isi identitas usaha dan penanggung jawab di RW 03."
+            hint="Nama, jenis, jam buka, dan kisaran omzet."
           />
           <div className="space-y-2">
             <Label>Nama usaha *</Label>
@@ -1779,37 +1662,33 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
           </p>
           {product === "rw3biz" && (
             <>
-              <UsahaKontribusiFields
-                value={bizKontribusi}
-                onChange={ubahBizKontribusi}
-                jenisTempat={jenisTempatUsaha}
-                jamBuka={jamBuka}
-                jamTutup={jamTutup}
-              />
+              <div className="space-y-2">
+                <Label>Kisaran omzet (pendapatan kotor) per bulan *</Label>
+                <div className="grid gap-2">
+                  {RENTANG_OMZET.map((v) => (
+                    <Button
+                      key={v}
+                      type="button"
+                      variant={rentangOmzet === v ? "default" : "outline"}
+                      className="h-12 justify-start text-base"
+                      aria-pressed={rentangOmzet === v}
+                      onClick={() => setRentangOmzet(v)}
+                    >
+                      {RENTANG_OMZET_LABEL[v]}
+                    </Button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Cukup kisaran, tidak dibagikan ke pihak lain. Luas tempat, sampah, parkir, dan kendaraan usaha dicatat
+                  petugas saat survey.
+                </p>
+              </div>
               <EstimasiKontribusiCard
                 payload={previewSementaraPayload}
-                sementara="Sementara dihitung tanpa pegawai. Angka berubah setelah jumlah, peran, dan asal pegawai diisi."
+                sementara="Perkiraan awal. Angka final ditetapkan setelah survey lokasi."
               />
             </>
           )}
-          <div className="space-y-2">
-            <Label>Alamat usaha (jika berbeda dari lokasi sebelumnya)</Label>
-            <Textarea
-              value={alamatUsaha}
-              onChange={(e) => setAlamatUsaha(e.target.value)}
-              rows={2}
-              placeholder="Kosongkan jika sama dengan alamat lokasi usaha"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Nama penanggung jawab *</Label>
-            <Input
-              value={penanggungJawab}
-              onChange={(e) => setPenanggungJawab(e.target.value)}
-              placeholder="Nama lengkap pemilik / PJ usaha"
-              className="h-12"
-            />
-          </div>
           <PesanGalat pesan={errMsg} />
           <div className="flex gap-2">
             <Button variant="outline" className="touch-target" onClick={() => goStep(-1)}>
@@ -1824,17 +1703,12 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                   jenisTempatUsahaLain,
                   kategoriUsaha,
                   kategoriUsahaLain,
-                  penanggungJawab,
                   jamBuka,
                   jamTutup,
-                  alamatUsaha,
                   requireJamOperasional: true,
                 });
                 if (err) return showErr(err);
-                if (product === "rw3biz") {
-                  const errBiz = validateBizKontribusi(bizKontribusi, jenisTempatUsaha);
-                  if (errBiz) return showErr(errBiz);
-                }
+                if (product === "rw3biz" && !rentangOmzet) return showErr("Pilih kisaran omzet per bulan");
                 goStep(1);
               }}
             >
@@ -2043,42 +1917,36 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                         Pengurus mengabari hasil survey lewat nomor ini.
                       </p>
                     </div>
-                    <div
-                      className={
-                        formProfile?.requirePekerjaan !== false
-                          ? "grid grid-cols-2 gap-3"
-                          : "space-y-2"
-                      }
-                    >
-                      <div className="space-y-2">
-                        <Label>Jenis kelamin</Label>
-                        <Select
-                          value={p.jenisKelamin}
-                          onValueChange={(v) => updatePenghuni(i, { jenisKelamin: v })}
-                        >
-                          <SelectTrigger className="h-12">
-                            <SelectValue placeholder="Pilih" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Laki-laki">Laki-laki</SelectItem>
-                            <SelectItem value="Perempuan">Perempuan</SelectItem>
-                          </SelectContent>
-                        </Select>
+                    <div className="space-y-2">
+                      <Label>Jenis kelamin</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {["Laki-laki", "Perempuan"].map((jk) => (
+                          <Button
+                            key={jk}
+                            type="button"
+                            variant={p.jenisKelamin === jk ? "default" : "outline"}
+                            className="h-12 text-base"
+                            aria-pressed={p.jenisKelamin === jk}
+                            onClick={() => updatePenghuni(i, { jenisKelamin: jk })}
+                          >
+                            {jk}
+                          </Button>
+                        ))}
                       </div>
-                      {formProfile?.requirePekerjaan !== false && (
-                        <div className="space-y-2">
-                          <Label>Pekerjaan</Label>
-                          <SearchableSelect
-                            value={p.pekerjaan}
-                            onValueChange={(v) => updatePenghuni(i, { pekerjaan: v })}
-                            options={pekerjaanLegacyOptions}
-                            placeholder="Pilih pekerjaan"
-                            searchPlaceholder="Cari pekerjaan…"
-                            triggerClassName="h-12"
-                          />
-                        </div>
-                      )}
                     </div>
+                    {formProfile?.requirePekerjaan !== false && (
+                      <div className="space-y-2">
+                        <Label>Pekerjaan</Label>
+                        <SearchableSelect
+                          value={p.pekerjaan}
+                          onValueChange={(v) => updatePenghuni(i, { pekerjaan: v })}
+                          options={pekerjaanLegacyOptions}
+                          placeholder="Pilih pekerjaan"
+                          searchPlaceholder="Cari pekerjaan…"
+                          triggerClassName="h-12"
+                        />
+                      </div>
+                    )}
                     {formProfile?.requireKeperluanTinggal ? (
                       <RincianKeperluanFields
                         idPrefix={`keperluan-${i}`}
@@ -2237,39 +2105,10 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
           <MicroStepHeader
             current={1}
             total={1}
-            title="Masa berlaku"
-            hint={formProfile?.bayarHint ?? "Tanggal bayar dan termin menentukan sampai kapan izin berlaku."}
+            title="Periksa lalu kirim"
+            hint="Pilih lama berlaku, cek isian, lalu setujui tata tertib."
           />
-          <div className="space-y-2">
-            <Label>Tanggal bayar *</Label>
-            <Input
-              type="date"
-              value={tanggalBayar}
-              onChange={(e) => setTanggalBayar(e.target.value)}
-              required
-              className="h-12"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Termin *</Label>
-            <Select value={terminBulan} onValueChange={setTerminBulan}>
-              <SelectTrigger className="h-12">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {TERMIN_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {previewSampai && (
-            <p className="text-sm rounded-lg bg-muted p-3">
-              Berlaku sampai: <span className="font-semibold">{formatTanggalPanjang(previewSampai)}</span>
-            </p>
-          )}
+          <PilihTermin value={terminBulan} onChange={setTerminBulan} />
           <div className="space-y-2">
             <Label>Catatan (opsional)</Label>
             <Textarea
@@ -2303,7 +2142,9 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-xs text-muted-foreground">Usaha</p>
-                  <p>{namaUsaha.trim() || "—"} · PJ {penanggungJawab.trim() || "—"}</p>
+                  <p>
+                    {namaUsaha.trim() || "—"} · {jamBuka || "—"}–{jamTutup || "—"}
+                  </p>
                 </div>
                 <Button type="button" variant="ghost" size="sm" className="h-auto px-2 py-1 text-brand" onClick={() => lompatKe("usaha")}>
                   Ubah
@@ -2376,7 +2217,6 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                 <EstimasiKontribusiCard
                   payload={previewKontribusiPayload}
                   terminBulan={parseInt(terminBulan, 10)}
-                  usahaBaru={bizKontribusi.usahaBaru === "ya"}
                 />
               ) : jenisWarga === "kost" || jenisWarga === "kontrak" ? (
                 <KontribusiTinggalInfo
@@ -2400,14 +2240,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
               className="flex-1 touch-target"
               disabled={mutation.isPending || !setujuTataTertib}
               onClick={() => {
-                const err = validateStepBayar(
-                  tanggalBayar,
-                  terminBulan,
-                  nomorUnit,
-                  catatan,
-                  keperluan,
-                  setujuTataTertib,
-                );
+                const err = validateStepBayar(terminBulan, setujuTataTertib);
                 if (err) return showErr(err);
                 const errLokasi = validateLokasiWargaSinggah({ rt, alamat, jenisWarga, nomorUnit, ukuranTinggal });
                 if (errLokasi) {
@@ -2443,10 +2276,9 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                     lompatKe("penghuni");
                     return showErr(errPj, { step: indeksLangkah("penghuni"), idx: 0 });
                   }
-                  const errBiz = validateBizKontribusi(bizKontribusi, jenisTempatUsaha);
-                  if (errBiz) {
+                  if (!rentangOmzet) {
                     lompatKe("usaha");
-                    return showErr(errBiz, { step: indeksLangkah("usaha") });
+                    return showErr("Pilih kisaran omzet per bulan", { step: indeksLangkah("usaha") });
                   }
                 }
                 if (aturanKk === "wajib" && !fotoKk) {

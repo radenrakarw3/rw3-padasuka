@@ -1,76 +1,39 @@
-import { Store, BookOpen, RefreshCw, Search, FileText, Megaphone } from "lucide-react";
+import { Store, BookOpen, RefreshCw, Search, Home, Megaphone } from "lucide-react";
 import { Rw3bizShell } from "@/components/rw3biz-shell";
-import { FeatureExplain } from "@/components/gov/feature-explain";
-import { FeatureMenuBlock } from "@/components/gov/feature-menu-block";
+import { ServiceCard } from "@/components/gov/service-card";
+import { MenuRingkas } from "@/components/gov/menu-ringkas";
 import { RW3BIZ_ROUTES } from "@/lib/rw3biz-routes";
 
 export default function Rw3bizHub() {
   return (
     <Rw3bizShell title="RW3BIZ" backHref="/">
-      <FeatureExplain title="Apa itu RW3BIZ?" className="mb-4">
-        <p>
-          Layanan izin <strong>berjualan / usaha</strong> di wilayah RW 03 Padasuka — terpisah dari
-          Visit RW3 (yang khusus untuk tinggal: ngontrak & ngekost).
-        </p>
-        <p>
-          Isi data usaha, lokasi, jam operasional, dan penanggung jawab. Setelah survey pengurus,
-          Anda mendapat nomor izin dan dapat dihubungi lewat WhatsApp.
-        </p>
-      </FeatureExplain>
-      <div className="space-y-4">
-        <FeatureMenuBlock
-          explainTitle="Ajukan izin usaha"
-          explain={<>Daftar usaha baru: lapak, kiosk, atau jenis tempat lain di RW 03.</>}
-          href={RW3BIZ_ROUTES.pengajuan}
-          icon={Store}
-          title="Ajukan izin jualan"
-          description="Data usaha, jam buka, dan penanggung jawab"
-          variant="solid"
+      <p className="mb-4 text-base">
+        Izin <strong>usaha, warung, atau lapak</strong> di wilayah RW 03 Padasuka. Setelah disurvey pengurus,
+        usaha Anda mendapat nomor izin.
+      </p>
+      <ServiceCard
+        href={RW3BIZ_ROUTES.pengajuan}
+        icon={Store}
+        eyebrow="Daftar baru"
+        title="Daftarkan usaha"
+        description="Data usaha, jam buka, dan orang yang bekerja"
+        variant="solid"
+      />
+      <div className="mt-6 space-y-6">
+        <MenuRingkas
+          judul="Sudah terdaftar?"
+          items={[
+            { href: RW3BIZ_ROUTES.status, icon: Search, title: "Cek status & surat", description: "Pakai NIU atau nomor BIZ" },
+            { href: RW3BIZ_ROUTES.perpanjang, icon: RefreshCw, title: "Perbarui izin" },
+            { href: RW3BIZ_ROUTES.panduan, icon: BookOpen, title: "Panduan RW3BIZ" },
+          ]}
         />
-        <FeatureMenuBlock
-          explainTitle="Sudah punya Nomor Induk Usaha?"
-          explain={<>Perbarui surat izin sebelum habis sekaligus perbarui data pegawai dan kendaraan operasional.</>}
-          href={RW3BIZ_ROUTES.perpanjang}
-          icon={RefreshCw}
-          title="Perbarui izin"
-          description="Perpanjang surat & perbarui data"
-          variant="outline"
-        />
-        <FeatureMenuBlock
-          explainTitle="Cek status"
-          explain={<>Pantau pengajuan, cetak surat izin dan formulir, lihat tagihan serta kwitansi pembayaran.</>}
-          href={RW3BIZ_ROUTES.status}
-          icon={Search}
-          title="Cek status & surat"
-          description="Pakai NIU atau nomor BIZ"
-          variant="outline"
-        />
-        <FeatureMenuBlock
-          explainTitle="Warga terganggu usaha?"
-          explain={<>Sampah tercecer, bising, parkir menutup jalan, limbah/bau, dll. Identitas pelapor dirahasiakan.</>}
-          href={RW3BIZ_ROUTES.aduan}
-          icon={Megaphone}
-          title="Adukan usaha"
-          description="Dicek pengurus, terbukti = teguran / denda"
-          variant="outline"
-        />
-        <FeatureMenuBlock
-          explainTitle="Panduan"
-          explain={<>Dokumen yang disiapkan dan alur survey usaha.</>}
-          href={RW3BIZ_ROUTES.panduan}
-          icon={BookOpen}
-          title="Panduan RW3BIZ"
-          description="Langkah demi langkah"
-          variant="outline"
-        />
-        <FeatureMenuBlock
-          explainTitle="Tinggal di RW 03?"
-          explain={<>Ngontrak atau ngekost? Gunakan Visit RW3.</>}
-          href="/visitrw3"
-          icon={FileText}
-          title="Ke Visit RW3"
-          description="Izin tinggal (kost / kontrakan)"
-          variant="outline"
+        <MenuRingkas
+          judul="Lainnya"
+          items={[
+            { href: RW3BIZ_ROUTES.aduan, icon: Megaphone, title: "Adukan usaha yang mengganggu", description: "Identitas pelapor dirahasiakan" },
+            { href: "/visitrw3", icon: Home, title: "Ngontrak / ngekost?", description: "Lewat Visit RW3" },
+          ]}
         />
       </div>
     </Rw3bizShell>
