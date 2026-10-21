@@ -87,6 +87,14 @@ STARSENDER_DISABLED=true  # Set true untuk hentikan SEMUA kirim WA (mis. saat no
 PUBLIC_SITE_URL         # Default: https://rw3padasukacimahi.org (link di pesan WA)
 ```
 
+## Environment Variable Opsional (Aduan Warga)
+
+```
+ADUAN_SECRET # Kunci enkripsi identitas pelapor (AES-256-GCM). Kosong = diturunkan dari SESSION_SECRET. JANGAN diganti setelah ada aduan: identitas lama tidak bisa dibaca lagi.
+```
+
+Aduan Warga (`/aduan`, admin `/admin/aduan`): satu pintu untuk semua aduan; teguran bertingkat (Lisan, SP-1, SP-2, SP-3) terbit lewat Surat Sakti (`b_teguran_lisan`, `b_sp`). Modul: `server/aduan.ts`, `server/aduan-teguran.ts`, `server/aduan-kripto.ts`, `shared/aduan.ts`.
+
 Notifikasi otomatis via StarSender: Visit RW3 (pengajuan, approve/reject, pengingat kontrak H-7/H-1/habis), RW3BIZ (pendaftaran usaha). Modul: `server/wa-notify.ts`, `server/starsender.ts`.
 
 ---

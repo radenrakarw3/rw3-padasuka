@@ -6,7 +6,8 @@ export const RW3BIZ_ROUTES = {
   pengajuan: "/rw3biz/pengajuan",
   perpanjang: "/rw3biz/perpanjang",
   status: "/rw3biz/status",
-  aduan: "/rw3biz/aduan",
+  /** Aduan usaha masuk lewat Aduan Warga satu pintu. */
+  aduan: "/aduan/buat?kategori=usaha",
   admin: {
     landing: "/admin/rw3biz",
     antrianSurvey: "/admin/rw3biz/antrian?view=belum",

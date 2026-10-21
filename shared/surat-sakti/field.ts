@@ -18,6 +18,14 @@ export const BENTUK_BANTUAN = [
   "Dana", "Barang", "Material baru", "Material bekas layak pakai", "Alat", "Kendaraan", "Tempat", "Jasa/tenaga ahli", "Kolaborasi/CSR",
 ] as const;
 
+/** Urutan sama dengan TINGKAT_TEGURAN di shared/aduan.ts (lisan, sp1, sp2, sp3). */
+export const TINGKAT_TEGURAN_CETAK = [
+  "Teguran Lisan",
+  "Peringatan Pertama (SP-1)",
+  "Peringatan Kedua (SP-2)",
+  "Peringatan Ketiga (SP-3) — peringatan terakhir",
+] as const;
+
 /** Kunci yang ditangani tata letak (tidak dirender sebagai isi biasa). */
 export const KUNCI_TATA_LETAK = new Set(["penerima", "tembusan", "penandatangan", "penandatanganBA", "tindakRencana"]);
 
@@ -165,6 +173,19 @@ export const KELOMPOK: Record<string, KelompokField> = {
   perkembangan: { id: "perkembangan", judul: "Perkembangan", fields: [
     daftar("perkembangan", "Perkembangan terakhir", { wajib: true }),
     daftar("langkahBerikut", "Langkah berikutnya"),
+  ] },
+  teguranPihak: { id: "teguranPihak", judul: "Pihak yang ditegur", fields: [
+    teks("pihakDitegur", "Pihak yang ditegur", { wajib: true }),
+    teks("alamatDitegur", "Alamat"),
+  ] },
+  teguran: { id: "teguran", judul: "Teguran", fields: [
+    pilihan("tingkatTeguran", "Tingkat teguran", TINGKAT_TEGURAN_CETAK, { wajib: true }),
+    teks("dasarTeguran", "Dasar", { wajib: true, bantuan: "Mis. Aduan warga nomor ADU-2026-0001 dan hasil pemeriksaan pengurus. Jangan tulis nama pelapor." }),
+    uraian("pelanggaran", "Hal yang ditegur", { wajib: true, bantuan: "Tulis perbuatan/kondisinya, bukan siapa yang melapor." }),
+    daftar("kewajibanPerbaikan", "Yang wajib dilakukan", { wajib: true }),
+    tgl("tenggatPerbaikan", "Batas waktu perbaikan", { wajib: true }),
+    daftar("riwayatTeguran", "Teguran sebelumnya"),
+    uraian("konsekuensi", "Apabila tidak diindahkan"),
   ] },
   imbauan: { id: "imbauan", judul: "Imbauan", fields: [
     uraian("kondisiDiamati", "Kondisi yang diamati", { wajib: true }),

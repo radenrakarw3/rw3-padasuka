@@ -810,6 +810,139 @@ export const rw3bizPelanggaran = pgTable(
 );
 export type Rw3bizPelanggaran = typeof rw3bizPelanggaran.$inferSelect;
 
+// ===================== Aduan Warga (satu pintu) =====================
+// Konstanta & aturan: shared/aduan.ts. Identitas pelapor terenkripsi (server/aduan-kripto.ts).
+
+export const aduan = pgTable(
+  "aduan",
+  {
+    id: serial("id").primaryKey(),
+    /** ADU-2026-0001 */
+    nomor: text("nomor").unique(),
+    kodeLacak: text("kode_lacak").notNull().unique(),
+    pinHash: text("pin_hash").notNull(),
+    /** ModeIdentitas: rahasia | anonim | terbuka */
+    modeIdentitas: text("mode_identitas").notNull(),
+    pelaporNamaEnc: text("pelapor_nama_enc"),
+    pelaporWaEnc: text("pelapor_wa_enc"),
+    /** HMAC nomor WA — untuk batas kirim tanpa membuka enkripsi. */
+    pelaporWaHash: text("pelapor_wa_hash"),
+    pelaporRt: integer("pelapor_rt"),
+    kategori: text("kategori").notNull(),
+    judul: text("judul").notNull(),
+    uraian: text("uraian").notNull(),
+    lokasi: text("lokasi"),
+    rtLokasi: integer("rt_lokasi"),
+    tanggalKejadian: text("tanggal_kejadian"),
+    frekuensi: text("frekuensi").notNull().default("sekali"),
+    dampak: text("dampak").notNull().default("mengganggu"),
+    prioritas: text("prioritas").notNull().default("sedang"),
+    teraduJenis: text("teradu_jenis").notNull().default("tidak_tahu"),
+    teraduRefId: integer("teradu_ref_id"),
+    teraduNama: text("teradu_nama"),
+    teraduAlamat: text("teradu_alamat"),
+    teraduKunci: text("teradu_kunci"),
+    usahaId: integer("usaha_id").references(() => rw3bizUsaha.id, { onDelete: "set null" }),
+    status: text("status").notNull().default("masuk"),
+    duplikatDari: integer("duplikat_dari"),
+    rw3bizPelanggaranId: integer("rw3biz_pelanggaran_id").references(() => rw3bizPelanggaran.id, { onDelete: "set null" }),
+    /** Pesan pengurus yang tampil di halaman lacak pelapor. */
+    pesanPublik: text("pesan_publik"),
+    catatanInternal: text("catatan_internal"),
+    ditanganiOleh: text("ditangani_oleh"),
+    dibacaAt: timestamp("dibaca_at"),
+    selesaiAt: timestamp("selesai_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("aduan_status_idx").on(t.status),
+    index("aduan_prioritas_idx").on(t.prioritas),
+    index("aduan_teradu_kunci_idx").on(t.teraduKunci),
+    index("aduan_wa_hash_idx").on(t.pelaporWaHash, t.createdAt),
+    index("aduan_created_idx").on(t.createdAt),
+  ],
+);
+export type Aduan = typeof aduan.$inferSelect;
+
+export const aduanBukti = pgTable(
+  "aduan_bukti",
+  {
+    id: serial("id").primaryKey(),
+    aduanId: integer("aduan_id").notNull().references(() => aduan.id, { onDelete: "cascade" }),
+    /** pelapor | petugas */
+    sumber: text("sumber").notNull().default("pelapor"),
+    mime: text("mime").notNull(),
+    ukuran: integer("ukuran").notNull(),
+    sha256: text("sha256").notNull(),
+    data: bytea("data").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("aduan_bukti_aduan_idx").on(t.aduanId)],
+);
+
+export const aduanTimeline = pgTable(
+  "aduan_timeline",
+  {
+    id: serial("id").primaryKey(),
+    aduanId: integer("aduan_id").notNull().references(() => aduan.id, { onDelete: "cascade" }),
+    jenis: text("jenis").notNull(),
+    isi: text("isi").notNull(),
+    /** true = tampil di halaman lacak pelapor. */
+    publik: boolean("publik").notNull().default(false),
+    oleh: text("oleh"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("aduan_timeline_aduan_idx").on(t.aduanId, t.createdAt)],
+);
+export type AduanTimeline = typeof aduanTimeline.$inferSelect;
+
+export const aduanTeguran = pgTable(
+  "aduan_teguran",
+  {
+    id: serial("id").primaryKey(),
+    aduanId: integer("aduan_id").references(() => aduan.id, { onDelete: "set null" }),
+    teraduKunci: text("teradu_kunci").notNull(),
+    teraduJenis: text("teradu_jenis").notNull(),
+    teraduNama: text("teradu_nama").notNull(),
+    teraduAlamat: text("teradu_alamat"),
+    /** TingkatTeguran: lisan | sp1 | sp2 | sp3 */
+    tingkat: text("tingkat").notNull(),
+    pelanggaran: text("pelanggaran").notNull(),
+    kewajiban: text("kewajiban").notNull(),
+    tenggat: text("tenggat"),
+    /** Dokumen Surat Sakti (surat_rw.id). */
+    suratId: integer("surat_id"),
+    nomorSurat: text("nomor_surat"),
+    /** StatusTeguran: aktif | dipatuhi | tidak_dipatuhi | dicabut */
+    status: text("status").notNull().default("aktif"),
+    caraSerah: text("cara_serah"),
+    diserahkanAt: timestamp("diserahkan_at"),
+    catatan: text("catatan"),
+    oleh: text("oleh"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("aduan_teguran_kunci_idx").on(t.teraduKunci, t.createdAt),
+    index("aduan_teguran_status_idx").on(t.status, t.tenggat),
+    index("aduan_teguran_aduan_idx").on(t.aduanId),
+  ],
+);
+export type AduanTeguran = typeof aduanTeguran.$inferSelect;
+
+export const aduanAkses = pgTable(
+  "aduan_akses",
+  {
+    id: serial("id").primaryKey(),
+    aduanId: integer("aduan_id").notNull().references(() => aduan.id, { onDelete: "cascade" }),
+    oleh: text("oleh").notNull(),
+    alasan: text("alasan"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("aduan_akses_aduan_idx").on(t.aduanId)],
+);
+
 export type Rw3bizTagihan = typeof rw3bizTagihan.$inferSelect;
 export type Rw3bizPembayaran = typeof rw3bizPembayaran.$inferSelect;
 export type Rw3bizKeberatan = typeof rw3bizKeberatan.$inferSelect;

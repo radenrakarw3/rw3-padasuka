@@ -31,12 +31,15 @@ function deteksiMime(buf: Buffer): string | null {
  * bukan dari header data URL, agar file non-gambar tidak bisa disisipkan.
  */
 export function parseGambarDataUrl(dataUrl: string, jenis: JenisDokumen, pemilik?: string): GambarDokumen {
-  const label = pemilik ? `${LABEL[jenis]} ${pemilik}` : LABEL[jenis];
+  return parseGambar(dataUrl, pemilik ? `${LABEL[jenis]} ${pemilik}` : LABEL[jenis], MAX_BYTES_DOKUMEN[jenis]);
+}
+
+export function parseGambar(dataUrl: string, label: string, maxBytes: number): GambarDokumen {
   const m = /^data:image\/[a-z0-9.+-]+;base64,([\s\S]+)$/i.exec(dataUrl.trim());
   if (!m) throw new Error(`${label} harus berupa foto — unggah ulang`);
   const buffer = Buffer.from(m[1], "base64");
   if (buffer.length < 1024) throw new Error(`${label} rusak atau kosong — unggah ulang`);
-  if (buffer.length > MAX_BYTES_DOKUMEN[jenis]) {
+  if (buffer.length > maxBytes) {
     throw new Error(`${label} terlalu besar — foto ulang lebih dekat dan terang`);
   }
   const mime = deteksiMime(buffer);

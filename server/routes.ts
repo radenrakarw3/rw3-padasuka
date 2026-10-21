@@ -156,6 +156,13 @@ export async function registerRoutes(
   const { registerWilayahRoutes } = await import("./wilayah-routes");
   registerWilayahRoutes(app);
 
+  const { ensureAduanSchema } = await import("./aduan");
+  await ensureAduanSchema().catch((error) => {
+    console.error("Aduan schema init error:", error);
+  });
+  const { registerAduanRoutes } = await import("./aduan-routes");
+  registerAduanRoutes(app);
+
   const pdfTempPublicDir = path.join(uploadsDir, "pdf-temp");
   fs.mkdirSync(pdfTempPublicDir, { recursive: true });
   const pdfTempTokens = new Map<string, { filePath: string; expires: number }>();

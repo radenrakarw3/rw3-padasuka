@@ -6,6 +6,7 @@ import {
   CalendarDays,
   ClipboardList,
   FileText,
+  Gavel,
   Home,
   Inbox,
   LayoutGrid,
@@ -30,6 +31,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { Input } from "@/components/ui/input";
 import { UiRingkas } from "@/components/wilayah/ui";
 import { useVisitrw3AdminCounts } from "@/hooks/use-visitrw3-admin-counts";
+import { useRingkasanAduan } from "@/hooks/use-aduan-admin";
 import { VISITRW3_ROUTES } from "@/lib/visitrw3-routes";
 import { RW3BIZ_ROUTES } from "@/lib/rw3biz-routes";
 import logoGold from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
@@ -114,6 +116,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [cari, setCari] = useState("");
   const visit = useVisitrw3AdminCounts("visit");
   const biz = useVisitrw3AdminCounts("rw3biz");
+  const { data: aduan } = useRingkasanAduan();
 
   const grup: NavGroup[] = [
     {
@@ -122,6 +125,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         { path: "/admin/cek-warga", icon: UserSearch, label: "Cek Warga" },
         { path: "/admin/pusat-cetak", icon: Printer, label: "Pusat cetak F4" },
         { path: "/admin/surat-rw", icon: FileText, label: "Surat RW" },
+      ],
+    },
+    {
+      judul: "Aduan Warga",
+      items: [
+        { path: "/admin/aduan", icon: Megaphone, label: "Pusat aduan", badge: aduan?.belumDibaca },
+        { path: "/admin/aduan-teguran", icon: Gavel, label: "Teguran & SP", badge: aduan?.tenggatLewat },
       ],
     },
     {
@@ -174,7 +184,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const semua = grup.flatMap((g) => g.items);
   const aktif = semua.find((i) => isNavActive(location, search, i.path));
   const bawahAktif = bawah.some((i) => isNavActive(location, search, i.path));
-  const badgeMenu = (biz.keberatanMenunggu ?? 0) + (biz.aduanMenunggu ?? 0) + (biz.surveyMenunggu ?? 0);
+  const badgeMenu = (biz.keberatanMenunggu ?? 0) + (biz.aduanMenunggu ?? 0) + (biz.surveyMenunggu ?? 0) + (aduan?.belumDibaca ?? 0) + (aduan?.tenggatLewat ?? 0);
 
   const q = cari.trim().toLowerCase();
   const grupTersaring = q

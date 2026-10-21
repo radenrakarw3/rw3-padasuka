@@ -64,7 +64,13 @@ const AdminRw3bizTagihan = lazy(() => import("@/pages/admin/rw3biz-tagihan"));
 const AdminRw3bizTarif = lazy(() => import("@/pages/admin/rw3biz-tarif"));
 const AdminRw3bizRazia = lazy(() => import("@/pages/admin/rw3biz-razia"));
 const AdminRw3bizPelanggaran = lazy(() => import("@/pages/admin/rw3biz-pelanggaran"));
-const Rw3bizAduan = lazy(() => import("@/pages/rw3biz/aduan"));
+const AduanBeranda = lazy(() => import("@/pages/aduan/index"));
+const AduanBuat = lazy(() => import("@/pages/aduan/buat"));
+const AduanLacak = lazy(() => import("@/pages/aduan/lacak"));
+const AdminAduan = lazy(() => import("@/pages/admin/aduan/index"));
+const AdminAduanDetail = lazy(() => import("@/pages/admin/aduan/detail"));
+const AdminAduanTeguran = lazy(() => import("@/pages/admin/aduan/teguran"));
+const AdminAduanTeradu = lazy(() => import("@/pages/admin/aduan/teradu"));
 const AdminKeuangan = lazy(() => import("@/pages/admin/keuangan"));
 
 import goldLogo from "@assets/RW3-Cimahi-Logo-Gold.webp";
@@ -325,6 +331,10 @@ function AdminRoutes() {
         <Route path="/admin/rw3biz/tarif" component={AdminRw3bizTarif} />
         <Route path="/admin/rw3biz/razia" component={AdminRw3bizRazia} />
         <Route path="/admin/rw3biz/pelanggaran" component={AdminRw3bizPelanggaran} />
+        <Route path="/admin/aduan-teguran" component={AdminAduanTeguran} />
+        <Route path="/admin/aduan-teradu" component={AdminAduanTeradu} />
+        <Route path="/admin/aduan/:id">{(p) => <AdminAduanDetail id={Number(p.id)} />}</Route>
+        <Route path="/admin/aduan" component={AdminAduan} />
         <Route path="/admin/keuangan" component={AdminKeuangan} />
         <Route path="/admin/rw3biz" component={AdminRw3bizLanding} />
         <Route path="/admin/visitrw3/properti" component={AdminVisitrw3Properti} />
@@ -390,11 +400,16 @@ function PublicRoutes() {
       <Route path="/isi/:token">{(p) => <PublicIsi token={p.token} />}</Route>
       <Route path="/isi">{() => <PublicIsi />}</Route>
 
+      {/* Aduan Warga — satu pintu, identitas pelapor dilindungi */}
+      <Route path="/aduan/buat" component={AduanBuat} />
+      <Route path="/aduan/lacak" component={AduanLacak} />
+      <Route path="/aduan" component={AduanBeranda} />
+
       {/* RW3BIZ — izin usaha / jualan */}
       <Route path="/rw3biz/pengajuan" component={Rw3bizPengajuan} />
       <Route path="/rw3biz/perpanjang" component={Rw3bizPerpanjang} />
       <Route path="/rw3biz/status" component={Rw3bizStatus} />
-      <Route path="/rw3biz/aduan" component={Rw3bizAduan} />
+      <Route path="/rw3biz/aduan">{() => <Redirect to="/aduan/buat?kategori=usaha" />}</Route>
       <Route path="/rw3biz/panduan" component={Rw3bizPanduan} />
       <Route path="/rw3biz" component={Rw3bizHub} />
 
