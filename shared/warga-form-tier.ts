@@ -2,7 +2,7 @@
  * SSOT form warga RW 03 — inti sensus (UN) + ILO / UNESCO / Washington Group / CRVS.
  */
 
-import { resolveKategoriUmur } from "@shared/kategori-umur";
+import { isUmurLansia, resolveKategoriUmur } from "@shared/kategori-umur";
 import {
   hasKesulitanFungsional,
   needsLiterasi,
@@ -258,7 +258,7 @@ export function applyDerivedWargaFields<T extends WargaTierFormSlice & { lansia?
   const age = getWargaAge(form.tanggalLahir);
   return {
     ...form,
-    lansia: age !== null && age >= 60,
+    lansia: isUmurLansia(age),
     kategoriUmur: resolveKategoriUmur(form.tanggalLahir),
   };
 }

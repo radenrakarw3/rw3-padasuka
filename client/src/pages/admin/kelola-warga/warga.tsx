@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, ClipboardPen, Home, Inbox, Plus, Printer, QrCode, Search, Truck } from "lucide-react";
+import { ChevronRight, Home, Inbox, Plus, QrCode, Search } from "lucide-react";
 import { useDraft, useKirimSekali, wil } from "@/lib/wilayah-api";
 import { BarisRingkas, HIJAU, IsianTeks, Judul, Langkah, Memuat, Pesan } from "@/components/wilayah/ui";
 
@@ -9,13 +9,6 @@ interface Keluarga {
   id: number; kepala: string | null; alamat: string; noUnit: string | null; anggota: number;
   kelengkapan: number; punyaRumah: boolean; punyaQr: boolean; usulanMenunggu: number;
 }
-
-const PINTASAN = [
-  { ke: "/usulan", label: "Isian QR warga", Ikon: Inbox },
-  { ke: "/input-kertas", label: "Input dari kertas", Ikon: ClipboardPen },
-  { ke: "/cetak", label: "Cetak", Ikon: Printer },
-  { ke: "/pindah", label: "Pindah RT", Ikon: Truck },
-];
 
 function inisial(nama: string | null) {
   return (nama ?? "?").split(/\s+/).filter(Boolean).slice(0, 2).map((s) => s[0]).join("").toUpperCase();
@@ -91,7 +84,7 @@ export default function Warga() {
       <Judul sub={aksi === "catat" ? "Pilih keluarga yang berubah" : perlu === "rumah" ? "Keluarga yang belum dihubungkan ke rumah" : perlu === "cek" ? "Buka keluarga untuk mengecek data lama" : undefined}>
         Data warga & KK
       </Judul>
-      <div className="mb-2 flex gap-2">
+      <div className="mb-3 flex gap-2">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden />
           <input type="search" enterKeyHint="search" value={cari} onChange={(e) => setCari(e.target.value)} placeholder="Cari kepala keluarga / alamat…"
@@ -102,14 +95,6 @@ export default function Warga() {
           <Plus className="h-4 w-4" /><span className="hidden sm:inline">Keluarga baru</span><span className="sm:hidden">KK</span>
         </button>
       </div>
-      <nav aria-label="Menu kelola warga" className="no-scrollbar -mx-3 mb-3 flex gap-1.5 overflow-x-auto px-3 sm:mx-0 sm:flex-wrap sm:px-0">
-        {PINTASAN.map(({ ke, label, Ikon }) => (
-          <button key={ke} type="button" onClick={() => go(ke)}
-            className="flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-gray-300 bg-white px-3 text-xs font-medium text-gray-800 active:bg-gray-50 hover:border-emerald-300">
-            <Ikon className="h-3.5 w-3.5" style={{ color: HIJAU }} />{label}
-          </button>
-        ))}
-      </nav>
       {isLoading && <Memuat />}
       {error && <Pesan jenis="error">{(error as Error).message}</Pesan>}
       {data && <p className="mb-1.5 text-xs text-gray-500">{daftar.length} keluarga</p>}

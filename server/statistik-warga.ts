@@ -3,6 +3,9 @@ import { storage } from "./storage";
 import { cache, CacheKey, TTL } from "./cache";
 import { ringkasKeluarga } from "./wilayah-data";
 import { normalizeNomorHp } from "@shared/kontak";
+import { ACTIVE_RT_NUMBERS } from "@shared/rt";
+import { isoTanggal } from "@shared/wilayah";
+import { faktaKosong, terapkanFaktaKk, terapkanFaktaWarga, type FaktaSubjek } from "@shared/warga-efektif";
 import {
   KATEGORI_DAFTAR,
   daftarKategoriWarga,
@@ -35,15 +38,47 @@ async function singgahPerRt(): Promise<SinggahPerRt[]> {
   }
 }
 
+/** Jawaban Standar data yang berlaku (terverifikasi) dan yang menunggu dicek, per subjek. */
+async function faktaBerlaku(): Promise<{ warga: Map<number, FaktaSubjek>; kk: Map<number, FaktaSubjek> }> {
+  const hasil = { warga: new Map<number, FaktaSubjek>(), kk: new Map<number, FaktaSubjek>() };
+  try {
+    const { rows } = await pool.query(
+      `SELECT subjek, subjek_id, kunci, nilai, to_char(mulai, 'YYYY-MM-DD') AS mulai, status_verifikasi
+         FROM wil_fakta
+        WHERE sampai IS NULL AND status_verifikasi IN ('terverifikasi', 'perlu_cek') AND rt = ANY($1)
+        ORDER BY mulai DESC, id DESC`,
+      [[...ACTIVE_RT_NUMBERS]],
+    );
+    for (const r of rows) {
+      const peta = r.subjek === "kk" ? hasil.kk : hasil.warga;
+      let f = peta.get(r.subjek_id);
+      if (!f) peta.set(r.subjek_id, (f = faktaKosong()));
+      if (r.status_verifikasi === "perlu_cek") {
+        if (!f.perluCek.includes(r.kunci)) f.perluCek.push(r.kunci);
+      } else if (!f.terverifikasi[r.kunci]) {
+        f.terverifikasi[r.kunci] = { nilai: r.nilai, mulai: r.mulai };
+      }
+    }
+  } catch (e) {
+    console.warn("[statistik-warga] fakta Standar data tidak terbaca:", (e as Error).message);
+  }
+  return hasil;
+}
+
+/** KK & warga RT 01–04 dengan nilai efektif (Standar data didahulukan, kolom lama cadangan). */
+export async function dataWargaEfektif() {
+  const [kk, warga, fakta] = await Promise.all([storage.getAllKkPemukiman(), storage.getAllWargaPemukiman(), faktaBerlaku()]);
+  return {
+    kk: kk.map((k) => terapkanFaktaKk(k, fakta.kk.get(k.id))),
+    warga: warga.map((w) => terapkanFaktaWarga(w, fakta.warga.get(w.id))),
+  };
+}
+
 export async function statistikWarga(): Promise<StatistikWarga> {
-  const key = CacheKey.statistikWarga();
+  const key = CacheKey.statistikWarga(isoTanggal(new Date()));
   const cached = cache.get<StatistikWarga>(key);
   if (cached) return cached;
-  const [kk, warga, singgah] = await Promise.all([
-    storage.getAllKkPemukiman(),
-    storage.getAllWargaPemukiman(),
-    singgahPerRt(),
-  ]);
+  const [{ kk, warga }, singgah] = await Promise.all([dataWargaEfektif(), singgahPerRt()]);
   const hasil = hitungStatistikWarga(kk, warga, singgah);
   cache.set(key, hasil, TTL.DASHBOARD);
   return hasil;
@@ -103,7 +138,7 @@ export async function daftarStatistikWarga(kategori: KategoriDaftar, rt: number 
   if (kategori === "singgah") {
     daftar = await daftarSinggah(rt);
   } else {
-    const [kk, warga] = await Promise.all([storage.getAllKkPemukiman(), storage.getAllWargaPemukiman()]);
+    const { kk, warga } = await dataWargaEfektif();
     if (kategori === "belumDiisi" || kategori === "perhatian" || kategori === "kelengkapan") {
       daftar = await daftarStandarData(kategori, daftarKategoriWarga("kk", kk, warga, rt));
     } else {

@@ -11,6 +11,7 @@ import {
 } from "@shared/pekerjaan-labor";
 import { isNomorHpValid, normalizeNomorHp } from "@shared/kontak";
 import { getWargaAge } from "@shared/warga-form-tier";
+import type { KkEfektif, WargaEfektif } from "@shared/warga-efektif";
 
 export const STATUS_WARGA_TERHITUNG = "Aktif";
 
@@ -21,8 +22,8 @@ export function isWargaTerhitung(w: { statusKependudukan?: string | null }): boo
 export const KELOMPOK_UMUR_RINGKAS = [
   { id: "balita", label: "Balita", keterangan: "0–5 th", kategori: ["0-5"] },
   { id: "anak", label: "Anak & pelajar", keterangan: "6–18 th", kategori: ["6", "7-18"] },
-  { id: "produktif", label: "Usia produktif", keterangan: "19–64 th", kategori: ["19-25", "26-40", "41-55", "56-64"] },
-  { id: "lansia", label: "Lansia", keterangan: "65+ th", kategori: ["65+"] },
+  { id: "produktif", label: "Usia produktif", keterangan: "19–59 th", kategori: ["19-25", "26-40", "41-55", "56-59"] },
+  { id: "lansia", label: "Lansia", keterangan: "60+ th", kategori: ["60-64", "65+"] },
   { id: "belum", label: "Usia belum diisi", keterangan: "tanggal lahir kosong", kategori: ["belum_diisi"] },
 ] as const satisfies readonly { id: string; label: string; keterangan: string; kategori: readonly KategoriUmurId[] }[];
 
@@ -32,14 +33,26 @@ export function kelompokUmurRingkas(kategori: KategoriUmurId): KelompokUmurRingk
   return KELOMPOK_UMUR_RINGKAS.find((k) => (k.kategori as readonly string[]).includes(kategori))!.id;
 }
 
-export type StatistikKkSlice = {
+export type StatistikKkSlice = KkEfektif & {
   id: number;
   rt: number;
   penerimaBansos?: boolean | null;
+  layakBansos?: boolean | null;
+  jenisBansos?: string | null;
   alamat?: string | null;
+  noUnit?: string | null;
+  nomorKk?: string | null;
 };
 
-export type StatistikWargaSlice = {
+export type StatistikWargaSlice = WargaEfektif & {
+  statusDisabilitas?: string | null;
+  statusEktp?: string | null;
+  ibuHamil?: boolean | null;
+  punyaBpjsKesehatan?: boolean | null;
+  punyaPenyakitKronis?: boolean | null;
+  penyakitKronis?: string | null;
+  anakYatimPiatu?: boolean | null;
+  sedangKuliah?: boolean | null;
   id?: number;
   namaLengkap?: string | null;
   kkId: number;
@@ -321,7 +334,7 @@ export function hitungStatistikWarga(
   for (const k of kkList) {
     const target = [total, perRt.get(k.rt)!];
     const anggota = anggotaAktif.get(k.id) ?? [];
-    const lansiaSendiri = anggota.length === 1 && getEffectiveKategoriUmur(anggota[0]) === "65+";
+    const lansiaSendiri = anggota.length === 1 && kelompokUmurRingkas(getEffectiveKategoriUmur(anggota[0])) === "lansia";
     const tanpaWa = anggota.length > 0 && !anggota.some((a) => isNomorHpValid(a.nomorWhatsapp));
     for (const t of target) {
       t.kk++;
@@ -350,7 +363,7 @@ export function hitungStatistikWarga(
   const daftarRt = rtList.map((rt) => ({ rt, ...perRt.get(rt)! }));
   return {
     generatedAt: new Date().toISOString(),
-    aturan: { rt: rtList, status: STATUS_WARGA_TERHITUNG, umur: "kategori umur RW 03 (balita 0–5, lansia 65+)" },
+    aturan: { rt: rtList, status: STATUS_WARGA_TERHITUNG, umur: "kategori umur RW 03 (balita 0–5, lansia 60+)" },
     total,
     perRt: daftarRt,
     kategoriUmur,
@@ -413,8 +426,8 @@ export const KATEGORI_DAFTAR = {
   pengangguran: { judul: "Pengangguran", satuan: "orang" },
   balita: { judul: "Balita (0–5)", satuan: "orang" },
   anak: { judul: "Anak & pelajar (6–18)", satuan: "orang" },
-  produktif: { judul: "Usia produktif (19–64)", satuan: "orang" },
-  lansia: { judul: "Lansia (65+)", satuan: "orang" },
+  produktif: { judul: "Usia produktif (19–59)", satuan: "orang" },
+  lansia: { judul: "Lansia (60+)", satuan: "orang" },
   belum: { judul: "Usia belum diisi", satuan: "orang" },
   lansiaSendiri: { judul: "Lansia tinggal sendiri", satuan: "KK" },
   tanpaWa: { judul: "KK tanpa WhatsApp", satuan: "KK" },
@@ -544,7 +557,7 @@ export function daftarKategoriWarga(
     hasil = kkList
       .filter((k) => {
         const anggota = anggotaAktif.get(k.id) ?? [];
-        if (kategori === "lansiaSendiri") return anggota.length === 1 && getEffectiveKategoriUmur(anggota[0]) === "65+";
+        if (kategori === "lansiaSendiri") return anggota.length === 1 && kelompokUmurRingkas(getEffectiveKategoriUmur(anggota[0])) === "lansia";
         if (kategori === "tanpaWa") return anggota.length > 0 && !anggota.some((a) => isNomorHpValid(a.nomorWhatsapp));
         if (kategori === "bansos") return !!k.penerimaBansos;
         return true;

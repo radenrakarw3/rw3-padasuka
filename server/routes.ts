@@ -24,6 +24,9 @@ import {
 } from "./wa-notify";
 import { buildKependudukanStats } from "./kependudukan-stats";
 import { daftarStatistikWarga, statistikWarga } from "./statistik-warga";
+import { startSinkronUmurScheduler } from "./sinkron-umur";
+import { daftarRekapWarga, ringkasanRekapWarga } from "./rekap-warga";
+import { getKategoriRekap } from "@shared/rekap-kategori";
 import { cekWarga, pastikanIndexCekWarga } from "./cek-warga";
 import { isKategoriDaftar, perluNilai } from "@shared/statistik-warga";
 import { ACTIVE_RT_NUMBERS } from "@shared/rt";
@@ -123,6 +126,7 @@ export async function registerRoutes(
   });
   logWaStartupStatus();
   startVisitrw3ReminderScheduler();
+  startSinkronUmurScheduler();
 
   const isProduction = process.env.NODE_ENV === "production";
   if (isProduction) {
@@ -323,6 +327,30 @@ export async function registerRoutes(
     } catch (error: unknown) {
       console.error("[statistik-warga/daftar] error:", error);
       res.status(500).json({ message: "Gagal memuat daftar warga" });
+    }
+  });
+
+  app.get("/api/rekap-warga/ringkasan", requireAdmin, async (_req, res) => {
+    try {
+      res.setHeader("Cache-Control", "private, no-store");
+      res.json(await ringkasanRekapWarga());
+    } catch (error: unknown) {
+      console.error("[rekap-warga/ringkasan] error:", error);
+      res.status(500).json({ message: "Gagal memuat rekap warga" });
+    }
+  });
+
+  app.get("/api/rekap-warga/daftar", requireAdmin, async (req, res) => {
+    const kategori = getKategoriRekap(typeof req.query.kategori === "string" ? req.query.kategori : null);
+    if (!kategori) return res.status(400).json({ message: "Kategori rekap tidak dikenal" });
+    const rtAngka = req.query.rt ? parseInt(String(req.query.rt), 10) : NaN;
+    const rt = (ACTIVE_RT_NUMBERS as readonly number[]).includes(rtAngka) ? rtAngka : null;
+    try {
+      res.setHeader("Cache-Control", "private, no-store");
+      res.json(await daftarRekapWarga(kategori, rt));
+    } catch (error: unknown) {
+      console.error("[rekap-warga/daftar] error:", error);
+      res.status(500).json({ message: "Gagal memuat daftar rekap" });
     }
   });
 

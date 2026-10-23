@@ -8,20 +8,17 @@ import {
   FileText,
   Gavel,
   Home,
-  Inbox,
   LayoutGrid,
   LogOut,
   Megaphone,
   PieChart,
   Search,
   Users,
-  QrCode,
+  Printer,
   Truck,
   UserPen,
   UserSearch,
   ListChecks,
-  ClipboardPen,
-  Printer,
   Receipt,
   ShieldAlert,
   SlidersHorizontal,
@@ -32,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { UiRingkas } from "@/components/wilayah/ui";
 import { useVisitrw3AdminCounts } from "@/hooks/use-visitrw3-admin-counts";
 import { useRingkasanAduan } from "@/hooks/use-aduan-admin";
+import { useKotakMasuk } from "@/lib/kotak-masuk";
 import { VISITRW3_ROUTES } from "@/lib/visitrw3-routes";
 import { RW3BIZ_ROUTES } from "@/lib/rw3biz-routes";
 import logoGold from "@assets/RW3-Cimahi-Logo-Gold@16x_1772999415512.png";
@@ -41,8 +39,8 @@ type NavGroup = { judul?: string; items: NavItem[] };
 
 function isNavActive(location: string, search: string, path: string): boolean {
   const [base, query] = path.split("?");
-  if (base === "/admin/dashboard") return location === base;
-  if (base === "/admin/kelola-warga/warga" && location.startsWith("/admin/kelola-warga/keluarga/")) return true;
+  if (base === "/admin/dashboard" || base === "/admin/kependudukan") return location === base;
+  if (base === "/admin/kelola-warga/warga") return location === "/admin/kelola-warga" || location.startsWith("/admin/kelola-warga/");
   if (query) return location === base && search === query;
   return location === base || location.startsWith(`${base}/`);
 }
@@ -117,13 +115,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const visit = useVisitrw3AdminCounts("visit");
   const biz = useVisitrw3AdminCounts("rw3biz");
   const { data: aduan } = useRingkasanAduan();
+  const { data: kotakMasuk } = useKotakMasuk();
 
   const grup: NavGroup[] = [
     {
       items: [
         { path: "/admin/dashboard", icon: BarChart3, label: "Dashboard" },
         { path: "/admin/cek-warga", icon: UserSearch, label: "Cek Warga" },
-        { path: "/admin/pusat-cetak", icon: Printer, label: "Pusat cetak F4" },
         { path: "/admin/surat-rw", icon: FileText, label: "Surat RW" },
       ],
     },
@@ -164,11 +162,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       judul: "Kependudukan",
       items: [
         { path: "/admin/kependudukan", icon: Users, label: "Ringkasan warga" },
-        { path: "/admin/kelola-warga/warga", icon: UserPen, label: "Data warga & KK" },
-        { path: "/admin/kelola-warga/usulan", icon: Inbox, label: "Isian QR warga" },
-        { path: "/admin/kelola-warga/cetak", icon: QrCode, label: "Cetak untuk warga" },
-        { path: "/admin/kelola-warga/input-kertas", icon: ClipboardPen, label: "Input dari kertas" },
-        { path: "/admin/kelola-warga/pindah", icon: Truck, label: "Pindah RT" },
+        { path: "/admin/kelola-warga/warga", icon: UserPen, label: "Data warga & KK", badge: kotakMasuk?.total },
+        { path: "/admin/kependudukan/rekap", icon: Printer, label: "Rekap & cetak" },
         { path: "/admin/standar-data", icon: ListChecks, label: "Standar data" },
       ],
     },

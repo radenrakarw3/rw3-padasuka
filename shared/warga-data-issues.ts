@@ -3,6 +3,7 @@ import {
   getEffectiveKategoriUmur,
   isKategoriEligiblePengangguran,
   isPekerjaanSalahUntukKategori,
+  KATEGORI_UMUR_IDS,
   pekerjaanWajibUntukKategori,
   resolveKategoriUmur,
   type KategoriUmurId,
@@ -22,6 +23,7 @@ import {
   PEKERJAAN_PENSIUNAN,
 } from "@shared/pekerjaan-status";
 import { getWargaAge } from "@shared/warga-form-tier";
+import type { WargaEfektif } from "@shared/warga-efektif";
 import {
   needsPekerjaanDetail,
   needsStatusAngkatanKerja,
@@ -34,7 +36,8 @@ export type WargaDataIssueId =
   | "pekerjaan_tidak_standar"
   | "pekerjaan_salah_kategori"
   | "tanpa_status_pekerjaan"
-  | "status_pekerjaan_tidak_selaras";
+  | "status_pekerjaan_tidak_selaras"
+  | "status_lama_naik_usia";
 
 export type WargaDataIssueDef = {
   id: WargaDataIssueId;
@@ -79,6 +82,11 @@ export const WARGA_DATA_ISSUE_DEFS: WargaDataIssueDef[] = [
     label: "Pekerjaan tidak sesuai kategori umur",
     hint: "Usia 0–6 «Bimbingan Orang Tua»; 7–18 «Pelajar»; 65+ «Pensiunan»",
   },
+  {
+    id: "status_lama_naik_usia",
+    label: "Status lama setelah naik usia",
+    hint: "19+ masih «Pelajar» tanpa keterangan kuliah, atau 7+ masih «Bimbingan Orang Tua» — cek status sekarang",
+  },
 ];
 
 export type WargaIssueSlice = {
@@ -93,7 +101,28 @@ export type WargaIssueSlice = {
   pekerjaan?: string | null;
   statusPekerjaan?: string | null;
   nomorWhatsapp?: string | null;
+  sedangKuliah?: boolean | null;
+  /** Jawaban Standar data yang berlaku (mis. s_status_sekolah = "kuliah"). */
+  fakta?: Record<string, { nilai: string }>;
+  sumber?: WargaEfektif["sumber"];
 };
+
+/**
+ * Status yang tertinggal dari data lama setelah warga bertambah umur:
+ * 19+ masih «Pelajar» tanpa keterangan kuliah, atau 7+ masih «Bimbingan Orang Tua».
+ * Jawaban Standar data dianggap sengaja (mahasiswa memang «Pelajar / mahasiswa»).
+ */
+export function isStatusLamaNaikUsia(w: Pick<WargaIssueSlice, "tanggalLahir" | "pekerjaan" | "statusPekerjaan" | "sedangKuliah" | "fakta" | "sumber">): boolean {
+  if (w.sumber?.pekerjaan?.asal === "standar") return false;
+  const age = getWargaAge(w.tanggalLahir);
+  if (age === null || age < 7) return false;
+  const status = w.statusPekerjaan?.trim() ?? "";
+  const label = normalizePekerjaanLabelForStats(w.pekerjaan);
+  if (status === PEKERJAAN_BIMBINGAN_ORANG_TUA || (!status && label === PEKERJAAN_BIMBINGAN_ORANG_TUA)) return true;
+  if (age < 19) return false;
+  const pelajar = status === "Pelajar" || (!status && label === PEKERJAAN_PELAJAR);
+  return pelajar && !w.sedangKuliah && w.fakta?.s_status_sekolah?.nilai !== "kuliah";
+}
 
 const ISSUE_LABEL_SHORT: Record<WargaDataIssueId, string> = {
   tanpa_tanggal_lahir: "Tanggal lahir",
@@ -103,6 +132,7 @@ const ISSUE_LABEL_SHORT: Record<WargaDataIssueId, string> = {
   tanpa_pekerjaan: "Pekerjaan kosong",
   pekerjaan_tidak_standar: "Pekerjaan non-standar",
   pekerjaan_salah_kategori: "Pekerjaan tidak sesuai usia",
+  status_lama_naik_usia: "Status lama naik usia",
 };
 
 export type WargaWithIssues = WargaIssueSlice & {
@@ -187,6 +217,7 @@ export function detectWargaDataIssues(w: WargaIssueSlice): WargaDataIssueId[] {
       issues.push("pekerjaan_salah_kategori");
     }
   }
+  if (isStatusLamaNaikUsia(w)) issues.push("status_lama_naik_usia");
 
   return issues;
 }
@@ -200,18 +231,9 @@ export function buildWargaDataIssueReport(rows: WargaIssueSlice[]) {
     tanpa_pekerjaan: 0,
     pekerjaan_tidak_standar: 0,
     pekerjaan_salah_kategori: 0,
+    status_lama_naik_usia: 0,
   };
-  const perKategori: Record<KategoriUmurId, number> = {
-    "0-5": 0,
-    "6": 0,
-    "7-18": 0,
-    "19-25": 0,
-    "26-40": 0,
-    "41-55": 0,
-    "56-64": 0,
-    "65+": 0,
-    belum_diisi: 0,
-  };
+  const perKategori = Object.fromEntries(KATEGORI_UMUR_IDS.map((id) => [id, 0])) as Record<KategoriUmurId, number>;
 
   const flagged: WargaWithIssues[] = [];
   for (const row of rows) {

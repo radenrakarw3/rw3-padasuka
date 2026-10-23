@@ -1,5 +1,4 @@
-import { Link } from "wouter";
-import { PenLine, Printer } from "lucide-react";
+import { PenLine } from "lucide-react";
 
 const TAUTAN = {
   visit: [
@@ -17,9 +16,6 @@ export function TombolIsiPetugas({ product }: { product: "visit" | "rw3biz" }) {
       {TAUTAN[product].map((t) => (
         <a key={t.href} href={t.href} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center rounded-md border bg-white px-3 font-medium hover:bg-muted sm:min-h-0 sm:px-2.5 sm:py-1">{t.label}</a>
       ))}
-      <Link href={`/admin/pusat-cetak?item=${product === "rw3biz" ? "form-usaha" : "form-kost"}`} className="inline-flex min-h-10 items-center gap-1 rounded-md px-2 text-muted-foreground hover:underline sm:min-h-0 sm:py-1">
-        <Printer className="h-4 w-4" /> Cetak formulir kosong
-      </Link>
     </div>
   );
 }

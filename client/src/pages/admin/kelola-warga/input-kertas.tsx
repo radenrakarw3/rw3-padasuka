@@ -167,7 +167,7 @@ export default function InputKertas() {
 
   return (
     <div className="space-y-4">
-      <Judul kembali={() => go("/warga")} sub={`${rt2(rt)} · urutan sama dengan formulir kertas`}>Input dari kertas</Judul>
+      <Judul sub={`${rt2(rt)} · urutan sama dengan formulir kertas`}>Input dari kertas</Judul>
       {terakhir && <Pesan jenis="sukses">{terakhir} Lanjut ke formulir berikutnya.</Pesan>}
       {!detail && (
         <div className="rounded-2xl border bg-white p-4">

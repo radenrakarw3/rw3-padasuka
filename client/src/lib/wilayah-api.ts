@@ -55,7 +55,7 @@ export async function wil<T = any>(path: string, opsi: Opsi = {}): Promise<T> {
 
 /** Angka warga di Dashboard & Kependudukan dihitung dari data yang baru saja bisa berubah. */
 export function segarkanStatistikWarga() {
-  for (const key of ["/api/statistik-warga", "/api/warga-with-kk", "/api/wilayah/rw/ringkasan", "/api/stats/kependudukan"]) {
+  for (const key of ["/api/statistik-warga", "/api/warga-with-kk", "/api/wilayah/rw/ringkasan", "/api/stats/kependudukan", "/api/wilayah/rw/kotak-masuk", "/api/rekap-warga/ringkasan", "/api/rekap-warga/daftar"]) {
     queryClient.invalidateQueries({ queryKey: [key] });
   }
 }

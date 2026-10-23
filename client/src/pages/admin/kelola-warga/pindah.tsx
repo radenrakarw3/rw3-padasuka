@@ -1,15 +1,17 @@
 import { useState } from "react";
-import { useLocation, useSearch } from "wouter";
+import { Redirect, useLocation, useSearch } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useKirimSekali, wil } from "@/lib/wilayah-api";
 import { useRtKelola } from "./konteks";
-import { WILAYAH_RT_NUMBERS } from "@shared/wilayah";
+import { ACTIVE_RT_NUMBERS } from "@shared/rt";
 import { BarisRingkas, IsianTeks, Judul, Langkah, Memuat, Pesan, PilihTombol, TombolBesar, rt2 } from "@/components/wilayah/ui";
 
 interface Serah {
   id: number; jenis: string; kk_id: number; warga_id: number | null; rt_asal: number; rt_tujuan: number; alasan: string | null; status: string;
   nama_warga: string | null; kepala: string | null; anggota: number; arah: "masuk" | "keluar";
 }
+
+const STATUS_PINDAH: Record<string, string> = { diajukan: "menunggu keputusan", diterima: "diterima", ditolak: "ditolak", dibatalkan: "dibatalkan" };
 
 function Ajukan({ kkId, selesai, batal }: { kkId: number; selesai: () => void; batal: () => void }) {
   const rtKelola = useRtKelola();
@@ -33,7 +35,7 @@ function Ajukan({ kkId, selesai, batal }: { kkId: number; selesai: () => void; b
             pilihan={(data?.anggota ?? []).map((a) => ({ nilai: String(a.id), label: a.nama }))} />
         )}
         <PilihTombol label="Pindah ke RT" belumTahu={false} kolom={3} nilai={rtTujuan ? String(rtTujuan) : null} onChange={(v) => setRtTujuan(v ? Number(v) : null)}
-          pilihan={WILAYAH_RT_NUMBERS.filter((n) => n !== rtKelola).map((n) => ({ nilai: String(n), label: rt2(n) }))} />
+          pilihan={ACTIVE_RT_NUMBERS.filter((n) => n !== rtKelola).map((n) => ({ nilai: String(n), label: rt2(n) }))} />
         <IsianTeks label="Keterangan (boleh kosong)" nilai={alasan} onChange={setAlasan} />
       </Langkah>
     );
@@ -77,32 +79,47 @@ function Terima({ s, selesai }: { s: Serah; selesai: () => void }) {
   );
 }
 
-export default function Pindah() {
-  const [, go] = useLocation();
-  const params = new URLSearchParams(useSearch());
-  const kk = params.get("kk");
+function useSegarPindah() {
   const qc = useQueryClient();
-  const [ajukan, setAjukan] = useState(!!kk);
-  const [info, setInfo] = useState<string | null>(null);
-  const { data, isLoading, error } = useQuery<Serah[]>({ queryKey: ["/api/wilayah/serah-terima"], queryFn: () => wil("/api/wilayah/serah-terima") });
-  const segar = async (p: string) => {
+  return async () => {
     await qc.invalidateQueries({ queryKey: ["/api/wilayah/serah-terima"] });
     await qc.invalidateQueries({ queryKey: ["/api/wilayah/keluarga"] });
-    setAjukan(false);
+  };
+}
+
+/** Ajukan pindah RT untuk satu keluarga — dibuka dari tombol «Pindah RT» di halaman keluarga. */
+export default function Pindah() {
+  const [, go] = useLocation();
+  const kk = new URLSearchParams(useSearch()).get("kk");
+  const segar = useSegarPindah();
+  if (!kk) return <Redirect to="/masuk" />;
+  return (
+    <div>
+      <Judul kembali={() => go(`/keluarga/${kk}`)}>Pindah RT</Judul>
+      <Ajukan kkId={Number(kk)} batal={() => go(`/keluarga/${kk}`)} selesai={async () => { await segar(); go("/masuk?info=pindah"); }} />
+    </div>
+  );
+}
+
+/** Permintaan pindah RT masuk (perlu diterima) dan pengajuan keluar, untuk tab Kotak masuk. */
+export function DaftarPindah() {
+  const segarData = useSegarPindah();
+  const [info, setInfo] = useState<string | null>(new URLSearchParams(useSearch()).get("info") === "pindah" ? "Pengajuan pindah terkirim." : null);
+  const { data, isLoading, error } = useQuery<Serah[]>({ queryKey: ["/api/wilayah/serah-terima"], queryFn: () => wil("/api/wilayah/serah-terima") });
+  const segar = async (p: string) => {
+    await segarData();
     setInfo(p);
   };
-  if (ajukan && kk) return <div><Judul kembali={() => go(`/keluarga/${kk}`)}>Pindah RT</Judul><Ajukan kkId={Number(kk)} batal={() => go(`/keluarga/${kk}`)} selesai={() => segar("Pengajuan pindah terkirim.")} /></div>;
   return (
-    <div className="space-y-4">
-      <Judul kembali={() => go("/warga")}>Pindah RT</Judul>
+    <div className="space-y-3">
       {info && <Pesan jenis="sukses">{info}</Pesan>}
-      <Pesan>Untuk mengajukan pindah, buka keluarga di menu Warga lalu pilih “Pindah ke RT lain”.</Pesan>
       {isLoading && <Memuat />}
       {error && <Pesan jenis="error">{(error as Error).message}</Pesan>}
+      {data?.length === 0 && <Pesan>Belum ada permintaan pindah. Untuk mengajukan, buka keluarga lalu pilih «Pindah RT».</Pesan>}
       {data?.map((s) => (
         <div key={s.id} className="bg-white rounded-2xl border-2 border-gray-200 p-4">
           <p className="text-lg font-semibold">{s.jenis === "kk" ? `Keluarga ${s.kepala ?? ""} (${s.anggota} orang)` : s.nama_warga}</p>
-          <p className="text-base text-gray-600">{s.arah === "masuk" ? `Dari ${rt2(s.rt_asal)}` : `Ke ${rt2(s.rt_tujuan)}`} · {s.status}</p>
+          <p className="text-base text-gray-600">{s.arah === "masuk" ? `Masuk dari ${rt2(s.rt_asal)}` : `Keluar ke ${rt2(s.rt_tujuan)}`} · {STATUS_PINDAH[s.status] ?? s.status}</p>
           {s.status === "diajukan" && s.arah === "masuk" && <Terima s={s} selesai={() => segar("Keputusan tersimpan.")} />}
           {s.status === "diajukan" && s.arah === "keluar" && (
             <div className="mt-2"><TombolBesar varian="bahaya" onClick={async () => {

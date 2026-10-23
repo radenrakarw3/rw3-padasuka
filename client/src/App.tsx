@@ -41,6 +41,7 @@ const Rw3bizPerpanjang = lazy(() => import("@/pages/rw3biz/perpanjang"));
 const AdminLayout = lazy(() => import("@/components/admin-layout"));
 
 const AdminKependudukanRingkasan = lazy(() => import("@/pages/admin/kependudukan-ringkasan"));
+const AdminKependudukanRekap = lazy(() => import("@/pages/admin/kependudukan-rekap"));
 const AdminKelolaWarga = lazy(() => import("@/pages/admin/kelola-warga"));
 
 const AdminSuratRw = lazy(() => import("@/pages/admin/surat-rw"));
@@ -48,7 +49,6 @@ const AdminSuratSakti = lazy(() => import("@/pages/admin/surat-sakti"));
 const AdminRwDashboard = lazy(() => import("@/pages/admin/rw-dashboard"));
 const AdminStandarData = lazy(() => import("@/pages/admin/standar-data"));
 const AdminCekWarga = lazy(() => import("@/pages/admin/cek-warga"));
-const AdminPusatCetak = lazy(() => import("@/pages/admin/pusat-cetak"));
 const PublicIsi = lazy(() => import("@/pages/public/isi"));
 
 const AdminVisitrw3Landing = lazy(() => import("@/pages/admin/visitrw3-landing"));
@@ -310,6 +310,7 @@ function AdminRoutes() {
         <Suspense fallback={<AdminRouteFallback />}>
           <Switch>
 
+        <Route path="/admin/kependudukan/rekap" component={AdminKependudukanRekap} />
         <Route path="/admin/kependudukan" component={AdminKependudukanRingkasan} />
         <Route path="/admin/kelola-warga/*" component={AdminKelolaWarga} />
         <Route path="/admin/kelola-warga" component={AdminKelolaWarga} />
@@ -320,8 +321,6 @@ function AdminRoutes() {
         <Route path="/admin/dashboard" component={AdminRwDashboard} />
         <Route path="/admin/standar-data" component={AdminStandarData} />
         <Route path="/admin/cek-warga" component={AdminCekWarga} />
-        <Route path="/admin/pusat-cetak" component={AdminPusatCetak} />
-
         <Route path="/admin/surat-rw-lama" component={AdminSuratRw} />
         <Route path="/admin/surat-rw" component={AdminSuratSakti} />
 

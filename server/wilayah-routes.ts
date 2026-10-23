@@ -7,7 +7,7 @@ import * as standar from "./wilayah-standar";
 import * as surat from "./wilayah-surat";
 import * as layanan from "./surat-sakti/layanan";
 import * as tindak from "./surat-sakti/tindak";
-import { ringkasanRw } from "./wilayah-dashboard";
+import { kotakMasukRw, ringkasanRw } from "./wilayah-dashboard";
 import { isWilayahRt, type SubjekFakta } from "@shared/wilayah";
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
@@ -101,6 +101,7 @@ export function registerWilayahRoutes(app: Express) {
   // ------------------------------------------------------------------ khusus Ketua RW
   const RW = requireRwWilayah;
   app.get("/api/wilayah/rw/ringkasan", RW, h(async () => ringkasanRw(), "Gagal memuat dashboard"));
+  app.get("/api/wilayah/rw/kotak-masuk", RW, h(async () => kotakMasukRw()));
   app.post("/api/wilayah/rw/standar", RW, h(async (req) => standar.tambahStandar(req.aktor!, standar.inputStandarSchema.parse(req.body))));
   app.patch("/api/wilayah/rw/standar/:id", RW, h(async (req) => standar.ubahStandar(req.aktor!, idParam(req), standar.inputStandarSchema.parse(req.body))));
   app.delete("/api/wilayah/rw/standar/:id", RW, h(async (req) => standar.aturAktifStandar(req.aktor!, idParam(req), false)));

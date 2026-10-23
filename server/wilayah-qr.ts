@@ -9,6 +9,7 @@ import QRCode from "qrcode";
 import { z } from "zod";
 import { pool } from "./db";
 import { invalidateWarga } from "./cache";
+import { kolomUmur } from "./sinkron-umur";
 import { catatAudit, WilayahError, type Aktor } from "./wilayah-auth";
 import { denganTransaksi, detailKeluarga, indukKeluarga, ringkasKeluarga, simpanFakta } from "./wilayah-data";
 import { registri, standarAktif } from "./wilayah-standar";
@@ -516,7 +517,8 @@ export async function putuskanUsulan(aktor: Aktor, id: number, input: unknown) {
     }
     for (const t of d.tanggalLahir) {
       if (!idAnggota.has(t.wargaId)) throw new WilayahError(400, "Anggota tidak valid");
-      await c.query(`UPDATE warga SET tanggal_lahir = $2 WHERE id = $1`, [t.wargaId, t.tanggalLahir]);
+      const umur = kolomUmur(t.tanggalLahir);
+      await c.query(`UPDATE warga SET tanggal_lahir = $2, kategori_umur = $3, lansia = $4 WHERE id = $1`, [t.wargaId, t.tanggalLahir, umur.kategori_umur, umur.lansia]);
       await catatAudit(aktor, "ubah", "warga", t.wargaId, rt, null, { tanggalLahir: t.tanggalLahir, sumber: `usulan #${id}` }, c);
       n++;
     }

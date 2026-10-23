@@ -131,7 +131,7 @@ function Periksa({ id }: { id: number }) {
     const cocokKk = (daftarKk ?? []).filter((k) => !q || (k.kepala ?? "").toLowerCase().includes(q) || k.alamat.toLowerCase().includes(q)).slice(0, 20);
     return (
       <div className="space-y-4">
-        <Judul kembali={() => go("/usulan")} sub={`${asal} · ${new Date(usulan.dibuat).toLocaleDateString("id-ID")}`}>Keluarga belum terdaftar</Judul>
+        <Judul kembali={() => go("/masuk")} sub={`${asal} · ${new Date(usulan.dibuat).toLocaleDateString("id-ID")}`}>Keluarga belum terdaftar</Judul>
         <Pesan>
           Alamat: <b>{kb?.alamat}{kb?.noUnit ? ` No. ${kb.noUnit}` : ""}</b><br />
           Anggota: {usulan.isi.anggota.map((a) => `${a.nama} (${a.hubungan})`).join(", ")}
@@ -167,7 +167,7 @@ function Periksa({ id }: { id: number }) {
                 <IsianPanjang label="Pesan untuk keluarga (wajib)" nilai={catatan} onChange={setCatatan} />
                 {error && <Pesan jenis="error">{error}</Pesan>}
                 <BilahAksiAdmin>
-                  <TombolBesar memuat={mengirim} disabled={catatan.trim().length < 3} onClick={async () => { const r = await kirim(); if (r) go("/usulan"); }}>Simpan keputusan</TombolBesar>
+                  <TombolBesar memuat={mengirim} disabled={catatan.trim().length < 3} onClick={async () => { const r = await kirim(); if (r) go("/masuk"); }}>Simpan keputusan</TombolBesar>
                 </BilahAksiAdmin>
               </>
             )}
@@ -181,7 +181,7 @@ function Periksa({ id }: { id: number }) {
 
   return (
     <div className="space-y-4">
-      <Judul kembali={() => go("/usulan")} sub={`${asal} · ${new Date(usulan.dibuat).toLocaleDateString("id-ID")}`}>Periksa isian warga</Judul>
+      <Judul kembali={() => go("/masuk")} sub={`${asal} · ${new Date(usulan.dibuat).toLocaleDateString("id-ID")}`}>Periksa isian warga</Judul>
       {keluargaBaru && (
         <Pesan jenis="peringatan">
           Isian dicocokkan ke KK yang dipilih/didaftarkan. Setelah diterima, tambahkan anggotanya (dengan NIK) di halaman keluarga.{" "}
@@ -221,7 +221,7 @@ function Periksa({ id }: { id: number }) {
           {error && <Pesan jenis="error">{error}</Pesan>}
           <BilahAksiAdmin>
             <TombolBesar memuat={mengirim} disabled={aksi !== "terima" && catatan.trim().length < 3}
-              onClick={async () => { const r = await kirim(); if (r) go(aksi === "terima" ? `/keluarga/${kkTujuan}${keluargaBaru ? "?langkah=anggota" : ""}` : "/usulan"); }}>
+              onClick={async () => { const r = await kirim(); if (r) go(aksi === "terima" ? `/keluarga/${kkTujuan}${keluargaBaru ? "?langkah=anggota" : ""}` : "/masuk"); }}>
               Simpan keputusan
             </TombolBesar>
           </BilahAksiAdmin>
@@ -231,22 +231,25 @@ function Periksa({ id }: { id: number }) {
   );
 }
 
-export default function Usulan({ id }: { id?: number }) {
+export default function Usulan({ id }: { id: number }) {
+  return <Periksa id={id} />;
+}
+
+/** Daftar isian QR / formulir warga untuk tab Kotak masuk. */
+export function DaftarUsulan() {
   const [, go] = useLocation();
   const [status, setStatus] = useState("menunggu");
   const { data, isLoading, error } = useQuery<{ id: number; kepala: string | null; alamat: string; pengisi: string; status: string; created_at: string; sumber: string; keluarga_baru: boolean }[]>({
-    queryKey: ["/api/wilayah/rt/usulan", status], queryFn: () => wil(`/api/wilayah/rt/usulan?status=${status}`), enabled: !id,
+    queryKey: ["/api/wilayah/rt/usulan", status], queryFn: () => wil(`/api/wilayah/rt/usulan?status=${status}`),
   });
-  if (id) return <Periksa id={id} />;
   return (
-    <div className="space-y-4">
-      <Judul kembali={() => go("/warga")}>Isian warga</Judul>
+    <div className="space-y-3">
       <PilihTombol label="Tampilkan" belumTahu={false} nilai={status} onChange={(v) => v && setStatus(v)}
         pilihan={[{ nilai: "menunggu", label: "Perlu diperiksa" }, { nilai: "semua", label: "Semua" }]} />
       {isLoading && <Memuat />}
       {error && <Pesan jenis="error">{(error as Error).message}</Pesan>}
-      {data?.length === 0 && <Pesan jenis="sukses">Tidak ada isian yang menunggu.</Pesan>}
-      <ul className="bg-white rounded-2xl border-2 border-gray-200 divide-y-2 divide-gray-100">
+      {data?.length === 0 && <Pesan jenis="sukses">{status === "menunggu" ? "Tidak ada isian yang menunggu." : "Belum ada isian warga."}</Pesan>}
+      {!!data?.length && <ul className="bg-white rounded-2xl border-2 border-gray-200 divide-y-2 divide-gray-100">
         {data?.map((u) => (
           <li key={u.id}>
             <button type="button" onClick={() => go(`/usulan/${u.id}`)} className="w-full min-h-[72px] px-3 py-3 flex items-center gap-3 text-left active:bg-gray-50 sm:px-4">
@@ -261,7 +264,7 @@ export default function Usulan({ id }: { id?: number }) {
             </button>
           </li>
         ))}
-      </ul>
+      </ul>}
     </div>
   );
 }

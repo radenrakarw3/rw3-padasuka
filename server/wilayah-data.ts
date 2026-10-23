@@ -6,6 +6,7 @@ import type { PoolClient } from "pg";
 import { pool } from "./db";
 import { invalidateKk, invalidateWarga } from "./cache";
 import { catatAudit, WilayahError, type Aktor } from "./wilayah-auth";
+import { kolomUmur } from "./sinkron-umur";
 import { registri, standarAktif } from "./wilayah-standar";
 import {
   berlakuUntukWarga,
@@ -440,11 +441,12 @@ export async function tambahWarga(aktor: Aktor, kkId: number, input: unknown) {
   if (ada[0]) {
     throw new WilayahError(409, ada[0].rt === rt ? "NIK ini sudah tercatat di RT Anda" : "NIK ini sudah tercatat di RT lain. Gunakan serah-terima pindah RT, jangan membuat data ganda.");
   }
+  const umur = kolomUmur(d.tanggalLahir);
   return denganTransaksi(async (c) => {
     const { rows } = await c.query(
-      `INSERT INTO warga (kk_id, nama_lengkap, nik, jenis_kelamin, tanggal_lahir, kedudukan_keluarga, status_perkawinan, nomor_whatsapp, status_kependudukan)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Aktif') RETURNING id`,
-      [kkId, d.nama, d.nik, d.jenisKelamin, d.tanggalLahir ?? null, d.kedudukan, d.statusPerkawinan, hp],
+      `INSERT INTO warga (kk_id, nama_lengkap, nik, jenis_kelamin, tanggal_lahir, kedudukan_keluarga, status_perkawinan, nomor_whatsapp, status_kependudukan, kategori_umur, lansia)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Aktif', $9, $10) RETURNING id`,
+      [kkId, d.nama, d.nik, d.jenisKelamin, d.tanggalLahir ?? null, d.kedudukan, d.statusPerkawinan, hp, umur.kategori_umur, umur.lansia],
     );
     await c.query(`UPDATE kartu_keluarga SET jumlah_penghuni = (SELECT COUNT(*) FROM warga WHERE kk_id = $1) WHERE id = $1`, [kkId]);
     await catatAudit(aktor, "tambah", "warga", rows[0].id, rt, null, { nama: d.nama, kkId }, c);
@@ -461,7 +463,7 @@ export async function ubahWarga(aktor: Aktor, wargaId: number, input: unknown) {
   const kolom: Record<string, unknown> = {};
   if (d.nama !== undefined) kolom.nama_lengkap = d.nama;
   if (d.jenisKelamin !== undefined) kolom.jenis_kelamin = d.jenisKelamin;
-  if (d.tanggalLahir !== undefined) kolom.tanggal_lahir = d.tanggalLahir;
+  if (d.tanggalLahir !== undefined) Object.assign(kolom, { tanggal_lahir: d.tanggalLahir }, kolomUmur(d.tanggalLahir));
   if (d.kedudukan !== undefined) kolom.kedudukan_keluarga = d.kedudukan;
   if (d.statusPerkawinan !== undefined) kolom.status_perkawinan = d.statusPerkawinan;
   if (d.status !== undefined) kolom.status_kependudukan = d.status;
@@ -555,7 +557,7 @@ export async function simpanFakta(aktor: Aktor, input: unknown, q?: PoolClient) 
     await catatAudit(aktor, d.nilai == null ? "kosongkan_fakta" : "catat_fakta", d.subjek, d.subjekId, rt, sebelum ? { [d.kunci]: sebelum.nilai } : null, { [d.kunci]: d.nilai, mulai, sumber }, c);
     return { id, tidakBerubah: false };
   };
-  return q ? jalankan(q) : denganTransaksi(jalankan);
+  return q ? jalankan(q) : denganTransaksi(jalankan).finally(invalidateWarga);
 }
 
 /** Simpan banyak jawaban sekaligus (satu form bertahap = satu transaksi). */
@@ -565,7 +567,7 @@ export async function simpanBanyakFakta(aktor: Aktor, input: unknown) {
     const hasil = [];
     for (const item of list) hasil.push(await simpanFakta(aktor, item, c));
     return { disimpan: hasil.filter((h) => !h.tidakBerubah).length, tidakBerubah: hasil.filter((h) => h.tidakBerubah).length };
-  });
+  }).finally(invalidateWarga);
 }
 
 export async function putuskanFaktaPerluCek(aktor: Aktor, faktaId: number, terima: boolean) {
@@ -581,7 +583,7 @@ export async function putuskanFaktaPerluCek(aktor: Aktor, faktaId: number, terim
       await catatAudit(aktor, "tolak_fakta", f.subjek, f.subjek_id, rt, { [f.kunci]: f.nilai }, null, c);
     }
     return { ok: true };
-  });
+  }).finally(invalidateWarga);
 }
 
 export async function riwayatSubjek(aktor: Aktor, subjek: SubjekFakta, id: number) {

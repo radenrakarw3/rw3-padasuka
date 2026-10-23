@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useLocation, useSearch } from "wouter";
+import { useSearch } from "wouter";
 import { ClipboardList, FileText, Printer, QrCode } from "lucide-react";
 import { wil } from "@/lib/wilayah-api";
 import { useRtKelola } from "./konteks";
@@ -89,13 +89,12 @@ function Rekap({ paket, rt }: { paket: PaketKk[]; rt: number | null }) {
           ))}
         </tbody>
       </table>
-      <p style={{ fontSize: "8pt", marginTop: "2mm" }}>Kolom "Data" = kelengkapan data saat dicetak. Formulir yang kembali diinput di Kependudukan › Input dari kertas.</p>
+      <p style={{ fontSize: "8pt", marginTop: "2mm" }}>Kolom "Data" = kelengkapan data saat dicetak. Formulir yang kembali diinput di Kependudukan › Data warga & KK › Input kertas.</p>
     </AlirF4>
   );
 }
 
 export default function Cetak() {
-  const [, go] = useLocation();
   const params = new URLSearchParams(useSearch());
   const rtKelola = useRtKelola();
   const kkParam = params.get("kk");
@@ -134,7 +133,7 @@ export default function Cetak() {
     <div>
       <GayaCetakF4 margin={mode === "kartu" ? MARGIN_KARTU : undefined} />
       <div className="print:hidden space-y-4">
-        <Judul kembali={() => go("/warga")} sub={`${rt2(rtKelola)} · kertas F4`}>Cetak untuk warga</Judul>
+        <Judul sub={`${rt2(rtKelola)} · kertas F4`}>Bahan pendataan untuk warga</Judul>
         <PilihTombol label="Yang dicetak" belumTahu={false} nilai={mode} onChange={(v) => v && setMode(v as Mode)} pilihan={MODE} kolom={1} />
         <Pesan>{KETERANGAN[mode]}</Pesan>
         {mode === "paket" && (

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { ExternalLink, MessageCircle, PhoneOff, QrCode, Search } from "lucide-react";
+import { ExternalLink, MessageCircle, PhoneOff, Printer, QrCode, Search } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { toWaMeUrl } from "@/lib/wa";
 import { jalurKelolaRt } from "@/pages/admin/kelola-warga/konteks";
 import { ACTIVE_RT_NUMBERS } from "@shared/rt";
 import { judulDaftar, type DaftarKategori, type KategoriDaftar, type PilihanDaftar } from "@shared/statistik-warga";
+import { KATEGORI_DAFTAR_KE_REKAP } from "@shared/rekap-kategori";
 
 const HIJAU = "hsl(163,55%,22%)";
 const EMAS = "hsl(40,45%,55%)";
@@ -73,7 +74,12 @@ function IsiDaftar({ kategori, nilai, rtAwal, onTutup }: { kategori: KategoriDaf
   const ajakLengkapi = KATEGORI_LENGKAPI.includes(kategori);
   const cetak = (rtNo: number, kkIds: number[]) => {
     onTutup();
-    go(jalurKelolaRt(rtNo, `/cetak?mode=paket&kk=${kkIds.slice(0, MAKS_CETAK).join(",")}`));
+    go(`/admin/kependudukan/rekap?tab=bahan&rt=${rtNo}&mode=paket&kk=${kkIds.slice(0, MAKS_CETAK).join(",")}`);
+  };
+  const rekap = KATEGORI_DAFTAR_KE_REKAP[kategori];
+  const cetakDaftar = () => {
+    onTutup();
+    go(`/admin/kependudukan/rekap?tab=daftar&kategori=${rekap}${rt != null ? `&rt=${rt}` : ""}`);
   };
 
   return (
@@ -102,6 +108,12 @@ function IsiDaftar({ kategori, nilai, rtAwal, onTutup }: { kategori: KategoriDaf
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
         <Input value={cari} onChange={(e) => { setCari(e.target.value); setBatas(PER_HALAMAN); }} placeholder="Cari nama atau alamat…" className="pl-9" />
       </div>
+
+      {rekap && data && data.daftar.length > 0 && (
+        <Button variant="outline" className="w-full" onClick={cetakDaftar}>
+          <Printer className="mr-1.5 h-4 w-4" />Cetak daftar ini untuk verifikasi RT
+        </Button>
+      )}
 
       {data && kkPerRt.length > 0 && (
         <div className={`rounded-xl border p-2.5 ${ajakLengkapi ? "border-emerald-200 bg-emerald-50/60" : "border-gray-200 bg-gray-50"}`}>

@@ -1,6 +1,6 @@
 /**
  * SSOT kategori umur warga RW 03 — master data yang mengindukkan aturan pekerjaan & statistik.
- * Disimpan di kolom warga.kategori_umur, dihitung ulang dari tanggal_lahir setiap simpan.
+ * Disimpan di kolom warga.kategori_umur, dihitung ulang dari tanggal_lahir setiap simpan dan setiap hari (server/sinkron-umur.ts).
  */
 
 import { getWargaAge } from "@shared/warga-form-tier";
@@ -23,17 +23,26 @@ export const KATEGORI_UMUR_IDS = [
   "19-25",
   "26-40",
   "41-55",
-  "56-64",
+  "56-59",
+  "60-64",
   "65+",
   "belum_diisi",
 ] as const;
 
 export type KategoriUmurId = (typeof KATEGORI_UMUR_IDS)[number];
 
+/** Lansia mulai 60 tahun (UU 13/1998, Posyandu Lansia). Pensiunan wajib tetap mulai 65. */
+export const UMUR_LANSIA = 60;
+
+export function isUmurLansia(age: number | null): boolean {
+  return age !== null && age >= UMUR_LANSIA;
+}
+
 /** ID kategori deprecated — masih bisa ada di DB lama. */
 const LEGACY_KATEGORI_ALIASES: Record<string, KategoriUmurId> = {
   "6-17": "7-18",
   "18-25": "19-25",
+  "56-64": "56-59",
 };
 
 export type KategoriUmurDef = {
@@ -194,10 +203,24 @@ export const KATEGORI_UMUR_MASTER: readonly KategoriUmurDef[] = [
     isPensiunan: false,
   },
   {
-    id: "56-64",
+    id: "56-59",
     label: "Pra-Lansia",
-    shortLabel: "56–64 th",
+    shortLabel: "56–59 th",
     minAge: 56,
+    maxAge: 59,
+    defaultPekerjaan: null,
+    pekerjaanDisarankan: [],
+    hitungPengangguran: true,
+    isAnakRemaja: false,
+    isBimbinganOrangTua: false,
+    isPelajar: false,
+    isPensiunan: false,
+  },
+  {
+    id: "60-64",
+    label: "Lansia Muda",
+    shortLabel: "60–64 th",
+    minAge: 60,
     maxAge: 64,
     defaultPekerjaan: null,
     pekerjaanDisarankan: ["Pensiunan"],
@@ -209,7 +232,7 @@ export const KATEGORI_UMUR_MASTER: readonly KategoriUmurDef[] = [
   },
   {
     id: "65+",
-    label: "Lansia",
+    label: "Lansia 65+",
     shortLabel: "65+ th",
     minAge: 65,
     maxAge: null,
@@ -261,7 +284,8 @@ export function resolveKategoriUmurFromAge(age: number | null): KategoriUmurId {
   if (age <= 25) return "19-25";
   if (age <= 40) return "26-40";
   if (age <= 55) return "41-55";
-  if (age < 65) return "56-64";
+  if (age < UMUR_LANSIA) return "56-59";
+  if (age < 65) return "60-64";
   return "65+";
 }
 

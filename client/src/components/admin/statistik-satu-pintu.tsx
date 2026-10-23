@@ -208,8 +208,8 @@ export function StatistikSatuPintu({ rt, onPilihRt }: { rt?: number; onPilihRt?:
         <Kotak onClick={() => setDaftar("singgah")} ikon={<Building2 className="h-4 w-4" />} label="Warga singgah (Visit RW3)" nilai={angka(fokus.singgah)} sub={`${fokus.izinSinggah} izin berlaku${fokus.izinSegeraHabis ? ` · ${fokus.izinSegeraHabis} habis ≤30 hari` : ""}`} aksen={EMAS} />
         <Kotak onClick={() => setDaftar("balita")} ikon={<Baby className="h-4 w-4" />} label="Balita (0–5)" nilai={angka(fokus.umur.balita)} sub={`${pct(fokus.umur.balita, fokus.warga)}% warga`} aksen={EMAS} />
         <Kotak onClick={() => setDaftar("anak")} ikon={<GraduationCap className="h-4 w-4" />} label="Anak & pelajar (6–18)" nilai={angka(fokus.umur.anak)} sub={`${pct(fokus.umur.anak, fokus.warga)}% warga`} aksen="hsl(200,60%,45%)" />
-        <Kotak onClick={() => setDaftar("produktif")} ikon={<Briefcase className="h-4 w-4" />} label="Usia produktif (19–64)" nilai={angka(fokus.umur.produktif)} sub={`${pct(fokus.umur.produktif, fokus.warga)}% warga`} />
-        <Kotak onClick={() => setDaftar("lansia")} ikon={<UserRound className="h-4 w-4" />} label="Lansia (65+)" nilai={angka(fokus.umur.lansia)} sub={`${fokus.kkLansiaSendiri} tinggal sendiri`} aksen="hsl(265,45%,55%)" />
+        <Kotak onClick={() => setDaftar("produktif")} ikon={<Briefcase className="h-4 w-4" />} label="Usia produktif (19–59)" nilai={angka(fokus.umur.produktif)} sub={`${pct(fokus.umur.produktif, fokus.warga)}% warga`} />
+        <Kotak onClick={() => setDaftar("lansia")} ikon={<UserRound className="h-4 w-4" />} label="Lansia (60+)" nilai={angka(fokus.umur.lansia)} sub={`${fokus.kkLansiaSendiri} tinggal sendiri`} aksen="hsl(265,45%,55%)" />
       </div>
       <DaftarWargaDialog kategori={daftar} rtAwal={rt} onTutup={() => setDaftar(null)} />
 
@@ -227,7 +227,7 @@ export function StatistikSatuPintu({ rt, onPilihRt }: { rt?: number; onPilihRt?:
               <th className="px-2 py-2 text-right">Balita</th>
               <th className="px-2 py-2 text-right">Lansia</th>
               <th className="px-2 py-2 text-right">Nganggur</th>
-              <th className="px-2 py-2 text-right" title="KK dengan satu anggota aktif berusia 65+">Lansia sendiri</th>
+              <th className="px-2 py-2 text-right" title="KK dengan satu anggota aktif berusia 60+">Lansia sendiri</th>
               <th className="px-2 py-2 text-right">KK tanpa WA</th>
               <th className="px-2 py-2 text-right">Usia kosong</th>
               <th className="px-2 py-2 text-right" title="Tidak dihitung sebagai warga aktif">Pindah / wafat</th>

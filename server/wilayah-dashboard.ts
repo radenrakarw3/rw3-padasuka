@@ -38,6 +38,21 @@ export interface DataDasar {
   distribusi: DistribusiDasar[];
 }
 
+export interface KotakMasukRt { rt: number; usulan: number; pindah: number }
+
+/** Yang menunggu keputusan per RT: isian QR warga dan permintaan pindah RT yang masuk. */
+export async function kotakMasukRw(): Promise<{ total: number; perRt: KotakMasukRt[] }> {
+  const { rows } = await pool.query(
+    `SELECT r.rt,
+       (SELECT COUNT(*)::int FROM wil_usulan u WHERE u.rt = r.rt AND u.status = 'menunggu') AS usulan,
+       (SELECT COUNT(*)::int FROM wil_serah_terima s WHERE s.rt_tujuan = r.rt AND s.status = 'diajukan') AS pindah
+     FROM unnest($1::int[]) AS r(rt)`,
+    [RT_DASHBOARD],
+  );
+  const perRt = rows.map((r) => ({ rt: r.rt as number, usulan: r.usulan as number, pindah: r.pindah as number }));
+  return { total: perRt.reduce((n, r) => n + r.usulan + r.pindah, 0), perRt };
+}
+
 export async function ringkasanRw() {
   const { rows: kks } = await pool.query(
     `SELECT k.id, k.rt, k.alamat,
