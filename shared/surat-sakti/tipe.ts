@@ -1,5 +1,6 @@
-export type TujuanUtama = "tugaskan" | "masalah" | "keputusan" | "dukungan" | "pantau" | "kustom";
-export type Kategori = "A" | "B" | "C" | "D" | "E" | "F";
+export type TujuanUtama = "menegur" | "meminta" | "jabatan" | "kustom";
+/** T = menegur, M = meminta, J = menjalankan jabatan, F = kustom. */
+export type Kategori = "T" | "M" | "J" | "F";
 export type Layout = "surat" | "keputusan" | "berita_acara" | "tabel" | "notulen" | "laporan" | "kustom";
 export type PosisiPenerima = "pengurus" | "warga" | "eksternal" | "internal";
 export type Akses = "internal" | "rt_terkait" | "terbatas";
@@ -43,6 +44,15 @@ export interface Field {
   internal?: boolean;
   /** Jumlah baris kosong tambahan saat dicetak (daftar hadir). */
   barisKosong?: number;
+  /**
+   * Pilihan cepat (chip) untuk teks/uraian/waktu/daftar: diketuk untuk mengisi (daftar: menambah butir).
+   * Bentuk `{ dari, peta }`: saran bergantung pada nilai field lain (mis. jenis pelanggaran → kewajiban).
+   */
+  saran?: readonly string[] | { dari: string; peta: Readonly<Record<string, readonly string[]>> };
+  /** Tanggal: tombol "+n hari" dari hari ini. */
+  cepat?: readonly number[];
+  /** Pihak: penerima yang sering dipakai, tinggal diketuk. */
+  preset?: readonly Pihak[];
 }
 
 export interface KelompokField {
@@ -61,7 +71,7 @@ export interface JenisDokumen {
   /** Kode pada nomor surat (mis. ST, UND, BA). */
   nomorKode: string;
   versi: number;
-  /** Judul cetak untuk layout non-surat (BERITA ACARA …). */
+  /** Judul cetak untuk layout non-surat (BERITA ACARA …); {x} diganti nilai field x. */
   judulCetak?: string;
   ringkas: string;
   kelompok: string[];
@@ -79,6 +89,8 @@ export interface JenisDokumen {
   perluPersetujuanPihak?: boolean;
   /** Nilai awal form. */
   awal?: Record<string, unknown>;
+  /** Contoh perihal yang tinggal diketuk lalu disesuaikan. */
+  saranPerihal?: readonly string[];
 }
 
 export type DataDokumen = Record<string, unknown>;
@@ -92,7 +104,7 @@ export type Blok =
   | { t: "label"; baris: [string, string][] }
   | { t: "daftar"; item: string[]; bernomor?: boolean }
   | { t: "tabel"; kolom: string[]; lebar?: number[]; baris: string[][]; total?: string[] }
-  | { t: "ttd"; tempatTanggal?: string; kolom: { atas: string; nama: string; jabatan?: string }[] }
+  | { t: "ttd"; tempatTanggal?: string; kolom: { atas: string; nama: string; jabatan?: string; ketua?: boolean }[] }
   | { t: "tembusan"; item: string[] }
   | { t: "catatan"; teks: string };
 

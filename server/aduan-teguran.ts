@@ -66,6 +66,7 @@ async function susunTeguran(v: InputTeguran) {
   const rt = teradu.rt ?? a?.rt_lokasi ?? null;
   const umum: DataDokumen = {
     tingkatTeguran: TINGKAT_TEGURAN_CETAK[TINGKAT_TEGURAN.indexOf(v.tingkat)],
+    jenisPelanggaran: a ? KATEGORI_ADUAN_INFO[a.kategori as KategoriAduan]?.label ?? "" : "",
     dasarTeguran: a ? `Aduan warga nomor ${a.nomor} yang telah diperiksa pengurus RW 03` : "Hasil pemantauan pengurus RW 03",
     pelanggaran: v.pelanggaran,
     kewajibanPerbaikan: v.kewajiban,

@@ -265,8 +265,9 @@ export async function referensi(aktor: Aktor) {
 
 // ================================================================== verifikasi publik (minimum)
 export async function verifikasi(by: { token?: string; id?: number }) {
+  const kolom = `nomor_surat, tanggal_surat, status, jenis_surat, snapshot->'penandatangan'->>'nama' AS penandatangan`;
   const { rows } = by.token
-    ? await pool.query(`SELECT nomor_surat, tanggal_surat, status, jenis_surat FROM surat_rw WHERE verifikasi_token = $1 AND status <> 'draft'`, [by.token])
-    : await pool.query(`SELECT nomor_surat, tanggal_surat, status, jenis_surat FROM surat_rw WHERE id = $1 AND status <> 'draft' AND nomor_surat IS NOT NULL`, [by.id]);
-  return rows[0] as { nomor_surat: string; tanggal_surat: string; status: string; jenis_surat: string } | undefined;
+    ? await pool.query(`SELECT ${kolom} FROM surat_rw WHERE verifikasi_token = $1 AND status <> 'draft'`, [by.token])
+    : await pool.query(`SELECT ${kolom} FROM surat_rw WHERE id = $1 AND status <> 'draft' AND nomor_surat IS NOT NULL`, [by.id]);
+  return rows[0] as { nomor_surat: string; tanggal_surat: string; status: string; jenis_surat: string; penandatangan: string | null } | undefined;
 }

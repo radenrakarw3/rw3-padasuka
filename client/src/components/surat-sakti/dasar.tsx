@@ -130,7 +130,9 @@ function BlokHtml({ b }: { b: Blok }) {
             {b.kolom.map((k, i) => (
               <div key={i} className="text-center">
                 <p>{k.atas}</p>
-                <div className="h-14" aria-label="ruang tanda tangan basah" />
+                {k.ketua
+                  ? <div className="h-14 flex items-center justify-center text-[11px] italic text-stone-400">tanda tangan & QR otomatis saat terbit</div>
+                  : <div className="h-14" aria-label="ruang tanda tangan basah" />}
                 <p className="font-bold underline">{k.nama}</p>
                 {k.jabatan && <p>{k.jabatan}</p>}
               </div>

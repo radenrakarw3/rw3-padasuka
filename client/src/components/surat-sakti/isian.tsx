@@ -9,7 +9,24 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { wil } from "@/lib/wilayah-api";
-import { LABEL_JENIS_PIHAK, rupiah, keAngka, type DataDokumen, type Field, type JenisPihak, type KelompokField, type Pihak } from "@shared/surat-sakti";
+import { LABEL_JENIS_PIHAK, rupiah, keAngka, saranField, type DataDokumen, type Field, type JenisPihak, type KelompokField, type Pihak } from "@shared/surat-sakti";
+
+const hariIniPlus = (n: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+};
+const labelHari = (n: number) => (n === 0 ? "Hari ini" : n === -1 ? "Kemarin" : n === 1 ? "Besok" : n < 0 ? `${-n} hari lalu` : `+${n} hari`);
+
+/** Pilihan cepat: diketuk untuk mengisi; yang sedang terpilih/sudah ada ditandai. */
+function Chip({ teks, aktif, klik }: { teks: string; aktif?: boolean; klik: () => void }) {
+  return (
+    <button type="button" onClick={klik}
+      className={`min-h-9 rounded-full border px-3 py-1 text-left text-xs leading-snug sm:min-h-0 ${aktif ? "border-[hsl(163,55%,22%)] bg-emerald-50 text-[hsl(163,55%,22%)]" : "bg-white hover:border-[hsl(163,55%,22%)] hover:bg-emerald-50/50"}`}>
+      {aktif ? "✓ " : "+ "}{teks}
+    </button>
+  );
+}
 
 const cls = "w-full";
 
@@ -24,7 +41,7 @@ function useTunda<T>(v: T, ms = 300) {
 
 // ---------------------------------------------------------------- pihak
 /** Pilih pihak dari data yang sudah ada (akun RT, pengurus kelompok, warga, usaha, mitra) atau tulis pihak luar. */
-export function PihakPicker({ nilai, ubah, tunggal, peran = "rw" }: { nilai: Pihak[]; ubah: (p: Pihak[]) => void; tunggal?: boolean; peran?: "rt" | "rw" }) {
+export function PihakPicker({ nilai, ubah, tunggal, peran = "rw", preset }: { nilai: Pihak[]; ubah: (p: Pihak[]) => void; tunggal?: boolean; peran?: "rt" | "rw"; preset?: readonly Pihak[] }) {
   const [buka, setBuka] = useState(false);
   const [q, setQ] = useState("");
   const qt = useTunda(q);
@@ -57,6 +74,11 @@ export function PihakPicker({ nilai, ubah, tunggal, peran = "rw" }: { nilai: Pih
             </li>
           ))}
         </ul>
+      )}
+      {preset && preset.length > 0 && (!tunggal || nilai.length === 0) && (
+        <div className="flex flex-wrap gap-1.5">
+          {preset.filter((p) => !nilai.some((x) => x.nama === p.nama)).map((p) => <Chip key={p.nama} teks={p.nama} klik={() => tambah(p)} />)}
+        </div>
       )}
       {(!tunggal || nilai.length === 0) && (
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
@@ -195,7 +217,7 @@ export function FieldInput({ f, d, ubah }: { f: Field; d: DataDokumen; ubah: (ke
         </label>
       );
     case "pihak":
-      isi = <PihakPicker nilai={Array.isArray(v) ? (v as Pihak[]) : []} ubah={(p) => ubah(f.key, p)} tunggal={f.tunggal} />;
+      isi = <PihakPicker nilai={Array.isArray(v) ? (v as Pihak[]) : []} ubah={(p) => ubah(f.key, p)} tunggal={f.tunggal} preset={f.preset} />;
       break;
     case "daftar":
       isi = <DaftarEditor label={f.label} nilai={Array.isArray(v) ? (v as string[]) : []} ubah={(x) => ubah(f.key, x)} />;
@@ -206,12 +228,38 @@ export function FieldInput({ f, d, ubah }: { f: Field; d: DataDokumen; ubah: (ke
     default:
       isi = <Input id={id} value={s} onChange={(e) => ubah(f.key, e.target.value)} />;
   }
+  const saran = saranField(f, d);
+  let cepat: JSX.Element | null = null;
+  if (f.tipe === "tanggal" && f.cepat?.length) {
+    cepat = (
+      <div className="flex flex-wrap gap-1.5">
+        {f.cepat.map((n) => {
+          const t = hariIniPlus(n);
+          return <Chip key={n} teks={labelHari(n)} aktif={s === t} klik={() => ubah(f.key, t)} />;
+        })}
+      </div>
+    );
+  } else if (saran.length && f.tipe === "daftar") {
+    const ada = Array.isArray(v) ? (v as string[]).filter((x) => typeof x === "string" && x.trim()) : [];
+    cepat = (
+      <div className="flex flex-wrap gap-1.5">
+        {saran.map((x) => {
+          const aktif = ada.includes(x);
+          return <Chip key={x} teks={x} aktif={aktif} klik={() => ubah(f.key, aktif ? ada.filter((y) => y !== x) : [...ada, x])} />;
+        })}
+      </div>
+    );
+  } else if (saran.length) {
+    cepat = <div className="flex flex-wrap gap-1.5">{saran.map((x) => <Chip key={x} teks={x} aktif={s === x} klik={() => ubah(f.key, x)} />)}</div>;
+  }
   return (
     <div className="space-y-1">
       <Label htmlFor={id} className={cls}>
         {f.label}{f.wajib && <span className="text-red-600"> *</span>}
         {f.internal && <span className="ml-1 text-[11px] font-normal text-muted-foreground">(tidak dicetak)</span>}
       </Label>
+      {cepat && <p className="text-[11px] text-muted-foreground">Ketuk pilihan cepat atau tulis sendiri:</p>}
+      {cepat}
       {isi}
       {f.bantuan && <p className="text-xs text-muted-foreground">{f.bantuan}</p>}
     </div>

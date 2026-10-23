@@ -27,6 +27,14 @@ export function barisTabel(v: unknown): Record<string, string>[] {
     .filter((r) => Object.values(r).some(Boolean));
 }
 
+/** Saran untuk sebuah field; saran bergantung field lain bila `saran.dari` diisi. */
+export function saranField(f: Field, d: DataDokumen): readonly string[] {
+  if (!f.saran) return [];
+  if (Array.isArray(f.saran)) return f.saran;
+  const s = f.saran as { dari: string; peta: Readonly<Record<string, readonly string[]>> };
+  return s.peta[str(d[s.dari])] ?? [];
+}
+
 export function teksPihak(p: Pihak): string {
   const rt = p.rt && !/\bRT\b/i.test(p.peran ?? "") ? `RT ${String(p.rt).padStart(2, "0")}` : "";
   const ket = [p.peran, rt].filter(Boolean).join(", ");
@@ -116,43 +124,37 @@ function renderFields(fields: Field[], d: DataDokumen, lewati: Set<string>): Blo
   return out;
 }
 
-type KolomTtd = { atas: string; nama: string; jabatan?: string };
+type KolomTtd = { atas: string; nama: string; jabatan?: string; ketua?: boolean };
 
-const RW_TTD = (atas: string): KolomTtd => ({ atas, nama: IDENTITAS_RW.ketua.nama, jabatan: IDENTITAS_RW.ketua.jabatan });
+const RW_TTD = (atas: string): KolomTtd => ({ atas, nama: IDENTITAS_RW.ketua.nama, jabatan: IDENTITAS_RW.ketua.jabatan, ketua: true });
 const ttdPihak = (p: Pihak, atas: string): KolomTtd => ({ atas, nama: p.nama, jabatan: p.peran || undefined });
+/** Ketua RW selalu ditandatangani otomatis; pihak bernama Ketua RW yang dipilih manual tidak diduplikasi. */
+const bukanKetua = (p: Pihak) => !p.nama.toLowerCase().startsWith(IDENTITAS_RW.ketua.nama.split(" ").slice(0, 2).join(" ").toLowerCase());
 
+/** Kolom tanda tangan. Ketua RW selalu ada (kolom paling kanan), bertanda tangan dan ber-QR saat terbit. */
 export function penandatangan(j: JenisDokumen, d: DataDokumen): KolomTtd[] {
-  const kol: KolomTtd[] = [];
-  const mengetahui = () => {
-    if (!kol.some((k) => k.nama === IDENTITAS_RW.ketua.nama)) kol.push(RW_TTD("Mengetahui,"));
-  };
-  if (j.kelompok.includes("serah")) {
-    const a = daftarPihak(d.pihakMenyerahkan)[0];
-    const b = daftarPihak(d.pihakMenerima)[0];
-    if (a) kol.push(ttdPihak(a, "Yang menyerahkan,"));
-    if (b) kol.push(ttdPihak(b, "Yang menerima,"));
-    mengetahui();
-    return kol;
-  }
   if (j.perluPersetujuanPihak) {
-    daftarPihak(d.paraPihak).forEach((p, i) => kol.push(ttdPihak(p, `Pihak ${i + 1},`)));
-    mengetahui();
-    return kol;
+    return [...daftarPihak(d.paraPihak).filter(bukanKetua).map((p, i) => ttdPihak(p, `Pihak ${i + 1},`)), RW_TTD("Mengetahui,")];
   }
-  const ba = daftarPihak(d.penandatanganBA);
-  if (ba.length) {
-    ba.forEach((p) => kol.push(ttdPihak(p, p.peran ? `${p.peran},` : "Yang hadir,")));
-    mengetahui();
-    return kol;
-  }
-  const custom = daftarPihak(d.penandatangan);
+  const ba = daftarPihak(d.penandatanganBA).filter(bukanKetua);
+  if (ba.length) return [...ba.map((p) => ttdPihak(p, p.peran ? `${p.peran},` : "Yang hadir,")), RW_TTD("Mengetahui,")];
   const atas = j.posisi === "pengurus" ? "Yang menugaskan," : j.posisi === "internal" ? "Dibuat oleh," : "Hormat kami,";
-  if (custom.length) return custom.map((p, i) => ttdPihak(p, i === 0 ? atas : "Mengetahui,"));
-  return [RW_TTD(atas)];
+  const turut = daftarPihak(d.penandatangan).filter(bukanKetua);
+  return [...turut.map((p) => ttdPihak(p, p.peran ? `${p.peran},` : "Mengetahui,")), RW_TTD(atas)];
 }
 
-function judulDokumen(j: JenisDokumen, meta: MetaRender): Blok {
-  return { t: "judul", teks: j.judulCetak ?? j.label.toUpperCase(), sub: [`Nomor: ${meta.nomor ?? "(belum bernomor — draf)"}`] };
+/** Field yang nilainya sudah tercetak di judul atau kalimat pembuka ({x}). */
+function kunciJudul(j: JenisDokumen): string[] {
+  return [...`${j.judulCetak ?? ""} ${j.pembuka ?? ""}`.matchAll(/\{(\w+)\}/g)].map((m) => m[1]);
+}
+
+function teksJudul(j: JenisDokumen, d: DataDokumen): string {
+  const t = j.judulCetak ? isiPola(j.judulCetak, (k) => str(d[k])) : "";
+  return (t || j.label).toUpperCase();
+}
+
+function judulDokumen(j: JenisDokumen, d: DataDokumen, meta: MetaRender): Blok {
+  return { t: "judul", teks: teksJudul(j, d), sub: [`Nomor: ${meta.nomor ?? "(belum bernomor — draf)"}`] };
 }
 
 const URUTAN = ["KESATU", "KEDUA", "KETIGA", "KEEMPAT", "KELIMA", "KEENAM", "KETUJUH", "KEDELAPAN", "KESEMBILAN", "KESEPULUH"];
@@ -167,6 +169,7 @@ export function renderDokumen(j: JenisDokumen, d: DataDokumen, meta: MetaRender,
   const out: Blok[] = [];
   const tembusan = daftarStr(d.tembusan);
   const ttd = penandatangan(j, d);
+  const diJudul = kunciJudul(j);
 
   if (j.layout === "kustom") {
     const penerima = daftarPihak(d.penerima);
@@ -209,14 +212,14 @@ export function renderDokumen(j: JenisDokumen, d: DataDokumen, meta: MetaRender,
       out.push({ t: "alamat", baris: ["Kepada Yth.", ...(penerima.length > 1 ? penerima.map((p, i) => `${i + 1}. ${teksPihak(p)}`) : penerima.map(teksPihak)), "di", "Tempat"] });
       if (j.posisi !== "pengurus" && !pembuka.startsWith("Dengan hormat")) out.push({ t: "paragraf", teks: "Dengan hormat," });
     } else {
-      out.push(judulDokumen(j, meta));
+      out.push(judulDokumen(j, d, meta));
     }
     if (pembuka) out.push({ t: "paragraf", teks: pembuka });
-    out.push(...renderFields(fields, d, new Set()));
+    out.push(...renderFields(fields, d, new Set(diJudul)));
     out.push({ t: "paragraf", teks: penutup });
     out.push({ t: "ttd", tempatTanggal: j.kelompok.includes("penerima") ? undefined : tempatTanggal, kolom: ttd });
   } else if (j.layout === "keputusan") {
-    out.push({ t: "judul", teks: j.judulCetak ?? "KEPUTUSAN", sub: [`Nomor: ${meta.nomor ?? "(belum bernomor — draf)"}`, "TENTANG", meta.perihal.toUpperCase()] });
+    out.push({ t: "judul", teks: teksJudul(j, d), sub: [`Nomor: ${meta.nomor ?? "(belum bernomor — draf)"}`, "TENTANG", meta.perihal.toUpperCase()] });
     const menimbang = daftarStr(d.menimbang);
     const dasar = [...daftarStr(d.dasar), ...(str(d.sumberMusyawarah) ? [`Hasil ${str(d.sumberMusyawarah)}`] : [])];
     if (menimbang.length) out.push({ t: "sub", teks: "Menimbang" }, { t: "daftar", item: menimbang, bernomor: true });
@@ -225,20 +228,20 @@ export function renderDokumen(j: JenisDokumen, d: DataDokumen, meta: MetaRender,
     out.push({ t: "judul", teks: "MEMUTUSKAN" }, { t: "label", baris: [["Menetapkan", meta.perihal]] });
     const butir = daftarStr(d.butirKeputusan);
     if (butir.length) out.push({ t: "label", baris: butir.map((b, i) => [URUTAN[i] ?? `KE-${i + 1}`, b] as [string, string]) });
-    out.push(...renderFields(fields, d, new Set(["menimbang", "dasar", "sumberMusyawarah", "butirKeputusan"])));
+    out.push(...renderFields(fields, d, new Set(["menimbang", "dasar", "sumberMusyawarah", "butirKeputusan", "jenisKeputusan", ...diJudul])));
     out.push({ t: "ttd", tempatTanggal: `Ditetapkan di ${IDENTITAS_RW.tempat}, ${tanggalPanjang(meta.tanggal)}`, kolom: ttd });
   } else if (j.layout === "berita_acara") {
-    out.push(judulDokumen(j, meta));
-    const tglAktual = str(d.waktuAktual) || str(d.waktuSerah) || meta.tanggal;
+    out.push(judulDokumen(j, d, meta));
+    const tglAktual = str(d.waktuAktual) || meta.tanggal;
     const tempat = str(d.tempatAcara) || str(d.lokasi) || "wilayah RW 03 Kelurahan Padasuka";
     out.push({ t: "paragraf", teks: `${hariTanggalTerbilang(tglAktual)}, bertempat di ${tempat}, ${pembuka}` });
-    out.push(...renderFields(fields, d, new Set(["waktuAktual", "tempatAcara", "waktuSerah"])));
+    out.push(...renderFields(fields, d, new Set(["waktuAktual", "tempatAcara", ...diJudul])));
     out.push({ t: "paragraf", teks: penutup });
     out.push({ t: "ttd", tempatTanggal, kolom: ttd });
   } else {
-    out.push(judulDokumen(j, meta));
+    out.push(judulDokumen(j, d, meta));
     if (pembuka) out.push({ t: "paragraf", teks: pembuka });
-    out.push(...renderFields(fields, d, new Set()));
+    out.push(...renderFields(fields, d, new Set(diJudul)));
     if (j.layout === "laporan") out.push({ t: "paragraf", teks: penutup });
     out.push({ t: "ttd", tempatTanggal, kolom: ttd });
   }
@@ -254,6 +257,20 @@ export function renderTeksLama(isi: string, meta: MetaRender): Blok[] {
     if (t) out.push({ t: "paragraf", teks: t });
   }
   return out;
+}
+
+/** Badan dokumen (tanpa judul, kepala, alamat, tanda tangan, tembusan) sebagai teks berparagraf untuk Surat Kustom. */
+export function isiDariBloks(bloks: Blok[]): string {
+  const out: string[] = [];
+  for (const b of bloks) {
+    switch (b.t) {
+      case "sub": case "paragraf": case "catatan": out.push(b.teks); break;
+      case "label": out.push(b.baris.map(([a, c]) => `${a}: ${c}`).join("\n")); break;
+      case "daftar": out.push(b.item.map((x, i) => (b.bernomor ? `${i + 1}. ${x}` : `- ${x}`)).join("\n")); break;
+      case "tabel": out.push([b.kolom.join(" | "), ...b.baris.map((r) => r.join(" | "))].join("\n")); break;
+    }
+  }
+  return out.filter(Boolean).join("\n\n");
 }
 
 export function teksPolos(bloks: Blok[]): string {

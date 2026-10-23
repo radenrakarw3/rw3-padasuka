@@ -7,5 +7,5 @@ export const IDENTITAS_RW = {
   situs: "rw3padasukacimahi.org",
   tempat: "Cimahi",
   penerbit: "Ketua RW 03 Kelurahan Padasuka",
-  ketua: { nama: "Raden Raka", jabatan: "Ketua RW 03" },
+  ketua: { nama: "Raden Raka A.K.S", jabatan: "Ketua Rukun Warga 03 Padasuka Cimahi" },
 } as const;

@@ -13,10 +13,21 @@ import { useToast } from "@/hooks/use-toast";
 import { bukaBerkas, kunciIdempoten, wil } from "@/lib/wilayah-api";
 import { cn } from "@/lib/utils";
 import {
-  KATALOG, KELOMPOK, LABEL_KATEGORI, LABEL_TUJUAN, PETA_JENIS, kelompokJenis, renderDokumen, validasiDokumen, isoHariIni, daftarStr,
+  IDENTITAS_RW, KATALOG, KELOMPOK, LABEL_KATEGORI, LABEL_TUJUAN, PETA_JENIS, TINGKAT_TEGURAN_CETAK, kelompokJenis, renderDokumen, validasiDokumen, isoHariIni, daftarStr, str,
   type Akses, type DataDokumen, type JenisDokumen, type TujuanUtama,
 } from "@shared/surat-sakti";
+import { TINGKAT_TEGURAN, TINGKAT_TEGURAN_INFO } from "@shared/aduan";
 import { KelompokForm } from "./isian";
+import { PanelTtd, useStatusTtd } from "./ttd";
+
+function InfoPenandatangan() {
+  return (
+    <div className="space-y-1">
+      <p className="text-sm font-semibold text-[hsl(163,55%,22%)]">Ditandatangani otomatis</p>
+      <PanelTtd />
+    </div>
+  );
+}
 import { Galat, PratinjauBloks, RW, rt2 } from "./dasar";
 
 export interface StateEditor {
@@ -46,7 +57,11 @@ export function editorBaru(awal: Partial<StateEditor> = {}): StateEditor {
 export function bacaEditorLokal(): StateEditor | null {
   try {
     const s = localStorage.getItem(KUNCI_LOKAL);
-    return s ? (JSON.parse(s) as StateEditor) : null;
+    if (!s) return null;
+    const x = JSON.parse(s) as StateEditor;
+    if (x.kode && !PETA_JENIS[x.kode]) return { ...x, kode: "", tujuan: null, langkah: 0 };
+    if (x.tujuan && !LABEL_TUJUAN[x.tujuan]) return { ...x, tujuan: PETA_JENIS[x.kode]?.tujuan ?? null };
+    return x;
   } catch {
     return null;
   }
@@ -69,7 +84,7 @@ export function editorDariSurat(s: any): StateEditor {
   });
 }
 
-const LANGKAH = ["Jenis dokumen", "Konteks", "Isi", "Penanda tangan & tindak lanjut", "Periksa & terbit"];
+const LANGKAH = ["Jenis dokumen", "Konteks", "Isi", "Tanda tangan & tindak lanjut", "Periksa & terbit"];
 const AKSES: { v: Akses; label: string; ket: string }[] = [
   { v: "rt_terkait", label: "RT terkait", ket: "Ketua RT yang dipilih dapat membaca dan mengunduh setelah terbit." },
   { v: "internal", label: "Internal", ket: "Hanya RT yang ditugaskan (PIC) di tindak lanjut." },
@@ -143,11 +158,11 @@ function PilihJenis({ tujuan, setTujuan, kode, pilih }: { tujuan: TujuanUtama | 
       </div>
       <div className="relative max-w-md">
         <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input className="pl-9" type="search" placeholder="Cari jenis dokumen (mis. berita acara, undangan, material)…" value={cari} onChange={(e) => setCari(e.target.value)} />
+        <Input className="pl-9" type="search" placeholder="Cari jenis dokumen (mis. peringatan, berita acara, bantuan)…" value={cari} onChange={(e) => setCari(e.target.value)} />
       </div>
       {perKategori.map((g) => (
         <section key={g.k}>
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">{g.k}. {g.label}</h4>
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">{g.label}</h4>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {g.item.map((j) => (
               <button key={j.kode} type="button" onClick={() => pilih(j)}
@@ -178,6 +193,8 @@ export function Wizard({ awal, tutup }: { awal: StateEditor; tutup: (id: number 
   const sedangSimpan = useRef(false);
   const { data: ref } = useQuery<Referensi>({ queryKey: ["/api/wilayah/rw/surat-referensi"], queryFn: () => wil("/api/wilayah/rw/surat-referensi", RW), staleTime: 60_000 });
   const j = PETA_JENIS[s.kode];
+  const { data: ttd } = useStatusTtd();
+  const tanpaTtd = ttd ? !ttd.ada : false;
 
   useEffect(() => {
     try {
@@ -195,7 +212,16 @@ export function Wizard({ awal, tutup }: { awal: StateEditor; tutup: (id: number 
   const ubahData = (key: string, v: unknown) => {
     berubah.current = true;
     setTersimpan(null);
-    setS((x) => ({ ...x, data: { ...x.data, [key]: v } }));
+    setS((x) => {
+      const data: DataDokumen = { ...x.data, [key]: v };
+      // Konsekuensi baku per tingkat teguran, selama belum ditulis sendiri.
+      if (key === "tingkatTeguran") {
+        const baku = (t: unknown) => TINGKAT_TEGURAN_INFO[TINGKAT_TEGURAN[TINGKAT_TEGURAN_CETAK.indexOf(t as never)]]?.konsekuensi;
+        const lama = str(x.data.konsekuensi);
+        if (!lama || lama === baku(x.data.tingkatTeguran)) data.konsekuensi = baku(v) ?? "";
+      }
+      return { ...x, data };
+    });
   };
 
   const kelompokIsi = useMemo(() => (j ? kelompokJenis(j).filter((k) => k !== "ttd" && k !== "tindak").map((k) => KELOMPOK[k]).filter(Boolean) : []), [j]);
@@ -326,7 +352,7 @@ export function Wizard({ awal, tutup }: { awal: StateEditor; tutup: (id: number 
 
       {s.langkah === 0 && (
         <PilihJenis tujuan={s.tujuan} setTujuan={(t) => ubah({ tujuan: t })} kode={s.kode}
-          pilih={(jn) => ubah({ kode: jn.kode, tujuan: jn.tujuan, data: { ...(jn.awal ?? {}), ...s.data }, akses: !s.id && jn.kategori === "B" ? "internal" : s.akses, langkah: 1 })} />
+          pilih={(jn) => ubah({ kode: jn.kode, tujuan: jn.tujuan, data: { ...(jn.awal ?? {}), ...s.data }, akses: !s.id && jn.kategori === "T" ? "internal" : s.akses, langkah: 1 })} />
       )}
 
       {s.langkah === 1 && j && (
@@ -339,7 +365,18 @@ export function Wizard({ awal, tutup }: { awal: StateEditor; tutup: (id: number 
           </div>
           <div className="space-y-1">
             <Label htmlFor="perihal">Perihal / judul singkat <span className="text-red-600">*</span></Label>
-            <Input id="perihal" value={s.perihal} onChange={(e) => ubah({ perihal: e.target.value })} placeholder="mis. Penanganan genangan saluran Gg. Melati" />
+            <Input id="perihal" value={s.perihal} onChange={(e) => ubah({ perihal: e.target.value })} placeholder={j.saranPerihal?.[0] ? `mis. ${j.saranPerihal[0]}` : "Tulis perihal singkat"} />
+            {j.saranPerihal && j.saranPerihal.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {j.saranPerihal.map((p) => (
+                  <button key={p} type="button" onClick={() => ubah({ perihal: p })}
+                    className={cn("min-h-9 rounded-full border px-3 py-1 text-xs sm:min-h-0", s.perihal === p ? "border-[hsl(163,55%,22%)] bg-emerald-50" : "bg-white hover:bg-emerald-50/50")}>
+                    + {p}
+                  </button>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">Ketuk contoh lalu lengkapi bila perlu (mis. tambahkan lokasi atau nama kegiatan).</p>
           </div>
           <div className="space-y-1">
             <Label htmlFor="tgl">Tanggal dokumen <span className="text-red-600">*</span></Label>
@@ -358,7 +395,7 @@ export function Wizard({ awal, tutup }: { awal: StateEditor; tutup: (id: number 
             </div>
             {s.akses === "rt_terkait" && (
               <div className="flex flex-wrap gap-1">
-                {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+                {[1, 2, 3, 4].map((n) => (
                   <Button key={n} type="button" size="sm" variant={s.rtTerkait.includes(n) ? "default" : "outline"}
                     onClick={() => ubah({ rtTerkait: s.rtTerkait.includes(n) ? s.rtTerkait.filter((x) => x !== n) : [...s.rtTerkait, n].sort() })}>
                     {rt2(n)}
@@ -391,6 +428,7 @@ export function Wizard({ awal, tutup }: { awal: StateEditor; tutup: (id: number 
 
       {s.langkah === 3 && j && (
         <div className="space-y-4 max-w-3xl">
+          <InfoPenandatangan />
           {kelompokAkhir.map((k) => <KelompokForm key={k.id} k={k} d={s.data} ubah={ubahData} />)}
           <p className="text-xs text-muted-foreground">
             Rencana tindak lanjut dicatat sebagai pekerjaan saat dokumen terbit. Tulis "RT 02" pada kolom PIC agar Ketua RT 02 dapat melaporkan progres dari akunnya.
@@ -401,6 +439,7 @@ export function Wizard({ awal, tutup }: { awal: StateEditor; tutup: (id: number 
 
       {s.langkah === 4 && j && validasi && (
         <div className="space-y-4">
+          {tanpaTtd && <PanelTtd />}
           {validasi.galat.length > 0 && (
             <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm">
               <p className="font-semibold text-red-800">Belum dapat terbit:</p>
@@ -436,7 +475,7 @@ export function Wizard({ awal, tutup }: { awal: StateEditor; tutup: (id: number 
             </Button>
           )}
           {s.langkah === 4 && (
-            <Button type="button" className="min-h-12 flex-1 bg-[hsl(163,55%,22%)] text-base hover:bg-[hsl(163,55%,18%)] sm:min-h-9 sm:flex-none sm:text-sm" disabled={!validasi || validasi.galat.length > 0 || !bisaSimpan || menerbitkan}
+            <Button type="button" className="min-h-12 flex-1 bg-[hsl(163,55%,22%)] text-base hover:bg-[hsl(163,55%,18%)] sm:min-h-9 sm:flex-none sm:text-sm" disabled={!validasi || validasi.galat.length > 0 || !bisaSimpan || menerbitkan || tanpaTtd}
               onClick={() => setKonfirmasi(true)}>
               <BookOpen className="w-4 h-4 mr-1" /> Terbitkan
             </Button>
@@ -451,7 +490,7 @@ export function Wizard({ awal, tutup }: { awal: StateEditor; tutup: (id: number 
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-sm">
                 <p>Nomor resmi dibuat sekarang. Setelah terbit, isi dan PDF tidak dapat diubah. Bila ada kesalahan, batalkan lalu buat dokumen baru (bisa disalin dari dokumen ini).</p>
-                <p>Terbit bukan berarti terkirim. Catat penyerahan setelah dokumen benar-benar diberikan, dan bubuhkan tanda tangan basah pada cetakan.</p>
+                <p>Tanda tangan dan QR keaslian {IDENTITAS_RW.ketua.nama} dibubuhkan otomatis. Terbit bukan berarti terkirim: catat penyerahan setelah dokumen benar-benar diberikan.</p>
                 {validasi && validasi.peringatan.length > 0 && <p className="text-amber-800">Ada {validasi.peringatan.length} peringatan — pastikan sudah diperiksa.</p>}
               </div>
             </AlertDialogDescription>

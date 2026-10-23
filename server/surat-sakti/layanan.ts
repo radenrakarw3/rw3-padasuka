@@ -11,11 +11,12 @@ import { denganTransaksi } from "../wilayah-data";
 import { alokasiNomorUrut } from "../wilayah-surat";
 import { formatNomorKode } from "@shared/surat-nomor";
 import {
-  barisTabel, daftarPihak, jenisDariKode, jenisDariLabelLama, PETA_JENIS, renderDokumen, renderTeksLama,
-  statusDistribusi, statusDokumen, statusPekerjaan, str, teksPihak, teksPolos, validasiDokumen, isoHariIni, terlambat,
+  barisTabel, daftarPihak, isiDariBloks, jenisDariKode, jenisDariLabelLama, PETA_JENIS, petakanKodeLama, renderDokumen, renderTeksLama,
+  statusDistribusi, statusDokumen, statusPekerjaan, str, teksPihak, teksPolos, validasiDokumen, isoHariIni, terlambat, IDENTITAS_RW,
   type Blok, type DataDokumen, type JenisDokumen,
 } from "@shared/surat-sakti";
 import { buatPdf } from "./pdf";
+import { ttdAktif } from "./ttd";
 import { hanyaRw, kondisiBacaRt, pastikanBoleh } from "./akses";
 
 export function situs(): string {
@@ -256,6 +257,8 @@ export function rtDariTeks(s: string | undefined): number | null {
 
 export async function terbitkan(aktor: Aktor, id: number) {
   hanyaRw(aktor);
+  const ttd = await ttdAktif();
+  if (!ttd) throw new WilayahError(400, "Tanda tangan Ketua RW belum diunggah. Unggah sekali di halaman Surat RW (bagian Tanda tangan Ketua RW), lalu terbitkan lagi.");
   return denganTransaksi(async (c) => {
     const { rows } = await c.query(`SELECT * FROM surat_rw WHERE id = $1 FOR UPDATE`, [id]);
     const s = rows[0];
@@ -277,11 +280,12 @@ export async function terbitkan(aktor: Aktor, id: number) {
     const meta = { nomor, tanggal: s.tanggal_surat, perihal: s.perihal, draft: false, jumlahLampiran: lamp[0].n };
     const bloks = renderDokumen(jenis, data, meta, s.akses);
     const verifikasiUrl = `${situs()}/verify/surat/${token}`;
-    const { buffer, halaman } = await buatPdf({ bloks, nomor, draft: false, verifikasiUrl, judul: s.perihal });
+    const { buffer, halaman } = await buatPdf({ bloks, nomor, draft: false, verifikasiUrl, judul: s.perihal, ttd });
     const sha = crypto.createHash("sha256").update(buffer).digest("hex");
     const snapshot = {
       format: 1, kode: jenis.kode, label: jenis.label, templateVersi: jenis.versi, meta, data, bloks,
       peringatan: v.peringatan, penerbit: aktor.label, diterbitkanPada: new Date().toISOString(), pdfSha256: sha,
+      penandatangan: { nama: IDENTITAS_RW.ketua.nama, jabatan: IDENTITAS_RW.ketua.jabatan, ttdId: ttd.id, ttdSha256: ttd.sha256 },
     };
     await c.query(
       `UPDATE surat_rw SET status = 'terbit', nomor_surat = $2, nomor_urut = $3, tahun_nomor = $4, diterbitkan_at = now(), updated_at = now(),
@@ -332,19 +336,52 @@ export async function batalkan(aktor: Aktor, id: number, alasan: string) {
   return { ok: true };
 }
 
-/** Salin isi dokumen menjadi draft baru yang berdiri sendiri. Dokumen asal tidak berubah. */
+/** Salin isi dokumen menjadi draft baru yang berdiri sendiri. Dokumen asal tidak berubah. Jenis lama dipetakan ke jenis pengganti. */
 export async function salinJadiDraft(aktor: Aktor, id: number) {
   hanyaRw(aktor);
+  const { rows: asal } = await pool.query(
+    `SELECT kode_jenis, perihal, tujuan, isi_surat, COALESCE(snapshot->'data', data_form, '{}'::jsonb) AS data, snapshot->'bloks' AS bloks, akses, rt_terkait
+       FROM surat_rw WHERE id = $1 AND kode_jenis IS NOT NULL`,
+    [id],
+  );
+  const a = asal[0];
+  if (!a) throw new WilayahError(409, "Dokumen format lama tidak dapat disalin. Buat dokumen baru.");
+  const baru = petakanKodeLama(a.kode_jenis, a.data ?? {}, Array.isArray(a.bloks) ? isiDariBloks(a.bloks as Blok[]) : (a.isi_surat ?? ""));
   const { rows } = await pool.query(
     `INSERT INTO surat_rw (kode_jenis, jenis_surat, perihal, tujuan, tanggal_surat, isi_surat, data_form, status, dibuat_oleh, akses, rt_terkait, updated_at)
-     SELECT kode_jenis, jenis_surat, perihal, tujuan, to_char(current_date, 'YYYY-MM-DD'), isi_surat, COALESCE(snapshot->'data', data_form, '{}'::jsonb), 'draft', $2,
-            akses, rt_terkait, now()
-       FROM surat_rw WHERE id = $1 AND kode_jenis IS NOT NULL RETURNING ${KOLOM.replace(/s\./g, "")}`,
-    [id, aktor.label],
+     VALUES ($1, $2, $3, $4, to_char(current_date, 'YYYY-MM-DD'), $5, $6, 'draft', $7, $8, $9, now())
+     RETURNING ${KOLOM.replace(/s\./g, "")}`,
+    [baru.kode, PETA_JENIS[baru.kode].label, a.perihal, a.tujuan, a.isi_surat, JSON.stringify(baru.data), aktor.label, a.akses, a.rt_terkait],
   );
-  if (!rows[0]) throw new WilayahError(409, "Dokumen format lama tidak dapat disalin. Buat dokumen baru.");
-  await catatAudit(aktor, "salin_surat", "surat", rows[0].id, null, null, { dari: id });
+  await catatAudit(aktor, "salin_surat", "surat", rows[0].id, null, null, { dari: id, kode: baru.kode });
   return petakan(rows[0]);
+}
+
+/**
+ * Draft yang masih memakai jenis sebelum rombak Surat Sakti dipetakan ke jenis pengganti (atau Surat Kustom).
+ * Dokumen terbit tidak disentuh: isi dan PDF-nya tersimpan beku di snapshot. Idempoten; dijalankan saat server menyala.
+ */
+export async function rapikanDraftJenisLama(): Promise<number> {
+  const { rows } = await pool.query(
+    `SELECT id, kode_jenis, data_form, isi_surat FROM surat_rw
+      WHERE status = 'draft' AND kode_jenis IS NOT NULL AND NOT (kode_jenis = ANY($1::text[]))`,
+    [Object.keys(PETA_JENIS)],
+  );
+  for (const r of rows) {
+    const baru = petakanKodeLama(r.kode_jenis, r.data_form ?? {}, r.isi_surat ?? "");
+    await pool.query(
+      `UPDATE surat_rw SET kode_jenis = $2, jenis_surat = $3, data_form = $4, perlu_pemeriksaan = true, updated_at = now() WHERE id = $1 AND status = 'draft'`,
+      [r.id, baru.kode, PETA_JENIS[baru.kode].label, JSON.stringify(baru.data)],
+    );
+  }
+  const { rows: minta } = await pool.query(
+    `SELECT DISTINCT kode_jenis FROM wil_permintaan_surat WHERE kode_jenis IS NOT NULL AND NOT (kode_jenis = ANY($1::text[]))`,
+    [Object.keys(PETA_JENIS)],
+  );
+  for (const r of minta) {
+    await pool.query(`UPDATE wil_permintaan_surat SET kode_jenis = $2 WHERE kode_jenis = $1`, [r.kode_jenis, petakanKodeLama(r.kode_jenis, {}, "").kode]);
+  }
+  return rows.length;
 }
 
 /** Teks pengantar WhatsApp untuk disalin. Tidak mengirim apa pun. Isi lengkap tidak disertakan. */

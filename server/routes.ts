@@ -157,6 +157,10 @@ export async function registerRoutes(
 
   const { pastikanSkemaWilayah } = await import("./wilayah-skema");
   await pastikanSkemaWilayah();
+  const { rapikanDraftJenisLama } = await import("./surat-sakti/layanan");
+  await rapikanDraftJenisLama()
+    .then((n) => { if (n) console.log(`[SURAT] ${n} draft jenis lama dipetakan ke jenis baru`); })
+    .catch((error) => console.error("[SURAT] Gagal memetakan draft jenis lama:", (error as Error).message));
   const { registerWilayahRoutes } = await import("./wilayah-routes");
   registerWilayahRoutes(app);
 
@@ -665,6 +669,7 @@ export async function registerRoutes(
     const baris = s && cocok ? [
       ["Nomor", s.nomor_surat], ["Tanggal", s.tanggal_surat ?? "-"], ["Jenis", s.jenis_surat],
       ["Penerbit", "Ketua RW 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi"],
+      ...(s.penandatangan ? [["Ditandatangani", `${s.penandatangan}, Ketua Rukun Warga 03 Padasuka Cimahi`]] : []),
     ] : [];
     res.status(s && cocok ? 200 : 404).type("html").send(`<!doctype html><html lang="id"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Cek Nomor Dokumen RW 03</title><style>
@@ -675,8 +680,10 @@ background:${baik ? "#dcfce7" : "#fee2e2"};color:${baik ? "#166534" : "#991b1b"}
 dt{color:#57534e}dd{margin:0;font-weight:600;word-break:break-word}p{padding:0 20px 18px;font-size:13px;line-height:1.6;color:#57534e}</style></head>
 <body><div class="w"><div class="c"><div class="h"><small>KPP RW 03 Padasuka</small><b>Cek Nomor Dokumen</b></div>
 <span class="s">${statusTeks}</span><dl>${baris.map(([k, v]) => `<dt>${k}</dt><dd>${esc(String(v))}</dd>`).join("")}</dl>
-<p>Halaman ini hanya mencocokkan nomor dan status dokumen pada arsip RW 03. Ini bukan tanda tangan elektronik tersertifikasi;
-dokumen sah bila ditandatangani basah oleh pejabat yang tercantum. Isi dokumen tidak ditampilkan di sini.</p></div></div></body></html>`);
+<p>${s?.penandatangan
+  ? "Dokumen ini tercatat di arsip RW 03 dan ditandatangani secara elektronik oleh penandatangan di atas melalui sistem RW 03 saat diterbitkan. Pastikan nomor dan tanggal pada kertas sama dengan yang tampil di sini."
+  : "Halaman ini mencocokkan nomor dan status dokumen pada arsip RW 03. Dokumen ini diterbitkan sebelum tanda tangan elektronik diterapkan; sah bila ditandatangani basah oleh pejabat yang tercantum."}
+Isi dokumen tidak ditampilkan di sini.</p></div></div></body></html>`);
   };
 
   app.get("/verify/surat/:token", async (req, res) => {

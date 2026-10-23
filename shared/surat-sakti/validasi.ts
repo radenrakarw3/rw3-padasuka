@@ -2,10 +2,6 @@ import { barisTabel, daftarPihak, daftarStr, fieldJenis, renderDokumen, str, tek
 import { keAngka, POLA_PLACEHOLDER, POLA_SENSITIF, urai } from "./redaksi";
 import type { DataDokumen, HasilValidasi, JenisDokumen } from "./tipe";
 
-const PASANGAN_TANGGAL: [string, string][] = [
-  ["mulaiTugas", "selesaiTugas"], ["masaKerjaMulai", "masaKerjaSelesai"], ["waktuMulai", "waktuSelesai"],
-];
-
 function terisi(tipe: string, v: unknown): boolean {
   switch (tipe) {
     case "daftar": return daftarStr(v).length > 0;
@@ -48,9 +44,9 @@ export function validasiDokumen(j: JenisDokumen, d: DataDokumen, meta: { perihal
       }
     }
   }
-  for (const [a, b] of PASANGAN_TANGGAL) {
-    const x = str(d[a]), y = str(d[b]);
-    if (x && y && x > y) galat.push("Tanggal selesai tidak boleh sebelum tanggal mulai");
+  for (const k of ["tenggatPerbaikan", "batasTanggapan", "harapanTanggapan"]) {
+    const x = str(d[k]);
+    if (x && urai(x) && urai(meta.tanggal) && x < meta.tanggal) galat.push("Batas waktu tidak boleh sebelum tanggal dokumen");
   }
 
   if (j.perluDasar) {
@@ -79,7 +75,7 @@ export function validasiDokumen(j: JenisDokumen, d: DataDokumen, meta: { perihal
   if (j.posisi === "eksternal" && /\b(memerintahkan|diperintahkan|wajib segera)\b/i.test(teks)) {
     peringatan.push("Surat kepada instansi/perusahaan sebaiknya berupa permohonan atau ajakan koordinasi, bukan perintah.");
   }
-  if (j.kategori === "D" && str(d.nominal)) {
+  if (j.kelompok.includes("bantuan") && str(d.nominal)) {
     peringatan.push("Nominal permohonan tidak dicatat sebagai pemasukan. Catat bantuan yang dijanjikan/diterima secara terpisah.");
   }
   return { galat: [...new Set(galat)], peringatan, perluPemeriksaan };

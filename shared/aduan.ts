@@ -31,6 +31,20 @@ export const KATEGORI_ADUAN_INFO: Record<KategoriAduan, { label: string; contoh:
   lainnya: { label: "Lainnya", contoh: "hal lain yang mengganggu kenyamanan warga RW 03", bobot: 1 },
 };
 
+/** Saran "yang wajib dilakukan" pada teguran/SP per kategori. */
+export const KEWAJIBAN_SARAN: Record<KategoriAduan, string[]> = {
+  sampah: ["Tidak membuang sampah sembarangan", "Membersihkan sampah di lokasi paling lambat batas waktu", "Membuang sampah sesuai jadwal pengangkutan RW 03"],
+  kebisingan: ["Tidak menimbulkan suara keras di atas pukul 22.00", "Menghormati waktu istirahat tetangga"],
+  keamanan: ["Menghentikan kegiatan yang meresahkan warga", "Melapor kepada pengurus RW bila menerima tamu menginap"],
+  parkir: ["Tidak memarkir kendaraan menutup jalan/gang", "Memastikan akses rumah warga tidak terhalang"],
+  usaha: ["Menjaga kebersihan dan ketertiban lokasi usaha", "Mengatur parkir pembeli agar tidak menghalangi jalan", "Mendaftarkan usaha melalui RW3BIZ (rw3padasukacimahi.org)"],
+  kost: ["Melaporkan seluruh penghuni melalui Visit RW3 (rw3padasukacimahi.org)", "Menyerahkan salinan KTP penghuni kepada Ketua RT setempat", "Menjaga ketenangan lingkungan setelah pukul 22.00"],
+  bangunan: ["Mengamankan bangunan/material agar tidak membahayakan warga", "Memperbaiki kerusakan yang ditimbulkan", "Tidak menempatkan material di badan jalan atau saluran"],
+  ketertiban: ["Menjaga ketertiban dan menghormati tetangga", "Menyelesaikan perselisihan melalui musyawarah RW"],
+  hewan: ["Menjaga hewan peliharaan agar tidak berkeliaran", "Membersihkan kotoran hewan di area umum"],
+  lainnya: [],
+};
+
 /** Kategori aduan → jenis pelanggaran RW3BIZ saat aduan usaha diteruskan ke sistem denda. */
 export const KATEGORI_KE_PELANGGARAN_BIZ: Record<KategoriAduan, string> = {
   sampah: "sampah_tercecer",

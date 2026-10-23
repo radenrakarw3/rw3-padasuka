@@ -221,6 +221,7 @@ async function ujiDatabase() {
   const nomorKk = `9900${acak()}`;
   const nik1 = `9901${acak()}`;
   const bersih: { kk?: number; kkLain: number[]; surat: number[] } = { surat: [], kkLain: [] };
+  const bersihTtd = await (await import("./surat-sakti-integrasi")).pastikanTtdUji(pool);
 
   try {
     let kkId = 0;
@@ -270,18 +271,19 @@ async function ujiDatabase() {
 
     await uji("nomor surat aman saat terbit bersamaan (tanpa duplikat)", async () => {
       for (let i = 0; i < 6; i++) {
-        const s = await surat.simpanDraft(rw, draftUji("c_undangan", `Uji paralel ${i}`));
+        const s = await surat.simpanDraft(rw, draftUji("c_edaran", `Uji paralel ${i}`));
         bersih.surat.push(s.id);
       }
       const hasil = await Promise.all(bersih.surat.map((id) => surat.terbitkan(rw, id)));
       sama(new Set(hasil.map((h) => h.nomorSurat)).size, hasil.length, "nomor unik");
-      await harusGagal(() => surat.simpanDraft(rw, draftUji("c_undangan", "Ubah"), bersih.surat[0]), 409, "surat terbit diubah");
-      await harusGagal(() => surat.simpanDraft(rt7, draftUji("c_undangan", "RT")), 403, "RT membuat surat");
+      await harusGagal(() => surat.simpanDraft(rw, draftUji("c_edaran", "Ubah"), bersih.surat[0]), 409, "surat terbit diubah");
+      await harusGagal(() => surat.simpanDraft(rt7, draftUji("c_edaran", "RT")), 403, "RT membuat surat");
     });
 
     await alurLengkap({ pool, data, qr, surat, rt7, rt6, rw, kkId: () => kkId, nik1, bersih, acak });
   } finally {
     await hapusSuratUji(pool, bersih.surat);
+    await bersihTtd();
     await pool.query(`DELETE FROM wil_usulan WHERE diinput_oleh = $1`, [rw.label]).catch(() => {});
     if (bersih.kkLain.length) await pool.query(`DELETE FROM kartu_keluarga WHERE id = ANY($1::int[])`, [bersih.kkLain]).catch(() => {});
     if (bersih.kk) {
@@ -391,7 +393,7 @@ async function alurLengkap(k: any) {
     pastikan(r.perhatian.some((p: any) => p.kunci === "s_jaminan_kesehatan"), "ringkasan perhatian");
   });
   await uji("surat: draft → lampiran → terbit → kirim berbukti → tindak → salin jadi draft baru", async () => {
-    const s = await surat.simpanDraft(rw, draftUji("b_permohonan_instansi", "Pengantar uji"));
+    const s = await surat.simpanDraft(rw, draftUji("mt_instansi", "Pengantar uji"));
     bersih.surat.push(s.id);
     const lamp = await surat.tambahLampiran(rw, s.id, { nama: "uji.png", data: "data:image/png;base64,iVBORw0KGgo=" });
     pastikan((await surat.ambilLampiranAman(rw, lamp.id)), "lampiran");

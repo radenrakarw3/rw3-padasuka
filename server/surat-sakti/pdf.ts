@@ -1,6 +1,7 @@
 /**
  * PDF Surat Sakti (server). Dibentuk dari blok terstruktur yang tersimpan — bukan dari teks bebas.
- * Tanda tangan: ruang kosong untuk tanda tangan basah. Tidak ada gambar tanda tangan.
+ * Tanda tangan: dokumen terbit memuat gambar tanda tangan Ketua RW + QR keaslian di kolom Ketua RW.
+ * Draf tidak pernah memuat tanda tangan. Kolom pihak lain tetap kosong untuk tanda tangan basah.
  */
 import fs from "fs";
 import path from "path";
@@ -78,12 +79,21 @@ export interface OpsiPdf {
   skala?: number;
   /** Rata kiri-kanan untuk paragraf, daftar, dan isian label. Default true. */
   rata?: boolean;
+  /** Gambar tanda tangan Ketua RW; hanya dibubuhkan pada dokumen terbit. */
+  ttd?: { dataUrl: string; mime: string } | null;
 }
+
+const KET_TTD_ELEKTRONIK =
+  "Dokumen ini ditandatangani secara elektronik oleh Ketua RW 03 melalui sistem RW 03. Pindai kode QR untuk memeriksa keaslian nomor, tanggal, penandatangan, dan status dokumen.";
 
 class Penulis {
   doc = new jsPDF({ unit: "mm", format: [F4.w, F4.h], compress: true });
   y = 0;
   readonly lh: number;
+  draft = false;
+  gambarTtd: { dataUrl: string; format: "PNG" | "JPEG"; w: number; h: number } | null = null;
+  qrData: string | null = null;
+  qrTerpasang = false;
   constructor(
     private nomor: string | null,
     readonly k = 1,
@@ -273,19 +283,24 @@ class Penulis {
     this.y += this.rata ? 5.5 : 3;
   }
 
-  ttd(kolom: { atas: string; nama: string; jabatan?: string }[], tempatTanggal?: string) {
+  ttd(kolom: { atas: string; nama: string; jabatan?: string; ketua?: boolean }[], tempatTanggal?: string) {
     this.font();
     const perBaris = kolom.length === 1 ? 1 : Math.min(3, kolom.length);
     const lh = this.lh;
+    const ruangTtd = 22;
+    const ukuranQr = 21;
     for (let i = 0; i < kolom.length; i += perBaris) {
       const grup = kolom.slice(i, i + perBaris);
       const lebar = perBaris === 1 ? CW / 2 : CW / grup.length;
       this.font("normal", 11);
       const barisAtas = Math.max(1, ...grup.map((k) => this.pecah(k.atas, lebar - 4).length));
-      const tinggi = (barisAtas + 2) * lh + 22;
+      this.font("normal", 10.5);
+      const barisJabatan = Math.max(0, ...grup.map((k) => (k.jabatan ? Math.min(2, this.pecah(k.jabatan, lebar - 4).length) : 0)));
+      const tinggi = (barisAtas + 1 + barisJabatan) * lh + ruangTtd + 4;
       this.pastikan(tinggi + (i === 0 && tempatTanggal ? lh + 1 : 0));
       const x0 = perBaris === 1 ? ML + CW / 2 : ML;
       if (i === 0 && tempatTanggal) {
+        this.font("normal", 11);
         this.doc.text(bersihkan(tempatTanggal), perBaris === 1 ? x0 + lebar / 2 : ML + CW, this.y, { align: perBaris === 1 ? "center" : "right" });
         this.y += lh + 1;
       }
@@ -298,7 +313,9 @@ class Penulis {
           this.doc.text(l, cx, y, { align: "center" });
           y += lh;
         }
-        y += 20;
+        const yRuang = y - lh * 0.4;
+        if (k.ketua) this.bubuhkanTtd(cx, yRuang, Math.min(48, lebar - 6), ruangTtd - 2, perBaris === 1 ? x0 - ukuranQr - 4 : null, ukuranQr);
+        y += ruangTtd;
         this.font("bold", 11);
         const nama = this.pecah(k.nama, lebar - 4)[0] ?? "";
         this.doc.text(nama, cx, y, { align: "center" });
@@ -306,30 +323,58 @@ class Penulis {
         this.doc.setLineWidth(0.2);
         this.doc.line(cx - w / 2, y + 0.8, cx + w / 2, y + 0.8);
         this.font("normal", 10.5);
-        if (k.jabatan) this.doc.text(this.pecah(k.jabatan, lebar - 4)[0] ?? "", cx, y + lh, { align: "center" });
+        if (k.jabatan) this.pecah(k.jabatan, lebar - 4).slice(0, 2).forEach((l, n) => this.doc.text(l, cx, y + lh * (n + 1), { align: "center" }));
       });
       this.y = yAwal + tinggi;
     }
     this.font();
   }
 
-  async qr(url: string) {
-    const ukuran = 22;
-    this.pastikan(ukuran + 4);
-    try {
-      const data = await QRCode.toDataURL(url, { margin: 0, width: 240 });
-      this.doc.addImage(data, "PNG", ML, this.y, ukuran, ukuran);
-    } catch {
-      /* QR opsional */
+  /** Tanda tangan Ketua RW di ruang tanda tangan; QR keaslian di kiri kolom bila muat (qrX), selain itu di bawah dokumen. */
+  private bubuhkanTtd(cx: number, yAtas: number, maksW: number, maksH: number, qrX: number | null, ukuranQr: number) {
+    if (this.draft) {
+      this.doc.setTextColor(140);
+      this.font("italic", 8);
+      this.doc.text("(tanda tangan & QR dibubuhkan saat terbit)", cx, yAtas + maksH / 2 + 1, { align: "center" });
+      this.doc.setTextColor(0);
+      return;
     }
+    const g = this.gambarTtd;
+    if (g) {
+      const s = Math.min(maksW / g.w, maksH / g.h);
+      const w = g.w * s;
+      const h = g.h * s;
+      try {
+        this.doc.addImage(g.dataUrl, g.format, cx - w / 2, yAtas + (maksH - h) / 2, w, h);
+      } catch {
+        /* gambar rusak: ruang tetap kosong untuk tanda tangan basah */
+      }
+    }
+    if (this.qrData && qrX !== null && !this.qrTerpasang) {
+      const yQr = yAtas + (maksH - ukuranQr) / 2 + 2;
+      this.doc.addImage(this.qrData, "PNG", qrX, yQr, ukuranQr, ukuranQr);
+      this.font("italic", 7);
+      this.doc.text("Pindai untuk cek keaslian", qrX + ukuranQr / 2, yQr + ukuranQr + 3, { align: "center" });
+      this.qrTerpasang = true;
+    }
+  }
+
+  /** QR di bawah dokumen (bila tidak muat di samping tanda tangan) + keterangan tanda tangan elektronik. */
+  keteranganKeaslian() {
+    const ukuran = 22;
     this.font("italic", 8.5);
-    const ket = [
-      "Pindai untuk memeriksa nomor, tanggal, penerbit, dan status dokumen.",
-      "Kode QR ini bukan tanda tangan elektronik tersertifikasi.",
-      "Dokumen sah bila ditandatangani basah oleh penandatangan.",
-    ];
-    ket.forEach((k, i) => this.doc.text(k, ML + ukuran + 3, this.y + 5 + i * 4.2));
-    this.y += ukuran + 3;
+    if (this.qrData && !this.qrTerpasang) {
+      this.pastikan(ukuran + 4);
+      this.doc.addImage(this.qrData, "PNG", ML, this.y, ukuran, ukuran);
+      this.pecah(KET_TTD_ELEKTRONIK, CW - ukuran - 4).forEach((l, i) => this.doc.text(l, ML + ukuran + 3, this.y + 5 + i * 4.2));
+      this.y += ukuran + 3;
+      this.qrTerpasang = true;
+    } else if (this.qrData) {
+      const ls = this.pecah(KET_TTD_ELEKTRONIK, CW);
+      this.pastikan(ls.length * 4.2 + 2);
+      ls.forEach((l, i) => this.doc.text(l, ML, this.y + i * 4.2));
+      this.y += ls.length * 4.2 + 2;
+    }
     this.font();
   }
 
@@ -367,6 +412,22 @@ class Penulis {
 export async function buatPdf(o: OpsiPdf): Promise<{ buffer: Buffer; halaman: number }> {
   const p = new Penulis(o.nomor, o.skala ?? SKALA_SURAT, o.rata ?? true);
   if (o.judul) p.doc.setProperties({ title: bersihkan(o.judul), creator: IDENTITAS_RW.penerbit });
+  p.draft = o.draft;
+  if (!o.draft && o.ttd) {
+    try {
+      const props = p.doc.getImageProperties(o.ttd.dataUrl);
+      p.gambarTtd = { dataUrl: o.ttd.dataUrl, format: o.ttd.mime === "image/jpeg" ? "JPEG" : "PNG", w: props.width, h: props.height };
+    } catch {
+      p.gambarTtd = null;
+    }
+  }
+  if (!o.draft && o.verifikasiUrl) {
+    try {
+      p.qrData = await QRCode.toDataURL(o.verifikasiUrl, { margin: 0, width: 240 });
+    } catch {
+      p.qrData = null;
+    }
+  }
   p.kop();
   for (let i = 0; i < o.bloks.length; i++) {
     const b = o.bloks[i];
@@ -427,9 +488,9 @@ export async function buatPdf(o: OpsiPdf): Promise<{ buffer: Buffer; halaman: nu
         break;
     }
   }
-  if (o.verifikasiUrl && !o.draft) {
+  if (p.qrData) {
     p.y += 4;
-    await p.qr(o.verifikasiUrl);
+    p.keteranganKeaslian();
   }
   const halaman = p.akhiri(o.draft);
   return { buffer: Buffer.from(p.doc.output("arraybuffer")), halaman };

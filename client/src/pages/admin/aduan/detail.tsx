@@ -23,7 +23,7 @@ import {
   ADUAN_ROUTES, IKON_KATEGORI, IKON_MODE, LencanaPrioritas, LencanaStatus, PilihFotoBukti, formatTanggal, formatWaktu,
 } from "@/components/aduan/aduan-ui";
 import {
-  DAMPAK_ADUAN_LABEL, FREKUENSI_ADUAN_LABEL, JENIS_TERADU, JENIS_TERADU_LABEL, KATEGORI_ADUAN_INFO, MODE_IDENTITAS_INFO,
+  DAMPAK_ADUAN_LABEL, FREKUENSI_ADUAN_LABEL, JENIS_TERADU, JENIS_TERADU_LABEL, KATEGORI_ADUAN_INFO, KEWAJIBAN_SARAN, MODE_IDENTITAS_INFO,
   PRIORITAS_ADUAN, PRIORITAS_ADUAN_LABEL, STATUS_TEGURAN_LABEL, TINGKAT_TEGURAN, TINGKAT_TEGURAN_INFO,
   type DampakAduan, type FrekuensiAduan, type JenisTeradu, type KategoriAduan, type ModeIdentitas, type StatusTeguran, type TingkatTeguran,
 } from "@shared/aduan";
@@ -47,19 +47,6 @@ type Detail = {
   aduanLainTeradu: { id: number; nomor: string; judul: string; status: string }[];
   riwayatTeguran: { id: number; tingkat: TingkatTeguran; status: string; nomorSurat: string | null; dibuat: string }[];
   saranTingkat: TingkatTeguran | null;
-};
-
-const KEWAJIBAN_SARAN: Record<KategoriAduan, string[]> = {
-  sampah: ["Tidak membuang sampah sembarangan", "Membersihkan sampah di lokasi paling lambat batas waktu"],
-  kebisingan: ["Tidak menimbulkan suara keras di atas pukul 22.00", "Menghormati waktu istirahat tetangga"],
-  keamanan: ["Menghentikan kegiatan yang meresahkan warga", "Melapor kepada pengurus RW bila menerima tamu menginap"],
-  parkir: ["Tidak memarkir kendaraan menutup jalan/gang", "Memastikan akses rumah warga tidak terhalang"],
-  usaha: ["Menjaga kebersihan dan ketertiban lokasi usaha", "Mengatur parkir pembeli agar tidak menghalangi jalan"],
-  kost: ["Melaporkan seluruh penghuni kepada pengurus RW", "Menjaga ketenangan lingkungan setelah pukul 22.00"],
-  bangunan: ["Mengamankan bangunan/material agar tidak membahayakan warga", "Memperbaiki kerusakan yang ditimbulkan"],
-  ketertiban: ["Menjaga ketertiban dan menghormati tetangga", "Menyelesaikan perselisihan melalui musyawarah RW"],
-  hewan: ["Menjaga hewan peliharaan agar tidak berkeliaran", "Membersihkan kotoran hewan di area umum"],
-  lainnya: [],
 };
 
 const tambahHari = (n: number) => {

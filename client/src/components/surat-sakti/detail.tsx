@@ -264,7 +264,7 @@ export function DetailSurat({ id, tutup, ubahDraft }: { id: number; tutup: () =>
         </Bagian>
       )}
 
-      {final && (j?.kategori === "D" || s.bantuan.length > 0) && (
+      {final && (j?.kelompok.includes("bantuan") || s.bantuan.length > 0) && (
         <Bagian judul="Dukungan / bantuan (per tahap)" aksi={<Button size="sm" variant="outline" onClick={() => setForm(form === "bantuan" ? null : "bantuan")}>+ Catat tahap</Button>}>
           <p className="text-xs text-muted-foreground">Tahap dimohonkan, dijanjikan, diterima, dan digunakan dicatat terpisah. Yang dimohonkan atau dijanjikan bukan pemasukan.</p>
           <ul className="text-sm space-y-1">

@@ -43,7 +43,7 @@ async function main() {
     ssl: process.env.DATABASE_URL.includes("sslmode=") ? undefined : process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined,
   });
   await client.connect();
-  const sql = ["0023_wilayah.sql", "0024_wilayah_input_rw.sql", "0025_surat_sakti.sql", "0026_wilayah_standar.sql"]
+  const sql = ["0023_wilayah.sql", "0024_wilayah_input_rw.sql", "0025_surat_sakti.sql", "0026_wilayah_standar.sql", "0032_surat_ttd.sql"]
     .map((f) => fs.readFileSync(path.join(process.cwd(), "migrations", f), "utf8"))
     .join("\n");
 

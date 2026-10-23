@@ -7,6 +7,7 @@ import * as standar from "./wilayah-standar";
 import * as surat from "./wilayah-surat";
 import * as layanan from "./surat-sakti/layanan";
 import * as tindak from "./surat-sakti/tindak";
+import * as ttd from "./surat-sakti/ttd";
 import { kotakMasukRw, ringkasanRw } from "./wilayah-dashboard";
 import { isWilayahRt, type SubjekFakta } from "@shared/wilayah";
 
@@ -143,6 +144,9 @@ export function registerWilayahRoutes(app: Express) {
 
   app.get("/api/wilayah/rw/surat-ringkasan", RW, h(async (req) => tindak.ringkasan(req.aktor!)));
   app.get("/api/wilayah/rw/surat-referensi", RW, h(async (req) => tindak.referensi(req.aktor!)));
+  app.get("/api/wilayah/rw/surat-ttd", RW, h(async (req) => ttd.statusTtd(req.aktor!)));
+  app.post("/api/wilayah/rw/surat-ttd", RW, h(async (req) => ttd.unggahTtd(req.aktor!, req.body), "Gagal menyimpan tanda tangan"));
+  app.delete("/api/wilayah/rw/surat-ttd", RW, h(async (req) => ttd.hapusTtd(req.aktor!)));
   app.post("/api/wilayah/rw/surat", RW, h(async (req) => layanan.simpanDraft(req.aktor!, req.body)));
   app.patch("/api/wilayah/rw/surat/:id", RW, h(async (req) => layanan.simpanDraft(req.aktor!, req.body, idParam(req))));
   app.delete("/api/wilayah/rw/surat/:id", RW, h(async (req) => layanan.hapusDraft(req.aktor!, idParam(req))));

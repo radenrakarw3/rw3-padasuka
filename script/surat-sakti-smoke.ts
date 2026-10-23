@@ -49,12 +49,22 @@ async function main() {
       for (const k of j.kelompok) pastikan(ss.KELOMPOK[k], `${j.kode}: kelompok ${k} tidak ada`);
     }
   });
-  await uji("kategori A–F terisi dan 8 jenis lama terpetakan", async () => {
-    for (const k of ["A", "B", "C", "D", "E", "F"]) pastikan(ss.KATALOG.some((j) => j.kategori === k), `kategori ${k} kosong`);
+  await uji("pilar Menegur/Meminta/Jabatan/Kustom terisi dan 8 jenis lama terpetakan", async () => {
+    for (const k of ["T", "M", "J", "F"]) pastikan(ss.KATALOG.some((j) => j.kategori === k), `kategori ${k} kosong`);
     const { JENIS_SURAT_RW } = await import("../shared/surat-nomor");
     for (const lama of JENIS_SURAT_RW) pastikan(ss.jenisDariLabelLama(lama), `jenis lama ${lama} tidak terpetakan`);
   });
-  await uji("jumlah jenis ≥ 51", () => pastikan(ss.KATALOG.length >= 51, `hanya ${ss.KATALOG.length}`));
+  await uji("katalog ringkas: 15 jenis + kustom", () => pastikan(ss.KATALOG.length === 16, `ada ${ss.KATALOG.length}`));
+  await uji("kode yang dipakai modul Aduan tetap ada", () => {
+    for (const kode of ["b_klarifikasi", "b_teguran_lisan", "b_sp"]) pastikan(ss.PETA_JENIS[kode], `${kode} hilang`);
+  });
+  await uji("kode lama dipetakan ke jenis yang ada", () => {
+    for (const [lama, p] of Object.entries(ss.KODE_LAMA)) pastikan(ss.PETA_JENIS[p.kode], `${lama} → ${p.kode} tidak ada`);
+    const ba = ss.petakanKodeLama("c_ba_musyawarah", { hasil: ["Sepakat"] }, "");
+    pastikan(ba.kode === "jb_berita_acara" && ba.data.jenisBA === "Musyawarah" && Array.isArray(ba.data.hasil), JSON.stringify(ba));
+    const k = ss.petakanKodeLama("c_undangan", { penerima: [{ nama: "Warga", jenis: "warga" }], agenda: ["x"] }, "Isi lama.");
+    pastikan(k.kode === "f_kustom" && k.data.isiSurat === "Isi lama." && !("agenda" in k.data) && Array.isArray(k.data.penerima), JSON.stringify(k));
+  });
 
   console.log("\n== Redaksi ==");
   await uji("terbilang & rupiah", () => {
@@ -77,23 +87,45 @@ async function main() {
     pastikan(v.galat.some((g) => g.includes("dikonfirmasi")), "harus ditolak");
     pastikan(v.perluPemeriksaan, "harus perlu pemeriksaan");
   });
-  await uji("penetapan tanpa dasar → perlu pemeriksaan, tidak bisa terbit", () => {
-    const j = ss.PETA_JENIS.c_penetapan;
+  await uji("keputusan tanpa dasar → perlu pemeriksaan, tidak bisa terbit", () => {
+    const j = ss.PETA_JENIS.jb_keputusan;
     const d = { ...contohData(j), dasar: [], sumberMusyawarah: "", dasarDiperiksa: false };
     const v = ss.validasiDokumen(j, d, { perihal: "Penetapan", tanggal: "2026-10-12" });
     pastikan(v.galat.length > 0 && v.perluPemeriksaan, "harus diblokir");
   });
   await uji("placeholder tersisa ditolak; kata sanksi diberi peringatan", () => {
-    const j = ss.PETA_JENIS.b_imbauan;
-    const v1 = ss.validasiDokumen(j, { ...contohData(j), kondisiDiamati: "Sampah di [isi lokasi]" }, { perihal: "Imbauan", tanggal: "2026-10-12" });
+    const j = ss.PETA_JENIS.c_edaran;
+    const v1 = ss.validasiDokumen(j, { ...contohData(j), informasi: "Sampah di [isi lokasi]" }, { perihal: "Edaran", tanggal: "2026-10-12" });
     pastikan(v1.galat.some((g) => g.includes("placeholder")), "placeholder lolos");
-    const v2 = ss.validasiDokumen(j, { ...contohData(j), kondisiDiamati: "Akan dikenakan denda" }, { perihal: "Imbauan", tanggal: "2026-10-12" });
+    const v2 = ss.validasiDokumen(j, { ...contohData(j), informasi: "Akan dikenakan denda" }, { perihal: "Edaran", tanggal: "2026-10-12" });
     pastikan(v2.peringatan.length > 0, "kata sanksi tanpa peringatan");
   });
   await uji("field wajib kosong ditolak", () => {
-    const j = ss.PETA_JENIS.a_tugas;
-    const v = ss.validasiDokumen(j, {}, { perihal: "Tugas", tanggal: "2026-10-12" });
-    pastikan(v.galat.some((g) => g.startsWith("Petugas")), JSON.stringify(v.galat));
+    const j = ss.PETA_JENIS.b_sp;
+    const v = ss.validasiDokumen(j, {}, { perihal: "SP", tanggal: "2026-10-12" });
+    pastikan(v.galat.some((g) => g.startsWith("Hal yang ditegur")), JSON.stringify(v.galat));
+  });
+  await uji("batas waktu teguran sebelum tanggal surat ditolak", () => {
+    for (const kode of ["b_sp", "tg_pekerjaan"]) {
+      const j = ss.PETA_JENIS[kode];
+      const v = ss.validasiDokumen(j, { ...contohData(j), tenggatPerbaikan: "2026-10-01" }, { perihal: "Teguran", tanggal: "2026-10-12" });
+      pastikan(v.galat.some((g) => g.startsWith("Batas waktu")), `${kode}: ${v.galat.join("; ")}`);
+    }
+  });
+  await uji("SP tidak lagi mengharuskan asal aduan", () => {
+    const j = ss.PETA_JENIS.b_sp;
+    const teks = ss.teksPolos(ss.renderDokumen(j, { ...contohData(j), dasarTeguran: "Peraturan RW 03 Nomor 1 Tahun 2026 tentang Ketertiban" }, { nomor: null, tanggal: "2026-10-12", perihal: "SP-1", draft: true }));
+    pastikan(!/atas aduan warga/i.test(teks) && teks.includes("Peraturan RW 03 Nomor 1"), teks.slice(0, 400));
+  });
+  await uji("judul berita acara & laporan mengikuti pilihan", () => {
+    const meta = { nomor: null, tanggal: "2026-10-12", perihal: "Uji", draft: true };
+    const ba = ss.renderDokumen(ss.PETA_JENIS.jb_berita_acara, { ...contohData(ss.PETA_JENIS.jb_berita_acara), jenisBA: "Serah-Terima" }, meta);
+    pastikan(ba[0].t === "judul" && ba[0].teks === "BERITA ACARA SERAH-TERIMA", JSON.stringify(ba[0]));
+    pastikan(!ss.teksPolos(ba).includes("Jenis berita acara"), "jenis BA tercetak dua kali");
+    const lap = ss.renderDokumen(ss.PETA_JENIS.jb_laporan, { ...contohData(ss.PETA_JENIS.jb_laporan), jenisLaporan: "Laporan Penggunaan Dana/Barang" }, meta);
+    pastikan(lap[0].t === "judul" && lap[0].teks === "LAPORAN PENGGUNAAN DANA/BARANG", JSON.stringify(lap[0]));
+    const kosong = ss.renderDokumen(ss.PETA_JENIS.jb_laporan, {}, meta);
+    pastikan(kosong[0].t === "judul" && kosong[0].teks === "LAPORAN KEGIATAN / PERTANGGUNGJAWABAN", JSON.stringify(kosong[0]));
   });
   await uji("status independen & terlambat dihitung dari tenggat", () => {
     pastikan(ss.statusDistribusi([]) === "belum", "distribusi");
@@ -104,9 +136,9 @@ async function main() {
     pastikan(!ss.terlambat({ status: "selesai", tenggat: "2026-10-01" }, "2026-10-10"), "selesai tidak terlambat");
   });
   await uji("surat yang biasa merujuk surat lama tetap sah tanpa rujukan", () => {
-    for (const kode of ["b_pengingat", "d_pengingat", "e_kembali", "a_ubah", "c_ubah", "a_minta_laporan"]) {
+    for (const kode of ["mt_susulan", "jb_keputusan"]) {
       const j = ss.PETA_JENIS[kode];
-      const d = { ...contohData(j), suratRujukan: "", tanggalRujukan: "", penugasanRujukan: "", keputusanDiubah: "" };
+      const d = { ...contohData(j), suratRujukan: "", tanggalRujukan: "", keputusanDiubah: "" };
       const v = ss.validasiDokumen(j, d, { perihal: "Uji tanpa rujukan", tanggal: "2026-10-12" });
       pastikan(v.galat.length === 0, `${kode}: ${v.galat.join("; ")}`);
     }
@@ -125,6 +157,46 @@ async function main() {
     pastikan(surat.some((b) => b.t === "paragraf" && b.teks.startsWith("Demikian")), "penutup baku");
   });
 
+  console.log("\n== Tanda tangan & form ==");
+  const { ttdContohDataUrl } = await import("./ttd-contoh");
+  const ttd = { dataUrl: ttdContohDataUrl(), mime: "image/png" };
+  const jumlahGambar = (b: Buffer) => (b.toString("latin1").match(/\/Subtype \/Image/g) ?? []).length;
+  /** Gambar kop (logo PNG bening = gambar + masker). */
+  const gambarDasar = jumlahGambar((await buatPdf({ bloks: [], nomor: null, draft: true })).buffer);
+  await uji("Ketua RW selalu menandatangani setiap jenis (nama & jabatan baku)", () => {
+    for (const j of ss.KATALOG) {
+      const d = { ...contohData(j), penandatangan: [{ nama: "Raden Raka", peran: "Ketua RW", jenis: "pengurus" }] };
+      const t = ss.renderDokumen(j, d, { nomor: null, tanggal: "2026-10-12", perihal: "Uji", draft: true }).find((b) => b.t === "ttd");
+      pastikan(t && t.t === "ttd", `${j.kode}: tanpa blok tanda tangan`);
+      const ketua = t.kolom.filter((k) => k.ketua);
+      pastikan(ketua.length === 1 && ketua[0].nama === "Raden Raka A.K.S" && ketua[0].jabatan === "Ketua Rukun Warga 03 Padasuka Cimahi", `${j.kode}: ${JSON.stringify(t.kolom)}`);
+      pastikan(t.kolom.filter((k) => k.nama.startsWith("Raden Raka")).length === 1, `${j.kode}: Ketua RW ganda`);
+    }
+  });
+  await uji("draf tanpa tanda tangan; terbit memuat tanda tangan + QR", async () => {
+    const j = ss.PETA_JENIS.b_sp;
+    const bloks = ss.renderDokumen(j, contohData(j), { nomor: null, tanggal: "2026-10-12", perihal: "SP", draft: true });
+    const polos = await buatPdf({ bloks, nomor: null, draft: true });
+    const draf = await buatPdf({ bloks, nomor: null, draft: true, ttd, verifikasiUrl: "https://rw3padasukacimahi.org/verify/surat/x" });
+    const terbit = await buatPdf({ bloks, nomor: "001/SP/RW.03/X/2026", draft: false, ttd, verifikasiUrl: "https://rw3padasukacimahi.org/verify/surat/x" });
+    pastikan(jumlahGambar(draf.buffer) === gambarDasar, `draf memuat tanda tangan/QR (${jumlahGambar(draf.buffer)} vs ${gambarDasar})`);
+    pastikan(jumlahGambar(polos.buffer) === gambarDasar, "kop berubah");
+    pastikan(jumlahGambar(terbit.buffer) === gambarDasar + 3, `terbit: ${jumlahGambar(terbit.buffer)} gambar, harus kop + tanda tangan (+masker bening) + QR`);
+  });
+  await uji("pilihan cepat sah: rujukan field ada, tanpa placeholder/kata sensitif", () => {
+    for (const j of ss.KATALOG) {
+      const fields = ss.fieldJenis(j);
+      const kunci = new Set(fields.map((f) => f.key));
+      for (const f of fields) {
+        if (f.saran && !Array.isArray(f.saran)) pastikan(kunci.has((f.saran as { dari: string }).dari), `${j.kode}.${f.key}: saran merujuk field yang tidak ada`);
+        const semua = Array.isArray(f.saran) ? f.saran : f.saran ? Object.values((f.saran as { peta: Record<string, string[]> }).peta).flat() : [];
+        for (const s of [...semua, ...(j.saranPerihal ?? [])]) {
+          pastikan(!ss.POLA_PLACEHOLDER.test(s) && !ss.POLA_SENSITIF.test(s), `${j.kode}.${f.key}: "${s}"`);
+        }
+      }
+    }
+  });
+
   console.log("\n== PDF semua jenis ==");
   for (const j of ss.KATALOG) {
     await uji(`${j.kode} (${j.layout})`, async () => {
@@ -136,7 +208,8 @@ async function main() {
       pastikan(!ss.POLA_PLACEHOLDER.test(teks), "placeholder di hasil");
       pastikan(!/undefined|null|\[object/i.test(teks), "nilai kosong bocor ke dokumen");
       pastikan(bloks.some((b) => b.t === "ttd"), "tanpa blok tanda tangan");
-      const { buffer, halaman } = await buatPdf({ bloks, nomor: `001/${j.nomorKode}/RW.03/X/2026`, draft: false, verifikasiUrl: "https://rw3padasukacimahi.org/verify/surat/contoh" });
+      const { buffer, halaman } = await buatPdf({ bloks, nomor: `001/${j.nomorKode}/RW.03/X/2026`, draft: false, verifikasiUrl: "https://rw3padasukacimahi.org/verify/surat/contoh", ttd });
+      pastikan(jumlahGambar(buffer) === gambarDasar + 3, `gambar di PDF: ${jumlahGambar(buffer)} (harus kop + tanda tangan + QR)`);
       pastikan(buffer.subarray(0, 5).toString() === "%PDF-", "bukan PDF");
       pastikan(halaman >= 1, "halaman 0");
       const kotak = /\/MediaBox \[0 0 ([\d.]+) ([\d.]+)\]/.exec(buffer.toString("latin1"));
@@ -145,7 +218,7 @@ async function main() {
     });
   }
   await uji("dokumen panjang (tabel 60 baris, daftar 40 butir) multi-halaman", async () => {
-    for (const kode of ["c_jadwal", "e_penggunaan", "b_ba_klarifikasi", "d_dana"]) {
+    for (const kode of ["jb_laporan", "jb_berita_acara", "mt_bantuan", "e_notulen"]) {
       const j = ss.PETA_JENIS[kode];
       const bloks = ss.renderDokumen(j, contohData(j, true), { nomor: null, tanggal: "2026-10-12", perihal: "Dokumen panjang", draft: true });
       const { buffer, halaman } = await buatPdf({ bloks, nomor: null, draft: true });
@@ -153,13 +226,6 @@ async function main() {
       fs.writeFileSync(path.join(keluar, `panjang-${kode}.pdf`), buffer);
     }
   });
-  await uji("daftar hadir punya baris kosong untuk tanda tangan", () => {
-    const j = ss.PETA_JENIS.e_daftar_hadir;
-    const bloks = ss.renderDokumen(j, { namaKegiatan: "Rapat", waktuAcara: "2026-10-12", jamAcara: "19:30", tempatAcara: "Balai RW" }, { nomor: null, tanggal: "2026-10-12", perihal: "Rapat", draft: true });
-    const t = bloks.find((b) => b.t === "tabel");
-    pastikan(t && t.t === "tabel" && t.baris.length >= 15, "baris kosong");
-  });
-
   if (DB_UJI) {
     const { ujiIntegrasi } = await import("./surat-sakti-integrasi");
     await ujiIntegrasi(uji, pastikan);

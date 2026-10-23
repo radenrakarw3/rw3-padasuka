@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ClipboardCheck, Gavel, Handshake, PenLine, Search, UserCheck } from "lucide-react";
+import { Gavel, HandHelping, Landmark, PenLine, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,6 +12,7 @@ import { Galat, RW, TigaStatus, tanggalId, type RingkasSurat } from "@/component
 import { Wizard, bacaEditorLokal, editorBaru, hapusEditorLokal, type StateEditor } from "@/components/surat-sakti/wizard";
 import { DetailSurat } from "@/components/surat-sakti/detail";
 import { DaftarTindak } from "@/components/surat-sakti/tindak";
+import { PanelTtd } from "@/components/surat-sakti/ttd";
 
 type Layar = { t: "beranda" } | { t: "wizard"; s: StateEditor } | { t: "detail"; id: number };
 
@@ -19,9 +20,8 @@ interface Ringkasan {
   draft: number; perlu_pemeriksaan: number; belum_distribusi: number; tindak_terlambat: number; tindak_jatuh_tempo: number; pekerjaan_selesai_30h: number;
 }
 
-const TOMBOL: { t: TujuanUtama; ikon: typeof UserCheck }[] = [
-  { t: "kustom", ikon: PenLine }, { t: "tugaskan", ikon: UserCheck }, { t: "masalah", ikon: AlertTriangle }, { t: "keputusan", ikon: Gavel },
-  { t: "dukungan", ikon: Handshake }, { t: "pantau", ikon: ClipboardCheck },
+const TOMBOL: { t: TujuanUtama; ikon: typeof Gavel }[] = [
+  { t: "menegur", ikon: Gavel }, { t: "meminta", ikon: HandHelping }, { t: "jabatan", ikon: Landmark }, { t: "kustom", ikon: PenLine },
 ];
 
 function DaftarSurat({ bagian, cari, buka }: { bagian: string; cari?: string; buka: (id: number) => void }) {
@@ -77,7 +77,7 @@ export default function SuratSakti() {
     const kej = Number(params.get("kejadian"));
     const surat = Number(params.get("surat"));
     if (surat) setLayar({ t: "detail", id: surat });
-    else if (kej) setLayar({ t: "wizard", s: editorBaru({ kejadianId: kej, tujuan: "masalah" }) });
+    else if (kej) setLayar({ t: "wizard", s: editorBaru({ kejadianId: kej, tujuan: "menegur" }) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -102,6 +102,7 @@ export default function SuratSakti() {
 
       {layar.t === "beranda" && (
         <>
+          <PanelTtd />
           {lokal && (lokal.perihal || lokal.kode) && (
             <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm flex flex-wrap items-center gap-2">
               <span className="w-full min-w-0 break-words sm:w-auto sm:flex-1">Ada isian belum selesai: <b>{PETA_JENIS[lokal.kode]?.label ?? "dokumen"}{lokal.perihal ? ` — ${lokal.perihal}` : ""}</b></span>
@@ -110,7 +111,7 @@ export default function SuratSakti() {
             </div>
           )}
 
-          <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
             {TOMBOL.map(({ t, ikon: Ikon }) => (
               <button key={t} type="button"
                 onClick={() => bukaWizard(t === "kustom" ? editorBaru({ tujuan: t, kode: "f_kustom" }) : editorBaru({ tujuan: t }))}
