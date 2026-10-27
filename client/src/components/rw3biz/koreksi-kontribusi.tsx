@@ -1,26 +1,19 @@
-import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  ASAL_ORANG_BIZ,
-  ASAL_ORANG_BIZ_LABEL,
   JENIS_TEMPAT_BIZ,
   JENIS_TEMPAT_BIZ_LABEL,
   CHARTER_BIZ,
   KENDARAAN_BIZ,
   OPERASIONAL_MALAM,
   OPERASIONAL_MALAM_LABEL,
-  PERAN_ORANG_BIZ,
-  PERAN_ORANG_BIZ_LABEL,
   RENTANG_OMZET,
-  RENTANG_OMZET_LABEL,
   STATUS_TEMPAT_BIZ,
   STATUS_TEMPAT_BIZ_LABEL,
   formatRp,
-  hitungKontribusiRw3biz,
   type HasilKontribusi,
   type TarifKontribusi,
 } from "@shared/rw3biz-kontribusi";
@@ -30,7 +23,8 @@ export type DataKontribusiEdit = {
   statusTempat: string;
   luasM2: number;
   hariOperasional: number;
-  rentangOmzet: string;
+  /** Data lama, tidak diubah lagi di editor. */
+  rentangOmzet: string | null;
   operasionalMalam: string;
   sampahKantongHari: number;
   pakaiBahuJalan: boolean;
@@ -43,16 +37,6 @@ export type DataKontribusiEdit = {
   charterTruk: number;
   charterTrukBesar: number;
   usahaBaru: boolean;
-};
-
-export type OrangKontribusiEdit = {
-  id: number;
-  namaLengkap: string;
-  isAnak: boolean;
-  peran: string;
-  asal: string;
-  domisili?: string | null;
-  wargaId?: number | null;
 };
 
 type BarisSumber = {
@@ -84,7 +68,7 @@ export function dataKontribusiDariBaris(r: BarisSumber): DataKontribusiEdit {
     statusTempat: pilih(STATUS_TEMPAT_BIZ, r.statusTempat, "sewa"),
     luasM2: r.luasM2 ?? 0,
     hariOperasional: r.hariOperasional ?? 7,
-    rentangOmzet: pilih(RENTANG_OMZET, r.rentangOmzet, "lt3"),
+    rentangOmzet: (RENTANG_OMZET as readonly string[]).includes(String(r.rentangOmzet)) ? String(r.rentangOmzet) : null,
     operasionalMalam: pilih(OPERASIONAL_MALAM, r.operasionalMalam, "tidak"),
     sampahKantongHari: r.sampahKantongHari ?? 0,
     pakaiBahuJalan: Boolean(r.pakaiBahuJalan),
@@ -97,27 +81,6 @@ export function dataKontribusiDariBaris(r: BarisSumber): DataKontribusiEdit {
     charterTruk: r.charterTruk ?? 0,
     charterTrukBesar: r.charterTrukBesar ?? 0,
     usahaBaru: Boolean(r.usahaBaru),
-  };
-}
-
-export function orangKontribusiDariBaris(
-  rows: { id: number; namaLengkap: string; isAnak: boolean; peran?: string | null; asal?: string | null; domisili?: string | null; wargaId?: number | null }[],
-): OrangKontribusiEdit[] {
-  return rows.map((o) => ({
-    id: o.id,
-    namaLengkap: o.namaLengkap,
-    isAnak: o.isAnak,
-    peran: pilih(PERAN_ORANG_BIZ, o.peran, "pekerja_tetap"),
-    asal: pilih(ASAL_ORANG_BIZ, o.asal, "luar"),
-    domisili: o.domisili ?? null,
-    wargaId: o.wargaId ?? null,
-  }));
-}
-
-export function koreksiPayload(data: DataKontribusiEdit, orang: OrangKontribusiEdit[]) {
-  return {
-    ...data,
-    orang: orang.filter((o) => !o.isAnak).map((o) => ({ id: o.id, peran: o.peran, asal: o.asal })),
   };
 }
 
@@ -200,26 +163,14 @@ function PilihKecil({
 const opsi = <T extends string>(daftar: readonly T[], label: Record<T, string>) =>
   daftar.map((v) => ({ value: v, label: label[v] }));
 
-/** Editor hasil survey lapangan + pratinjau kontribusi (rumus sama dengan server). */
+/** Editor hasil survey lapangan (data usaha & kendaraan untuk razia). Tidak menentukan sumbangsih. */
 export function KoreksiKontribusiEditor({
   data,
-  orang,
   onData,
-  onOrang,
 }: {
   data: DataKontribusiEdit;
-  orang: OrangKontribusiEdit[];
   onData: (patch: Partial<DataKontribusiEdit>) => void;
-  onOrang: (id: number, patch: Partial<OrangKontribusiEdit>) => void;
 }) {
-  const { data: tarif } = useTarifAdmin();
-  const hasil = useMemo(
-    () =>
-      tarif
-        ? hitungKontribusiRw3biz({ ...data, orang: orang.map((o) => ({ peran: o.peran, asal: o.asal, isAnak: o.isAnak })) }, tarif)
-        : null,
-    [tarif, data, orang],
-  );
   const angka = (s: string) => Math.max(0, parseInt(s.replace(/\D/g, ""), 10) || 0);
 
   return (
@@ -229,13 +180,9 @@ export function KoreksiKontribusiEditor({
           <Label className="text-xs">Jenis tempat</Label>
           <PilihKecil value={data.jenisTempatUsaha} onChange={(v) => onData({ jenisTempatUsaha: v })} options={opsi(JENIS_TEMPAT_BIZ, JENIS_TEMPAT_BIZ_LABEL)} />
         </div>
-        <div className="space-y-1 col-span-2 sm:col-span-1">
+        <div className="space-y-1 col-span-2">
           <Label className="text-xs">Status tempat</Label>
           <PilihKecil value={data.statusTempat} onChange={(v) => onData({ statusTempat: v })} options={opsi(STATUS_TEMPAT_BIZ, STATUS_TEMPAT_BIZ_LABEL)} />
-        </div>
-        <div className="space-y-1 col-span-2 sm:col-span-1">
-          <Label className="text-xs">Omzet / bulan</Label>
-          <PilihKecil value={data.rentangOmzet} onChange={(v) => onData({ rentangOmzet: v })} options={opsi(RENTANG_OMZET, RENTANG_OMZET_LABEL)} />
         </div>
         <div className="space-y-1">
           <Label className="text-xs">Luas (m²)</Label>
@@ -292,47 +239,11 @@ export function KoreksiKontribusiEditor({
             ))}
           </div>
         </div>
-        <label className="col-span-2 flex min-h-11 items-center justify-between gap-2 rounded border px-3 py-1.5 text-sm sm:col-span-1 sm:min-h-0 sm:px-2 sm:text-xs">
-          Pakai bahu jalan
+        <label className="col-span-2 flex min-h-11 items-center justify-between gap-2 rounded border px-3 py-1.5 text-sm sm:min-h-0 sm:px-2 sm:text-xs">
+          Pakai bahu jalan / parkir pelanggan
           <Switch checked={data.pakaiBahuJalan} onCheckedChange={(v) => onData({ pakaiBahuJalan: v })} />
         </label>
-        <label className="col-span-2 flex min-h-11 items-center justify-between gap-2 rounded border px-3 py-1.5 text-sm sm:col-span-1 sm:min-h-0 sm:px-2 sm:text-xs">
-          Usaha baru
-          <Switch checked={data.usahaBaru} onCheckedChange={(v) => onData({ usahaBaru: v })} />
-        </label>
       </div>
-
-      {orang.some((o) => !o.isAnak) && (
-        <div className="space-y-1.5">
-          <p className="text-xs font-medium">Peran & asal orang</p>
-          {orang
-            .filter((o) => !o.isAnak)
-            .map((o) => (
-              <div
-                key={o.id}
-                className="grid grid-cols-2 items-center gap-2 rounded-lg border p-2 sm:grid-cols-[1fr_auto_auto] sm:gap-1.5 sm:border-0 sm:p-0"
-              >
-                <p className="col-span-2 min-w-0 text-sm sm:col-span-1 sm:truncate sm:text-xs">
-                  {o.namaLengkap}
-                  {o.wargaId ? <span className="text-success"> · terdata warga RW 03</span> : null}
-                </p>
-                <div className="min-w-0 sm:w-36">
-                  <PilihKecil value={o.peran} onChange={(v) => onOrang(o.id, { peran: v })} options={opsi(PERAN_ORANG_BIZ, PERAN_ORANG_BIZ_LABEL)} />
-                </div>
-                <div className="min-w-0 sm:w-28">
-                  <PilihKecil value={o.asal} onChange={(v) => onOrang(o.id, { asal: v })} options={opsi(ASAL_ORANG_BIZ, ASAL_ORANG_BIZ_LABEL)} />
-                </div>
-              </div>
-            ))}
-        </div>
-      )}
-
-      {hasil && (
-        <div className="rounded-lg border border-brand/30 bg-brand/5 p-2">
-          <p className="mb-1 text-xs font-semibold">Pratinjau kontribusi setelah koreksi</p>
-          <RincianKontribusi hasil={hasil} />
-        </div>
-      )}
     </div>
   );
 }

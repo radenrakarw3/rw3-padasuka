@@ -28,20 +28,23 @@ import {
   KoreksiKontribusiEditor,
   RincianKontribusi,
   dataKontribusiDariBaris,
-  koreksiPayload,
-  orangKontribusiDariBaris,
   type DataKontribusiEdit,
-  type OrangKontribusiEdit,
 } from "@/components/rw3biz/koreksi-kontribusi";
+import {
+  RingkasanSumbangsih,
+  SumbangsihFields,
+  sumbangsihPayload,
+  type IsianSumbangsih,
+} from "@/components/rw3biz/kontribusi-form";
 import {
   ASAL_ORANG_BIZ_LABEL,
   CHARTER_BIZ,
   KENDARAAN_BIZ,
   PERAN_ORANG_BIZ_LABEL,
-  RENTANG_OMZET_LABEL,
   STATUS_TEMPAT_BIZ_LABEL,
   OPERASIONAL_MALAM_LABEL,
   formatRp,
+  parseSumbangsih,
   type HasilKontribusi,
 } from "@shared/rw3biz-kontribusi";
 import { hariIniWib } from "@shared/visitrw3-kontribusi";
@@ -113,7 +116,8 @@ export default function AdminRw3bizAntrian() {
   const [alasanTolak, setAlasanTolak] = useState("");
   const [koreksiAktif, setKoreksiAktif] = useState(false);
   const [dataKoreksi, setDataKoreksi] = useState<DataKontribusiEdit | null>(null);
-  const [orangKoreksi, setOrangKoreksi] = useState<OrangKontribusiEdit[]>([]);
+  const [ubahSumbangsih, setUbahSumbangsih] = useState(false);
+  const [sumbangsihBaru, setSumbangsihBaru] = useState<IsianSumbangsih>({});
   const [tanggalBayar, setTanggalBayar] = useState(hariIniWib);
 
   const status = lolosView === "belum" ? "menunggu_survey" : hasil;
@@ -179,12 +183,13 @@ export default function AdminRw3bizAntrian() {
       const res = await apiRequest("PATCH", `/api/admin/rw3biz/pengajuan/${id}/approve`, {
         catatanSurvey: catatanSurvey.trim() || null,
         tanggalBayar,
-        ...((koreksiAktif || wajibSurvey) && dataKoreksi ? { koreksi: koreksiPayload(dataKoreksi, orangKoreksi) } : {}),
+        ...((koreksiAktif || wajibSurvey) && dataKoreksi ? { koreksi: dataKoreksi } : {}),
+        ...(ubahSumbangsih || !sumbangsihDiajukan ? { sumbangsih: sumbangsihPayload(sumbangsihBaru) } : {}),
       });
       return readJsonSafely(res);
     },
     onSuccess: () => {
-      toast({ title: "Disetujui", description: "Usaha aktif, kontribusi bulanan ditetapkan dan tagihan dibuat" });
+      toast({ title: "Disetujui", description: "Usaha aktif, sumbangsih bulanan ditetapkan dan tagihan dibuat" });
       setDetailId(null);
       queryClient.invalidateQueries({ queryKey: ["/api/admin/rw3biz/pengajuan"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/rw3biz/usaha"] });
@@ -225,16 +230,20 @@ export default function AdminRw3bizAntrian() {
     domisili?: string | null;
     wargaId?: number | null;
   }[];
-  const rincianDiajukan = bacaRincian(p?.rincianKontribusi);
-  /** Pengajuan lama tanpa rincian, atau pengajuan baru yang data survey-nya belum diisi petugas. */
-  const wajibSurvey = !rincianDiajukan || !p?.statusTempat;
+  const sumbangsihDiajukan = parseSumbangsih(p?.sumbangsih);
+  const rincianDiajukan = sumbangsihDiajukan ? null : bacaRincian(p?.rincianKontribusi);
+  const totalSumbangsihBaru = Object.values(sumbangsihBaru).reduce((s, n) => s + (n > 0 ? n : 0), 0);
+  /** Pengajuan lama (rumus) tanpa sumbangsih: data survey wajib bila sumbangsih tidak diisi admin. */
+  const wajibSurvey = !sumbangsihDiajukan && totalSumbangsihBaru <= 0 && !p?.statusTempat;
 
   useEffect(() => {
     if (!detail?.pengajuan) return;
     setKoreksiAktif(false);
     setTanggalBayar(hariIniWib());
     setDataKoreksi(dataKontribusiDariBaris(detail.pengajuan));
-    setOrangKoreksi(orangKontribusiDariBaris(detail.orang ?? []));
+    const awal = parseSumbangsih(detail.pengajuan.sumbangsih) ?? [];
+    setUbahSumbangsih(false);
+    setSumbangsihBaru(Object.fromEntries(awal.map((s) => [s.posId, s.nominal])));
   }, [detail]);
 
   const viewOptions = useMemo(
@@ -338,7 +347,7 @@ export default function AdminRw3bizAntrian() {
                 {row.namaUsaha}
               </p>
               <p className="text-xs text-muted-foreground break-words">
-                PJ: {row.pjNama} · {row.jumlahOrang} orang · berlaku {row.tanggalBerlakuSampai}
+                PJ: {row.pjNama} · berlaku {row.tanggalBerlakuSampai}
               </p>
               {row.alamat?.trim() && (
                 <p className="text-xs text-muted-foreground mt-1 flex items-start gap-1 break-words">
@@ -376,6 +385,13 @@ export default function AdminRw3bizAntrian() {
                     <FileText className="w-3.5 h-3.5" /> Cetak formulir
                   </a>
                 </Button>
+                {p.sumbangsih && (
+                  <Button size="sm" variant="outline" className="gap-1" asChild>
+                    <a href={`/api/admin/rw3biz/pengajuan/${p.id}/pernyataan`} target="_blank" rel="noreferrer">
+                      <FileText className="w-3.5 h-3.5" /> Surat pernyataan
+                    </a>
+                  </Button>
+                )}
                 {p.status === "disetujui" && (
                   <Button size="sm" variant="outline" className="gap-1" asChild>
                     <a href={`/api/admin/rw3biz/pengajuan/${p.id}/surat`} target="_blank" rel="noreferrer">
@@ -391,14 +407,26 @@ export default function AdminRw3bizAntrian() {
                 <p><span className="text-muted-foreground">Jam: </span>{p.jamBuka} – {p.jamTutup}</p>
                 <p><span className="text-muted-foreground">Alamat: </span>{p.alamat}</p>
               </div>
+              {sumbangsihDiajukan && (
+                <RingkasanSumbangsih
+                  items={sumbangsihDiajukan}
+                  catatan={[
+                    p.status === "menunggu_survey" ? "Isian pemohon. Bisa diubah di bawah bila disepakati lain saat survey." : "",
+                    p.pernyataanDisetujuiAt
+                      ? `Surat pernyataan disetujui ${new Date(p.pernyataanDisetujuiAt).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })} (versi ${p.pernyataanVersi}).`
+                      : "Surat pernyataan belum disetujui online — minta tanda tangan di formulir kertas.",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                />
+              )}
               <div className="rounded-lg border border-brand/30 p-3 space-y-2">
                 <p className="text-xs font-semibold">
-                  Data penentu kontribusi {p.statusTempat ? "(isian pemohon)" : "— diisi petugas saat survey"}
+                  Data usaha {p.statusTempat ? "(hasil survey)" : "— dicatat petugas saat survey"}
                 </p>
                 <div className="grid grid-cols-1 gap-x-3 gap-y-1 text-xs sm:grid-cols-2 sm:gap-y-0.5">
                   <p><span className="text-muted-foreground">Status tempat: </span>{labelDari(STATUS_TEMPAT_BIZ_LABEL, p.statusTempat)}</p>
                   <p><span className="text-muted-foreground">Luas: </span>{p.luasM2 ?? "—"} m²</p>
-                  <p className="sm:col-span-2"><span className="text-muted-foreground">Omzet: </span>{labelDari(RENTANG_OMZET_LABEL, p.rentangOmzet)}</p>
                   <p><span className="text-muted-foreground">Hari buka: </span>{p.hariOperasional ?? "—"}/minggu</p>
                   <p><span className="text-muted-foreground">Malam: </span>{labelDari(OPERASIONAL_MALAM_LABEL, p.operasionalMalam)}</p>
                   <p><span className="text-muted-foreground">Sampah: </span>{p.sampahKantongHari ?? 0} kantong/hari</p>
@@ -418,20 +446,15 @@ export default function AdminRw3bizAntrian() {
                       {p.charterPenyedia ? ` (${p.charterPenyedia})` : ""}
                     </p>
                   )}
-                  <p><span className="text-muted-foreground">Usaha baru: </span>{p.usahaBaru ? "ya" : "tidak"}</p>
                 </div>
-                {rincianDiajukan && !p.statusTempat ? (
-                  <p className="text-xs text-muted-foreground">
-                    Perkiraan awal dari omzet & jumlah orang:{" "}
-                    <strong>{formatRp(rincianDiajukan.total)}</strong>/bulan. Isi hasil survey di bawah sebelum menyetujui.
-                  </p>
-                ) : rincianDiajukan ? (
-                  <RincianKontribusi hasil={rincianDiajukan} />
-                ) : (
-                  <p className="text-xs text-muted-foreground">Belum ada rincian (pengajuan lama) — isi koreksi survey sebelum menyetujui.</p>
+                {rincianDiajukan && (
+                  <>
+                    <p className="text-xs text-muted-foreground">Pengajuan lama — kontribusi masih dari rumus:</p>
+                    <RincianKontribusi hasil={rincianDiajukan} />
+                  </>
                 )}
                 {p.kontribusiBulanan != null && p.status !== "menunggu_survey" && (
-                  <p className="text-xs">Kontribusi ditetapkan: <strong>{formatRp(p.kontribusiBulanan)}</strong> / bulan</p>
+                  <p className="text-xs">Ditetapkan: <strong>{formatRp(p.kontribusiBulanan)}</strong> / bulan</p>
                 )}
               </div>
               <div className="rounded-lg border border-green-200 bg-green-50/40 p-3 space-y-1">
@@ -443,7 +466,7 @@ export default function AdminRw3bizAntrian() {
                 </p>
               </div>
               <div className="space-y-2">
-                <p className="font-medium text-xs">Orang terdaftar ({orang.length})</p>
+                <p className="font-medium text-xs">Pemilik / penanggung jawab</p>
                 {orang.map((o) => (
                   <div key={o.id} className="rounded border p-2 text-xs space-y-1">
                     <p className="font-medium">
@@ -477,27 +500,40 @@ export default function AdminRw3bizAntrian() {
                       <input
                         type="checkbox"
                         className="h-5 w-5 shrink-0 accent-[hsl(163,55%,22%)] sm:h-4 sm:w-4"
+                        checked={ubahSumbangsih || !sumbangsihDiajukan}
+                        disabled={!sumbangsihDiajukan}
+                        onChange={(e) => setUbahSumbangsih(e.target.checked)}
+                      />
+                      {sumbangsihDiajukan
+                        ? "Ubah sumbangsih (disepakati lain dengan pemohon saat survey)"
+                        : "Isi sumbangsih yang disanggupkan pemohon"}
+                    </label>
+                    {(ubahSumbangsih || !sumbangsihDiajukan) && (
+                      <SumbangsihFields value={sumbangsihBaru} onChange={setSumbangsihBaru} />
+                    )}
+                  </div>
+                  <div className="rounded-lg border p-3 space-y-2">
+                    <label className="flex min-h-10 items-center gap-3 text-sm font-medium sm:min-h-0 sm:gap-2 sm:text-xs">
+                      <input
+                        type="checkbox"
+                        className="h-5 w-5 shrink-0 accent-[hsl(163,55%,22%)] sm:h-4 sm:w-4"
                         checked={koreksiAktif || wajibSurvey}
                         disabled={wajibSurvey}
                         onChange={(e) => setKoreksiAktif(e.target.checked)}
                       />
                       {wajibSurvey
-                        ? "Isi data hasil survey lapangan (wajib)"
-                        : "Koreksi hasil survey lapangan (isian pemohon berbeda dengan kondisi nyata)"}
+                        ? "Isi data hasil survey lapangan (wajib untuk pengajuan lama tanpa sumbangsih)"
+                        : "Catat hasil survey lapangan (luas, sampah, parkir, kendaraan & plat)"}
                     </label>
                     {(koreksiAktif || wajibSurvey) && dataKoreksi && (
                       <KoreksiKontribusiEditor
                         data={dataKoreksi}
-                        orang={orangKoreksi}
                         onData={(patch) => setDataKoreksi((d) => (d ? { ...d, ...patch } : d))}
-                        onOrang={(id, patch) =>
-                          setOrangKoreksi((list) => list.map((o) => (o.id === id ? { ...o, ...patch } : o)))
-                        }
                       />
                     )}
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor="rw3biz-tanggal-bayar">Tanggal uang kontribusi diterima</Label>
+                    <Label htmlFor="rw3biz-tanggal-bayar">Tanggal sumbangsih pertama diterima</Label>
                     <Input
                       id="rw3biz-tanggal-bayar"
                       type="date"

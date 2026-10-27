@@ -157,8 +157,6 @@ export type ValidatePenghuniOptions = {
   tempatKerjaLabel?: string;
   /** RW3BIZ: kendaraan dicatat per usaha, bukan per orang; sekolah tidak ditanyakan. */
   dataUsaha?: boolean;
-  /** RW3BIZ pegawai biasa: WhatsApp & foto KTP boleh kosong. */
-  pegawaiRingan?: boolean;
 };
 
 export function validateSinglePenghuni(
@@ -195,7 +193,7 @@ export function validateSinglePenghuni(
 
   if (!p.nik || p.nik.length !== 16) return "NIK harus 16 digit";
   if (!p.nomorWhatsapp.trim()) {
-    if (!opts.pegawaiRingan) return "Isi nomor WhatsApp";
+    return "Isi nomor WhatsApp";
   } else if (!isNomorHpValid(p.nomorWhatsapp)) {
     return "Nomor WhatsApp tidak valid (contoh 081234567890)";
   }
@@ -209,7 +207,7 @@ export function validateSinglePenghuni(
     return `Isi ${tempatLabel.toLowerCase()}`;
   }
   if (opts.dataUsaha) {
-    if (!p.fotoKtpPath && !opts.pegawaiRingan) return "Unggah foto KTP";
+    if (!p.fotoKtpPath) return "Unggah foto KTP";
     return null;
   }
 

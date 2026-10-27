@@ -13,7 +13,7 @@ import {
   warga,
   type Rw3bizUsaha,
 } from "@shared/schema";
-import { ACTIVE_RT_NUMBERS } from "@shared/rt";
+import { RW3BIZ_RT_NUMBERS } from "@shared/rt";
 import { tandaiRaziaSelesai } from "./rw3biz-razia";
 import {
   ASAL_ORANG_BIZ,
@@ -29,7 +29,13 @@ import {
   RENTANG_OMZET,
   RENTANG_OMZET_TENGAH,
   STATUS_TEMPAT_BIZ,
+  RAB_VERSI,
+  SUMBANGSIH_MAKS_PER_PROGRAM,
   alokasiKePos,
+  parseSumbangsih,
+  rapikanSumbangsih,
+  totalSumbangsih,
+  type SumbangsihProgram,
   bulanIni,
   cariFaktorTarget,
   hitungKontribusiRw3biz,
@@ -71,8 +77,14 @@ export function parseRincianTersimpan(raw: string | null | undefined): RincianTe
 export async function loadTarif(): Promise<TarifKontribusi> {
   const [row] = await db.select().from(rw3bizSettings).where(eq(rw3bizSettings.key, KEY_CONFIG)).limit(1);
   const tarif = parseTarifKontribusi(row?.value);
-  if (!tarif.programMulai) {
-    tarif.programMulai = bulanIni();
+  let versiTersimpan = 0;
+  try {
+    versiTersimpan = Number(JSON.parse(row?.value ?? "{}").rabVersi) || 0;
+  } catch {
+    versiTersimpan = 0;
+  }
+  if (!tarif.programMulai || versiTersimpan < RAB_VERSI) {
+    tarif.programMulai ||= bulanIni();
     await simpanTarifMentah(tarif);
   }
   return tarif;
@@ -115,7 +127,7 @@ export const dataUsahaSchema = z.object({
   statusTempat: z.enum(STATUS_TEMPAT_BIZ),
   luasM2: z.number().int().min(0).max(100_000),
   hariOperasional: z.number().int().min(1).max(7),
-  rentangOmzet: z.enum(RENTANG_OMZET),
+  rentangOmzet: z.enum(RENTANG_OMZET).optional().nullable(),
   operasionalMalam: z.enum(OPERASIONAL_MALAM),
   sampahKantongHari: z.number().int().min(0).max(500),
   pakaiBahuJalan: z.boolean(),
@@ -151,7 +163,7 @@ export function kolomDataUsaha(d: DataUsaha) {
     statusTempat: d.statusTempat,
     luasM2: d.luasM2,
     hariOperasional: d.hariOperasional,
-    rentangOmzet: d.rentangOmzet,
+    rentangOmzet: d.rentangOmzet ?? null,
     operasionalMalam: d.operasionalMalam,
     sampahKantongHari: d.sampahKantongHari,
     pakaiBahuJalan: d.pakaiBahuJalan,
@@ -205,7 +217,7 @@ export function dataUsahaDariBaris(row: {
     statusTempat: pilih(row.statusTempat, STATUS_TEMPAT_BIZ, "milik"),
     luasM2: row.luasM2 ?? 0,
     hariOperasional: row.hariOperasional ?? 7,
-    rentangOmzet: pilih(row.rentangOmzet, RENTANG_OMZET, "lt3"),
+    rentangOmzet: (RENTANG_OMZET as readonly string[]).includes(String(row.rentangOmzet)) ? (row.rentangOmzet as RentangOmzet) : null,
     operasionalMalam: pilih(row.operasionalMalam, OPERASIONAL_MALAM, "tidak"),
     sampahKantongHari: row.sampahKantongHari ?? 0,
     pakaiBahuJalan: row.pakaiBahuJalan,
@@ -240,7 +252,7 @@ function umurTahun(tanggalLahir: string | null | undefined): number {
   return Math.floor((Date.now() - t) / (365.25 * 24 * 3600 * 1000));
 }
 
-/** Cocokkan NIK ke warga aktif RT 01–04. Kolom warga.lansia belum ada di semua database — umur dihitung dari tanggal lahir. */
+/** Cocokkan NIK ke warga aktif RT 01–07. Kolom warga.lansia belum ada di semua database — umur dihitung dari tanggal lahir. */
 export async function cocokkanWargaRw3(niks: (string | null | undefined)[], q: DbLike = db): Promise<Map<string, InfoWargaRw3>> {
   const bersih = Array.from(new Set(niks.map(digitNik).filter((n) => n.length === 16)));
   const hasil = new Map<string, InfoWargaRw3>();
@@ -259,7 +271,7 @@ export async function cocokkanWargaRw3(niks: (string | null | undefined)[], q: D
     .innerJoin(kartuKeluarga, eq(warga.kkId, kartuKeluarga.id))
     .where(inArray(warga.nik, bersih));
   for (const r of rows) {
-    if (r.status !== "Aktif" || !(ACTIVE_RT_NUMBERS as readonly number[]).includes(r.rt)) continue;
+    if (r.status !== "Aktif" || !(RW3BIZ_RT_NUMBERS as readonly number[]).includes(r.rt)) continue;
     hasil.set(r.nik, {
       wargaId: r.id,
       penerimaBansos: Boolean(r.bansos),
@@ -303,6 +315,26 @@ export function kolomKontribusi(r: RincianTersimpan) {
   };
 }
 
+export const sumbangsihSchema = z
+  .array(z.object({ posId: z.string().trim().min(1).max(80), nominal: z.number().int().min(0).max(SUMBANGSIH_MAKS_PER_PROGRAM) }))
+  .max(50);
+
+/** Rapikan isian sumbangsih terhadap program yang berlaku; wajib minimal satu program bernominal. */
+export function sumbangsihFinal(isian: z.infer<typeof sumbangsihSchema>, tarif: TarifKontribusi): SumbangsihProgram[] {
+  const list = rapikanSumbangsih(isian, tarif.posAnggaran);
+  if (!list.length) throw new Error("Isi sumbangsih bulanan untuk minimal satu program RW 03");
+  return list;
+}
+
+export function kolomSumbangsih(list: SumbangsihProgram[]) {
+  return {
+    sumbangsih: JSON.stringify(list),
+    kontribusiBulanan: totalSumbangsih(list),
+    rincianKontribusi: null,
+    persenPekerjaRw3: null,
+  };
+}
+
 export async function orangUntukPengajuan(pengajuanId: number | null | undefined, q: DbLike = db) {
   if (!pengajuanId) return [];
   return q.select().from(rw3bizOrang).where(eq(rw3bizOrang.pengajuanId, pengajuanId)).orderBy(asc(rw3bizOrang.urutan));
@@ -320,21 +352,31 @@ export function tentukanTahapTransisi(periodeMulai: string, tarif: TarifKontribu
   return ke < tarif.transisiPersen.length ? tarif.programMulai : null;
 }
 
-function hitungTagihanUsaha(usaha: Rw3bizUsaha, periode: string, potonganTerminPersen: number, tarif: TarifKontribusi) {
-  const kontribusi = usaha.kontribusiBulanan ?? 0;
+/**
+ * Sumbangsih ditagih persis sesuai yang disanggupkan: tanpa gratis usaha baru, masa transisi,
+ * potongan termin, maupun pembulatan. Keringanan dari pengurus tetap berlaku.
+ */
+function nominalUsahaPeriode(usaha: Rw3bizUsaha, periode: string, potonganTerminPersen: number, tarif: TarifKontribusi) {
+  const sukarela = parseSumbangsih(usaha.sumbangsih) != null;
   const p = penyesuaianPeriode({
     periode,
     periodeMulaiUsaha: usaha.periodeTagihanMulai ?? periode,
-    usahaBaru: usaha.usahaBaru,
-    tahapTransisiMulai: usaha.tahapTransisiMulai,
+    usahaBaru: sukarela ? false : usaha.usahaBaru,
+    tahapTransisiMulai: sukarela ? null : usaha.tahapTransisiMulai,
     keringananPersen: usaha.keringananPersen,
     keringananSampai: usaha.keringananSampai,
     tarif,
   });
+  const potongan = sukarela ? 0 : potonganTerminPersen;
   const catatan = [...p.catatan];
-  if (potonganTerminPersen > 0 && p.persenBayar > 0) catatan.push(`Potongan bayar di muka ${potonganTerminPersen}%`);
-  const jumlah = nominalTagihan(kontribusi, p.persenBayar, potonganTerminPersen, tarif);
-  return { kontribusi, jumlah, catatan, status: jumlah === 0 ? "dibebaskan" : "belum" };
+  if (potongan > 0 && p.persenBayar > 0) catatan.push(`Potongan bayar di muka ${potongan}%`);
+  const jumlah = nominalTagihan(usaha.kontribusiBulanan ?? 0, p.persenBayar, potongan, sukarela ? { ...tarif, pembulatan: 1 } : tarif);
+  return { jumlah, catatan };
+}
+
+function hitungTagihanUsaha(usaha: Rw3bizUsaha, periode: string, potonganTerminPersen: number, tarif: TarifKontribusi) {
+  const { jumlah, catatan } = nominalUsahaPeriode(usaha, periode, potonganTerminPersen, tarif);
+  return { kontribusi: usaha.kontribusiBulanan ?? 0, jumlah, catatan, status: jumlah === 0 ? "dibebaskan" : "belum" };
 }
 
 /** Buat/perbarui tagihan untuk periode-periode tertentu; tagihan yang sudah ada pembayaran tidak diubah. */
@@ -527,6 +569,8 @@ export const keringananSchema = z
 
 export const ubahUsahaSchema = z.object({
   koreksi: koreksiSurveySchema.optional(),
+  /** Sumbangsih baru yang disepakati dengan pengusaha; kosong = tetap. */
+  sumbangsih: sumbangsihSchema.optional(),
   keringanan: keringananSchema.optional(),
 });
 
@@ -536,27 +580,24 @@ export async function ubahKontribusiUsaha(usahaId: number, input: z.infer<typeof
   return db.transaction(async (tx) => {
     const [usaha] = await tx.select().from(rw3bizUsaha).where(eq(rw3bizUsaha.id, usahaId));
     if (!usaha) throw new Error("Usaha tidak ditemukan");
-    const lama = parseRincianTersimpan(usaha.rincianKontribusi);
     const data = { ...dataUsahaDariBaris(usaha), ...stripUndefined(parsed.koreksi ?? {}) } as DataUsaha;
-    let orangInput = lama?.input.orang.map((o) => ({ peran: String(o.peran ?? ""), asal: String(o.asal ?? ""), isAnak: Boolean(o.isAnak) })) ?? [];
-    const orangRows = await orangUntukPengajuan(usaha.pengajuanId, tx);
-    if (orangRows.length) {
-      for (const k of parsed.koreksi?.orang ?? []) {
-        const set: Record<string, string> = {};
-        if (k.peran) set.peran = k.peran;
-        if (k.asal) set.asal = k.asal;
-        if (Object.keys(set).length) {
-          await tx.update(rw3bizOrang).set(set).where(and(eq(rw3bizOrang.id, k.id), eq(rw3bizOrang.pengajuanId, usaha.pengajuanId!)));
-        }
-      }
-      const segar = await orangUntukPengajuan(usaha.pengajuanId, tx);
-      orangInput = segar.map((o) => ({ peran: o.peran, asal: o.asal, isAnak: o.isAnak })) as typeof orangInput;
+    const sumbangsih = parsed.sumbangsih?.length ? sumbangsihFinal(parsed.sumbangsih, tarif) : parseSumbangsih(usaha.sumbangsih);
+    let kontribusi: Partial<typeof rw3bizUsaha.$inferInsert>;
+    let rincian: RincianTersimpan | null = null;
+    if (sumbangsih?.length) {
+      kontribusi = kolomSumbangsih(sumbangsih);
+    } else {
+      const lama = parseRincianTersimpan(usaha.rincianKontribusi);
+      let orangInput = lama?.input.orang.map((o) => ({ peran: String(o.peran ?? ""), asal: String(o.asal ?? ""), isAnak: Boolean(o.isAnak) })) ?? [];
+      const orangRows = await orangUntukPengajuan(usaha.pengajuanId, tx);
+      if (orangRows.length) orangInput = orangRows.map((o) => ({ peran: o.peran ?? "", asal: o.asal ?? "", isAnak: o.isAnak }));
+      rincian = hitungRincian(data, orangInput, tarif);
+      kontribusi = kolomKontribusi(rincian);
     }
-    const rincian = hitungRincian(data, orangInput, tarif);
     const set: Partial<typeof rw3bizUsaha.$inferInsert> = {
       jenisTempatUsaha: data.jenisTempatUsaha,
       ...kolomDataUsaha(data),
-      ...kolomKontribusi(rincian),
+      ...kontribusi,
     };
     if (parsed.keringanan !== undefined) {
       set.keringananJenis = parsed.keringanan?.jenis ?? null;
@@ -571,7 +612,7 @@ export async function ubahKontribusiUsaha(usahaId: number, input: z.infer<typeof
       .from(rw3bizTagihan)
       .where(and(eq(rw3bizTagihan.usahaId, usahaId), eq(rw3bizTagihan.terbayar, 0), sql`${rw3bizTagihan.periode} >= ${bulanIni()}`));
     await tulisTagihan(tx, updated, belumDibayar.map((b) => b.periode), 0, tarif);
-    return { usaha: updated, rincian };
+    return { usaha: updated, rincian, sumbangsih };
   });
 }
 
@@ -729,16 +770,7 @@ export async function rabBulan(periode: string) {
     const p = tambahBulan(periode, i);
     const total = terhitung.reduce((s, u) => {
       if (u.periodeTagihanMulai && p < u.periodeTagihanMulai) return s;
-      const adj = penyesuaianPeriode({
-        periode: p,
-        periodeMulaiUsaha: u.periodeTagihanMulai ?? p,
-        usahaBaru: u.usahaBaru,
-        tahapTransisiMulai: u.tahapTransisiMulai,
-        keringananPersen: u.keringananPersen,
-        keringananSampai: u.keringananSampai,
-        tarif,
-      });
-      return s + nominalTagihan(u.kontribusiBulanan ?? 0, adj.persenBayar, 0, tarif);
+      return s + nominalUsahaPeriode(u, p, 0, tarif).jumlah;
     }, 0);
     return { periode: p, total };
   });
@@ -782,24 +814,6 @@ export async function rabBulan(periode: string) {
       lunas: tagihan.filter((t) => t.status === "lunas").length,
       dibebaskan: tagihan.filter((t) => t.status === "dibebaskan").length,
     },
-  };
-}
-
-/** Simulasi proyeksi bulanan penuh untuk tarif usulan (belum disimpan). */
-export async function simulasiTarif(raw: unknown) {
-  const tarif = parseTarifKontribusi(JSON.stringify(raw ?? {}));
-  const usahaAktif = await db.select().from(rw3bizUsaha).where(eq(rw3bizUsaha.status, "aktif"));
-  const inputs = usahaAktif
-    .map((u) => parseRincianTersimpan(u.rincianKontribusi)?.input)
-    .filter((i): i is InputKontribusi => Boolean(i));
-  const totals = inputs.map((i) => hitungKontribusiRw3biz(i, tarif).total);
-  return {
-    jumlahUsaha: inputs.length,
-    proyeksi: totals.reduce((s, t) => s + t, 0),
-    terendah: totals.length ? Math.min(...totals) : 0,
-    tertinggi: totals.length ? Math.max(...totals) : 0,
-    rataRata: totals.length ? Math.round(totals.reduce((s, t) => s + t, 0) / totals.length) : 0,
-    faktorDisarankan: cariFaktorTarget(inputs, tarif, tarif.targetBulanan),
   };
 }
 

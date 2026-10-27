@@ -15,7 +15,8 @@ import { FeatureExplain } from "@/components/gov/feature-explain";
 import { RW3BIZ_ROUTES } from "@/lib/rw3biz-routes";
 import { formatKategoriUsahaLabel } from "@shared/visitrw3-kategori-usaha";
 import { RincianKontribusi } from "@/components/rw3biz/koreksi-kontribusi";
-import { formatRp, labelPeriode, type HasilKontribusi } from "@shared/rw3biz-kontribusi";
+import { RingkasanSumbangsih } from "@/components/rw3biz/kontribusi-form";
+import { formatRp, labelPeriode, type HasilKontribusi, type SumbangsihProgram } from "@shared/rw3biz-kontribusi";
 import { useToast } from "@/hooks/use-toast";
 
 type TagihanPublik = {
@@ -63,7 +64,9 @@ type StatusData = {
   usaha: { status: string; tanggalHabis: string; namaUsaha: string; nomorBiz: string; nomorInduk: string | null } | null;
   kontribusi: {
     bulanan: number;
-    hasil: HasilKontribusi;
+    /** Usaha baru: sumbangsih per program. Null = usaha lama (rumus). */
+    sumbangsih: SumbangsihProgram[] | null;
+    hasil: HasilKontribusi | null;
     alokasi: { id: string; label: string; nominal: number }[];
     final: boolean;
     keringanan: { persen: number; sampai: string | null } | null;
@@ -160,12 +163,12 @@ function KartuSurat({ s }: { s: RingkasSurat }) {
 
       {s.kedaluwarsa ? (
         <p className="text-sm rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-destructive" role="alert">
-          Masa berlaku habis sejak {tglPanjang(s.berlakuSampai)}. Segera perbarui izin beserta data pegawai dan kendaraan.
+          Masa berlaku habis sejak {tglPanjang(s.berlakuSampai)}. Segera perbarui izin beserta data kendaraan dan sumbangsih.
         </p>
       ) : (
         <p className={`text-sm rounded-lg border p-3 ${wajibPerbarui ? "border-amber-300 bg-amber-50 text-amber-900" : "bg-muted/40"}`}>
           Sisa <b>{s.sisaHari} hari</b>. Wajib diperbarui paling lambat <b>{tglPanjang(s.perbaruiPalingLambat)}</b> — sekaligus
-          memperbarui data pegawai dan kendaraan operasional.
+          memperbarui data kendaraan operasional dan sumbangsih.
         </p>
       )}
 
@@ -211,15 +214,15 @@ function FormKeberatan({ nomor }: { nomor: string }) {
   if (!buka) {
     return (
       <Button variant="outline" className="w-full" onClick={() => setBuka(true)}>
-        Ajukan peninjauan kontribusi
+        Ajukan perubahan sumbangsih / keringanan
       </Button>
     );
   }
   return (
     <div className="space-y-3 rounded-lg border p-3">
       <p className="text-xs text-muted-foreground">
-        Jelaskan kenapa kontribusi terasa tidak sesuai (misalnya data survey keliru, usaha sedang sepi). Hanya penanggung jawab yang
-        bisa mengajukan.
+        Jelaskan perubahan yang Anda inginkan (misalnya ingin mengubah sumbangsih, atau usaha sedang sepi). Hanya penanggung jawab
+        yang bisa mengajukan.
       </p>
       <div className="space-y-1">
         <Label>Nomor WhatsApp penanggung jawab</Label>
@@ -318,15 +321,36 @@ export default function Rw3bizStatus() {
               </p>
             )}
             {pengajuan.alasanTolak && <p className="text-sm text-destructive">Alasan tolak: {pengajuan.alasanTolak}</p>}
-            <a href={`/api/public/rw3biz/formulir/${encodeURIComponent(pengajuan.nomorBiz)}`} target="_blank" rel="noreferrer">
-              <Button variant="outline" size="sm" className="w-full gap-1.5">
-                <FileText className="w-4 h-4" /> Cetak formulir pendaftaran
-              </Button>
-            </a>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <a href={`/api/public/rw3biz/formulir/${encodeURIComponent(pengajuan.nomorBiz)}`} target="_blank" rel="noreferrer">
+                <Button variant="outline" size="sm" className="w-full gap-1.5">
+                  <FileText className="w-4 h-4" /> Formulir pendaftaran
+                </Button>
+              </a>
+              <a href={`/api/public/rw3biz/pernyataan/${encodeURIComponent(pengajuan.nomorBiz)}`} target="_blank" rel="noreferrer">
+                <Button variant="outline" size="sm" className="w-full gap-1.5">
+                  <FileText className="w-4 h-4" /> Surat pernyataan sumbangsih
+                </Button>
+              </a>
+            </div>
           </div>
         )}
 
-        {kontribusi && (
+        {kontribusi?.sumbangsih && (
+          <div className="space-y-2">
+            <RingkasanSumbangsih
+              items={kontribusi.sumbangsih}
+              catatan={kontribusi.final ? "Disepakati saat survey. Disetor tiap bulan ke Kas RW 03." : "Diajukan — dikonfirmasi pengurus saat survey."}
+            />
+            {kontribusi.keringanan && (
+              <p className="text-xs text-success">
+                Keringanan {kontribusi.keringanan.persen}% sampai {kontribusi.keringanan.sampai ?? "—"}
+              </p>
+            )}
+          </div>
+        )}
+
+        {kontribusi?.hasil && (
           <div className="space-y-3 rounded-xl border-2 border-brand/30 bg-card p-4">
             <div className="flex items-baseline justify-between gap-2">
               <p className="font-semibold text-sm">Kontribusi bulanan</p>

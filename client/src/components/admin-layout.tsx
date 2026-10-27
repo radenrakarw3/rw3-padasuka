@@ -147,11 +147,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       items: [
         { path: RW3BIZ_ROUTES.admin.antrianSurvey, icon: ClipboardList, label: "Survey usaha", badge: biz.surveyMenunggu },
         { path: RW3BIZ_ROUTES.admin.antrianSudah, icon: ClipboardList, label: "Usaha terdaftar" },
-        { path: RW3BIZ_ROUTES.admin.tagihan, icon: Receipt, label: "Tagihan kontribusi", badge: biz.keberatanMenunggu },
+        { path: RW3BIZ_ROUTES.admin.tagihan, icon: Receipt, label: "Tagihan sumbangsih", badge: biz.keberatanMenunggu },
         { path: RW3BIZ_ROUTES.admin.razia, icon: Truck, label: "Razia kendaraan" },
         { path: RW3BIZ_ROUTES.admin.pelanggaran, icon: ShieldAlert, label: "Pelanggaran & aduan", badge: biz.aduanMenunggu },
         { path: RW3BIZ_ROUTES.admin.dashboard, icon: PieChart, label: "RAB & statistik" },
-        { path: RW3BIZ_ROUTES.admin.tarif, icon: SlidersHorizontal, label: "Tarif & pos anggaran" },
+        { path: RW3BIZ_ROUTES.admin.tarif, icon: SlidersHorizontal, label: "Program & denda" },
       ],
     },
     {

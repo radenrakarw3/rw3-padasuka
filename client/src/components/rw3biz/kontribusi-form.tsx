@@ -1,13 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Minus, Plus } from "lucide-react";
-import { readJsonSafely } from "@/lib/queryClient";
+import { HeartHandshake, Minus, Plus } from "lucide-react";
 import { useTarifPublik } from "@/components/rw3biz/transparansi";
+import { KebutuhanRw3 } from "@/components/rw3biz/pernyataan";
 import {
   ASAL_ORANG_BIZ,
   ASAL_ORANG_BIZ_LABEL,
@@ -17,23 +16,26 @@ import {
   KENDARAAN_BIZ,
   OPERASIONAL_MALAM,
   OPERASIONAL_MALAM_LABEL,
-  PERAN_ORANG_BIZ,
   PERAN_ORANG_BIZ_LABEL,
-  RENTANG_OMZET,
-  RENTANG_OMZET_LABEL,
+  PILIHAN_CEPAT_SUMBANGSIH,
   STATUS_TEMPAT_BIZ,
   STATUS_TEMPAT_BIZ_LABEL,
+  SUMBANGSIH_MAKS_PER_PROGRAM,
   formatRp,
   turunkanOperasionalMalam,
-  type HasilKontribusi,
+  type PosAnggaran,
 } from "@shared/rw3biz-kontribusi";
 
 export const JENIS_TEMPAT_BIZ_OPTIONS = JENIS_TEMPAT_BIZ.map((v) => ({ value: v, label: JENIS_TEMPAT_BIZ_LABEL[v] }));
+
+/** Peran yang boleh diisi pemohon: data pegawai tidak dicatat. */
+export const PERAN_PEMOHON_BIZ = ["pemilik", "penanggung_jawab"] as const;
 
 export type BizKontribusiForm = {
   statusTempat: string;
   luasM2: string;
   hariOperasional: string;
+  /** Data lama; tidak ditanyakan lagi, dibawa apa adanya. */
   rentangOmzet: string;
   /** "" = ikut jam buka/tutup */
   operasionalMalam: string;
@@ -54,36 +56,12 @@ export type BizKontribusiForm = {
   usahaBaru: "" | "ya" | "tidak";
 };
 
-export function emptyBizKontribusi(): BizKontribusiForm {
-  return {
-    statusTempat: "",
-    luasM2: "",
-    hariOperasional: "",
-    rentangOmzet: "",
-    operasionalMalam: "",
-    sampahKantongHari: "",
-    pakaiBahuJalan: "",
-    kendaraanMotor: "0",
-    kendaraanMobil: "0",
-    kendaraanKolbak: "0",
-    kendaraanTruk: "0",
-    kendaraanTrukBesar: "0",
-    platOperasional: "",
-    adaCharter: "",
-    charterKolbak: "0",
-    charterTruk: "0",
-    charterTrukBesar: "0",
-    charterPenyedia: "",
-    usahaBaru: "",
-  };
-}
-
 /** Isi ulang form dari data tersimpan (perpanjang). */
 export function bizFormDariData(d: {
   statusTempat: string;
   luasM2: number;
   hariOperasional: number;
-  rentangOmzet: string;
+  rentangOmzet?: string | null;
   operasionalMalam: string;
   sampahKantongHari: number;
   pakaiBahuJalan: boolean;
@@ -103,7 +81,7 @@ export function bizFormDariData(d: {
     statusTempat: d.statusTempat,
     luasM2: String(d.luasM2 ?? ""),
     hariOperasional: String(d.hariOperasional ?? ""),
-    rentangOmzet: d.rentangOmzet,
+    rentangOmzet: d.rentangOmzet ?? "",
     operasionalMalam: d.operasionalMalam,
     sampahKantongHari: String(d.sampahKantongHari ?? 0),
     pakaiBahuJalan: d.pakaiBahuJalan ? "ya" : "tidak",
@@ -136,7 +114,6 @@ export function validateBizKontribusi(f: BizKontribusiForm, jenisTempat: string)
   if (jenisTempat !== "keliling" && !(angka(f.luasM2) > 0)) return "Isi perkiraan luas tempat usaha (m²)";
   const hari = angka(f.hariOperasional);
   if (!(hari >= 1 && hari <= 7)) return "Isi berapa hari buka dalam seminggu (1–7)";
-  if (!f.rentangOmzet) return "Pilih kisaran omzet per bulan";
   if (Number.isNaN(angka(f.sampahKantongHari))) return "Isi perkiraan sampah per hari (kantong), 0 jika tidak ada";
   if (!f.pakaiBahuJalan) return "Jawab apakah usaha memakai bahu jalan / parkir pelanggan";
   if (KENDARAAN_BIZ.some((k) => Number.isNaN(angka(f[k.kode])))) {
@@ -150,7 +127,6 @@ export function validateBizKontribusi(f: BizKontribusiForm, jenisTempat: string)
   if (f.adaCharter === "ya" && !CHARTER_BIZ.some((c) => (angka(f[c.kode]) || 0) > 0)) {
     return "Isi berapa kali kendaraan charter datang per minggu";
   }
-  if (!f.usahaBaru) return "Jawab apakah usaha ini baru buka";
   return null;
 }
 
@@ -166,7 +142,7 @@ export function bizKontribusiPayload(f: BizKontribusiForm, jamBuka: string, jamT
     statusTempat: f.statusTempat,
     luasM2: angka(f.luasM2) || 0,
     hariOperasional: angka(f.hariOperasional) || 7,
-    rentangOmzet: f.rentangOmzet,
+    rentangOmzet: f.rentangOmzet || null,
     operasionalMalam: f.operasionalMalam || turunkanOperasionalMalam(jamBuka, jamTutup),
     sampahKantongHari: angka(f.sampahKantongHari) || 0,
     pakaiBahuJalan: f.pakaiBahuJalan === "ya",
@@ -240,7 +216,7 @@ function PilihSelect({
   );
 }
 
-/** Field tambahan langkah "Usaha" — penentu kontribusi bulanan. */
+/** Data tempat & kendaraan usaha (perpanjang). Dicek pengurus saat survey; tidak menentukan sumbangsih. */
 export function UsahaKontribusiFields({
   value: f,
   onChange,
@@ -256,14 +232,11 @@ export function UsahaKontribusiFields({
 }) {
   const otomatis = turunkanOperasionalMalam(jamBuka, jamTutup);
   const totalKendaraan = totalKendaraanBiz(f);
-  const { data: tarif } = useTarifPublik();
   return (
     <div className="space-y-4 rounded-xl border border-brand/20 bg-brand/5 p-4">
       <div>
-        <p className="font-semibold text-sm">Data penentu kontribusi bulanan</p>
-        <p className="text-xs text-muted-foreground">
-          Isi sejujurnya — angka ini dicek saat survey. Usaha kecil membayar kecil; ada batas atas sesuai omzet.
-        </p>
+        <p className="font-semibold text-sm">Tempat & kendaraan usaha</p>
+        <p className="text-xs text-muted-foreground">Isi sesuai keadaan sekarang. Pengurus mencocokkannya saat survey.</p>
       </div>
       <div className="space-y-2">
         <Label>Status tempat usaha *</Label>
@@ -295,16 +268,6 @@ export function UsahaKontribusiFields({
             onChange={(e) => onChange({ hariOperasional: e.target.value.replace(/\D/g, "").slice(0, 1) })}
           />
         </div>
-      </div>
-      <div className="space-y-2">
-        <Label>Kisaran omzet (pendapatan kotor) per bulan *</Label>
-        <PilihSelect
-          value={f.rentangOmzet}
-          onChange={(v) => onChange({ rentangOmzet: v })}
-          placeholder="Pilih kisaran"
-          options={RENTANG_OMZET.map((v) => ({ value: v, label: RENTANG_OMZET_LABEL[v] }))}
-        />
-        <p className="text-xs text-muted-foreground">Cukup kisaran, bukan angka pasti. Tidak dibagikan ke pihak lain.</p>
       </div>
       <div className="space-y-2">
         <Label>Operasional malam</Label>
@@ -349,16 +312,8 @@ export function UsahaKontribusiFields({
             return (
               <div key={k.kode} className="flex items-center gap-3 p-2.5">
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">
-                    {k.label}
-                    {k.beratJalan && (
-                      <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900">beban jalan</span>
-                    )}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">
-                    {k.contoh}
-                    {tarif ? ` · ${formatRp(tarif[k.kode])}/unit/bulan` : ""}
-                  </p>
+                  <p className="text-sm font-medium">{k.label}</p>
+                  <p className="text-[11px] text-muted-foreground">{k.contoh}</p>
                 </div>
                 <div className="flex items-center gap-1">
                   <Button type="button" variant="outline" size="icon" className="h-9 w-9" onClick={() => ubah(n - 1)} disabled={n <= 0} aria-label={`Kurangi ${k.label}`}>
@@ -398,8 +353,7 @@ export function UsahaKontribusiFields({
       <div className="space-y-2">
         <Label>Memakai kolbak / truk charter (sewaan) yang datang ke usaha? *</Label>
         <p className="text-xs text-muted-foreground">
-          Kendaraan bukan milik usaha — disewa/dicarter untuk kirim atau ambil barang. Tetap lewat jalan RW 03 sehingga ikut
-          dihitung beban jalan, sesuai seberapa sering datang.
+          Kendaraan bukan milik usaha — disewa/dicarter untuk kirim atau ambil barang lewat jalan RW 03.
         </p>
         <PilihanYaTidak
           value={f.adaCharter}
@@ -417,10 +371,7 @@ export function UsahaKontribusiFields({
                   <div key={c.kode} className="flex items-center gap-3 p-2.5">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium">{c.label}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        Rata-rata datang per minggu
-                        {tarif ? ` · ${formatRp(tarif[c.tarif])}/kedatangan, maks. ${formatRp(tarif[c.kendaraan])}/bulan per 7× seminggu` : ""}
-                      </p>
+                      <p className="text-[11px] text-muted-foreground">Rata-rata datang per minggu</p>
                     </div>
                     <div className="flex items-center gap-1">
                       <Button type="button" variant="outline" size="icon" className="h-9 w-9" onClick={() => ubah(n - 1)} disabled={n <= 0} aria-label={`Kurangi ${c.label}`}>
@@ -454,21 +405,11 @@ export function UsahaKontribusiFields({
           </div>
         )}
       </div>
-      <div className="space-y-2">
-        <Label>Usaha ini baru buka (kurang dari 3 bulan)? *</Label>
-        <PilihanYaTidak
-          value={f.usahaBaru}
-          onChange={(v) => onChange({ usahaBaru: v })}
-          ya="Ya, baru buka"
-          tidak="Sudah lama berjalan"
-        />
-        <p className="text-xs text-muted-foreground">Usaha baru gratis kontribusi di bulan pertama.</p>
-      </div>
     </div>
   );
 }
 
-/** Peran & asal setiap orang di usaha — dasar persentase pekerja warga RW 03. */
+/** Peran & asal pemohon (pemilik / penanggung jawab). */
 export function OrangKontribusiFields({
   peran,
   asal,
@@ -483,16 +424,24 @@ export function OrangKontribusiFields({
   return (
     <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
       <div className="space-y-2">
-        <Label>Peran di usaha *</Label>
-        <PilihSelect
-          value={peran}
-          onChange={(v) => onChange({ peran: v })}
-          placeholder="Pemilik / penanggung jawab / pekerja"
-          options={PERAN_ORANG_BIZ.map((v) => ({ value: v, label: PERAN_ORANG_BIZ_LABEL[v] }))}
-        />
+        <Label>Anda di usaha ini sebagai *</Label>
+        <div className="grid grid-cols-2 gap-2">
+          {PERAN_PEMOHON_BIZ.map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => onChange({ peran: v })}
+              className={`rounded-lg border px-3 py-3 text-sm transition-colors ${
+                peran === v ? "border-brand bg-brand/10 font-medium" : "bg-background hover:bg-muted"
+              }`}
+            >
+              {PERAN_ORANG_BIZ_LABEL[v]}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="space-y-2">
-        <Label>Asal tempat tinggal *</Label>
+        <Label>Tempat tinggal *</Label>
         <div className="grid grid-cols-2 gap-2">
           {ASAL_ORANG_BIZ.map((v) => (
             <button
@@ -507,9 +456,7 @@ export function OrangKontribusiFields({
             </button>
           ))}
         </div>
-        <p className="text-xs text-muted-foreground">
-          NIK dicocokkan otomatis dengan data warga RW 03. Usaha yang mempekerjakan warga RW 03 mendapat potongan.
-        </p>
+        <p className="text-xs text-muted-foreground">NIK dicocokkan otomatis dengan data warga RW 03.</p>
       </div>
       {asal === "luar" && (
         <div className="space-y-2">
@@ -527,170 +474,155 @@ export function OrangKontribusiFields({
 }
 
 export function validateOrangKontribusi(o: { peran: string; asal: string; domisili: string }): string | null {
-  if (!o.peran) return "Pilih peran orang ini di usaha";
-  if (!o.asal) return "Pilih asal tempat tinggal (warga RW 03 atau luar)";
-  if (o.asal === "luar" && !o.domisili.trim()) return "Isi alamat domisili untuk pekerja dari luar RW 03";
+  if (!(PERAN_PEMOHON_BIZ as readonly string[]).includes(o.peran)) return "Pilih: pemilik atau penanggung jawab usaha";
+  if (!o.asal) return "Pilih tempat tinggal (warga RW 03 atau luar)";
+  if (o.asal === "luar" && !o.domisili.trim()) return "Isi alamat domisili bila tinggal di luar RW 03";
   return null;
 }
 
-export type PreviewKontribusi = {
-  hasil: HasilKontribusi;
-  alokasi: { id: string; label: string; nominal: number }[];
-  potonganTermin: Record<string, number>;
-  bulanGratisUsahaBaru: number;
-  transisiPersen: number[];
-  tenggangHari: number;
-};
+// ---------------------------------------------------------------- Sumbangsih
 
-/** Kartu estimasi kontribusi + alokasi program, dihitung server (rumus yang sama dengan penetapan). */
-export function EstimasiKontribusiCard({
-  payload,
-  terminBulan,
-  usahaBaru,
-  sementara,
-}: {
-  payload: Record<string, unknown> | null;
-  terminBulan?: number;
-  usahaBaru?: boolean;
-  /** Teks penjelas bila sebagian data masih diasumsikan — kartu tampil ringkas. */
-  sementara?: string;
-}) {
-  const kunci = useMemo(() => (payload ? JSON.stringify(payload) : ""), [payload]);
-  const [kunciTunda, setKunciTunda] = useState(kunci);
-  useEffect(() => {
-    const t = window.setTimeout(() => setKunciTunda(kunci), 400);
-    return () => window.clearTimeout(t);
-  }, [kunci]);
+/** Nominal per bulan per program (id pos anggaran → rupiah). */
+export type IsianSumbangsih = Record<string, number>;
 
-  const { data, isFetching, error } = useQuery<PreviewKontribusi>({
-    queryKey: ["/api/public/rw3biz/preview-kontribusi", kunciTunda],
-    queryFn: async () => {
-      const res = await fetch("/api/public/rw3biz/preview-kontribusi", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: kunciTunda,
-      });
-      if (!res.ok) {
-        const j = await readJsonSafely<{ message?: string }>(res).catch(() => ({ message: undefined }));
-        throw new Error(j?.message || "Gagal menghitung estimasi");
-      }
-      return readJsonSafely<PreviewKontribusi>(res);
-    },
-    enabled: Boolean(kunciTunda),
-    staleTime: 60_000,
-  });
+export function useProgramRw3(enabled = true): { program: PosAnggaran[]; isLoading: boolean } {
+  const { data, isLoading } = useTarifPublik(enabled);
+  return { program: data?.posAnggaran ?? [], isLoading };
+}
 
-  if (!payload) {
-    return (
-      <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-        {sementara
-          ? "Perkiraan kontribusi bulanan muncul setelah data penentu kontribusi di atas lengkap."
-          : "Estimasi kontribusi bulanan muncul setelah data usaha serta peran dan asal setiap orang lengkap."}
-      </div>
-    );
-  }
-  const h = data?.hasil;
-  const potongan = terminBulan && terminBulan > 1 ? data?.potonganTermin[String(terminBulan)] ?? 0 : 0;
+export function sumbangsihPayload(isian: IsianSumbangsih) {
+  return Object.entries(isian)
+    .filter(([, n]) => n > 0)
+    .map(([posId, nominal]) => ({ posId, nominal: Math.round(nominal) }));
+}
 
-  if (sementara) {
-    return (
-      <div className="sticky bottom-2 z-10 rounded-xl border-2 border-brand/30 bg-card/95 p-3 text-sm shadow-md backdrop-blur">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="font-medium">Perkiraan kontribusi</span>
-          <span className="flex items-center gap-1.5 text-lg font-bold text-brand tabular-nums">
-            {isFetching && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
-            {h ? `${formatRp(h.total)}/bulan` : "—"}
-          </span>
-        </div>
-        <p className="text-[11px] text-muted-foreground">{sementara}</p>
-        {h && (
-          <details className="mt-1">
-            <summary className="cursor-pointer text-xs font-medium text-brand">Lihat rincian</summary>
-            <ul className="mt-1 space-y-0.5 text-xs">
-              {h.komponen.map((k) => (
-                <li key={k.kode} className="flex justify-between gap-3">
-                  <span className="text-muted-foreground">{k.label}</span>
-                  <span className="tabular-nums">{formatRp(k.nominal)}</span>
-                </li>
-              ))}
-              {h.diskonLokal > 0 && (
-                <li className="flex justify-between gap-3 text-success">
-                  <span>Potongan pekerja warga RW 03 ({h.diskonLokalPersen}%)</span>
-                  <span className="tabular-nums">−{formatRp(h.diskonLokal)}</span>
-                </li>
-              )}
-              {h.terkenaBatasAtas && <li className="text-success">Dibatasi: {h.batasAtasAlasan}</li>}
-            </ul>
-          </details>
-        )}
-      </div>
-    );
-  }
+/** Total hanya untuk program yang masih berlaku (isian draf lama bisa memuat program yang sudah dihapus). */
+export function totalIsianSumbangsih(isian: IsianSumbangsih, program: PosAnggaran[]): number {
+  return program.reduce((s, p) => s + Math.max(0, isian[p.id] ?? 0), 0);
+}
 
+export function validateSumbangsih(isian: IsianSumbangsih, program: PosAnggaran[]): string | null {
+  return totalIsianSumbangsih(isian, program) > 0 ? null : "Isi sumbangsih untuk minimal satu program RW 03";
+}
+
+function InputRupiah({ value, onChange, label }: { value: number; onChange: (n: number) => void; label: string }) {
   return (
-    <div className="rounded-xl border-2 border-brand/30 bg-card p-4 space-y-3 text-sm">
-      <div className="flex items-center justify-between gap-2">
-        <p className="font-semibold">Estimasi kontribusi bulanan</p>
-        {isFetching && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
-      </div>
-      {error && !h && <p className="text-xs text-destructive">{(error as Error).message}</p>}
-      {h && (
-        <>
-          <ul className="space-y-1">
-            {h.komponen.map((k) => (
-              <li key={k.kode} className="flex justify-between gap-3">
-                <span className="text-muted-foreground">{k.label}</span>
-                <span className="tabular-nums">{formatRp(k.nominal)}</span>
-              </li>
-            ))}
-            {h.diskonLokal > 0 && (
-              <li className="flex justify-between gap-3 text-success">
-                <span>Potongan pekerja warga RW 03 ({h.diskonLokalPersen}%)</span>
-                <span className="tabular-nums">−{formatRp(h.diskonLokal)}</span>
-              </li>
-            )}
-            {h.faktorPenyesuaian !== 1 && (
-              <li className="flex justify-between gap-3 text-muted-foreground">
-                <span>Faktor penyesuaian RAB</span>
-                <span className="tabular-nums">× {h.faktorPenyesuaian.toFixed(2)}</span>
-              </li>
-            )}
-            {h.terkenaBatasAtas && (
-              <li className="text-xs text-success">Dibatasi: {h.batasAtasAlasan}</li>
-            )}
-          </ul>
-          <div className="flex items-baseline justify-between border-t pt-2">
-            <span className="font-semibold">Per bulan</span>
-            <span className="text-xl font-bold text-brand tabular-nums">{formatRp(h.total)}</span>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {h.jumlahPekerja} orang tercatat ({h.jumlahPegawai ?? h.jumlahPekerja} pegawai) · {h.pekerjaRw3} warga RW 03 ({h.persenPekerjaRw3}%) ·{" "}
-            {h.pekerjaLuar} dari luar
-          </p>
-          <ul className="text-xs text-muted-foreground list-disc pl-4 space-y-0.5">
-            {usahaBaru && <li>Bulan pertama gratis (usaha baru).</li>}
-            {data.transisiPersen.length > 0 && (
-              <li>Masa sosialisasi: bayar {data.transisiPersen.join("% → ")}% lalu penuh.</li>
-            )}
-            {potongan > 0 && <li>Bayar {terminBulan} bulan di muka: potongan {potongan}%.</li>}
-            <li>Tenggang {data.tenggangHari} hari tiap bulan, tanpa denda. Cicilan boleh.</li>
-            <li>Angka final ditetapkan setelah survey; bisa ajukan peninjauan bila keberatan.</li>
-          </ul>
-          <details className="rounded-lg bg-muted/40 p-2">
-            <summary className="cursor-pointer text-xs font-medium">Kontribusi Anda dipakai untuk</summary>
-            <ul className="mt-2 space-y-0.5 text-xs">
-              {data.alokasi
-                .filter((a) => a.nominal > 0)
-                .map((a) => (
-                  <li key={a.id} className="flex justify-between gap-3">
-                    <span>{a.label}</span>
-                    <span className="tabular-nums">{formatRp(a.nominal)}</span>
-                  </li>
-                ))}
-            </ul>
-          </details>
-        </>
-      )}
+    <div className="flex h-12 items-center rounded-md border bg-background focus-within:ring-2 focus-within:ring-ring">
+      <span className="pl-3 pr-1 text-sm font-medium text-muted-foreground">Rp</span>
+      <input
+        className="h-full min-w-0 flex-1 bg-transparent pr-3 text-lg font-semibold tabular-nums outline-none"
+        inputMode="numeric"
+        aria-label={label}
+        placeholder="0"
+        value={value > 0 ? value.toLocaleString("id-ID") : ""}
+        onChange={(e) => {
+          const n = parseInt(e.target.value.replace(/\D/g, "").slice(0, 9), 10) || 0;
+          onChange(Math.min(SUMBANGSIH_MAKS_PER_PROGRAM, n));
+        }}
+      />
+      <span className="pr-3 text-xs text-muted-foreground">/bulan</span>
     </div>
   );
+}
+
+/** Pengusaha menyanggupkan sendiri nominal per program — tidak ada rumus/tarif. */
+export function SumbangsihFields({
+  value,
+  onChange,
+  tanpaPengantar,
+}: {
+  value: IsianSumbangsih;
+  onChange: (v: IsianSumbangsih) => void;
+  /** Penjelasan sudah ada di judul langkah. */
+  tanpaPengantar?: boolean;
+}) {
+  const { program, isLoading } = useProgramRw3();
+  const total = totalIsianSumbangsih(value, program);
+  const ubah = (id: string, n: number) => onChange({ ...value, [id]: n });
+
+  if (isLoading) return <Skeleton className="h-64 w-full rounded-xl" />;
+  return (
+    <div className="space-y-3">
+      {!tanpaPengantar && (
+        <div className="space-y-1 rounded-xl border border-brand/20 bg-brand/5 p-3 text-sm">
+          <p className="flex items-center gap-2 font-semibold">
+            <HeartHandshake className="h-4 w-4 text-brand" /> Sumbangsih untuk program RW 03
+          </p>
+          <p className="text-muted-foreground">
+            Tidak ada tarif atau hitungan. Tulis sendiri berapa yang ingin Anda sumbangkan <b>setiap bulan</b> untuk program yang
+            ingin Anda dukung — boleh satu program atau beberapa.
+          </p>
+        </div>
+      )}
+      <KebutuhanRw3 ringkas />
+      <p className="pt-1 text-sm font-semibold">Pilih program yang ingin Anda dukung:</p>
+      {program.map((p) => {
+        const n = value[p.id] ?? 0;
+        return (
+          <div key={p.id} className={`space-y-2 rounded-xl border p-3 ${n > 0 ? "border-brand/50 bg-brand/5" : "bg-card"}`}>
+            <div>
+              <p className="text-sm font-semibold">{p.label}</p>
+              {p.keterangan && <p className="text-xs text-muted-foreground">{p.keterangan}</p>}
+              {p.nominal > 0 && (
+                <p className="text-[11px] text-muted-foreground">
+                  Kebutuhan program {formatRp(p.nominal)}/bulan · {formatRp(p.nominal * 12)}/tahun
+                </p>
+              )}
+            </div>
+            <InputRupiah value={n} onChange={(v) => ubah(p.id, v)} label={`Sumbangsih untuk ${p.label}`} />
+            <div className="flex flex-wrap gap-1.5">
+              {PILIHAN_CEPAT_SUMBANGSIH.map((cepat) => (
+                <button
+                  key={cepat}
+                  type="button"
+                  onClick={() => ubah(p.id, cepat)}
+                  className={`rounded-full border px-3 py-1.5 text-xs tabular-nums transition-colors ${
+                    n === cepat ? "border-brand bg-brand text-white" : "bg-background hover:bg-muted"
+                  }`}
+                >
+                  {formatRp(cepat)}
+                </button>
+              ))}
+              {n > 0 && (
+                <button type="button" onClick={() => ubah(p.id, 0)} className="rounded-full px-3 py-1.5 text-xs text-muted-foreground underline">
+                  Kosongkan
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+      <div className="sticky bottom-2 z-10 flex items-baseline justify-between gap-2 rounded-xl border-2 border-brand/30 bg-card/95 p-3 shadow-md backdrop-blur">
+        <span className="text-sm font-medium">Jumlah sumbangsih</span>
+        <span className="text-lg font-bold tabular-nums text-brand">{formatRp(total)}/bulan</span>
+      </div>
+    </div>
+  );
+}
+
+/** Ringkasan sumbangsih yang disanggupkan (periksa sebelum kirim, cek status). */
+export function RingkasanSumbangsih({ items, catatan }: { items: { label: string; nominal: number }[]; catatan?: string }) {
+  const total = items.reduce((s, x) => s + x.nominal, 0);
+  return (
+    <div className="space-y-2 rounded-xl border-2 border-brand/30 bg-card p-4 text-sm">
+      <p className="font-semibold">Sumbangsih bulanan untuk program RW 03</p>
+      <ul className="space-y-1">
+        {items.map((x) => (
+          <li key={x.label} className="flex justify-between gap-3">
+            <span className="text-muted-foreground">{x.label}</span>
+            <span className="tabular-nums">{formatRp(x.nominal)}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="flex items-baseline justify-between border-t pt-2">
+        <span className="font-semibold">Per bulan</span>
+        <span className="text-xl font-bold tabular-nums text-brand">{formatRp(total)}</span>
+      </div>
+      {catatan && <p className="text-xs text-muted-foreground">{catatan}</p>}
+    </div>
+  );
+}
+
+export function ringkasIsianSumbangsih(isian: IsianSumbangsih, program: PosAnggaran[]) {
+  return program.filter((p) => (isian[p.id] ?? 0) > 0).map((p) => ({ label: p.label, nominal: isian[p.id] }));
 }

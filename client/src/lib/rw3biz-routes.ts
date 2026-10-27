@@ -4,6 +4,8 @@ export const RW3BIZ_ROUTES = {
   hub: "/rw3biz",
   panduan: "/rw3biz/panduan",
   pengajuan: "/rw3biz/pengajuan",
+  /** Formulir kertas kosong untuk dicetak & ditulis tangan. */
+  formulir: "/rw3biz/formulir",
   perpanjang: "/rw3biz/perpanjang",
   status: "/rw3biz/status",
   /** Aduan usaha masuk lewat Aduan Warga satu pintu. */

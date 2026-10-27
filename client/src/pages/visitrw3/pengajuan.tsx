@@ -77,20 +77,27 @@ import {
 import { isVisitRw3Jenis } from "@shared/visitrw3-produk";
 import { aturanFotoKk, getVisitrw3FormProfile } from "@shared/visitrw3-form-by-jenis";
 import type { PengajuanProduct } from "@/lib/visitrw3-produk-ui";
+import { PernyataanSumbangsihPanel } from "@/components/rw3biz/pernyataan";
+import { RW3BIZ_RT_NUMBERS } from "@shared/rt";
 import {
-  EstimasiKontribusiCard,
   JENIS_TEMPAT_BIZ_OPTIONS,
   OrangKontribusiFields,
+  RingkasanSumbangsih,
+  SumbangsihFields,
+  ringkasIsianSumbangsih,
+  sumbangsihPayload,
+  totalIsianSumbangsih,
+  useProgramRw3,
   validateOrangKontribusi,
+  validateSumbangsih,
+  type IsianSumbangsih,
 } from "@/components/rw3biz/kontribusi-form";
 import { PilihTermin } from "@/components/gov/pilih-termin";
 
 import {
   ASAL_ORANG_BIZ_LABEL,
   PERAN_ORANG_BIZ_LABEL,
-  RENTANG_OMZET,
-  RENTANG_OMZET_LABEL,
-  turunkanOperasionalMalam,
+  formatRp,
   type AsalOrangBiz,
   type PeranOrangBiz,
 } from "@shared/rw3biz-kontribusi";
@@ -121,15 +128,20 @@ const JENIS_CHOICES_VISIT: {
   },
 ];
 
-/** Kost tidak punya langkah jumlah: sendiri/berdua dipilih di langkah lokasi. */
+/** Kost tidak punya langkah jumlah: sendiri/berdua dipilih di langkah lokasi. Usaha cukup satu orang (pemilik / PJ). */
 function buildPengajuanSteps(jenis: JenisWarga): StepDef[] {
+  if (jenis === "jualan") {
+    return [
+      { id: "lokasi", label: "Lokasi" },
+      { id: "usaha", label: "Usaha" },
+      { id: "penghuni", label: "Pemilik" },
+      { id: "sumbangsih", label: "Dukung" },
+      { id: "bayar", label: "Kirim" },
+    ];
+  }
   const steps: StepDef[] = [{ id: "lokasi", label: "Lokasi" }];
-  if (jenis === "jualan") steps.push({ id: "usaha", label: "Usaha" });
-  if (jenis !== "kost") steps.push({ id: "jumlah", label: jenis === "jualan" ? "Pegawai" : "Keluarga" });
-  steps.push(
-    { id: "penghuni", label: jenis === "jualan" ? "Data orang" : "Data diri" },
-    { id: "bayar", label: "Kirim" },
-  );
+  if (jenis !== "kost") steps.push({ id: "jumlah", label: "Keluarga" });
+  steps.push({ id: "penghuni", label: "Data diri" }, { id: "bayar", label: "Kirim" });
   return steps;
 }
 
@@ -233,19 +245,13 @@ type PenghuniForm = {
   punyaKendaraan: "" | "ya" | "tidak";
   kendaraanList: KendaraanRow[];
   fotoKtpPath: string;
-  /** RW3BIZ: peran & asal pekerja. */
+  /** RW3BIZ: peran (pemilik / PJ) & asal tempat tinggal. */
   peran: string;
   asal: string;
   domisili: string;
 };
 
-function pegawaiBiasa(p: PenghuniForm) {
-  return p.peran === "pekerja_tetap" || p.peran === "pekerja_harian";
-}
-
-/** Anak tidak dihitung sebagai pekerja; nilai bawaan hanya untuk lolos skema. */
 function orangKontribusiPayload(p: PenghuniForm) {
-  if (p.isAnak) return { peran: "pekerja_harian", asal: "rw3", domisili: null };
   return {
     peran: p.peran,
     asal: p.asal,
@@ -571,9 +577,7 @@ type DraftPengajuan = {
   catatan: string;
   setujuTataTertib: boolean;
   fotoKk?: string;
-  rentangOmzet?: string;
-  /** Draf lama: hanya `rentangOmzet` yang masih dipakai. */
-  bizKontribusi?: { rentangOmzet?: string };
+  sumbangsih?: IsianSumbangsih;
 };
 
 function bacaDraft(key: string): DraftPengajuan | null {
@@ -772,7 +776,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
   const [kategoriUsahaLain, setKategoriUsahaLain] = useState("");
   const [jamBuka, setJamBuka] = useState("");
   const [jamTutup, setJamTutup] = useState("");
-  const [rentangOmzet, setRentangOmzet] = useState("");
+  const [sumbangsih, setSumbangsih] = useState<IsianSumbangsih>({});
   const [jumlahDewasa, setJumlahDewasa] = useState(1);
   const [jumlahAnak, setJumlahAnak] = useState(0);
   const jumlah = jumlahDewasa + jumlahAnak;
@@ -829,9 +833,9 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
     setKategoriUsahaLain(d?.kategoriUsahaLain ?? "");
     setJamBuka(d?.jamBuka ?? "");
     setJamTutup(d?.jamTutup ?? "");
-    setRentangOmzet(d?.rentangOmzet ?? d?.bizKontribusi?.rentangOmzet ?? "");
-    setJumlahDewasa(d?.jumlahDewasa ?? 1);
-    setJumlahAnak(d?.jumlahAnak ?? 0);
+    setSumbangsih(d?.sumbangsih ?? {});
+    setJumlahDewasa(product === "rw3biz" ? 1 : d?.jumlahDewasa ?? 1);
+    setJumlahAnak(product === "rw3biz" ? 0 : d?.jumlahAnak ?? 0);
     setPenghuni(
       d?.penghuni?.length
         ? d.penghuni.map((p) => {
@@ -883,7 +887,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
         kategoriUsahaLain,
         jamBuka,
         jamTutup,
-        rentangOmzet,
+        sumbangsih,
         jumlahDewasa,
         jumlahAnak,
         penghuni,
@@ -898,7 +902,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
   }, [
     draftKey, draftSiapKey, nomorHasil, step, rt, alamat, nomorUnit, ukuranTinggal, namaUsaha,
     jenisTempatUsaha, jenisTempatUsahaLain, kategoriUsaha, kategoriUsahaLain,
-    jamBuka, jamTutup, rentangOmzet, jumlahDewasa, jumlahAnak, penghuni, penghuniIndex,
+    jamBuka, jamTutup, sumbangsih, jumlahDewasa, jumlahAnak, penghuni, penghuniIndex,
     terminBulan, catatan, setujuTataTertib, fotoKk,
   ]);
 
@@ -998,7 +1002,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
     const n = sameTypeBefore + 1;
     if (p.isAnak) return `Anak ${n}`;
     if (jenisWarga === "kost") return n === 1 ? "Data diri Anda" : "Teman sekamar";
-    if (product === "rw3biz") return n === 1 ? "Data Anda (pemilik)" : `Orang ke-${n}`;
+    if (product === "rw3biz") return "Data pemilik / penanggung jawab";
     return n === 1 ? "Data diri Anda" : `Dewasa ${n}`;
   }
 
@@ -1054,7 +1058,6 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
       requireTempatKerja: formProfile?.requireTempatKerja ?? true,
       tempatKerjaLabel: formProfile?.tempatKerjaLabel,
       dataUsaha: product === "rw3biz",
-      pegawaiRingan: product === "rw3biz" && pegawaiBiasa(p),
     };
   }
 
@@ -1065,46 +1068,10 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
     return ada ? null : "Minimal satu orang berperan Pemilik atau Penanggung jawab, lengkap dengan nomor WhatsApp";
   }
 
-  /** Pemohon hanya mengisi omzet; luas, sampah, parkir, dan kendaraan diisi petugas saat survey. */
-  const dataUsahaAwal = useMemo(
-    () => ({ rentangOmzet, operasionalMalam: turunkanOperasionalMalam(jamBuka, jamTutup) }),
-    [rentangOmzet, jamBuka, jamTutup],
-  );
+  const { program: programRw3 } = useProgramRw3(product === "rw3biz");
+  const ringkasSumbangsih = useMemo(() => ringkasIsianSumbangsih(sumbangsih, programRw3), [sumbangsih, programRw3]);
 
-  /** Perkiraan sejak langkah Usaha: orang yang belum diisi dianggap pegawai dari luar RW 03. */
-  const previewSementaraPayload = useMemo(() => {
-    if (product !== "rw3biz" || !jenisTempatUsaha || !rentangOmzet) return null;
-    const orang = penghuni
-      .filter((p) => !p.isAnak)
-      .map((p, idx) => ({
-        isAnak: false,
-        peran: p.peran || (idx === 0 ? "pemilik" : "pekerja_harian"),
-        asal: p.asal || "luar",
-        domisili: null,
-      }));
-    return {
-      jenisTempatUsaha,
-      ...dataUsahaAwal,
-      jamBuka: jamBuka || null,
-      jamTutup: jamTutup || null,
-      orang: orang.length ? orang : [{ isAnak: false, peran: "pemilik", asal: "luar", domisili: null }],
-    };
-  }, [product, jenisTempatUsaha, rentangOmzet, dataUsahaAwal, penghuni, jamBuka, jamTutup]);
-
-  const previewKontribusiPayload = useMemo(() => {
-    if (product !== "rw3biz" || !jenisTempatUsaha || !rentangOmzet) return null;
-    const orang = penghuni.map((p) => ({ isAnak: p.isAnak, ...orangKontribusiPayload(p) }));
-    if (orang.some((o) => !o.isAnak && (!o.peran || !o.asal))) return null;
-    return {
-      jenisTempatUsaha,
-      ...dataUsahaAwal,
-      jamBuka: jamBuka || null,
-      jamTutup: jamTutup || null,
-      orang: orang.filter((o) => !o.isAnak),
-    };
-  }, [product, jenisTempatUsaha, rentangOmzet, dataUsahaAwal, penghuni, jamBuka, jamTutup]);
-
-  const kunciKontribusi = `${terminBulan}|${JSON.stringify(previewKontribusiPayload)}`;
+  const kunciKontribusi = `${terminBulan}|${JSON.stringify(ringkasSumbangsih)}`;
   useEffect(() => {
     setSetujuTataTertib(false);
   }, [kunciKontribusi]);
@@ -1152,13 +1119,16 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
           kategoriUsaha: buildKategoriUsahaPayload(kategoriUsaha, kategoriUsahaLain),
           jamBuka: jamBuka.trim(),
           jamTutup: jamTutup.trim(),
-          ...dataUsahaAwal,
           pjSetujuNotifikasi: true,
-          jumlahOrang: jumlah,
+          jumlahOrang: orang.length,
           terminBulan: parseInt(terminBulan, 10),
           catatanPemohon: catatanKirim(),
           orang,
+          sumbangsih: sumbangsihPayload(
+            Object.fromEntries(programRw3.map((p) => [p.id, sumbangsih[p.id] ?? 0])),
+          ),
           setujuTataTertib: true as const,
+          setujuPernyataan: true as const,
         });
         return readJsonSafely<{ nomorBiz: string; nomorVisitrw3?: string }>(res);
       }
@@ -1315,7 +1285,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
             ...(product === "rw3biz"
               ? [
                   "Anda akan dihubungi lewat WhatsApp jika diperlukan klarifikasi.",
-                  "Kontribusi bulanan final ditetapkan setelah survey dan tampil di halaman cek status, lengkap dengan rinciannya.",
+                  "Sumbangsih yang Anda sanggupkan tampil di halaman cek status dan dikonfirmasi pengurus saat survey.",
                 ]
               : ["Setelah disetujui, Surat Izin Tinggal Sementara terbit — bisa dilihat & dicetak dari halaman cek status."]),
           ]}
@@ -1408,7 +1378,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
           <p>
             <strong>Siapkan:</strong>{" "}
             {product === "rw3biz"
-              ? "KTP pemilik dan data orang yang bekerja di usaha."
+              ? "KTP pemilik atau penanggung jawab usaha."
               : "KTP setiap orang dewasa yang tinggal" + (jenisWarga === "kontrak" ? " (dan KK bila ada anak)." : ".")}{" "}
             Isian tersimpan otomatis di HP ini.
           </p>
@@ -1451,7 +1421,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
           <div className="space-y-2">
             <Label>RT</Label>
             <div className="grid grid-cols-4 gap-2">
-              {rtOptions.map((n) => (
+              {(product === "rw3biz" ? RW3BIZ_RT_NUMBERS : rtOptions).map((n) => (
                 <Button
                   key={n}
                   type="button"
@@ -1558,7 +1528,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
             current={1}
             total={1}
             title="Data usaha"
-            hint="Nama, jenis, jam buka, dan kisaran omzet."
+            hint="Nama, jenis, dan jam buka usaha."
           />
           <div className="space-y-2">
             <Label>Nama usaha *</Label>
@@ -1659,36 +1629,8 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
           </div>
           <p className="text-xs text-muted-foreground -mt-2">
             Format 24 jam (00:00–23:59), tanpa AM/PM. Petugas survey menyesuaikan kunjungan dengan jam buka.
+            {product === "rw3biz" && " Luas tempat, sampah, parkir, dan kendaraan usaha dicatat petugas saat survey."}
           </p>
-          {product === "rw3biz" && (
-            <>
-              <div className="space-y-2">
-                <Label>Kisaran omzet (pendapatan kotor) per bulan *</Label>
-                <div className="grid gap-2">
-                  {RENTANG_OMZET.map((v) => (
-                    <Button
-                      key={v}
-                      type="button"
-                      variant={rentangOmzet === v ? "default" : "outline"}
-                      className="h-12 justify-start text-base"
-                      aria-pressed={rentangOmzet === v}
-                      onClick={() => setRentangOmzet(v)}
-                    >
-                      {RENTANG_OMZET_LABEL[v]}
-                    </Button>
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Cukup kisaran, tidak dibagikan ke pihak lain. Luas tempat, sampah, parkir, dan kendaraan usaha dicatat
-                  petugas saat survey.
-                </p>
-              </div>
-              <EstimasiKontribusiCard
-                payload={previewSementaraPayload}
-                sementara="Perkiraan awal. Angka final ditetapkan setelah survey lokasi."
-              />
-            </>
-          )}
           <PesanGalat pesan={errMsg} />
           <div className="flex gap-2">
             <Button variant="outline" className="touch-target" onClick={() => goStep(-1)}>
@@ -1708,7 +1650,6 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                   requireJamOperasional: true,
                 });
                 if (err) return showErr(err);
-                if (product === "rw3biz" && !rentangOmzet) return showErr("Pilih kisaran omzet per bulan");
                 goStep(1);
               }}
             >
@@ -1747,12 +1688,6 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
           <p className="text-sm font-medium text-center text-brand">
             Total {jumlah} {formProfile.orangLabel}
           </p>
-          {product === "rw3biz" && (
-            <EstimasiKontribusiCard
-              payload={previewSementaraPayload}
-              sementara={`Orang pertama dianggap pemilik, sisanya pegawai dari luar RW 03 sampai datanya diisi. Pegawai warga RW 03 memberi potongan.`}
-            />
-          )}
           {aturanKk !== "tidak" && (
             <div className="rounded-xl border bg-card p-3">
               <FotoDokumenPicker
@@ -1814,7 +1749,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                   p.isAnak
                     ? "Anak cukup nama, tanggal lahir, dan jenjang sekolah."
                     : jenisWarga === "jualan"
-                      ? "Pegawai cukup nama, NIK, tanggal lahir, dan asal. WhatsApp & foto KTP wajib untuk pemilik/PJ."
+                      ? "Cukup satu orang: pemilik atau penanggung jawab usaha. Data pegawai tidak perlu diisi."
                       : jenisWarga === "kost"
                         ? "Data diri penghuni kamar (KTP & WhatsApp wajib)."
                         : "Data diri penghuni kontrakan — isi satu per satu."
@@ -1898,10 +1833,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>
-                        Nomor WhatsApp aktif
-                        {product === "rw3biz" && pegawaiBiasa(p) ? " (opsional untuk pegawai)" : ""}
-                      </Label>
+                      <Label>Nomor WhatsApp aktif</Label>
                       <Input
                         className="h-12"
                         type="tel"
@@ -2021,7 +1953,6 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                     )}
                     <FotoDokumenPicker
                       jenis="ktp"
-                      {...(product === "rw3biz" && pegawaiBiasa(p) ? { label: "Foto KTP (opsional untuk pegawai)" } : {})}
                       foto={p.fotoKtpPath}
                       diproses={fotoDiproses === i}
                       onPilih={(f) =>
@@ -2035,12 +1966,6 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                   </>
                 )}
               </div>
-              {product === "rw3biz" && (
-                <EstimasiKontribusiCard
-                  payload={previewSementaraPayload}
-                  sementara="Ikut berubah saat peran dan asal setiap orang diisi."
-                />
-              )}
               <PesanGalat pesan={errMsg} />
               <div className="flex gap-2">
                 <Button
@@ -2100,6 +2025,34 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
           );
         })()}
 
+      {stepId === "sumbangsih" && (
+        <div className="space-y-4">
+          <MicroStepHeader
+            current={1}
+            total={1}
+            title="Sumbangsih untuk program RW 03"
+            hint="Tidak ada tarif. Tulis sendiri berapa yang ingin Anda sumbangkan setiap bulan untuk program yang ingin Anda dukung — boleh satu atau beberapa. Disetor ke Kas RW 03 dengan kwitansi."
+          />
+          <SumbangsihFields value={sumbangsih} onChange={setSumbangsih} tanpaPengantar />
+          <PesanGalat pesan={errMsg} />
+          <div className="flex gap-2">
+            <Button variant="outline" className="touch-target" onClick={() => goStep(-1)}>
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <Button
+              className="flex-1 touch-target"
+              onClick={() => {
+                const err = validateSumbangsih(sumbangsih, programRw3);
+                if (err) return showErr(err);
+                goStep(1);
+              }}
+            >
+              Lanjut <ChevronRight className="w-4 h-4 ml-1" />
+            </Button>
+          </div>
+        </div>
+      )}
+
       {stepId === "bayar" && (
         <div className="space-y-4">
           <MicroStepHeader
@@ -2151,6 +2104,19 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                 </Button>
               </div>
             )}
+            {product === "rw3biz" && (
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">Sumbangsih per bulan</p>
+                  <p>
+                    {formatRp(totalIsianSumbangsih(sumbangsih, programRw3))} · {ringkasSumbangsih.length} program
+                  </p>
+                </div>
+                <Button type="button" variant="ghost" size="sm" className="h-auto px-2 py-1 text-brand" onClick={() => lompatKe("sumbangsih")}>
+                  Ubah
+                </Button>
+              </div>
+            )}
             <div className="space-y-1">
               <p className="text-xs text-muted-foreground">
                 {jumlah} {formProfile?.orangLabel ?? "orang"}
@@ -2161,13 +2127,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                     <p className="truncate">
                       {x.namaLengkap.trim() || penghuniHeading(x, xi)}
                       <span className="text-muted-foreground">
-                        {x.isAnak
-                          ? " · anak"
-                          : x.fotoKtpPath
-                            ? " · KTP ✓"
-                            : product === "rw3biz" && pegawaiBiasa(x)
-                              ? ""
-                              : " · KTP belum ada"}
+                        {x.isAnak ? " · anak" : x.fotoKtpPath ? " · KTP ✓" : " · KTP belum ada"}
                       </span>
                     </p>
                     {!x.isAnak && product === "rw3biz" && (
@@ -2209,28 +2169,49 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
               </div>
             )}
           </div>
-          <Visitrw3SyaratPanel
-            tataMasyarakat={settingsMap.tata_tertib_masyarakat ?? ""}
-            tataKhusus={settingsMap.tata_tertib_penyewa ?? ""}
-            kontribusi={
-              product === "rw3biz" ? (
-                <EstimasiKontribusiCard
-                  payload={previewKontribusiPayload}
-                  terminBulan={parseInt(terminBulan, 10)}
-                />
-              ) : jenisWarga === "kost" || jenisWarga === "kontrak" ? (
-                <KontribusiTinggalInfo
-                  jenis={jenisWarga}
-                  settingsRows={settingsRows}
-                  terminBulan={parseInt(terminBulan, 10)}
-                  ukuran={ukuranTinggal}
-                />
-              ) : null
-            }
-            setuju={setujuTataTertib}
-            onSetuju={setSetujuTataTertib}
-            loading={settingsLoading}
-          />
+          {product === "rw3biz" ? (
+            <>
+              <RingkasanSumbangsih
+                items={ringkasSumbangsih}
+                catatan="Disetor tiap bulan ke Kas RW 03 dengan kwitansi, boleh dicicil. Bisa diubah saat survey atau saat memperbarui izin."
+              />
+              <div className="space-y-1">
+                <p className="text-sm font-semibold">Surat Pernyataan Sumbangsih</p>
+                <p className="text-xs text-muted-foreground">
+                  Mohon dibaca seluruhnya. Pengajuan hanya bisa dikirim setelah semua pernyataan dicentang.
+                </p>
+              </div>
+              <PernyataanSumbangsihPanel
+                key={kunciKontribusi}
+                items={ringkasSumbangsih}
+                terminBulan={parseInt(terminBulan, 10)}
+                identitas={{ nama: penghuni[0]?.namaLengkap, namaUsaha, alamat }}
+                tataMasyarakat={settingsMap.tata_tertib_masyarakat ?? ""}
+                tataKhusus={settingsMap.tata_tertib_penyewa ?? ""}
+                setuju={setujuTataTertib}
+                onSetuju={setSetujuTataTertib}
+                loading={settingsLoading}
+              />
+            </>
+          ) : (
+            <Visitrw3SyaratPanel
+              tataMasyarakat={settingsMap.tata_tertib_masyarakat ?? ""}
+              tataKhusus={settingsMap.tata_tertib_penyewa ?? ""}
+              kontribusi={
+                jenisWarga === "kost" || jenisWarga === "kontrak" ? (
+                  <KontribusiTinggalInfo
+                    jenis={jenisWarga}
+                    settingsRows={settingsRows}
+                    terminBulan={parseInt(terminBulan, 10)}
+                    ukuran={ukuranTinggal}
+                  />
+                ) : null
+              }
+              setuju={setujuTataTertib}
+              onSetuju={setSetujuTataTertib}
+              loading={settingsLoading}
+            />
+          )}
           <PesanGalat pesan={errMsg} />
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => goStep(-1)}>
@@ -2276,9 +2257,10 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                     lompatKe("penghuni");
                     return showErr(errPj, { step: indeksLangkah("penghuni"), idx: 0 });
                   }
-                  if (!rentangOmzet) {
-                    lompatKe("usaha");
-                    return showErr("Pilih kisaran omzet per bulan", { step: indeksLangkah("usaha") });
+                  const errSumbangsih = validateSumbangsih(sumbangsih, programRw3);
+                  if (errSumbangsih) {
+                    lompatKe("sumbangsih");
+                    return showErr(errSumbangsih, { step: indeksLangkah("sumbangsih") });
                   }
                 }
                 if (aturanKk === "wajib" && !fotoKk) {

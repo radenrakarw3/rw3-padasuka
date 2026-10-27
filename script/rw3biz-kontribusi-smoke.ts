@@ -12,7 +12,10 @@ import {
   hitungKontribusiRw3biz,
   nominalTagihan,
   parseTarifKontribusi,
+  parseSumbangsih,
   penyesuaianPeriode,
+  rapikanSumbangsih,
+  totalSumbangsih,
   turunkanOperasionalMalam,
   type InputKontribusi,
 } from "../shared/rw3biz-kontribusi";
@@ -275,9 +278,10 @@ uji("potongan termin 12 bulan 10%", () => {
 uji("alokasi pos anggaran proporsional dan jumlahnya tepat", () => {
   const a = alokasiKePos(45_000, tarif.posAnggaran);
   assert.equal(a.reduce((s, x) => s + x.nominal, 0), 45_000);
-  const linmas = a.find((x) => x.id === "linmas_ronda")!;
-  assert.ok(linmas.nominal >= 7_200 && linmas.nominal <= 7_201);
-  assert.equal(tarif.posAnggaran.reduce((s, x) => s + x.nominal, 0), 5_000_000);
+  const linmas = a.find((x) => x.id === "linmas_keamanan")!;
+  assert.equal(linmas.nominal, 7_500);
+  assert.equal(tarif.posAnggaran.reduce((s, x) => s + x.nominal, 0), 18_000_000);
+  assert.equal(tarif.targetBulanan, 18_000_000);
 });
 
 uji("parse konfigurasi rusak kembali ke default", () => {
@@ -285,6 +289,15 @@ uji("parse konfigurasi rusak kembali ke default", () => {
   assert.equal(t.minimal, 10_000);
   const t2 = parseTarifKontribusi(JSON.stringify({ minimal: 15_000, maksimal: 5_000 }));
   assert.equal(t2.maksimal, 15_000);
+});
+
+uji("RAB tersimpan versi lama diganti RAB baru sekali; versi baru tidak ditimpa", () => {
+  const lama = parseTarifKontribusi(JSON.stringify({ targetBulanan: 5_000_000, posAnggaran: [{ id: "x", label: "Lama", nominal: 1 }] }));
+  assert.equal(lama.targetBulanan, 18_000_000);
+  assert.equal(lama.posAnggaran.length, 10);
+  const baru = parseTarifKontribusi(JSON.stringify({ ...lama, targetBulanan: 20_000_000, posAnggaran: [{ id: "x", label: "Admin", nominal: 1 }] }));
+  assert.equal(baru.targetBulanan, 20_000_000);
+  assert.equal(baru.posAnggaran[0].label, "Admin");
 });
 
 uji("faktor penyesuaian dicari agar mencapai target", () => {
@@ -296,6 +309,24 @@ uji("faktor penyesuaian dicari agar mencapai target", () => {
   const hasil = cariFaktorTarget(inputs, tarif, 5_000_000);
   assert.ok(hasil.tercapai);
   assert.ok(hasil.proyeksi >= 5_000_000);
+});
+
+uji("sumbangsih: hanya program berlaku & nominal > 0, label disalin, total dijumlah", () => {
+  const list = rapikanSumbangsih(
+    [
+      { posId: "kebersihan", nominal: 10_000 },
+      { posId: "linmas_keamanan", nominal: 7_500 },
+      { posId: "tidak_ada", nominal: 50_000 },
+      { posId: "dana_cadangan", nominal: 0 },
+    ],
+    tarif.posAnggaran,
+  );
+  assert.deepEqual(list.map((s) => s.posId), ["linmas_keamanan", "kebersihan"]);
+  assert.equal(list[1].label, "Kebersihan lingkungan (petugas sapu RW)");
+  assert.equal(totalSumbangsih(list), 17_500);
+  assert.deepEqual(parseSumbangsih(JSON.stringify(list)), list);
+  assert.equal(parseSumbangsih(null), null);
+  assert.equal(parseSumbangsih("{rusak"), null);
 });
 
 console.log(`\n${lulus} uji lulus`);

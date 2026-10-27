@@ -557,7 +557,9 @@ function rw3bizKontribusiKolom() {
     /** Usaha baru buka (< 3 bulan) — dapat bulan pertama gratis. */
     usahaBaru: boolean("usaha_baru").notNull().default(false),
     kontribusiBulanan: integer("kontribusi_bulanan"),
-    /** JSON { input, hasil } — hasil hitungKontribusiRw3biz saat ditetapkan. */
+    /** JSON SumbangsihProgram[] — nominal yang disanggupkan pengusaha per program RW 03. Null = usaha lama (rumus). */
+    sumbangsih: text("sumbangsih"),
+    /** JSON { input, hasil } — hasil hitungKontribusiRw3biz saat ditetapkan (usaha lama). */
     rincianKontribusi: text("rincian_kontribusi"),
     persenPekerjaRw3: integer("persen_pekerja_rw3"),
   };
@@ -636,6 +638,9 @@ export const rw3bizPengajuan = pgTable("rw3biz_pengajuan", {
   reviewedAt: timestamp("reviewed_at"),
   reviewedBy: text("reviewed_by"),
   setujuTataTertib: boolean("setuju_tata_tertib").notNull().default(false),
+  /** Versi Surat Pernyataan Sumbangsih yang disetujui pemohon (shared/rw3biz-pernyataan.ts). */
+  pernyataanVersi: text("pernyataan_versi"),
+  pernyataanDisetujuiAt: timestamp("pernyataan_disetujui_at"),
   ...rw3bizKontribusiKolom(),
   createdAt: timestamp("created_at").defaultNow(),
 });

@@ -34,6 +34,7 @@ const Visitrw3Panduan = lazy(() => import("@/pages/visitrw3/panduan"));
 
 const Rw3bizHub = lazy(() => import("@/pages/rw3biz/hub"));
 const Rw3bizPengajuan = lazy(() => import("@/pages/rw3biz/pengajuan"));
+const Rw3bizFormulir = lazy(() => import("@/pages/rw3biz/formulir"));
 const Rw3bizPanduan = lazy(() => import("@/pages/rw3biz/panduan"));
 const Rw3bizStatus = lazy(() => import("@/pages/rw3biz/status"));
 const Rw3bizPerpanjang = lazy(() => import("@/pages/rw3biz/perpanjang"));
@@ -406,6 +407,7 @@ function PublicRoutes() {
 
       {/* RW3BIZ — izin usaha / jualan */}
       <Route path="/rw3biz/pengajuan" component={Rw3bizPengajuan} />
+      <Route path="/rw3biz/formulir" component={Rw3bizFormulir} />
       <Route path="/rw3biz/perpanjang" component={Rw3bizPerpanjang} />
       <Route path="/rw3biz/status" component={Rw3bizStatus} />
       <Route path="/rw3biz/aduan">{() => <Redirect to="/aduan/buat?kategori=usaha" />}</Route>

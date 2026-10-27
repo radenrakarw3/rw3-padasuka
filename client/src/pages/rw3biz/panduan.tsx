@@ -1,6 +1,7 @@
 import { Link } from "wouter";
-import { BookOpen, Store, Clock, Camera, MessageCircle, ChevronRight, Wallet, HeartHandshake, BarChart3 } from "lucide-react";
-import { RumusKontribusi, TransparansiKontribusi } from "@/components/rw3biz/transparansi";
+import { BookOpen, Store, Clock, Camera, MessageCircle, ChevronRight, Wallet, HeartHandshake, BarChart3, Printer } from "lucide-react";
+import { AturanRw3biz, TransparansiKontribusi } from "@/components/rw3biz/transparansi";
+import { KebutuhanRw3 } from "@/components/rw3biz/pernyataan";
 import { Rw3bizShell } from "@/components/rw3biz-shell";
 import { Button } from "@/components/ui/button";
 import {
@@ -48,22 +49,24 @@ export default function Rw3bizPanduan() {
           </h2>
           <ol className="space-y-2">
             <FlowStep n={1}>
-              Isi data usaha: nama, jenis tempat, kategori, jam buka–tutup, PJ, serta data penentu kontribusi (luas, omzet, sampah,
-              parkir, kendaraan operasional — motor, mobil, kolbak, truk), termasuk kolbak/truk <strong>charter (sewaan)</strong> yang
-              datang ke usaha beserta berapa kali datang per minggu.
+              Daftar <strong>online</strong> dari HP, atau <strong>cetak formulir kertas</strong> lalu serahkan ke pengurus RT/RW. Isi
+              data usaha: nama, jenis tempat, jenis dagangan, alamat, dan jam buka–tutup.
             </FlowStep>
             <FlowStep n={2}>
-              Data <strong>semua</strong> pemilik, PJ, dan pegawai (nama, NIK, peran, asal tempat tinggal). Jumlah pegawai ikut menentukan
-              kontribusi.
+              Data <strong>satu orang</strong> saja: pemilik atau penanggung jawab usaha (nama, NIK, WhatsApp, foto KTP). Data pegawai
+              tidak perlu diisi.
             </FlowStep>
-            <FlowStep n={3}>Setujui tata tertib, pilih masa berlaku (1, 3, 6, atau 12 bulan), dan lihat estimasi kontribusi bulanan.</FlowStep>
+            <FlowStep n={3}>
+              Tentukan sendiri <strong>sumbangsih bulanan</strong> untuk program RW 03 yang ingin Anda dukung, pilih masa berlaku (1, 3,
+              6, atau 12 bulan), lalu setujui tata tertib.
+            </FlowStep>
             <FlowStep n={4}>
-              Setelah survey dan disetujui, usaha mendapat <strong>Nomor Induk Usaha (NIU-RW3-…)</strong> dan Surat Izin Usaha yang bisa
-              dicetak dari cek status.
+              Petugas survey mencatat luas tempat, sampah, parkir, dan kendaraan operasional. Setelah disetujui, usaha mendapat{" "}
+              <strong>Nomor Induk Usaha (NIU-RW3-…)</strong> dan Surat Izin Usaha yang bisa dicetak dari cek status.
             </FlowStep>
             <FlowStep n={5}>
-              Bayar kontribusi tiap bulan — setiap pembayaran masuk Kas RW 03 dan diberi kwitansi. Perbarui surat (beserta data pegawai
-              dan kendaraan) sebelum masa berlakunya habis.
+              Setor sumbangsih tiap bulan — setiap pembayaran masuk Kas RW 03 dan diberi kwitansi. Perbarui surat (beserta data
+              kendaraan dan sumbangsih) sebelum masa berlakunya habis.
             </FlowStep>
             <FlowStep n={6}>
               Ada razia kendaraan berat. Kendaraan menuju usaha yang plat/charternya belum terdaftar dikenai denda (masuk Kas RW, ada
@@ -74,16 +77,23 @@ export default function Rw3bizPanduan() {
               petugas dikenai teguran tertulis, lalu denda yang makin besar bila berulang dalam 12 bulan.
             </FlowStep>
             <FlowStep n={8}>
-              Bila kontribusi dan denda sebulan melebihi kebutuhan RW, kelebihannya jadi <strong>voucher belanja warga</strong> yang hanya
+              Bila sumbangsih dan denda sebulan melebihi kebutuhan RW, kelebihannya jadi <strong>voucher belanja warga</strong> yang hanya
               bisa dipakai di usaha RW3BIZ yang tertib. Voucher yang Anda terima ditukar ke Kas RW 03 senilai penuh.
             </FlowStep>
           </ol>
-          <Link href={RW3BIZ_ROUTES.pengajuan}>
-            <Button className="w-full touch-target mt-2">
-              Mulai ajukan
-              <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </Link>
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <Link href={RW3BIZ_ROUTES.pengajuan}>
+              <Button className="w-full touch-target">
+                Isi online
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </Link>
+            <Link href={RW3BIZ_ROUTES.formulir}>
+              <Button variant="outline" className="w-full touch-target gap-1.5">
+                <Printer className="w-4 h-4" /> Cetak formulir kertas
+              </Button>
+            </Link>
+          </div>
         </section>
 
         <section className="rounded-xl border bg-card p-4 space-y-2">
@@ -91,7 +101,7 @@ export default function Rw3bizPanduan() {
           <ul className="text-sm text-muted-foreground space-y-2">
             <li className="flex gap-2">
               <Camera className="w-4 h-4 shrink-0 mt-0.5" />
-              Data KTP pemilik/PJ dan seluruh pegawai (foto KTP wajib untuk pemilik/PJ)
+              KTP pemilik / penanggung jawab (foto KTP untuk online, fotokopi KTP untuk formulir kertas)
             </li>
             <li className="flex gap-2">
               <Clock className="w-4 h-4 shrink-0 mt-0.5" />
@@ -103,7 +113,7 @@ export default function Rw3bizPanduan() {
             </li>
             <li className="flex gap-2">
               <Wallet className="w-4 h-4 shrink-0 mt-0.5" />
-              Perkiraan omzet per bulan (cukup kisaran), luas tempat, serta jumlah dan plat kendaraan operasional
+              Besar sumbangsih bulanan yang ingin Anda berikan untuk program RW 03
             </li>
           </ul>
         </section>
@@ -111,20 +121,21 @@ export default function Rw3bizPanduan() {
         <section className="rounded-xl border bg-card p-4 space-y-3">
           <h2 className="font-semibold text-sm flex items-center gap-2">
             <HeartHandshake className="w-4 h-4 text-brand" />
-            Kontribusi bulanan untuk lingkungan
+            Sumbangsih untuk program RW 03
           </h2>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Semua yang berusaha di wilayah RW 03 ikut menanggung biaya bersama: <strong className="text-foreground">Linmas</strong> yang
-            ronda malam, <strong className="text-foreground">petugas kebersihan</strong>, dana sosial warga sakit dan meninggal, serta
-            pemeliharaan lampu jalan dan selokan. Besarnya dihitung dengan rumus yang sama untuk semua usaha — usaha kecil membayar kecil,
-            dan usaha yang mempekerjakan warga RW 03 mendapat potongan. Kelebihan dana di atas kebutuhan RW kembali ke usaha lewat
-            voucher belanja warga.
+            Usaha di wilayah RW 03 ikut mendukung program bersama: <strong className="text-foreground">Linmas</strong> yang ronda
+            malam, <strong className="text-foreground">petugas kebersihan</strong>, dana sosial dan darurat, serta perawatan jalan,
+            lampu, dan selokan. <strong className="text-foreground">Tidak ada tarif atau rumus</strong> — Anda sendiri yang
+            menentukan berapa sumbangsih per bulan dan untuk program mana, lalu menyetujui <strong className="text-foreground">Surat
+            Pernyataan Sumbangsih</strong>. Kelebihan dana di atas kebutuhan RW kembali ke usaha lewat voucher belanja warga.
           </p>
+          <KebutuhanRw3 />
           <Accordion type="single" collapsible>
-            <AccordionItem value="rumus" className="border-b-0">
-              <AccordionTrigger className="text-sm py-2">Lihat rumus lengkap</AccordionTrigger>
+            <AccordionItem value="aturan" className="border-b-0">
+              <AccordionTrigger className="text-sm py-2">Aturan denda, kemudahan, & voucher</AccordionTrigger>
               <AccordionContent>
-                <RumusKontribusi />
+                <AturanRw3biz />
               </AccordionContent>
             </AccordionItem>
           </Accordion>
@@ -133,9 +144,9 @@ export default function Rw3bizPanduan() {
         <section className="rounded-xl border bg-card p-4 space-y-3">
           <h2 className="font-semibold text-sm flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-brand" />
-            Laporan pemakaian kontribusi
+            Laporan pemakaian sumbangsih
           </h2>
-          <p className="text-xs text-muted-foreground">Uang kontribusi masuk Kas RW dan dipakai per pos berikut. Diperbarui otomatis.</p>
+          <p className="text-xs text-muted-foreground">Uang sumbangsih masuk Kas RW dan dipakai per program berikut. Diperbarui otomatis.</p>
           <TransparansiKontribusi />
         </section>
 
@@ -150,19 +161,19 @@ export default function Rw3bizPanduan() {
           <AccordionItem value="biaya">
             <AccordionTrigger className="text-sm">Apa ada biaya?</AccordionTrigger>
             <AccordionContent className="text-sm text-muted-foreground">
-              Ada kontribusi bulanan sesuai rumus di atas. Estimasinya muncul sebelum Anda mengirim pengajuan; angka final ditetapkan
-              setelah survey. Pembayaran dicatat pengurus dan tercatat di Kas RW.
+              Tidak ada tarif. Yang ada hanya sumbangsih bulanan yang besarnya Anda tentukan sendiri saat mendaftar, lalu dikonfirmasi
+              pengurus saat survey. Setiap setoran dicatat pengurus dan masuk Kas RW 03 dengan kwitansi.
             </AccordionContent>
           </AccordionItem>
           <AccordionItem value="keberatan">
-            <AccordionTrigger className="text-sm">Bagaimana jika merasa terlalu berat?</AccordionTrigger>
+            <AccordionTrigger className="text-sm">Bagaimana jika ingin mengubah sumbangsih?</AccordionTrigger>
             <AccordionContent className="text-sm text-muted-foreground">
-              Buka halaman{" "}
+              Ubah saat memperbarui izin, atau buka halaman{" "}
               <Link href={RW3BIZ_ROUTES.status} className="text-brand font-medium underline">
                 cek status
-              </Link>
-              , lalu ajukan peninjauan dengan alasan Anda. Pengurus akan survey ulang atau memberi keringanan sementara bila usaha sedang
-              sepi, pengusaha lansia/disabilitas, atau keluarga penerima bansos.
+              </Link>{" "}
+              dan ajukan perubahan dengan alasan Anda. Pengurus juga bisa memberi keringanan sementara bila usaha sedang sepi,
+              pengusaha lansia/disabilitas, atau keluarga penerima bansos.
             </AccordionContent>
           </AccordionItem>
         </Accordion>

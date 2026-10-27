@@ -149,7 +149,7 @@ export function RabKartu({ rab }: { rab: RabData }) {
         </div>
         <div className="grid grid-cols-2 gap-2 text-xs">
           <div className="rounded-lg bg-muted/40 p-2">
-            <p className="text-muted-foreground">Proyeksi tarif penuh</p>
+            <p className="text-muted-foreground">Sumbangsih disanggupkan</p>
             <p className="font-semibold tabular-nums">{formatRp(rab.proyeksiPenuh)}</p>
             <p className="text-muted-foreground">{rab.usahaAktif} usaha aktif</p>
           </div>
@@ -159,11 +159,11 @@ export function RabKartu({ rab }: { rab: RabData }) {
             <p className="text-muted-foreground">Pemasukan lain {formatRp(rab.pemasukanLain)}</p>
           </div>
           <div className="rounded-lg bg-muted/40 p-2">
-            <p className="text-muted-foreground">Pekerja warga RW 03</p>
-            <p className="font-semibold tabular-nums">{rab.pekerja.persenRw3}%</p>
-            <p className="text-muted-foreground">
-              {rab.pekerja.rw3} dari {rab.pekerja.total} · luar {rab.pekerja.luar}
+            <p className="text-muted-foreground">Rata-rata per usaha</p>
+            <p className="font-semibold tabular-nums">
+              {formatRp(rab.usahaAktif - rab.usahaBelumDihitung > 0 ? rab.proyeksiPenuh / (rab.usahaAktif - rab.usahaBelumDihitung) : 0)}
             </p>
+            <p className="text-muted-foreground">sumbangsih / bulan</p>
           </div>
           <div className="rounded-lg bg-muted/40 p-2">
             <p className="text-muted-foreground">Tunggakan bulan lalu</p>
@@ -174,7 +174,7 @@ export function RabKartu({ rab }: { rab: RabData }) {
         <div className="rounded-lg border border-[hsl(40,45%,55%)]/50 bg-[hsl(40,45%,55%)]/10 p-3 text-xs space-y-1">
           <p className="font-medium">Dana voucher belanja warga</p>
           <p>
-            Kontribusi {formatRp(rab.voucher.kontribusi)} + denda {formatRp(rab.voucher.denda)} = {formatRp(rab.voucher.terkumpul)} dari
+            Sumbangsih {formatRp(rab.voucher.kontribusi)} + denda {formatRp(rab.voucher.denda)} = {formatRp(rab.voucher.terkumpul)} dari
             kebutuhan {formatRp(rab.target)}.{" "}
             {rab.voucher.surplus > 0 ? (
               <strong>Kelebihan {formatRp(rab.voucher.surplus)} siap dijadikan voucher.</strong>
@@ -194,13 +194,13 @@ export function RabKartu({ rab }: { rab: RabData }) {
         {rab.usahaBelumDihitung > 0 && (
           <p className="flex items-start gap-1 text-xs text-warning">
             <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-            {rab.usahaBelumDihitung} usaha aktif belum punya kontribusi (data lama) — lengkapi lewat Tagihan → Ubah kontribusi.
+            {rab.usahaBelumDihitung} usaha aktif belum punya sumbangsih (data lama) — lengkapi lewat Tagihan → Ubah sumbangsih.
           </p>
         )}
-        {!rab.faktor.tercapai && rab.proyeksiPenuh < rab.target && rab.usahaAktif > 0 && (
+        {rab.proyeksiPenuh < rab.target && rab.usahaAktif > 0 && (
           <p className="flex items-start gap-1 text-xs text-warning">
             <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-            Tarif saat ini belum cukup untuk target. Pertimbangkan pendataan usaha yang belum terdaftar sebelum menaikkan tarif.
+            Sumbangsih yang disanggupkan belum mencukupi kebutuhan RAB. Ajak usaha yang belum terdaftar untuk mendaftar.
           </p>
         )}
       </div>
@@ -248,7 +248,7 @@ export default function AdminRw3bizDashboard() {
       <Visitrw3AdminNav
         product="rw3biz"
         title="RAB & statistik RW3BIZ"
-        description="Kontribusi usaha untuk RAB operasional RW 03 — Linmas, kebersihan, dana sosial, dan pemeliharaan."
+        description="Sumbangsih usaha untuk program RW 03 — Linmas, kebersihan, dana sosial, dan pemeliharaan."
         actions={
           <Input
             type="month"
@@ -295,35 +295,21 @@ export default function AdminRw3bizDashboard() {
           {rabLoading || !rab ? <Skeleton className="h-64 w-full rounded-2xl" /> : <RabKartu rab={rab} />}
 
           {rab && rab.sebaran.length > 0 && (
-            <BagianLipat judul="Sebaran kontribusi per jenis usaha" className="rounded-2xl border bg-card p-4">
-              <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">
-                Beban = kontribusi dibanding perkiraan omzet. Jenis yang ditandai bebannya lebih dari 2× rata-rata — cek keadilan tarif.
-              </p>
+            <BagianLipat judul="Sebaran sumbangsih per jenis usaha" className="rounded-2xl border bg-card p-4">
               <ul className="space-y-2 sm:hidden">
                 {rab.sebaran.map((s) => (
-                  <li
-                    key={s.jenis}
-                    className={cn(
-                      "rounded-lg border p-3 text-xs space-y-1",
-                      s.terlaluBerat && "border-warning/50 bg-warning/5 text-warning",
-                    )}
-                  >
+                  <li key={s.jenis} className="rounded-lg border p-3 text-xs space-y-1">
                     <div className="flex items-start justify-between gap-2">
                       <p className="min-w-0 break-words text-sm font-medium">{labelJenis(s.jenis)}</p>
                       <span className="shrink-0 tabular-nums">{s.jumlah} usaha</span>
                     </div>
                     <p>
-                      <span className={s.terlaluBerat ? undefined : "text-muted-foreground"}>Rata-rata </span>
+                      <span className="text-muted-foreground">Rata-rata </span>
                       <span className="tabular-nums font-semibold">{formatRp(s.rataRata)}</span>
                     </p>
                     <p className="tabular-nums">
-                      <span className={s.terlaluBerat ? undefined : "text-muted-foreground"}>Rentang </span>
+                      <span className="text-muted-foreground">Rentang </span>
                       {formatRp(s.terendah)}–{formatRp(s.tertinggi)}
-                    </p>
-                    <p className="tabular-nums">
-                      <span className={s.terlaluBerat ? undefined : "text-muted-foreground"}>Beban </span>
-                      {s.bebanPersenOmzet.toLocaleString("id-ID")}%{s.terlaluBerat ? " ⚠" : ""}
                     </p>
                   </li>
                 ))}
@@ -335,33 +321,28 @@ export default function AdminRw3bizDashboard() {
                       <th className="py-1 pr-2 font-medium">Jenis</th>
                       <th className="py-1 pr-2 font-medium text-right">Usaha</th>
                       <th className="py-1 pr-2 font-medium text-right">Rata-rata</th>
-                      <th className="py-1 pr-2 font-medium text-right">Rentang</th>
-                      <th className="py-1 font-medium text-right">Beban</th>
+                      <th className="py-1 font-medium text-right">Rentang</th>
                     </tr>
                   </thead>
                   <tbody>
                     {rab.sebaran.map((s) => (
-                      <tr key={s.jenis} className={`border-t ${s.terlaluBerat ? "text-warning" : ""}`}>
+                      <tr key={s.jenis} className="border-t">
                         <td className="py-1 pr-2">{labelJenis(s.jenis)}</td>
                         <td className="py-1 pr-2 text-right tabular-nums">{s.jumlah}</td>
                         <td className="py-1 pr-2 text-right tabular-nums">{formatRp(s.rataRata)}</td>
-                        <td className="py-1 pr-2 text-right tabular-nums">
-                          {formatRp(s.terendah)}–{formatRp(s.tertinggi)}
-                        </td>
                         <td className="py-1 text-right tabular-nums">
-                          {s.bebanPersenOmzet.toLocaleString("id-ID")}%{s.terlaluBerat ? " ⚠" : ""}
+                          {formatRp(s.terendah)}–{formatRp(s.tertinggi)}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              </div>
             </BagianLipat>
           )}
 
           {rab && (
-            <BagianLipat judul="Proyeksi 6 bulan (masa transisi & keringanan)" className="rounded-2xl border bg-card p-4">
+            <BagianLipat judul="Proyeksi 6 bulan (termasuk keringanan)" className="rounded-2xl border bg-card p-4">
               <div className="space-y-2 sm:space-y-1">
                 {rab.proyeksiBertahap.map((b) => (
                   <div key={b.periode} className="grid grid-cols-[4.5rem_1fr_6.5rem] items-center gap-2 text-xs">
@@ -411,12 +392,9 @@ export default function AdminRw3bizDashboard() {
                     </div>
                     <div className="min-w-0 text-xs sm:text-right">
                       <p className="font-semibold tabular-nums">
-                        {u.kontribusiBulanan != null ? `${formatRp(u.kontribusiBulanan)}/bln` : "Belum dihitung"}
+                        {u.kontribusiBulanan != null ? `${formatRp(u.kontribusiBulanan)}/bln` : "Belum ada"}
                       </p>
-                      <p className="text-muted-foreground">
-                        PJ: {u.pjNama}
-                        {u.persenPekerjaRw3 != null ? ` · ${u.persenPekerjaRw3}% pekerja RW 03` : ""}
-                      </p>
+                      <p className="text-muted-foreground">PJ: {u.pjNama}</p>
                     </div>
                   </li>
                 ))}

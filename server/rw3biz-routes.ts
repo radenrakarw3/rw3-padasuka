@@ -15,7 +15,6 @@ import {
   listUsahaAktif,
   getOrangKtpPayload,
   hitungTanggalBerlaku,
-  previewKontribusi,
 } from "./rw3biz";
 import {
   ajukanKeberatan,
@@ -31,13 +30,12 @@ import {
   publikTarif,
   rabBulan,
   simpanTarif,
-  simulasiTarif,
   tagihanUntukUsaha,
   tanggapiKeberatan,
   transparansiPublik,
   ubahKontribusiUsaha,
 } from "./rw3biz-kontribusi";
-import { bulanIni } from "@shared/rw3biz-kontribusi";
+import { bulanIni, parseSumbangsih, totalSumbangsih } from "@shared/rw3biz-kontribusi";
 import {
   bayarDenda,
   batalBayarDenda,
@@ -69,6 +67,7 @@ import {
   buatPdfKwitansi,
   buatPdfKwitansiPelanggaran,
   buatPdfKwitansiRazia,
+  buatPdfPernyataan,
   buatPdfSuratUsaha,
   getDataFormulir,
   getDataKwitansi,
@@ -130,6 +129,16 @@ export function registerRw3bizRoutes(app: Express) {
     }
   });
 
+  app.get("/api/public/rw3biz/pernyataan/:nomor", async (req, res) => {
+    try {
+      const data = await getDataFormulir({ nomorBiz: String(req.params.nomor) });
+      if (!data) return res.status(404).json({ message: "Nomor pengajuan tidak ditemukan" });
+      kirimPdf(res, await buatPdfPernyataan(data, { lengkap: false }), req.query.unduh === "1");
+    } catch (error: unknown) {
+      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal membuat surat pernyataan") });
+    }
+  });
+
   /** Kwitansi publik hanya dengan nomor usaha yang cocok — id pembayaran berurutan, jangan bisa ditebak-tebak. */
   app.get("/api/public/rw3biz/kwitansi/:id", async (req, res) => {
     try {
@@ -180,6 +189,16 @@ export function registerRw3bizRoutes(app: Express) {
     }
   });
 
+  app.get("/api/admin/rw3biz/pengajuan/:id/pernyataan", requireAdmin, async (req, res) => {
+    try {
+      const data = await getDataFormulir({ id: parseInt(String(req.params.id), 10) });
+      if (!data) return res.status(404).json({ message: "Pengajuan tidak ditemukan" });
+      kirimPdf(res, await buatPdfPernyataan(data, { lengkap: true }), req.query.unduh === "1");
+    } catch (error: unknown) {
+      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal membuat surat pernyataan") });
+    }
+  });
+
   app.get("/api/admin/rw3biz/kwitansi/:id", requireAdmin, async (req, res) => {
     try {
       const data = await getDataKwitansi(parseInt(String(req.params.id), 10));
@@ -219,14 +238,6 @@ export function registerRw3bizRoutes(app: Express) {
       res.json({ tanggalBerlakuSampai: sampai });
     } catch (error: unknown) {
       res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Permintaan tidak valid") });
-    }
-  });
-
-  app.post("/api/public/rw3biz/preview-kontribusi", async (req, res) => {
-    try {
-      res.json(await previewKontribusi(req.body));
-    } catch (error: unknown) {
-      res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Data usaha belum lengkap untuk menghitung kontribusi") });
     }
   });
 
@@ -333,19 +344,26 @@ export function registerRw3bizRoutes(app: Express) {
       const data = await getStatusByNomor(nomor);
       if (!data) return res.status(404).json({ message: "Nomor RW3BIZ tidak ditemukan" });
       const tarif = await loadTarif();
-      const sumber = data.usaha ?? data.pengajuan;
-      const rincian = parseRincianTersimpan(sumber?.rincianKontribusi);
-      const kontribusi = rincian
-        ? {
-            bulanan: sumber?.kontribusiBulanan ?? rincian.hasil.total,
-            hasil: rincian.hasil,
-            alokasi: alokasiUntuk(sumber?.kontribusiBulanan ?? rincian.hasil.total, tarif),
-            final: Boolean(data.usaha),
-            keringanan: data.usaha?.keringananPersen
-              ? { persen: data.usaha.keringananPersen, sampai: data.usaha.keringananSampai }
-              : null,
-          }
+      // Pembaruan yang masih menunggu survey memuat sumbangsih terbaru yang diajukan.
+      const sumber = data.pengajuan?.status === "menunggu_survey" ? data.pengajuan : data.usaha ?? data.pengajuan;
+      const sumbangsih = parseSumbangsih(sumber?.sumbangsih);
+      const rincian = sumbangsih ? null : parseRincianTersimpan(sumber?.rincianKontribusi);
+      const keringanan = data.usaha?.keringananPersen
+        ? { persen: data.usaha.keringananPersen, sampai: data.usaha.keringananSampai }
         : null;
+      const final = sumber === data.usaha || sumber?.status === "disetujui";
+      const kontribusi = sumbangsih
+        ? { bulanan: totalSumbangsih(sumbangsih), sumbangsih, hasil: null, alokasi: [], final, keringanan }
+        : rincian
+          ? {
+              bulanan: sumber?.kontribusiBulanan ?? rincian.hasil.total,
+              sumbangsih: null,
+              hasil: rincian.hasil,
+              alokasi: alokasiUntuk(sumber?.kontribusiBulanan ?? rincian.hasil.total, tarif),
+              final,
+              keringanan,
+            }
+          : null;
       const tagihan = data.usaha ? await tagihanUntukUsaha(data.usaha.id) : [];
       // Nomor WA PJ dipakai sebagai verifikasi keberatan — jangan dibuka di endpoint publik.
       const samarkanWa = (n?: string | null) => (n ? `${n.slice(0, 4)}****${n.slice(-3)}` : null);
@@ -472,14 +490,6 @@ export function registerRw3bizRoutes(app: Express) {
       res.json(await simpanTarif(req.body));
     } catch (error: unknown) {
       res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal menyimpan tarif") });
-    }
-  });
-
-  app.post("/api/admin/rw3biz/settings/simulasi", requireAdmin, async (req, res) => {
-    try {
-      res.json(await simulasiTarif(req.body));
-    } catch (error: unknown) {
-      res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal menyimulasikan tarif") });
     }
   });
 

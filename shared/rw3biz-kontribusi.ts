@@ -128,10 +128,6 @@ export const CHARTER_BIZ: { kode: KodeCharterBiz; kendaraan: KodeKendaraanBiz; t
 
 export const MINGGU_PER_BULAN = 4;
 
-/** Batas orang (pemilik, PJ, pegawai) per pendaftaran usaha. */
-export const MAKS_ORANG_BIZ = 150;
-export const MAKS_ANAK_BIZ = 4;
-
 /** Charter dihitung per kedatangan; tiap 7 kedatangan/minggu setara satu unit milik sendiri (batas atasnya). */
 export function hitungCharter(kedatanganPerMinggu: number, c: (typeof CHARTER_BIZ)[number], tarif: TarifKontribusi): number {
   const n = Math.max(0, Math.floor(kedatanganPerMinggu));
@@ -190,7 +186,7 @@ export const JENIS_PELANGGARAN_INFO: Record<JenisPelanggaran, { label: string; c
   limbah_bau: { label: "Limbah, bau, atau asap", contoh: "air limbah ke jalan, selokan tersumbat, bau / asap menyengat" },
   jam_operasional: { label: "Melanggar jam operasional", contoh: "buka di luar jam yang didaftarkan" },
   kerusakan_fasum: { label: "Merusak jalan / fasilitas umum", contoh: "jalan rusak, portal, lampu, selokan rusak akibat kegiatan usaha" },
-  data_tidak_sesuai: { label: "Data usaha tidak sesuai", contoh: "pegawai / kendaraan / omzet tidak dilaporkan" },
+  data_tidak_sesuai: { label: "Data usaha tidak sesuai", contoh: "kendaraan operasional / data usaha tidak dilaporkan" },
   lainnya: { label: "Lainnya", contoh: "pelanggaran lain terhadap tata tertib RW 03" },
 };
 
@@ -310,22 +306,67 @@ export type TarifKontribusi = {
   potonganTermin: Record<string, number>;
   tenggangHari: number;
   posAnggaran: PosAnggaran[];
+  /** Versi RAB bawaan yang terakhir diterapkan (lihat RAB_VERSI). */
+  rabVersi: number;
 };
 
+/** RAB RW 03 (Anggaran Penerimaan dan Pengeluaran RW, Perwal Cimahi 53/2021 Pasal 114 ayat 4). */
 export const POS_ANGGARAN_DEFAULT: PosAnggaran[] = [
-  { id: "linmas_ronda", label: "Linmas — operasional ronda", nominal: 800_000, keterangan: "8 kali ronda per bulan" },
-  { id: "linmas_insentif", label: "Linmas — insentif petugas", nominal: 350_000, keterangan: "7 orang x Rp50.000" },
-  { id: "kebersihan", label: "Petugas kebersihan", nominal: 600_000, keterangan: "Tukang sapu lingkungan" },
-  { id: "sosial_duka", label: "Dana sosial duka", nominal: 500_000, keterangan: "Santunan warga meninggal" },
-  { id: "sosial_sakit", label: "Dana sosial warga sakit", nominal: 400_000, keterangan: "Rawat inap / berobat" },
-  { id: "pemeliharaan", label: "Pemeliharaan lingkungan", nominal: 700_000, keterangan: "Lampu jalan, selokan, jalan rusak ringan" },
-  { id: "angkut_sampah", label: "Angkutan sampah & alat kebersihan", nominal: 250_000 },
-  { id: "kegiatan_warga", label: "Kegiatan warga", nominal: 400_000, keterangan: "PHBN/17-an, posyandu, pemuda" },
-  { id: "sekretariat", label: "Operasional sekretariat RW", nominal: 350_000, keterangan: "ATK, cetak surat, pulsa/WA, listrik pos" },
-  { id: "sarana_keamanan", label: "Pemeliharaan sarana keamanan", nominal: 250_000, keterangan: "Pos ronda, portal, CCTV" },
-  { id: "darurat", label: "Dana darurat / bencana", nominal: 300_000, keterangan: "Kekeringan, banjir, kebakaran" },
-  { id: "cadangan", label: "Cadangan", nominal: 100_000 },
+  { id: "insentif_pelayanan", label: "Insentif kinerja pelayanan", nominal: 1_500_000, keterangan: "Pengurus yang melayani surat, survey, izin, dan pendataan" },
+  { id: "linmas_keamanan", label: "Linmas & keamanan", nominal: 3_000_000, keterangan: "Ronda malam, insentif Linmas, pos ronda, portal, CCTV" },
+  { id: "kebersihan", label: "Kebersihan lingkungan (petugas sapu RW)", nominal: 2_000_000, keterangan: "Petugas sapu, angkut sampah, alat kebersihan" },
+  { id: "operasional_rt", label: "Operasional 7 RT", nominal: 1_400_000, keterangan: "Rp200.000 per RT per bulan" },
+  { id: "infrastruktur", label: "Infrastruktur & maintenance kecil", nominal: 2_500_000, keterangan: "Lampu jalan, selokan, tambal jalan, perbaikan fasilitas umum" },
+  { id: "sosial_darurat", label: "Sosial & respons darurat", nominal: 1_500_000, keterangan: "Santunan duka, warga sakit, banjir, kebakaran" },
+  { id: "administrasi_digital", label: "Administrasi, data & digital", nominal: 600_000, keterangan: "ATK, cetak surat, WA, sistem rw3padasukacimahi.org" },
+  { id: "kegiatan_warga", label: "Kegiatan warga/kader/pemuda", nominal: 1_000_000, keterangan: "17-an, posyandu, kader, karang taruna" },
+  { id: "dana_pembangunan", label: "Dana pembangunan", nominal: 2_500_000, keterangan: "Tabungan pembangunan sarana & prasarana lingkungan" },
+  { id: "dana_cadangan", label: "Dana cadangan", nominal: 2_000_000, keterangan: "Kebutuhan mendesak di luar rencana" },
 ];
+
+/** Naikkan bila POS_ANGGARAN_DEFAULT diganti: konfigurasi tersimpan versi lama ikut diperbarui sekali. */
+export const RAB_VERSI = 2;
+
+// ---------------------------------------------------------------- Sumbangsih program RW 03
+
+/**
+ * Kontribusi usaha tidak dihitung rumus: pengusaha menyanggupkan sendiri nominal per bulan
+ * untuk program RW 03 (= pos anggaran). Label disalin agar tetap terbaca bila pos diganti nama.
+ */
+export type SumbangsihProgram = { posId: string; label: string; nominal: number };
+
+export const SUMBANGSIH_MAKS_PER_PROGRAM = 10_000_000;
+export const PILIHAN_CEPAT_SUMBANGSIH = [5_000, 10_000, 25_000, 50_000];
+
+export function totalSumbangsih(list: { nominal: number }[]): number {
+  return list.reduce((s, x) => s + Math.max(0, Math.round(Number(x.nominal) || 0)), 0);
+}
+
+/** Cocokkan isian ke program yang berlaku; program tak dikenal & nominal 0 dibuang, urutan ikut daftar program. */
+export function rapikanSumbangsih(isian: { posId: string; nominal: number }[], program: PosAnggaran[]): SumbangsihProgram[] {
+  const nominal = new Map<string, number>();
+  for (const x of isian) {
+    const n = Math.min(SUMBANGSIH_MAKS_PER_PROGRAM, Math.max(0, Math.round(Number(x.nominal) || 0)));
+    nominal.set(x.posId, (nominal.get(x.posId) ?? 0) + n);
+  }
+  return program
+    .map((p) => ({ posId: p.id, label: p.label, nominal: Math.min(SUMBANGSIH_MAKS_PER_PROGRAM, nominal.get(p.id) ?? 0) }))
+    .filter((s) => s.nominal > 0);
+}
+
+/** null = usaha lama yang kontribusinya masih dari rumus. */
+export function parseSumbangsih(raw: string | null | undefined): SumbangsihProgram[] | null {
+  if (!raw?.trim()) return null;
+  try {
+    const v = JSON.parse(raw);
+    if (!Array.isArray(v)) return null;
+    return v
+      .filter((s) => s && typeof s.posId === "string" && typeof s.label === "string")
+      .map((s) => ({ posId: s.posId, label: s.label, nominal: Math.max(0, Math.round(Number(s.nominal) || 0)) }));
+  } catch {
+    return null;
+  }
+}
 
 /** Nomor kwitansi tetap dari id pembayaran: KW/RW03/BIZ/2026/00012. */
 export function nomorKwitansi(pembayaranId: number, tanggal: string): string {
@@ -346,7 +387,7 @@ export function bulanIni(): string {
 }
 
 export const TARIF_DEFAULT: TarifKontribusi = {
-  targetBulanan: 5_000_000,
+  targetBulanan: 18_000_000,
   tarifDasar: {
     keliling: 10_000,
     lapak: 20_000,
@@ -402,6 +443,7 @@ export const TARIF_DEFAULT: TarifKontribusi = {
   potonganTermin: { "1": 0, "3": 5, "6": 7, "12": 10 },
   tenggangHari: 10,
   posAnggaran: POS_ANGGARAN_DEFAULT,
+  rabVersi: RAB_VERSI,
 };
 
 function angka(v: unknown, fallback: number): number {
@@ -428,7 +470,8 @@ export function parseTarifKontribusi(raw: string | null | undefined): TarifKontr
   for (const k of Object.keys(d.potonganTermin)) {
     potonganTermin[k] = Math.min(50, angka(o.potonganTermin?.[k], d.potonganTermin[k]));
   }
-  const posAnggaran = Array.isArray(o.posAnggaran) && o.posAnggaran.length
+  const rabLama = angka(o.rabVersi, 0) < RAB_VERSI;
+  const posAnggaran = !rabLama && Array.isArray(o.posAnggaran) && o.posAnggaran.length
     ? o.posAnggaran
         .filter((p) => p && typeof p.label === "string" && p.label.trim())
         .map((p, i) => ({
@@ -453,7 +496,7 @@ export function parseTarifKontribusi(raw: string | null | undefined): TarifKontr
       ? o.dendaPengulangan.map((p) => Math.min(10, angka(p, 1))).slice(0, 10)
       : d.dendaPengulangan;
   return {
-    targetBulanan: angka(o.targetBulanan, d.targetBulanan),
+    targetBulanan: rabLama ? d.targetBulanan : angka(o.targetBulanan, d.targetBulanan),
     tarifDasar,
     tambahanOmzet,
     luasBatasM2: angka(o.luasBatasM2, d.luasBatasM2),
@@ -492,6 +535,7 @@ export function parseTarifKontribusi(raw: string | null | undefined): TarifKontr
     potonganTermin,
     tenggangHari: Math.min(28, Math.floor(angka(o.tenggangHari, d.tenggangHari))),
     posAnggaran,
+    rabVersi: RAB_VERSI,
   };
 }
 

@@ -41,6 +41,8 @@ import {
   formatRp,
   labelPeriode,
   nomorKwitansi,
+  parseSumbangsih,
+  totalSumbangsih,
   type AsalOrangBiz,
   type JenisTempatBiz,
   type OperasionalMalam,
@@ -48,6 +50,7 @@ import {
   type RentangOmzet,
   type StatusTempatBiz,
 } from "@shared/rw3biz-kontribusi";
+import { PERNYATAAN_VERSI, PERWAL_RW, pasalPernyataanSumbangsih } from "@shared/rw3biz-pernyataan";
 import { bersihkan, muatLogo, SKALA_SURAT, tulisRata } from "./surat-sakti/pdf";
 import { dataUsahaDariBaris, loadTarif, parseRincianTersimpan } from "./rw3biz-kontribusi";
 import type { getDataKwitansiRazia } from "./rw3biz-razia";
@@ -525,10 +528,11 @@ export async function buatPdfSuratUsaha(d: DataSuratUsaha, opsi: { nikLengkap: b
   );
   L.y += 2;
 
-  const rincian = parseRincianTersimpan(p.rincianKontribusi);
-  const kontribusi = p.kontribusiBulanan ?? rincian?.hasil.total ?? null;
-  const pegawai = d.orang.filter((o) => !o.isAnak && o.peran !== "pemilik");
-  const pegawaiRw3 = pegawai.filter((o) => o.asal === "rw3").length;
+  // Surat yang masih berlaku memuat sumbangsih terkini (bisa diubah pengurus setelah terbit).
+  const sumber = d.digantiOleh ? p : d.usaha;
+  const rincian = parseRincianTersimpan(sumber.rincianKontribusi);
+  const sumbangsih = parseSumbangsih(sumber.sumbangsih);
+  const kontribusi = sumber.kontribusiBulanan ?? (sumbangsih ? totalSumbangsih(sumbangsih) : rincian?.hasil.total) ?? null;
   const pjNik = p.pjNik ? (opsi.nikLengkap ? p.pjNik : samarNik(p.pjNik)) : null;
   const jenisTempat =
     p.jenisTempatUsaha === "lainnya" && p.jenisTempatUsahaLain
@@ -543,9 +547,14 @@ export async function buatPdfSuratUsaha(d: DataSuratUsaha, opsi: { nikLengkap: b
     ["Jam operasional", p.jamBuka && p.jamTutup ? `${p.jamBuka} - ${p.jamTutup} WIB` : "-"],
     ["Penanggung jawab", `${p.pjNama}${pjNik ? ` (NIK ${pjNik})` : ""}`],
     ["Status tempat", label(STATUS_TEMPAT_BIZ_LABEL, p.statusTempat as StatusTempatBiz)],
-    ["Jumlah pegawai", `${pegawai.length} orang (${pegawaiRw3} warga RW 03, ${pegawai.length - pegawaiRw3} dari luar)`],
     ["Kendaraan operasional", ringkasKendaraan(p)],
-    ["Kontribusi bulanan", kontribusi != null ? `${formatRp(kontribusi)} (${rupiahTerbilang(kontribusi)})` : "-"],
+    [
+      sumbangsih ? "Sumbangsih bulanan" : "Kontribusi bulanan",
+      kontribusi != null ? `${formatRp(kontribusi)} (${rupiahTerbilang(kontribusi)})` : "-",
+    ],
+    ...(sumbangsih?.length
+      ? ([["Untuk program", sumbangsih.map((s) => `${s.label} ${formatRp(s.nominal)}`).join("; ")]] as [string, string][])
+      : []),
     [
       "Jenis surat",
       p.tipe === "perpanjang"
@@ -555,11 +564,15 @@ export async function buatPdfSuratUsaha(d: DataSuratUsaha, opsi: { nikLengkap: b
   ], 46);
   L.y += 2;
 
-  L.subjudul("Pemilik, penanggung jawab, dan pegawai terdaftar");
+  const pemegang = d.orang.filter((o) => o.isPenanggungJawab && !o.isAnak);
+  L.subjudul("Pemilik / penanggung jawab usaha");
   L.tabel(
     ["No", "Nama lengkap", "NIK", "L/P", "Tgl. lahir", "Peran", "Asal"],
     [8, 37, 34, 9, 21, 28, CW - 137],
-    d.orang.map((o, i) => [String(i + 1), ...baris(o, opsi.nikLengkap, false, false)]),
+    (pemegang.length ? pemegang : d.orang.filter((o) => !o.isAnak).slice(0, 1)).map((o, i) => [
+      String(i + 1),
+      ...baris(o, opsi.nikLengkap, false, false),
+    ]),
   );
 
   // Kotak masa berlaku
@@ -609,11 +622,13 @@ export async function buatPdfSuratUsaha(d: DataSuratUsaha, opsi: { nikLengkap: b
   L.doc.text("Ketentuan:", ML, L.y);
   L.y += 5.2 * L.k;
   L.daftarBernomor([
-    "Surat ini hanya berlaku untuk usaha, lokasi, pegawai, dan kendaraan yang tercantum, sampai tanggal BERLAKU SAMPAI.",
-    `Surat wajib diperbarui sebelum masa berlaku habis (paling lambat ${tgl(d.perbaruiPalingLambat)}) sekaligus memperbarui data pegawai dan kendaraan operasional. Setelah disetujui, terbit surat baru dan surat ini tidak berlaku lagi. Nomor Induk Usaha tetap sama.`,
-    "Setiap penambahan atau pengurangan pegawai dan kendaraan operasional - milik sendiri maupun charter/sewaan (terutama kolbak dan truk yang membebani jalan lingkungan) - wajib dilaporkan kepada pengurus RW, karena ikut menentukan kontribusi.",
+    "Surat ini hanya berlaku untuk usaha, lokasi, dan kendaraan yang tercantum, sampai tanggal BERLAKU SAMPAI.",
+    `Surat wajib diperbarui sebelum masa berlaku habis (paling lambat ${tgl(d.perbaruiPalingLambat)}) sekaligus memperbarui data kendaraan operasional dan sumbangsih. Setelah disetujui, terbit surat baru dan surat ini tidak berlaku lagi. Nomor Induk Usaha tetap sama.`,
+    "Setiap penambahan atau pengurangan kendaraan operasional - milik sendiri maupun charter/sewaan (terutama kolbak dan truk yang membebani jalan lingkungan) - wajib dilaporkan kepada pengurus RW.",
     "Pengurus RW dapat melakukan razia kendaraan. Kendaraan menuju usaha ini yang tidak tercatat di surat ini dikenai denda yang disetor ke Kas RW 03, dan data usaha wajib diperbarui.",
-    `Kontribusi bulanan dibayarkan ke Kas RW 03 paling lambat tanggal ${1 + tarif.tenggangHari} setiap bulan. Setiap pembayaran diberi kwitansi resmi; simpan kwitansi sebagai bukti.`,
+    sumbangsih
+      ? `Sumbangsih yang disanggupkan dalam Surat Pernyataan Sumbangsih SPS/${p.nomorBiz} adalah dana swadaya masyarakat sebagaimana ${PERWAL_RW.pasal} ${PERWAL_RW.singkat}, disetor ke Kas RW 03 paling lambat tanggal ${1 + tarif.tenggangHari} setiap bulan, dan dipakai sesuai RAB RW 03. Setiap setoran diberi kwitansi resmi; simpan kwitansi sebagai bukti.`
+      : `Kontribusi bulanan dibayarkan ke Kas RW 03 paling lambat tanggal ${1 + tarif.tenggangHari} setiap bulan. Setiap pembayaran diberi kwitansi resmi; simpan kwitansi sebagai bukti.`,
     "Pemegang izin wajib menjaga kebersihan, ketertiban, dan keamanan lingkungan, serta tidak merusak jalan dan fasilitas umum di wilayah RW 03.",
     "Pelanggaran (sampah tercecer, kebisingan, parkir menghalangi jalan, limbah/bau, melanggar jam operasional, merusak fasilitas umum, data tidak sesuai, dll) dari aduan warga yang terbukti atau temuan petugas dikenai teguran / denda: denda dasar x tingkat (ringan/sedang/berat) x pengulangan dalam 12 bulan. Denda disetor ke Kas RW 03 dengan kwitansi.",
     "Bila kontribusi dan denda yang terkumpul dalam sebulan melebihi kebutuhan anggaran RW, kelebihannya dijadikan voucher belanja bagi warga RW 03 yang hanya dapat dibelanjakan di usaha RW3BIZ yang tertib berkontribusi. Voucher yang diterima usaha ditukar ke Kas RW 03 senilai nominalnya.",
@@ -703,7 +718,9 @@ export async function buatPdfFormulir(
     ["Operasional malam", label(OPERASIONAL_MALAM_LABEL, p.operasionalMalam as OperasionalMalam)],
     ["Status tempat", label(STATUS_TEMPAT_BIZ_LABEL, p.statusTempat as StatusTempatBiz)],
     ["Luas tempat", p.luasM2 != null ? `${p.luasM2} m²` : "-"],
-    ["Kisaran omzet / bulan", label(RENTANG_OMZET_LABEL, p.rentangOmzet as RentangOmzet)],
+    ...(p.rentangOmzet
+      ? ([["Kisaran omzet / bulan", label(RENTANG_OMZET_LABEL, p.rentangOmzet as RentangOmzet)]] as [string, string][])
+      : []),
     ["Sampah per hari", p.sampahKantongHari != null ? `${p.sampahKantongHari} kantong` : "-"],
     ["Memakai bahu jalan", p.pakaiBahuJalan ? "Ya" : "Tidak"],
     ["Usaha baru (< 3 bulan)", p.usahaBaru ? "Ya" : "Tidak"],
@@ -725,7 +742,7 @@ export async function buatPdfFormulir(
     L.paragraf("Tidak ada kendaraan operasional.", 10.5);
   }
 
-  L.subjudul(`D. Pemilik, penanggung jawab, dan pegawai (${orang.length} orang)`);
+  L.subjudul("D. Pemilik / penanggung jawab");
   L.tabel(
     ["No", "Nama lengkap", "NIK", "L/P", "Tgl. lahir", "Peran", "Asal / domisili", "WhatsApp"],
     [8, 31, 31, 8, 19, 26, 28, CW - 151],
@@ -733,9 +750,27 @@ export async function buatPdfFormulir(
     8.5,
   );
 
-  L.subjudul(p.status === "disetujui" ? "E. Kontribusi bulanan (ditetapkan)" : "E. Perkiraan kontribusi bulanan");
-  const rincian = parseRincianTersimpan(p.rincianKontribusi);
-  if (rincian) {
+  const sumbangsih = parseSumbangsih(p.sumbangsih);
+  const rincian = sumbangsih ? null : parseRincianTersimpan(p.rincianKontribusi);
+  L.subjudul(
+    sumbangsih
+      ? p.status === "disetujui"
+        ? "E. Sumbangsih bulanan untuk program RW 03 (disepakati)"
+        : "E. Sumbangsih bulanan untuk program RW 03 (disanggupkan)"
+      : p.status === "disetujui"
+        ? "E. Kontribusi bulanan (ditetapkan)"
+        : "E. Perkiraan kontribusi bulanan",
+  );
+  if (sumbangsih) {
+    const total = totalSumbangsih(sumbangsih);
+    L.tabel(
+      ["Program RW 03", "Per bulan"],
+      [CW - 40, 40],
+      [...sumbangsih.map((s) => [s.label, formatRp(s.nominal)]), ["JUMLAH", formatRp(total)]],
+    );
+    L.font("italic", 9.5);
+    L.paragraf(`(${rupiahTerbilang(total)} per bulan)`, 9.5, 4.6);
+  } else if (rincian) {
     const h = rincian.hasil;
     const rows: string[][] = h.komponen.map((k) => [k.label, formatRp(k.nominal)]);
     if (h.diskonLokal > 0) rows.push([`Potongan pegawai warga RW 03 (${h.diskonLokalPersen}%)`, `-${formatRp(h.diskonLokal)}`]);
@@ -779,7 +814,9 @@ export async function buatPdfFormulir(
 
   L.ruang(4.6 * L.k * 2 + 3 + 44 * L.k);
   L.paragraf(
-    "Dengan menandatangani formulir ini, pemohon menyatakan data di atas benar, bersedia disurvey, dan sanggup membayar kontribusi bulanan ke Kas RW 03 sesuai ketentuan.",
+    sumbangsih
+      ? "Dengan menandatangani formulir ini, pemohon menyatakan data di atas benar, bersedia disurvey, dan sanggup menyetor sumbangsih bulanan di atas ke Kas RW 03 untuk program RW 03."
+      : "Dengan menandatangani formulir ini, pemohon menyatakan data di atas benar, bersedia disurvey, dan sanggup membayar kontribusi bulanan ke Kas RW 03 sesuai ketentuan.",
     9.5,
     4.6,
   );
@@ -799,6 +836,171 @@ export async function buatPdfFormulir(
   }
   L.kaki(`Formulir RW3BIZ ${p.nomorBiz}${usaha?.nomorInduk ? ` · ${usaha.nomorInduk}` : ""}`);
   return { buffer: L.buffer(), nama: `Formulir-RW3BIZ-${p.nomorBiz}.pdf` };
+}
+
+// ---------------------------------------------------------------- Surat Pernyataan Sumbangsih
+
+function waktuWib(d: Date): string {
+  return d.toLocaleString("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+/** Kepala Perwal, bunyi lengkap Pasal 114, dan penerapannya — dalam bingkai emas. */
+function tulisDasarHukum(L: Lembar) {
+  const d = L.doc;
+  const yAwal = L.y - 2;
+  L.y += 3;
+  L.font("bold", 10.5);
+  d.setTextColor(...HIJAU);
+  d.text("DASAR HUKUM", ML + 4, L.y);
+  d.setTextColor(0);
+  L.y += 5.5 * L.k;
+  L.font("bold", 9.5);
+  for (const baris of PERWAL_RW.kepala) {
+    d.text(bersihkan(baris), W / 2, L.y, { align: "center" });
+    L.y += 4.3 * L.k;
+  }
+  L.y += 1.5;
+  L.font("bold", 9.5);
+  d.text(bersihkan(PERWAL_RW.bab), W / 2, L.y, { align: "center" });
+  L.y += 4.5 * L.k;
+  d.text(PERWAL_RW.pasal, W / 2, L.y, { align: "center" });
+  L.y += 5.5 * L.k;
+  const lebar = CW - 18;
+  const lh = 4.6 * L.k;
+  for (const a of PERWAL_RW.ayat) {
+    L.font("normal", 10);
+    const baris = L.pecah(a.teks, lebar);
+    L.ruang(lh * (baris.length + (a.huruf?.length ?? 0)));
+    d.text(a.no, ML + 4, L.y);
+    baris.forEach((b, i) => {
+      tulisRata(d, b, ML + 12, L.y, lebar, i === baris.length - 1);
+      L.y += lh;
+    });
+    for (const h of a.huruf ?? []) {
+      L.font(h.startsWith("a.") ? "bold" : "normal", 10);
+      for (const b of L.pecah(h, lebar - 6)) {
+        d.text(b, ML + 17, L.y);
+        L.y += lh;
+      }
+    }
+    L.y += 1;
+  }
+  L.y += 1.5;
+  L.font("bold", 9.5);
+  d.text("Penerapan pada sumbangsih RW3BIZ:", ML + 4, L.y);
+  L.y += 4.6 * L.k;
+  for (const p of PERWAL_RW.penerapan) {
+    L.font("normal", 9.5);
+    const baris = L.pecah(`${p.ayat}: ${p.teks}`, lebar + 6);
+    L.ruang(4.4 * L.k * baris.length);
+    baris.forEach((b) => {
+      d.text(b, ML + 6, L.y);
+      L.y += 4.4 * L.k;
+    });
+  }
+  L.y += 1;
+  // Bingkai hanya digambar bila blok tidak terpotong ke halaman berikutnya.
+  if (L.y > yAwal && d.getNumberOfPages() === 1) {
+    d.setDrawColor(...EMAS);
+    d.setLineWidth(0.6);
+    d.roundedRect(ML, yAwal, CW, L.y - yAwal, 2, 2);
+    d.setDrawColor(0);
+    d.setLineWidth(0.2);
+  }
+  L.y += 5;
+}
+
+/** Surat pernyataan yang disetujui pemohon (online) — pasal dari shared/rw3biz-pernyataan.ts. */
+export async function buatPdfPernyataan(
+  data: NonNullable<Awaited<ReturnType<typeof getDataFormulir>>>,
+  opsi: { lengkap: boolean },
+) {
+  const { pengajuan: p, orang, usaha } = data;
+  const tarif = await loadTarif();
+  const sumbangsih = parseSumbangsih(p.sumbangsih) ?? [];
+  const total = totalSumbangsih(sumbangsih);
+  const pj = orang.find((o) => o.isPenanggungJawab && !o.isAnak) ?? orang.find((o) => !o.isAnak) ?? null;
+  const L = new Lembar(`Lanjutan Surat Pernyataan Sumbangsih ${p.nomorBiz}`, `Surat Pernyataan Sumbangsih ${p.nomorBiz}`);
+  L.kop();
+  L.judul("SURAT PERNYATAAN SUMBANGSIH", "RW3BIZ - SUMBANGSIH USAHA UNTUK PROGRAM RW 03", `Nomor: SPS/${p.nomorBiz}`);
+
+  tulisDasarHukum(L);
+
+  L.paragraf("Yang bertanda tangan di bawah ini:");
+  L.y += 1;
+  const nik = pj?.nik ? (opsi.lengkap ? pj.nik : samarNik(pj.nik)) : p.pjNik ? (opsi.lengkap ? p.pjNik : samarNik(p.pjNik)) : "-";
+  L.labelNilai([
+    ["Nama", pj?.namaLengkap ?? p.pjNama],
+    ["NIK", nik],
+    ["Kedudukan", pj ? label(PERAN_ORANG_BIZ_LABEL, pj.peran as PeranOrangBiz) : "Penanggung jawab"],
+    ["Nama usaha", p.namaUsaha],
+    ["Alamat usaha", `${p.alamatUsaha?.trim() || p.alamat}, RT ${String(p.rt).padStart(2, "0")} / RW 03, Kel. Padasuka`],
+    ["Nomor WhatsApp", opsi.lengkap ? p.pjNomorWhatsapp : samarWa(p.pjNomorWhatsapp)],
+    ["Nomor pengajuan", `${p.nomorBiz}${usaha?.nomorInduk ? ` · ${usaha.nomorInduk}` : ""}`],
+  ], 40);
+  L.y += 1;
+  L.paragraf(
+    `selanjutnya disebut PIHAK PERTAMA, dengan ini menyatakan kepada Pengurus Rukun Warga 03 Kelurahan Padasuka yang diwakili oleh ${IDENTITAS_RW.ketua.jabatan} (selanjutnya disebut PIHAK KEDUA; bersama-sama disebut PARA PIHAK), hal-hal sebagai berikut:`,
+  );
+
+  L.subjudul(`Kebutuhan RW 03 (${formatRp(tarif.targetBulanan)}/bulan) dan sumbangsih yang disanggupkan`);
+  const disanggupi = new Map(sumbangsih.map((s) => [s.posId, s.nominal]));
+  const baris = tarif.posAnggaran.map((pos) => [pos.label, formatRp(pos.nominal), disanggupi.has(pos.id) ? formatRp(disanggupi.get(pos.id)!) : "-"]);
+  for (const s of sumbangsih) if (!tarif.posAnggaran.some((pos) => pos.id === s.posId)) baris.push([s.label, "-", formatRp(s.nominal)]);
+  baris.push(["JUMLAH", formatRp(tarif.targetBulanan), total ? formatRp(total) : "-"]);
+  L.tabel(["Program RW 03", "Kebutuhan / bulan", "Sumbangsih / bulan"], [CW - 76, 38, 38], baris, 9.5);
+
+  pasalPernyataanSumbangsih({ total: total || null, tenggangHari: tarif.tenggangHari, target: tarif.targetBulanan, terminBulan: p.terminBulan }).forEach(
+    (pasal, i) => {
+      L.ruang(24 * L.k);
+      L.y += 2;
+      L.font("bold", 11);
+      L.doc.text(`Pasal ${i + 1}`, W / 2, L.y, { align: "center" });
+      L.y += 5 * L.k;
+      L.doc.text(bersihkan(pasal.judul.toUpperCase()), W / 2, L.y, { align: "center" });
+      L.y += 5.5 * L.k;
+      L.daftarBernomor(pasal.ayat, 10);
+    },
+  );
+
+  L.y += 3;
+  L.ruang(70 * L.k);
+  L.font("bold", 10);
+  L.doc.setTextColor(...HIJAU);
+  const bukti = p.pernyataanDisetujuiAt
+    ? `Disetujui secara elektronik oleh PIHAK PERTAMA pada ${waktuWib(new Date(p.pernyataanDisetujuiAt))} WIB (versi ${p.pernyataanVersi ?? PERNYATAAN_VERSI}).`
+    : "Belum ada persetujuan elektronik - berlaku setelah ditandatangani PIHAK PERTAMA.";
+  L.paragraf(bukti, 10);
+  L.doc.setTextColor(0);
+  L.y += 3;
+
+  const yTtd = L.y;
+  L.tandaTangan(
+    [
+      { jabatan: "PIHAK PERTAMA,", nama: pj?.namaLengkap ?? p.pjNama },
+      { jabatan: "PIHAK KEDUA,", nama: IDENTITAS_RW.ketua.nama },
+    ],
+    `${IDENTITAS_RW.tempat}, ${p.pernyataanDisetujuiAt ? tgl(tanggalWib(new Date(p.pernyataanDisetujuiAt))) : "...................................."}`,
+  );
+  // Kotak meterai di sisi kiri kolom PIHAK PERTAMA, di ruang tanda tangan.
+  L.doc.setDrawColor(150);
+  L.doc.setLineDashPattern([1.2, 1], 0);
+  L.doc.rect(ML + 2, yTtd + 9 * L.k, 22, 15);
+  L.doc.setLineDashPattern([], 0);
+  L.doc.setDrawColor(0);
+  L.fontTetap("normal", 6.5);
+  L.doc.setTextColor(130);
+  L.doc.text("Meterai", ML + 13, yTtd + 9 * L.k + 6.5, { align: "center" });
+  L.doc.text("Rp10.000", ML + 13, yTtd + 9 * L.k + 9.5, { align: "center" });
+  L.doc.text("(bila diminta)", ML + 13, yTtd + 9 * L.k + 12.5, { align: "center" });
+  L.doc.setTextColor(0);
+
+  if (!opsi.lengkap) {
+    L.font("italic", 8.5);
+    L.paragraf("Salinan pemohon: NIK dan nomor WhatsApp disamarkan.", 8.5, 4.2);
+  }
+  L.kaki(`Surat Pernyataan Sumbangsih SPS/${p.nomorBiz} · versi ${p.pernyataanVersi ?? PERNYATAAN_VERSI}`);
+  return { buffer: L.buffer(), nama: `Surat-Pernyataan-Sumbangsih-${p.nomorBiz}.pdf` };
 }
 
 // ---------------------------------------------------------------- Kwitansi

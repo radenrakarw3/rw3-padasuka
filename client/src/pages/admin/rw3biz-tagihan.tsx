@@ -31,17 +31,21 @@ import {
   KoreksiKontribusiEditor,
   RincianKontribusi,
   dataKontribusiDariBaris,
-  koreksiPayload,
-  orangKontribusiDariBaris,
   type DataKontribusiEdit,
-  type OrangKontribusiEdit,
 } from "@/components/rw3biz/koreksi-kontribusi";
+import {
+  RingkasanSumbangsih,
+  SumbangsihFields,
+  sumbangsihPayload,
+  type IsianSumbangsih,
+} from "@/components/rw3biz/kontribusi-form";
 import {
   KERINGANAN_JENIS,
   KERINGANAN_JENIS_LABEL,
   bulanIni,
   formatRp,
   labelPeriode,
+  parseSumbangsih,
   type HasilKontribusi,
 } from "@shared/rw3biz-kontribusi";
 
@@ -88,6 +92,7 @@ type UsahaRow = {
   namaUsaha: string;
   pengajuanId: number | null;
   kontribusiBulanan: number | null;
+  sumbangsih: string | null;
   rincianKontribusi: string | null;
   keringananJenis: string | null;
   keringananPersen: number | null;
@@ -246,8 +251,8 @@ export default function AdminRw3bizTagihan() {
     <Visitrw3AdminShell>
       <Visitrw3AdminNav
         product="rw3biz"
-        title="Tagihan kontribusi"
-        description="Catat pembayaran kontribusi bulanan usaha — otomatis masuk Kas RW. Tenggang tanpa denda, cicilan boleh."
+        title="Tagihan sumbangsih"
+        description="Catat setoran sumbangsih bulanan usaha — otomatis masuk Kas RW. Tenggang tanpa denda, cicilan boleh."
         actions={
           <Input
             type="month"
@@ -339,7 +344,7 @@ export default function AdminRw3bizTagihan() {
                             <a
                               href={toWaMeUrl(
                                 t.usaha.pjNomorWhatsapp,
-                                `Assalamu'alaikum, ${t.usaha.pjNama}.\n\nPengingat kontribusi RW3BIZ *${t.usaha.nomorBiz}* (${t.usaha.namaUsaha}) periode ${t.periode}: ${formatRp(sisa)}. Batas ${t.jatuhTempo}, tanpa denda dan boleh dicicil.\n\nKontribusi dipakai untuk Linmas, kebersihan, dana sosial, dan pemeliharaan lingkungan RW 03. Terima kasih.`,
+                                `Assalamu'alaikum, ${t.usaha.pjNama}.\n\nPengingat sumbangsih RW3BIZ *${t.usaha.nomorBiz}* (${t.usaha.namaUsaha}) periode ${t.periode}: ${formatRp(sisa)}. Batas ${t.jatuhTempo}, tanpa denda dan boleh dicicil.\n\nSumbangsih dipakai untuk program RW 03: Linmas, kebersihan, dana sosial, dan pemeliharaan lingkungan. Terima kasih.`,
                               )}
                               target="_blank"
                               rel="noopener noreferrer"
@@ -388,7 +393,7 @@ export default function AdminRw3bizTagihan() {
                           onClick={() => setUbahUsahaId(t.usahaId)}
                         >
                           <Pencil className="w-3.5 h-3.5" />
-                          Kontribusi
+                          Sumbangsih
                         </Button>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -414,7 +419,7 @@ export default function AdminRw3bizTagihan() {
                               </DropdownMenuItem>
                             )}
                             <DropdownMenuItem className="min-h-11 gap-2" onSelect={() => setUbahUsahaId(t.usahaId)}>
-                              <Pencil className="h-4 w-4" /> Ubah kontribusi
+                              <Pencil className="h-4 w-4" /> Ubah sumbangsih
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -434,7 +439,7 @@ export default function AdminRw3bizTagihan() {
                     )}
                     <p className="text-xs text-muted-foreground break-words">
                       {labelPeriode(t.periode)} · tagihan {formatRp(t.jumlah)}
-                      {t.jumlah !== t.kontribusiBulanan ? ` (tarif ${formatRp(t.kontribusiBulanan)})` : ""} · terbayar{" "}
+                      {t.jumlah !== t.kontribusiBulanan ? ` (sumbangsih ${formatRp(t.kontribusiBulanan)})` : ""} · terbayar{" "}
                       {formatRp(t.terbayar)} · tempo {t.jatuhTempo}
                     </p>
                     {t.catatan.length > 0 && <p className="text-xs text-muted-foreground break-words">{t.catatan.join(" · ")}</p>}
@@ -640,23 +645,15 @@ function UbahKontribusiDialog({ usahaId, onClose }: { usahaId: number | null; on
     enabled: usahaId != null,
   });
   const usaha = daftarUsaha.find((u) => u.id === usahaId) ?? null;
-  const { data: detail } = useQuery<{ orang: Parameters<typeof orangKontribusiDariBaris>[0] }>({
-    queryKey: ["/api/admin/rw3biz/pengajuan", usaha?.pengajuanId],
-    queryFn: async () => {
-      const res = await fetch(`/api/admin/rw3biz/pengajuan/${usaha!.pengajuanId}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Gagal memuat data orang");
-      return res.json();
-    },
-    enabled: usaha?.pengajuanId != null,
-  });
 
   const [data, setData] = useState<DataKontribusiEdit | null>(null);
-  const [orang, setOrang] = useState<OrangKontribusiEdit[]>([]);
+  const [sumbangsih, setSumbangsih] = useState<IsianSumbangsih>({});
   const [keringanan, setKeringanan] = useState({ jenis: "", persen: "50", sampai: "", alasan: "" });
 
   useEffect(() => {
     if (!usaha) return;
     setData(dataKontribusiDariBaris(usaha as Parameters<typeof dataKontribusiDariBaris>[0]));
+    setSumbangsih(Object.fromEntries((parseSumbangsih(usaha.sumbangsih) ?? []).map((s) => [s.posId, s.nominal])));
     setKeringanan({
       jenis: usaha.keringananJenis ?? "",
       persen: String(usaha.keringananPersen ?? 50),
@@ -665,15 +662,12 @@ function UbahKontribusiDialog({ usahaId, onClose }: { usahaId: number | null; on
     });
   }, [usaha?.id]);
 
-  useEffect(() => {
-    setOrang(orangKontribusiDariBaris(detail?.orang ?? []));
-  }, [detail]);
-
   const simpan = useMutation({
     mutationFn: async () => {
       if (!usaha || !data) return;
       const res = await apiRequest("PATCH", `/api/admin/rw3biz/usaha/${usaha.id}/kontribusi`, {
-        koreksi: koreksiPayload(data, orang),
+        koreksi: data,
+        sumbangsih: sumbangsihPayload(sumbangsih),
         keringanan: keringanan.jenis
           ? {
               jenis: keringanan.jenis,
@@ -686,7 +680,7 @@ function UbahKontribusiDialog({ usahaId, onClose }: { usahaId: number | null; on
       return readJsonSafely(res);
     },
     onSuccess: () => {
-      toast({ title: "Kontribusi diperbarui", description: "Tagihan bulan berjalan yang belum dibayar ikut dihitung ulang" });
+      toast({ title: "Sumbangsih diperbarui", description: "Tagihan bulan berjalan yang belum dibayar ikut diperbarui" });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/rw3biz/usaha"] });
       invalidateTagihan();
       onClose();
@@ -694,13 +688,14 @@ function UbahKontribusiDialog({ usahaId, onClose }: { usahaId: number | null; on
     onError: (e: unknown) => toast({ title: "Gagal", description: getApiErrorMessage(e), variant: "destructive" }),
   });
 
-  const hasilLama = usaha ? bacaHasil(usaha.rincianKontribusi) : null;
+  const sumbangsihLama = usaha ? parseSumbangsih(usaha.sumbangsih) : null;
+  const hasilLama = usaha && !sumbangsihLama ? bacaHasil(usaha.rincianKontribusi) : null;
 
   return (
     <Dialog open={usahaId != null} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-xl sm:max-h-[85vh]">
         <DialogHeader>
-          <DialogTitle>Ubah kontribusi usaha</DialogTitle>
+          <DialogTitle>Ubah sumbangsih usaha</DialogTitle>
         </DialogHeader>
         {!usaha || !data ? (
           <Skeleton className="h-40 w-full" />
@@ -709,20 +704,21 @@ function UbahKontribusiDialog({ usahaId, onClose }: { usahaId: number | null; on
             <p>
               <span className="font-mono text-xs">{usaha.nomorBiz}</span> · {usaha.namaUsaha}
             </p>
+            {sumbangsihLama && <RingkasanSumbangsih items={sumbangsihLama} catatan="Sumbangsih saat ini." />}
             {hasilLama && (
               <div className="rounded-lg border p-2">
-                <p className="mb-1 text-xs font-semibold">Kontribusi saat ini</p>
+                <p className="mb-1 text-xs font-semibold">Kontribusi saat ini (usaha lama, dari rumus)</p>
                 <RincianKontribusi hasil={hasilLama} ringkas />
+                <p className="mt-1 text-xs text-muted-foreground">Isi sumbangsih di bawah untuk beralih ke sumbangsih per program.</p>
               </div>
             )}
             <div className="space-y-2">
+              <p className="text-xs font-semibold">Sumbangsih baru (sesuai kesepakatan dengan pengusaha)</p>
+              <SumbangsihFields value={sumbangsih} onChange={setSumbangsih} />
+            </div>
+            <div className="space-y-2">
               <p className="text-xs font-semibold">Data survey ulang</p>
-              <KoreksiKontribusiEditor
-                data={data}
-                orang={orang}
-                onData={(patch) => setData((d) => (d ? { ...d, ...patch } : d))}
-                onOrang={(id, patch) => setOrang((list) => list.map((o) => (o.id === id ? { ...o, ...patch } : o)))}
-              />
+              <KoreksiKontribusiEditor data={data} onData={(patch) => setData((d) => (d ? { ...d, ...patch } : d))} />
             </div>
             <div className="space-y-2 rounded-lg border p-3">
               <p className="text-xs font-semibold">Keringanan sementara</p>

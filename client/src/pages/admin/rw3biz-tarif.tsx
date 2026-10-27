@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Calculator, ChevronDown, Plus, Save, Trash2 } from "lucide-react";
+import { ChevronDown, Plus, Save, Trash2 } from "lucide-react";
 import { Visitrw3AdminNav } from "@/components/admin/visitrw3-admin-nav";
 import { Visitrw3AdminShell } from "@/components/admin/visitrw3-admin-ui";
 import { Button } from "@/components/ui/button";
@@ -12,29 +12,14 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, getApiErrorMessage, queryClient, readJsonSafely } from "@/lib/queryClient";
 import { useTarifAdmin } from "@/components/rw3biz/koreksi-kontribusi";
-import { labelJenis, useRab } from "@/pages/admin/rw3biz-dashboard";
 import {
   JENIS_PELANGGARAN_INFO,
-  JENIS_TEMPAT_BIZ,
-  JENIS_TEMPAT_BIZ_LABEL,
-  RENTANG_OMZET,
-  RENTANG_OMZET_LABEL,
   TINGKAT_PELANGGARAN,
   TINGKAT_PELANGGARAN_LABEL,
-  bulanIni,
   formatRp,
   hitungDendaPelanggaran,
   type TarifKontribusi,
 } from "@shared/rw3biz-kontribusi";
-
-type Simulasi = {
-  jumlahUsaha: number;
-  proyeksi: number;
-  terendah: number;
-  tertinggi: number;
-  rataRata: number;
-  faktorDisarankan: { faktor: number; proyeksi: number; tercapai: boolean };
-};
 
 function Angka({
   label,
@@ -113,60 +98,38 @@ function Bagian({
 export default function AdminRw3bizTarif() {
   const { toast } = useToast();
   const { data: tersimpan, isLoading } = useTarifAdmin();
-  const { data: rab } = useRab(bulanIni());
   const [t, setT] = useState<TarifKontribusi | null>(null);
-  const [transisiTeks, setTransisiTeks] = useState("");
   const [pengulanganTeks, setPengulanganTeks] = useState("");
-  const [simulasi, setSimulasi] = useState<Simulasi | null>(null);
 
   useEffect(() => {
     if (!tersimpan) return;
     setT(tersimpan);
-    setTransisiTeks(tersimpan.transisiPersen.join(", "));
     setPengulanganTeks(tersimpan.dendaPengulangan.join(", "));
   }, [tersimpan]);
 
-  const ubah = (patch: Partial<TarifKontribusi>) => {
-    setT((prev) => (prev ? { ...prev, ...patch } : prev));
-    setSimulasi(null);
-  };
+  const ubah = (patch: Partial<TarifKontribusi>) => setT((prev) => (prev ? { ...prev, ...patch } : prev));
 
   const totalPos = useMemo(() => (t ? t.posAnggaran.reduce((s, p) => s + p.nominal, 0) : 0), [t]);
   const draft = () => {
     if (!t) return null;
-    const transisiPersen = transisiTeks
-      .split(/[,\s]+/)
-      .filter(Boolean)
-      .map((s) => Number(s))
-      .filter((n) => Number.isFinite(n) && n >= 0 && n <= 100);
     const dendaPengulangan = pengulanganTeks
       .split(/[,\s]+/)
       .filter(Boolean)
       .map((s) => Number(s.replace(",", ".")))
       .filter((n) => Number.isFinite(n) && n >= 0 && n <= 10);
-    return { ...t, transisiPersen, dendaPengulangan: dendaPengulangan.length ? dendaPengulangan : t.dendaPengulangan };
+    return { ...t, dendaPengulangan: dendaPengulangan.length ? dendaPengulangan : t.dendaPengulangan };
   };
   const berubah = JSON.stringify(draft()) !== JSON.stringify(tersimpan);
-
-  const simulasiMutation = useMutation({
-    mutationFn: async () => readJsonSafely<Simulasi>(await apiRequest("POST", "/api/admin/rw3biz/settings/simulasi", draft())),
-    onSuccess: (s) => {
-      setSimulasi(s);
-      requestAnimationFrame(() =>
-        document.getElementById("hasil-simulasi-tarif")?.scrollIntoView({ behavior: "smooth", block: "nearest" }),
-      );
-    },
-    onError: (e: unknown) => toast({ title: "Gagal simulasi", description: getApiErrorMessage(e), variant: "destructive" }),
-  });
 
   const simpanMutation = useMutation({
     mutationFn: async () => readJsonSafely<TarifKontribusi>(await apiRequest("PUT", "/api/admin/rw3biz/settings", draft())),
     onSuccess: (baru) => {
       queryClient.setQueryData(["/api/admin/rw3biz/settings"], baru);
       queryClient.invalidateQueries({ queryKey: ["/api/admin/rw3biz/rab"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/public/rw3biz/tarif"] });
       toast({
-        title: "Tarif tersimpan",
-        description: "Berlaku untuk pengajuan baru dan saat kontribusi usaha dihitung ulang. Tagihan yang sudah dibuat tidak berubah.",
+        title: "Pengaturan tersimpan",
+        description: "Daftar program langsung tampil di form online & formulir kertas. Tagihan yang sudah dibuat tidak berubah.",
       });
     },
     onError: (e: unknown) => toast({ title: "Gagal menyimpan", description: getApiErrorMessage(e), variant: "destructive" }),
@@ -187,13 +150,10 @@ export default function AdminRw3bizTarif() {
     <Visitrw3AdminShell>
       <Visitrw3AdminNav
         product="rw3biz"
-        title="Tarif & pos anggaran"
-        description="Rumus kontribusi bulanan RW3BIZ dan rincian RAB operasional. Simulasikan dulu sebelum menyimpan."
+        title="Program & denda"
+        description="Daftar program RW 03 yang bisa didukung lewat sumbangsih, serta aturan denda razia & pelanggaran."
         actions={
           <div className="hidden gap-2 sm:flex">
-            <Button variant="outline" className="h-9 gap-1" disabled={simulasiMutation.isPending} onClick={() => simulasiMutation.mutate()}>
-              <Calculator className="w-4 h-4" /> Simulasi
-            </Button>
             <Button className="h-9 gap-1" disabled={!berubah || simpanMutation.isPending} onClick={() => simpanMutation.mutate()}>
               <Save className="w-4 h-4" /> Simpan
             </Button>
@@ -204,130 +164,27 @@ export default function AdminRw3bizTarif() {
       <p className="text-xs text-muted-foreground sm:hidden">Ketuk judul bagian untuk membuka dan mengubah angka.</p>
 
       <div className="space-y-4">
-        {simulasi && (
-          <div id="hasil-simulasi-tarif" className="scroll-mt-20 rounded-2xl border-2 border-brand/30 bg-brand/5 p-4 space-y-2 text-sm">
-            <p className="font-semibold">Hasil simulasi ({simulasi.jumlahUsaha} usaha aktif)</p>
-            <p>
-              Proyeksi per bulan: <strong>{formatRp(simulasi.proyeksi)}</strong> dari target {formatRp(t.targetBulanan)}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Terendah {formatRp(simulasi.terendah)} · rata-rata {formatRp(simulasi.rataRata)} · tertinggi {formatRp(simulasi.tertinggi)}
-            </p>
-            {simulasi.jumlahUsaha > 0 &&
-              (simulasi.faktorDisarankan.tercapai ? (
-                <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <span>
-                    Faktor penyesuaian agar tepat target: <strong>× {simulasi.faktorDisarankan.faktor.toFixed(2)}</strong> (proyeksi{" "}
-                    {formatRp(simulasi.faktorDisarankan.proyeksi)})
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full sm:h-7 sm:w-auto sm:text-xs"
-                    onClick={() => ubah({ faktorPenyesuaian: simulasi.faktorDisarankan.faktor })}
-                  >
-                    Pakai faktor ini
-                  </Button>
-                </div>
-              ) : (
-                <p className="text-xs text-warning">
-                  Target tidak tercapai bahkan dengan faktor maksimal karena batas atas per usaha — tambah pendataan usaha atau tinjau batas.
-                </p>
-              ))}
-          </div>
-        )}
-
-        <Bagian defaultOpen judul="Target & batas keadilan" keterangan="Kontribusi tiap usaha selalu di antara minimal dan batas atas sesuai omzet.">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-            <Angka label="Target RAB / bulan" value={t.targetBulanan} onChange={(n) => ubah({ targetBulanan: n })} />
-            <Angka label="Minimal / usaha" value={t.minimal} onChange={(n) => ubah({ minimal: n })} />
-            <Angka label="Maksimal / usaha" value={t.maksimal} onChange={(n) => ubah({ maksimal: n })} />
-            <Angka label="Pembulatan" value={t.pembulatan} onChange={(n) => ubah({ pembulatan: n })} />
-            <Angka
-              label="Batas % omzet"
-              value={t.batasPersenOmzet}
-              desimal
-              onChange={(n) => ubah({ batasPersenOmzet: n })}
-              hint="Dari omzet minimal rentang"
-            />
-            <Angka label="Batas omzet < 3 jt" value={t.batasOmzetKecil} onChange={(n) => ubah({ batasOmzetKecil: n })} />
-            <Angka
-              label="Faktor penyesuaian"
-              value={t.faktorPenyesuaian}
-              desimal
-              onChange={(n) => ubah({ faktorPenyesuaian: n })}
-              hint="Pengali seluruh tarif (1 = normal)"
-            />
-          </div>
-        </Bagian>
-
-        <Bagian judul="Tarif dasar per jenis tempat">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-            {JENIS_TEMPAT_BIZ.map((j) => (
-              <Angka
-                key={j}
-                label={JENIS_TEMPAT_BIZ_LABEL[j]}
-                value={t.tarifDasar[j]}
-                onChange={(n) => ubah({ tarifDasar: { ...t.tarifDasar, [j]: n } })}
-              />
-            ))}
-          </div>
-        </Bagian>
-
-        <Bagian judul="Tambahan menurut omzet">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-5">
-            {RENTANG_OMZET.map((r) => (
-              <Angka
-                key={r}
-                label={RENTANG_OMZET_LABEL[r]}
-                value={t.tambahanOmzet[r]}
-                onChange={(n) => ubah({ tambahanOmzet: { ...t.tambahanOmzet, [r]: n } })}
-              />
-            ))}
-          </div>
-        </Bagian>
-
-        <Bagian judul="Tambahan beban lingkungan" keterangan="Sesuai pemakaian layanan RW: keamanan malam, sampah, jalan, parkir.">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-            <Angka label="Luas bebas (m²)" value={t.luasBatasM2} onChange={(n) => ubah({ luasBatasM2: n })} />
-            <Angka label="Per m² di atasnya" value={t.luasPerM2} onChange={(n) => ubah({ luasPerM2: n })} />
-            <Angka label="Maks tambahan luas" value={t.luasMaks} onChange={(n) => ubah({ luasMaks: n })} />
-            <Angka label="Buka lewat 21.00" value={t.tambahanMalam} onChange={(n) => ubah({ tambahanMalam: n })} />
-            <Angka label="Buka 24 jam" value={t.tambahan24Jam} onChange={(n) => ubah({ tambahan24Jam: n })} />
-            <Angka label="Per kantong sampah (>1/hari)" value={t.sampahPerKantong} onChange={(n) => ubah({ sampahPerKantong: n })} />
-            <Angka label="Pakai bahu jalan" value={t.tambahanBahuJalan} onChange={(n) => ubah({ tambahanBahuJalan: n })} />
-            <Angka label="Per motor operasional" value={t.kendaraanMotor} onChange={(n) => ubah({ kendaraanMotor: n })} />
-            <Angka label="Per mobil operasional" value={t.kendaraanMobil} onChange={(n) => ubah({ kendaraanMobil: n })} />
-          </div>
-        </Bagian>
-
         <Bagian
-          judul="Kendaraan berat (beban jalan)"
-          keterangan="Per unit per bulan. Ditambahkan di luar batas omzet karena merusak jalan lingkungan; tetap tunduk pada batas maksimal."
+          defaultOpen
+          judul="Target & tenggang"
+          keterangan="Sumbangsih tidak dihitung rumus: pengusaha menentukan sendiri nominal per program. Target hanya pembanding di laporan RAB."
         >
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Angka label="Per kolbak / pick-up" value={t.kendaraanKolbak} onChange={(n) => ubah({ kendaraanKolbak: n })} />
-            <Angka label="Per truk engkel / sedang" value={t.kendaraanTruk} onChange={(n) => ubah({ kendaraanTruk: n })} />
-            <Angka label="Per truk besar" value={t.kendaraanTrukBesar} onChange={(n) => ubah({ kendaraanTrukBesar: n })} />
-          </div>
-        </Bagian>
-
-        <Bagian
-          judul="Kendaraan charter (per kedatangan)"
-          keterangan="Dihitung datang/minggu × 4 × tarif. Paling tinggi setara tarif unit milik sendiri untuk setiap 7 kedatangan per minggu."
-        >
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Angka label="Kolbak charter / datang" value={t.charterKolbakPerDatang} onChange={(n) => ubah({ charterKolbakPerDatang: n })} />
-            <Angka label="Truk charter / datang" value={t.charterTrukPerDatang} onChange={(n) => ubah({ charterTrukPerDatang: n })} />
-            <Angka label="Truk besar charter / datang" value={t.charterTrukBesarPerDatang} onChange={(n) => ubah({ charterTrukBesarPerDatang: n })} />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+            <Angka label="Kebutuhan RAB / bulan" value={t.targetBulanan} onChange={(n) => ubah({ targetBulanan: n })} />
+            <Angka label="Tenggang setor (hari)" value={t.tenggangHari} onChange={(n) => ubah({ tenggangHari: n })} />
           </div>
         </Bagian>
 
         <Bagian
           judul="Denda razia"
-          keterangan="Kendaraan tidak terdaftar saat razia: denda = pengali × tarif bulanan jenis kendaraan. Bisa diubah per temuan."
+          keterangan="Kendaraan tidak terdaftar saat razia: denda = pengali × dasar denda jenis kendaraan. Bisa diubah per temuan."
         >
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Angka label="Dasar motor" value={t.kendaraanMotor} onChange={(n) => ubah({ kendaraanMotor: n })} />
+            <Angka label="Dasar mobil / minibus" value={t.kendaraanMobil} onChange={(n) => ubah({ kendaraanMobil: n })} />
+            <Angka label="Dasar kolbak / pick-up" value={t.kendaraanKolbak} onChange={(n) => ubah({ kendaraanKolbak: n })} />
+            <Angka label="Dasar truk engkel / sedang" value={t.kendaraanTruk} onChange={(n) => ubah({ kendaraanTruk: n })} />
+            <Angka label="Dasar truk besar" value={t.kendaraanTrukBesar} onChange={(n) => ubah({ kendaraanTrukBesar: n })} />
             <Angka
               label="Pengali denda"
               value={t.dendaRaziaKali}
@@ -369,10 +226,7 @@ export default function AdminRw3bizTarif() {
             <Input
               className="sm:h-9 sm:text-sm sm:w-64"
               value={pengulanganTeks}
-              onChange={(e) => {
-                setPengulanganTeks(e.target.value);
-                setSimulasi(null);
-              }}
+              onChange={(e) => setPengulanganTeks(e.target.value)}
               placeholder="0, 1, 2, 3"
             />
             <p className="text-xs text-muted-foreground">
@@ -382,54 +236,10 @@ export default function AdminRw3bizTarif() {
           </div>
         </Bagian>
 
-        <Bagian judul="Insentif pekerja lokal" keterangan="Mendorong usaha mempekerjakan warga RW 03.">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Angka label="Per pegawai" value={t.pegawaiPerOrang} onChange={(n) => ubah({ pegawaiPerOrang: n })} hint="Semua kecuali pemilik" />
-            <Angka label="Tambahan per pegawai luar RW 03" value={t.pekerjaLuar} onChange={(n) => ubah({ pekerjaLuar: n })} hint="Pemilik tidak dihitung" />
-            <Angka
-              label="Potongan ≥50% pekerja RW 03 (%)"
-              value={t.diskonLokalSebagian}
-              onChange={(n) => ubah({ diskonLokalSebagian: n })}
-            />
-            <Angka label="Potongan 100% pekerja RW 03 (%)" value={t.diskonLokalPenuh} onChange={(n) => ubah({ diskonLokalPenuh: n })} />
-          </div>
-        </Bagian>
-
-        <Bagian judul="Kemudahan bayar">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-            <div className="space-y-1 sm:col-span-2">
-              <Label className="text-sm sm:text-xs">Masa transisi (% bayar bulan ke-1, ke-2, …)</Label>
-              <Input
-                className="sm:h-9 sm:text-sm"
-                value={transisiTeks}
-                onChange={(e) => {
-                  setTransisiTeks(e.target.value);
-                  setSimulasi(null);
-                }}
-                placeholder="50, 50, 75"
-              />
-              <p className="text-xs text-muted-foreground">
-                Dihitung dari awal program {t.programMulai || "(belum ditetapkan)"}. Kosongkan untuk langsung penuh.
-              </p>
-            </div>
-            <Angka label="Bulan gratis usaha baru" value={t.bulanGratisUsahaBaru} onChange={(n) => ubah({ bulanGratisUsahaBaru: n })} />
-            <Angka label="Tenggang (hari)" value={t.tenggangHari} onChange={(n) => ubah({ tenggangHari: n })} />
-            {Object.keys(t.potonganTermin)
-              .filter((k) => k !== "1")
-              .map((k) => (
-                <Angka
-                  key={k}
-                  label={`Potongan bayar ${k} bulan (%)`}
-                  value={t.potonganTermin[k]}
-                  onChange={(n) => ubah({ potonganTermin: { ...t.potonganTermin, [k]: n } })}
-                />
-              ))}
-          </div>
-        </Bagian>
-
         <Bagian
-          judul="Pos anggaran (RAB operasional)"
-          keterangan="Nama pos dipakai sebagai kategori pengeluaran Kas RW sehingga realisasi tiap pos terlacak otomatis."
+          defaultOpen
+          judul="Program RW 03 (pilihan sumbangsih)"
+          keterangan="Daftar ini tampil di form online & formulir kertas sebagai program yang bisa didukung pengusaha. Nominal = kebutuhan per bulan. Nama program juga dipakai sebagai kategori pengeluaran Kas RW."
         >
           <div className="space-y-2">
             {t.posAnggaran.map((p, i) => (
@@ -483,43 +293,17 @@ export default function AdminRw3bizTarif() {
               <Plus className="w-4 h-4" /> Tambah pos
             </Button>
             <p className={`text-sm ${totalPos === t.targetBulanan ? "text-success" : "text-warning"}`}>
-              Total pos {formatRp(totalPos)} {totalPos === t.targetBulanan ? "= target" : `≠ target ${formatRp(t.targetBulanan)}`}
+              Total kebutuhan program {formatRp(totalPos)} {totalPos === t.targetBulanan ? "= target" : `≠ target ${formatRp(t.targetBulanan)}`}
             </p>
           </div>
         </Bagian>
-
-        {rab && rab.sebaran.length > 0 && (
-          <Bagian judul="Sebaran kontribusi saat ini" keterangan="Gunakan untuk mengecek apakah satu jenis usaha menanggung beban berlebih.">
-            <ul className="space-y-1 text-xs">
-              {rab.sebaran.map((s) => (
-                <li
-                  key={s.jenis}
-                  className={`flex flex-col gap-0.5 border-b pb-1 last:border-0 sm:flex-row sm:justify-between sm:gap-2 sm:border-0 sm:pb-0 ${s.terlaluBerat ? "text-warning" : ""}`}
-                >
-                  <span className="font-medium sm:font-normal">
-                    {labelJenis(s.jenis)} ({s.jumlah})
-                  </span>
-                  <span className="tabular-nums">
-                    rata-rata {formatRp(s.rataRata)} · beban {s.bebanPersenOmzet.toLocaleString("id-ID")}% omzet
-                    {s.terlaluBerat ? " ⚠" : ""}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </Bagian>
-        )}
       </div>
 
       <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-20 -mx-1 space-y-1 rounded-xl border bg-background/95 p-2 shadow-lg backdrop-blur sm:hidden">
         {berubah && <p className="px-1 text-xs font-medium text-warning">Ada perubahan yang belum disimpan.</p>}
-        <div className="grid grid-cols-2 gap-2">
-          <Button variant="outline" className="gap-1" disabled={simulasiMutation.isPending} onClick={() => simulasiMutation.mutate()}>
-            <Calculator className="w-4 h-4" /> Simulasi
-          </Button>
-          <Button className="gap-1" disabled={!berubah || simpanMutation.isPending} onClick={() => simpanMutation.mutate()}>
-            <Save className="w-4 h-4" /> Simpan
-          </Button>
-        </div>
+        <Button className="w-full gap-1" disabled={!berubah || simpanMutation.isPending} onClick={() => simpanMutation.mutate()}>
+          <Save className="w-4 h-4" /> Simpan
+        </Button>
       </div>
     </Visitrw3AdminShell>
   );
