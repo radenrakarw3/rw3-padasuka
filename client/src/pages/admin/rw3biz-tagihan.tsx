@@ -717,7 +717,7 @@ function UbahKontribusiDialog({ usahaId, onClose }: { usahaId: number | null; on
               <SumbangsihFields value={sumbangsih} onChange={setSumbangsih} />
             </div>
             <div className="space-y-2">
-              <p className="text-xs font-semibold">Data survey ulang</p>
+              <p className="text-xs font-semibold">Perbarui data usaha</p>
               <KoreksiKontribusiEditor data={data} onData={(patch) => setData((d) => (d ? { ...d, ...patch } : d))} />
             </div>
             <div className="space-y-2 rounded-lg border p-3">

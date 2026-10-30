@@ -144,7 +144,7 @@ const orangInputSchema = z.object({
   fotoKtpPath: z.string().optional().nullable(),
 }).merge(orangKontribusiSchema);
 
-/** Pemohon cukup mengisi jenis tempat & jam; luas, sampah, kendaraan, dll. diisi petugas saat survey. */
+/** Pemohon cukup mengisi jenis tempat & jam; luas, sampah, kendaraan, dll. dapat dilengkapi Ketua RW saat menyetujui. */
 const dataUsahaPengajuanSchema = dataUsahaSchema
   .omit({ jenisTempatUsaha: true, operasionalMalam: true })
   .partial({
@@ -309,7 +309,7 @@ export async function createPengajuanBaru(input: z.infer<typeof pengajuanBaruSch
     usahaBaru: parsed.usahaBaru ?? false,
     operasionalMalam: parsed.operasionalMalam ?? turunkanOperasionalMalam(parsed.jamBuka, parsed.jamTutup),
   };
-  /** Kolom yang belum diisi pemohon tetap null sampai petugas mengisinya saat survey. */
+  /** Kolom yang belum diisi pemohon tetap null sampai dilengkapi saat persetujuan. */
   const belumSurvey = parsed.statusTempat
     ? {}
     : { statusTempat: null, luasM2: null, hariOperasional: null, sampahKantongHari: null };
@@ -418,7 +418,7 @@ export async function createPerpanjang(input: z.infer<typeof perpanjangSchema>) 
     .from(rw3bizPengajuan)
     .where(and(eq(rw3bizPengajuan.usahaId, usaha.id), eq(rw3bizPengajuan.status, "menunggu_survey")))
     .limit(1);
-  if (pending) throw new Error(`Masih ada pengajuan ${pending.nomorBiz} yang menunggu survey untuk usaha ini`);
+  if (pending) throw new Error(`Masih ada pengajuan ${pending.nomorBiz} yang menunggu persetujuan untuk usaha ini`);
 
   const tanggalBerlakuSampai = hitungTanggalBerlaku(parsed.tanggalBayar, parsed.terminBulan);
   const nomorBaru = await generateNomorBiz();
@@ -575,13 +575,13 @@ export async function getPengajuanDetailAdmin(id: number) {
 export const approveSchema = z.object({
   catatanSurvey: z.string().optional().nullable(),
   koreksi: koreksiSurveySchema.optional(),
-  /** Sumbangsih yang disepakati ulang saat survey; kosong = sesuai isian pemohon. */
+  /** Sumbangsih yang disepakati ulang saat menyetujui; kosong = sesuai isian pemohon. */
   sumbangsih: sumbangsihSchema.optional(),
   /** Tanggal uang kontribusi diterima; masa berlaku & tagihan dihitung ulang dari tanggal ini. */
   tanggalBayar: z.string().regex(DATE_REGEX, "Tanggal bayar tidak valid").optional().nullable(),
 });
 
-/** Terapkan hasil survey ke pengajuan; kontribusi final = sumbangsih (atau rumus untuk pengajuan lama). */
+/** Terapkan verifikasi/koreksi ke pengajuan; kontribusi final = sumbangsih (atau rumus untuk pengajuan lama). */
 async function terapkanKoreksiSurvey(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   pengajuan: Rw3bizPengajuan,
@@ -619,7 +619,7 @@ export async function approvePengajuan(id: number, adminUsername: string, input?
     if (awal.status !== "menunggu_survey") throw new Error("Pengajuan sudah diproses");
     const sukarela = Boolean(sumbangsih?.length) || parseSumbangsih(awal.sumbangsih) != null;
     if (!sukarela && !awal.statusTempat && !koreksi?.statusTempat) {
-      throw new Error("Pengajuan lama: isi sumbangsih atau data hasil survey sebelum menyetujui");
+      throw new Error("Pengajuan lama: isi sumbangsih atau lengkapi data usaha sebelum menyetujui");
     }
     const masaBerlaku = tanggalBayar
       ? { tanggalBayar, tanggalBerlakuSampai: hitungTanggalBerlaku(tanggalBayar, awal.terminBulan) }
@@ -707,7 +707,7 @@ export async function approvePengajuan(id: number, adminUsername: string, input?
     return { updated: p, usaha: usahaRow };
   });
 
-  notifyRw3bizDisetujui(updated);
+  notifyRw3bizDisetujui(updated, usaha);
   return { pengajuan: updated, usaha };
 }
 

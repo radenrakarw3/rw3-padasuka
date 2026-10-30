@@ -28,7 +28,7 @@ export function PilihTermin({ value, onChange }: { value: string; onChange: (v: 
         ))}
       </div>
       <p className="text-xs text-muted-foreground">
-        Izin mulai berlaku sejak tanggal Anda membayar ke pengurus RW saat survey.
+        Izin mulai berlaku sejak tanggal pembayaran pertama diterima Ketua RW / pengurus.
       </p>
     </div>
   );

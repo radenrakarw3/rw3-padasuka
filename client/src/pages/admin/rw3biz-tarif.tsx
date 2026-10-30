@@ -166,12 +166,12 @@ export default function AdminRw3bizTarif() {
       <div className="space-y-4">
         <Bagian
           defaultOpen
-          judul="Target & tenggang"
-          keterangan="Sumbangsih tidak dihitung rumus: pengusaha menentukan sendiri nominal per program. Target hanya pembanding di laporan RAB."
+          judul="Target & jatuh tempo"
+          keterangan="Sumbangsih tidak dihitung rumus: pengusaha menentukan sendiri nominal per program. Target hanya pembanding di laporan RAB. Jatuh tempo = tanggal 1 + tenggang (0 = setiap tanggal 1)."
         >
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             <Angka label="Kebutuhan RAB / bulan" value={t.targetBulanan} onChange={(n) => ubah({ targetBulanan: n })} />
-            <Angka label="Tenggang setor (hari)" value={t.tenggangHari} onChange={(n) => ubah({ tenggangHari: n })} />
+            <Angka label="Tenggang setelah tgl 1 (hari)" value={t.tenggangHari} onChange={(n) => ubah({ tenggangHari: n })} />
           </div>
         </Bagian>
 
@@ -196,7 +196,7 @@ export default function AdminRw3bizTarif() {
         </Bagian>
 
         <Bagian
-          judul="Denda pelanggaran (aduan warga & temuan petugas)"
+          judul="Denda pelanggaran (aduan warga & temuan Ketua RW / Linmas)"
           keterangan="Denda = dasar jenis × tingkat × pengulangan dalam 12 bulan, dibulatkan, paling banyak batas maksimal. Pengali pengulangan juga berlaku untuk razia (minimal 1×)."
         >
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">

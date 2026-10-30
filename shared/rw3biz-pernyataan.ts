@@ -4,7 +4,7 @@
  */
 import { terbilang } from "./surat-sakti/redaksi";
 
-export const PERNYATAAN_VERSI = "SPS-RW3BIZ-2026.10.2";
+export const PERNYATAAN_VERSI = "SPS-RW3BIZ-2026.10.6";
 
 export type AyatPerwal = { no: string; teks: string; huruf?: readonly string[] };
 
@@ -58,19 +58,116 @@ export function teksAyat(a: AyatPerwal): string {
   return [`${a.no} ${a.teks}`, ...(a.huruf ?? [])].join(" ");
 }
 
-/** Alasan singkat mengapa usaha ikut menanggung kebutuhan lingkungan. */
+/** Rekening resmi setor sumbangsih (a.n. Ketua RW 03). */
+export const REKENING_SUMBANGSIH = {
+  bank: "BCA",
+  nomor: "1390997490",
+  atasNama: "Raden Raka",
+} as const;
+
+/** Label singkat rekening untuk UI/cetak. */
+export const LABEL_REKENING_SUMBANGSIH = `${REKENING_SUMBANGSIH.bank} ${REKENING_SUMBANGSIH.nomor} a.n. ${REKENING_SUMBANGSIH.atasNama}`;
+
+/**
+ * Manfaat langsung bagi pengusaha yang berkontribusi (bukan hanya “kebutuhan RW”).
+ * Dipakai di form online, formulir kertas, dan panel kebutuhan.
+ */
 export const ALASAN_SUMBANGSIH = [
-  "Usaha Anda ikut dijaga Linmas saat ronda malam, dan jalannya dilewati pembeli, kurir, serta kendaraan barang.",
-  "Sampah usaha, selokan, dan lampu jalan di sekitar tempat usaha dirawat dari kas RW.",
-  "Surat izin, survey, data, dan sistem online RW 03 berjalan dari biaya administrasi yang sama.",
-  "Dana sosial & darurat menolong warga — termasuk pelanggan dan pegawai Anda — saat sakit, duka, atau bencana.",
-  "Uang tidak hilang: setiap setoran berkwitansi, laporannya terbuka per program, dan kelebihannya kembali sebagai voucher belanja di usaha RW3BIZ.",
+  "Lingkungan aman & ramah pembeli: Linmas ronda malam, jalan dan lampu dirawat — pembeli, kurir, dan kendaraan barang Anda lebih nyaman datang.",
+  "Tempat usaha tetap bersih: sampah, selokan, dan kebersihan sekitar dilayani dari kas RW — citra usaha Anda ikut naik.",
+  "Izin resmi RW3BIZ: Surat Izin Usaha + Nomor Induk Usaha yang bisa dicek online — kepercayaan pelanggan dan mitra naik.",
+  "Uang berputar balik ke usaha Anda: kelebihan kas di atas RAB jadi voucher belanja warga yang hanya boleh dibelanjakan di usaha RW3BIZ yang tertib menyetor.",
+  "Transparan & aman: setiap setoran berkwitansi resmi, laporan terbuka per program — bukan pungutan gelap.",
+  `Garansi anti-oknum: setor hanya lewat ${LABEL_REKENING_SUMBANGSIH} atau amplop tunai berkwitansi. Siapa pun di luar saluran resmi yang meminta uang atas nama RW — Anda berhak menolak; Ketua RW 03 membela dan menindak laporan Anda.`,
+  "Komunitas yang menolong: dana sosial & darurat menolong warga (pelanggan dan pegawai Anda) saat sakit, duka, atau bencana — usaha Anda dikenal sebagai bagian dari RW.",
 ];
+
+/**
+ * Cara setor resmi: transfer ke rekening Ketua RW, atau tunai dalam amplop diambil petugas + kwitansi.
+ * `tenggangHari` mengikuti tarif (0 = tanggal 1).
+ */
+export function teksCaraSetor(tenggangHari = 0): string {
+  const tgl = tanggalSetorBulanan(tenggangHari);
+  return (
+    `Setor paling lambat tanggal ${tgl} tiap bulan: (1) transfer ${LABEL_REKENING_SUMBANGSIH}; ` +
+    `atau (2) tunai dalam amplop — petugas RW mengambil di tempat usaha sambil menyerahkan kwitansi.`
+  );
+}
+
+export const GARANSI_ANTI_OKNUM =
+  `GARANSI: Sumbangsih RW3BIZ hanya lewat saluran resmi — transfer ${LABEL_REKENING_SUMBANGSIH}, atau tunai dalam amplop diambil petugas RW dengan kwitansi. ` +
+  "Bila ada oknum di luar kepengurusan RW 03 yang meminta uang atas nama RW / RW3BIZ — Anda wajib menolak. Laporkan ke Ketua RW 03; Ketua RW menjamin pembelaan dan penindakan.";
+
+/** Empat manfaat paling “duit / aman / izin / voucher” — untuk hero & kotak ringkas di formulir cetak. */
+export const MANFAAT_RINGKAS = [
+  "Aman & ramah pembeli — Linmas, jalan, lampu dirawat.",
+  "Izin resmi RW3BIZ yang bisa dicek online.",
+  "Voucher belanja warga bisa kembali ke kasir usaha yang tertib.",
+  "Setoran berkwitansi (BCA / amplop) + garansi anti-oknum.",
+] as const;
+
+/**
+ * Jangkar sosial nominal tinggi + setara harian/omzet (bukan tarif).
+ * Dipakai kotak centang di formulir cetak dan panduan online.
+ */
+export const JANGKAR_SUMBANGSIH_DETAIL = [
+  {
+    nominal: 100_000,
+    labelPendek: "Rp100.000",
+    setara: "≈ Rp3.300/hari · setara ±1–2 porsi / gelas",
+  },
+  {
+    nominal: 250_000,
+    labelPendek: "Rp250.000",
+    setara: "≈ Rp8.300/hari · setara ±3–4 porsi",
+  },
+  {
+    nominal: 500_000,
+    labelPendek: "Rp500.000",
+    setara: "≈ Rp16.700/hari · setara ±5–8 porsi / beberapa pelanggan",
+  },
+  {
+    nominal: 1_000_000,
+    labelPendek: "Rp1.000.000",
+    setara: "≈ Rp33.000/hari · setara omzet 1–2 pelanggan tetap",
+  },
+] as const;
+
+export const JANGKAR_SUMBANGSIH_TINGGI = JANGKAR_SUMBANGSIH_DETAIL.map((j) => j.nominal);
+
+/** Asumsi jumlah usaha ikut gotong royong — untuk ilustrasi “bagian saya” vs total RAB. */
+export const ASUMSI_USAHA_GOTONG_ROYONG = 30;
+
+/** Teks singkat: pecah RAB jadi bagian per usaha + setara per hari. */
+export function teksBagianSayaRab(targetBulanan: number, jumlahUsaha = ASUMSI_USAHA_GOTONG_ROYONG): string {
+  const n = Math.max(1, Math.floor(jumlahUsaha));
+  const bagian = Math.round(targetBulanan / n);
+  const perHari = Math.round(bagian / 30);
+  return (
+    `Kebutuhan RW ${rp(targetBulanan)}/bulan. Bila ${n} usaha ikut menanggung bersama, rata-rata ≈ ${rp(bagian)}/bulan ` +
+    `(≈ ${rp(perHari)}/hari · setara beberapa porsi/pelanggan per hari). Itu “bagian saya” — bukan tarif wajib; isi sebesar kemampuan terbesar Anda.`
+  );
+}
+
+/** Satu baris setara untuk nominal apa pun (patokan 30 hari). */
+export function teksSetaraHarian(nominal: number): string {
+  const perHari = Math.round(Math.max(0, nominal) / 30);
+  return `≈ ${rp(perHari)}/hari`;
+}
+
+/** Rekognisi singkat untuk usaha tertib — motif kebanggaan. */
+export const REKOGNISI_USAHA_TERTIB =
+  "Usaha yang tertib menyetor dicatat di laporan terbuka dan berhak menerima voucher belanja warga di tempat usahanya.";
 
 export type PasalPernyataan = { judul: string; ayat: string[] };
 
 const rp = (n: number) => `Rp${Math.round(n).toLocaleString("id-ID")}`;
 const kosong = "....................";
+
+/** Tanggal setor bulanan: 1 + tenggang (tenggang 0 = setiap tanggal 1). */
+export function tanggalSetorBulanan(tenggangHari: number): number {
+  return Math.max(1, Math.min(28, 1 + Math.max(0, Math.floor(tenggangHari))));
+}
 
 export type DataPernyataan = {
   /** Total sumbangsih per bulan; null = formulir kosong untuk ditulis tangan. */
@@ -82,7 +179,7 @@ export type DataPernyataan = {
 };
 
 export function pasalPernyataanSumbangsih(d: DataPernyataan): PasalPernyataan[] {
-  const tglSetor = 1 + d.tenggangHari;
+  const tglSetor = tanggalSetorBulanan(d.tenggangHari);
   const total =
     d.total != null ? `${rp(d.total)} (${terbilang(d.total)} rupiah)` : `Rp ${kosong} (sesuai jumlah pada tabel sumbangsih)`;
   const masa = d.terminBulan ? `${d.terminBulan} bulan` : "sesuai masa berlaku yang dipilih";
@@ -110,15 +207,18 @@ export function pasalPernyataanSumbangsih(d: DataPernyataan): PasalPernyataan[] 
     {
       judul: "Maksud dan Tujuan",
       ayat: [
-        "PIHAK PERTAMA menjalankan usaha di wilayah RW 03 dan ikut memanfaatkan keamanan, kebersihan, jalan, penerangan, serta layanan administrasi lingkungan.",
-        `Atas dasar itu PIHAK PERTAMA ikut menanggung kebutuhan bersama RW 03 sebesar ${rp(d.target)} per bulan (${rp(d.target * 12)} per tahun) secara gotong royong dan sesuai kemampuan.`,
+        "PIHAK PERTAMA menjalankan usaha di wilayah RW 03 dan memperoleh manfaat langsung: keamanan Linmas, kebersihan, jalan dan lampu yang dipakai pembeli/kurir, serta layanan administrasi dan Surat Izin Usaha RW3BIZ.",
+        `Atas dasar itu PIHAK PERTAMA ikut menanggung kebutuhan bersama RW 03 sebesar ${rp(d.target)} per bulan (${rp(d.target * 12)} per tahun) secara gotong royong dan sesuai kemampuan terbesar yang sanggup diberikan.`,
+        "Mengikuti RW3BIZ berarti ikut menanggung program RW 03: tidak menolak ikut berkontribusi, dan menyanggupi sumbangsih sesuai kemampuan.",
+        "Bagi usaha yang tertib menyetor, manfaatnya termasuk: izin resmi yang dapat dicek online, laporan dana terbuka, serta kesempatan menerima voucher belanja warga yang hanya berlaku di usaha RW3BIZ tertib.",
       ],
     },
     {
       judul: "Besaran dan Peruntukan",
       ayat: [
         `PIHAK PERTAMA menyanggupi sumbangsih sebesar ${total} per bulan, dengan rincian program sebagaimana tercantum dalam tabel sumbangsih.`,
-        "Besaran sumbangsih ditentukan sendiri oleh PIHAK PERTAMA tanpa paksaan. Tidak ada tarif atau hitungan dari PIHAK KEDUA.",
+        `Jumlah tersebut adalah komitmen bulanan tetap PIHAK PERTAMA — bukan setoran sekali saja — dan berlaku setiap bulan selama masa izin sampai diperbarui.`,
+        "Besaran sumbangsih ditentukan sendiri oleh PIHAK PERTAMA tanpa paksaan. Tidak ada tarif atau hitungan dari PIHAK KEDUA. PIHAK PERTAMA didorong menyanggupi sebesar kemampuan terbesarnya.",
         "PIHAK KEDUA menggunakan sumbangsih untuk program yang dipilih. Bila kebutuhan program tersebut telah terpenuhi pada bulan berjalan, kelebihannya digunakan untuk program lain dalam RAB RW 03 dan dilaporkan terbuka.",
         "Kelebihan dana di atas kebutuhan RAB bulanan dikembalikan kepada warga dalam bentuk voucher belanja yang hanya berlaku di usaha RW3BIZ yang tertib.",
       ],
@@ -127,15 +227,17 @@ export function pasalPernyataanSumbangsih(d: DataPernyataan): PasalPernyataan[] 
       judul: "Tata Cara Penyetoran",
       ayat: [
         `Sumbangsih disetor setiap bulan paling lambat tanggal ${tglSetor}, mulai bulan izin usaha berlaku.`,
-        "Sumbangsih hanya disetor kepada bendahara atau pengurus RW 03 yang ditunjuk dan wajib diberi kwitansi resmi. Setoran tanpa kwitansi resmi bukan tanggung jawab PIHAK KEDUA.",
-        "Sumbangsih boleh dicicil dalam bulan berjalan dan boleh dibayar beberapa bulan di muka.",
+        `Cara setor resmi: (a) transfer ke ${LABEL_REKENING_SUMBANGSIH}; atau (b) tunai dalam amplop yang dititipkan di tempat usaha — petugas RW mengambil amplop tersebut sambil menyerahkan kwitansi resmi.`,
+        "Setiap setoran wajib diberi kwitansi resmi. Setoran tanpa kwitansi resmi atau ke rekening / pihak di luar saluran di atas bukan tanggung jawab PIHAK KEDUA dan tidak dihitung sebagai sumbangsih.",
+        "Tidak ada petugas survey, perantara, atau pihak di luar kepengurusan RW 03 yang berwenang memungut uang atas nama RW3BIZ di luar pengambilan amplop resmi berkwitansi.",
+        "Sumbangsih boleh dicicil dalam bulan berjalan dan boleh dibayar beberapa bulan di muka, asal total komitmen bulanan tetap terpenuhi.",
         "PIHAK PERTAMA dapat memeriksa riwayat setoran dan kwitansi kapan saja melalui halaman cek status dengan Nomor Induk Usaha.",
       ],
     },
     {
       judul: "Kewajiban PIHAK PERTAMA",
       ayat: [
-        "Memberikan data yang benar mengenai identitas, usaha, dan kendaraan operasional, serta bersedia disurvey.",
+        "Memberikan data yang benar mengenai identitas, usaha, dan kendaraan operasional; data dapat diverifikasi oleh Ketua RW 03.",
         "Menyetor sumbangsih sesuai Pasal 4 dan Pasal 5 serta menyimpan kwitansi resmi.",
         "Menjaga kebersihan, ketertiban, dan keamanan; tidak memakai bahu jalan atau fasilitas umum tanpa izin; dan tidak merusak fasilitas umum.",
         "Melaporkan perubahan usaha (pindah, tutup, ganti penanggung jawab, atau perubahan kendaraan operasional) paling lambat 14 hari sejak perubahan.",
@@ -157,24 +259,28 @@ export function pasalPernyataanSumbangsih(d: DataPernyataan): PasalPernyataan[] 
     {
       judul: "Hak PIHAK PERTAMA",
       ayat: [
-        "Menerima Surat Izin Usaha RW 03 dan Nomor Induk Usaha.",
-        "Memperoleh laporan terbuka penggunaan dana.",
+        "Menerima Surat Izin Usaha RW 03 dan Nomor Induk Usaha yang dapat dicek online sebagai bukti usaha resmi di wilayah RW 03.",
+        "Memperoleh manfaat lingkungan (keamanan, kebersihan, jalan, penerangan) serta laporan terbuka penggunaan dana.",
         "Mengajukan perubahan besaran, keringanan, atau penghentian sementara sebagaimana Pasal 10.",
-        "Menerima voucher belanja warga di tempat usahanya dan menukarkannya ke Kas RW 03 senilai penuh, selama tertib menyetor.",
+        "Menerima voucher belanja warga di tempat usahanya dan menukarkannya ke Kas RW 03 senilai penuh, selama tertib menyetor — sehingga omzet usaha dapat bertambah dari belanja warga.",
+        "Menolak setiap permintaan uang dari oknum atau pihak di luar kepengurusan RW 03 yang mengaku mewakili RW / RW3BIZ, serta mendapat pembelaan Ketua RW 03 atas laporan tersebut.",
         "Mengajukan keberatan atau aduan atas pelayanan maupun dugaan penyimpangan dana.",
       ],
     },
     {
-      judul: "Larangan Pungutan di Luar Ketentuan",
+      judul: "Larangan Pungutan di Luar Ketentuan & Garansi Anti-Oknum",
       ayat: [
-        "Pengurus RW 03 dilarang memungut atau meminta uang dari PIHAK PERTAMA di luar sumbangsih dan denda resmi yang tercatat dengan kwitansi.",
-        "PIHAK PERTAMA berhak menolak pungutan tanpa kwitansi resmi dan melaporkannya kepada Ketua RW 03 atau Lurah Padasuka.",
+        "Ketua RW 03 dan bendahara dilarang memungut atau meminta uang dari PIHAK PERTAMA di luar sumbangsih dan denda resmi yang tercatat dengan kwitansi.",
+        "Siapa pun di luar kepengurusan resmi RW 03 — termasuk yang mengaku petugas, surveyor, perantara, atau “dari RW” — tidak berwenang meminta uang, barang, atau jasa atas nama RW 03 atau RW3BIZ.",
+        "PIHAK PERTAMA berhak dan dianjurkan menolak pungutan tanpa kwitansi resmi atau dari pihak yang bukan Ketua RW 03 / bendahara ditunjuk, dan melaporkannya segera kepada Ketua RW 03 atau Lurah Padasuka.",
+        "PIHAK KEDUA (Ketua RW 03) menjamin: laporan pungutan oknum akan ditindak; PIHAK PERTAMA yang menolak dan melapor tidak akan dirugikan status izinnya karena menolak pungutan gelap tersebut.",
+        "Pembayaran kepada oknum tanpa kwitansi resmi tidak diakui sebagai sumbangsih dan tidak membebaskan tunggakan yang sah.",
       ],
     },
     {
       judul: "Perubahan, Keringanan, dan Penghentian",
       ayat: [
-        "Besaran sumbangsih dapat diubah saat memperbarui izin, atau sewaktu-waktu melalui pengajuan di halaman cek status, dan berlaku mulai bulan berikutnya setelah disetujui.",
+        "Besaran sumbangsih dapat diubah saat memperbarui izin, atau sewaktu-waktu melalui pengajuan di halaman cek status, dan berlaku mulai bulan berikutnya setelah disetujui Ketua RW 03.",
         "PIHAK PERTAMA yang usahanya sedang sepi, lansia, penyandang disabilitas, atau keluarga penerima bansos dapat diberi keringanan sementara sebesar 50% atau 100%.",
         "Bila usaha tutup atau pindah, PIHAK PERTAMA memberitahukan PIHAK KEDUA dan kewajiban berhenti mulai bulan berikutnya. Sumbangsih yang telah disetor tidak dapat ditarik kembali.",
       ],
@@ -191,7 +297,7 @@ export function pasalPernyataanSumbangsih(d: DataPernyataan): PasalPernyataan[] 
     {
       judul: "Ketertiban Lingkungan",
       ayat: [
-        "Pelanggaran tata tertib lingkungan (sampah tercecer, kebisingan, parkir menghalangi jalan, limbah atau bau, melanggar jam operasional, merusak fasilitas umum, atau data tidak sesuai) yang terbukti dari aduan warga atau temuan petugas dikenai teguran tertulis dan/atau denda sesuai ketentuan RW3BIZ, dengan kwitansi resmi.",
+        "Pelanggaran tata tertib lingkungan (sampah tercecer, kebisingan, parkir menghalangi jalan, limbah atau bau, melanggar jam operasional, merusak fasilitas umum, atau data tidak sesuai) yang terbukti dari aduan warga atau temuan Ketua RW / Linmas dikenai teguran tertulis dan/atau denda sesuai ketentuan RW3BIZ, dengan kwitansi resmi.",
         "Kendaraan menuju tempat usaha yang tidak terdaftar saat razia dapat dikenai denda sesuai ketentuan RW3BIZ.",
         "Teguran dan denda tidak berkaitan dengan besar kecilnya sumbangsih.",
       ],
@@ -206,7 +312,7 @@ export function pasalPernyataanSumbangsih(d: DataPernyataan): PasalPernyataan[] 
     {
       judul: "Jangka Waktu",
       ayat: [
-        `Surat pernyataan ini berlaku sejak disetujui pengurus selama masa izin ${masa}, dan diperbarui setiap kali izin diperpanjang dengan besaran terbaru.`,
+        `Surat pernyataan ini berlaku sejak disetujui Ketua RW 03 selama masa izin ${masa}, dan diperbarui setiap kali izin diperpanjang dengan besaran terbaru.`,
         "Surat pernyataan berakhir bila usaha tutup atau pindah dan telah diberitahukan, atau bila izin usaha tidak diperpanjang.",
       ],
     },
@@ -237,9 +343,12 @@ export function pasalPernyataanSumbangsih(d: DataPernyataan): PasalPernyataan[] 
 
 /** Poin yang wajib dicentang satu per satu sebelum mengirim (gaya persetujuan aplikasi keuangan). */
 export function poinPersetujuan(d: { total: number; tenggangHari: number }): string[] {
+  const tgl = tanggalSetorBulanan(d.tenggangHari);
   return [
-    `Saya menyumbang secara sukarela ${rp(d.total)} per bulan untuk program RW 03 yang saya pilih, tanpa paksaan.`,
-    `Saya akan menyetor setiap bulan paling lambat tanggal ${1 + d.tenggangHari} hanya kepada pengurus RW 03 dan meminta kwitansi resmi.`,
+    `Saya mengerti manfaat berkontribusi: usaha saya di RW 03 lebih aman, bersih, dan punya izin resmi; kelebihan kas bisa kembali sebagai voucher belanja warga di usaha saya bila tertib menyetor — dan saya rela ikut menanggung program RW 03 sesuai kemampuan terbesar saya.`,
+    `Saya berkomitmen menyetor secara sukarela total ${rp(d.total)} setiap bulan paling lambat tanggal ${tgl} lewat transfer ${LABEL_REKENING_SUMBANGSIH} atau tunai dalam amplop diambil petugas RW dengan kwitansi — jumlah ini adalah komitmen bulanan, bukan sekali bayar.`,
+    `Saya mengerti garansi anti-oknum: hanya saluran resmi (rekening ${LABEL_REKENING_SUMBANGSIH} / amplop berkwitansi) yang sah. Saya berhak menolak permintaan dari pihak di luar kepengurusan RW 03, dan Ketua RW 03 menjamin pembelaan bila saya melapor.`,
+    `Saya tidak menolak ikut berkontribusi resmi: mengikuti RW3BIZ berarti saya ikut menanggung kebutuhan bersama RW 03 melalui saluran yang sah.`,
     `Saya telah membaca bunyi lengkap ${PERWAL_RW.pasal} ${PERWAL_RW.judul}, dan memahami bahwa sumbangsih ini adalah swadaya masyarakat yang dipakai sesuai Anggaran Penerimaan dan Pengeluaran RW 03.`,
     "Saya menyetujui seluruh pasal Surat Pernyataan Sumbangsih serta tata tertib lingkungan RW 03, dan persetujuan ini sah sebagai tanda tangan saya.",
   ];

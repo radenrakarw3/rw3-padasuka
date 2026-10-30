@@ -1,7 +1,7 @@
 /**
  * Dokumen cetak RW3BIZ (F4, jsPDF):
  * - Surat Izin Usaha RW 03 — terbit setiap pengajuan disetujui; wajib diperbarui sebelum masa berlaku habis.
- * - Formulir pendaftaran — salinan lengkap isian pengajuan (semua status), untuk arsip & survey.
+ * - Formulir pendaftaran — salinan lengkap isian pengajuan (semua status), untuk arsip & persetujuan Ketua RW.
  * - Kwitansi — bukti setiap pembayaran kontribusi / denda razia yang masuk Kas RW 03.
  */
 import { jsPDF } from "jspdf";
@@ -20,6 +20,8 @@ import {
 } from "@shared/schema";
 import { IDENTITAS_RW } from "@shared/surat-sakti/identitas";
 import { terbilang } from "@shared/surat-sakti/redaksi";
+import { ttdAktif } from "./surat-sakti/ttd";
+import { capAktif } from "./surat-sakti/cap";
 import { F4 } from "@shared/kertas";
 import { formatKategoriUsahaLabel } from "@shared/visitrw3-kategori-usaha";
 import {
@@ -50,7 +52,15 @@ import {
   type RentangOmzet,
   type StatusTempatBiz,
 } from "@shared/rw3biz-kontribusi";
-import { PERNYATAAN_VERSI, PERWAL_RW, pasalPernyataanSumbangsih } from "@shared/rw3biz-pernyataan";
+import {
+  ALASAN_SUMBANGSIH,
+  GARANSI_ANTI_OKNUM,
+  PERNYATAAN_VERSI,
+  teksCaraSetor,
+  PERWAL_RW,
+  pasalPernyataanSumbangsih,
+  tanggalSetorBulanan,
+} from "@shared/rw3biz-pernyataan";
 import { bersihkan, muatLogo, SKALA_SURAT, tulisRata } from "./surat-sakti/pdf";
 import { dataUsahaDariBaris, loadTarif, parseRincianTersimpan } from "./rw3biz-kontribusi";
 import type { getDataKwitansiRazia } from "./rw3biz-razia";
@@ -288,29 +298,88 @@ class Lembar {
     });
   }
 
-  /** Blok tanda tangan berjajar; nama kosong = garis titik untuk ditulis tangan. */
-  tandaTangan(kolom: { jabatan: string; nama?: string | null }[], tempatTanggal?: string) {
-    this.ruang(44 * this.k);
+  /**
+   * Blok tanda tangan berjajar ala Surat Sakti:
+   * tempat-tanggal kanan → label atas → ruang TTD (+ cap Ketua bila ada) → nama digarisbawahi → keterangan.
+   */
+  tandaTangan(
+    kolom: {
+      jabatan: string;
+      nama?: string | null;
+      keterangan?: string | null;
+      gambarTtd?: string | null;
+      gambarCap?: string | null;
+    }[],
+    tempatTanggal?: string,
+  ) {
     const lebar = CW / kolom.length;
-    this.font("normal", 10.5);
+    const lh = 4.6 * this.k;
+    const ruangH = 28;
+    const barisKet = Math.max(0, ...kolom.map((k) => (k.keterangan ? Math.min(2, this.pecah(k.keterangan, lebar - 6).length) : 0)));
+    this.ruang((tempatTanggal ? lh + 1 : 0) + lh + ruangH + lh + barisKet * lh * 0.95 + 4);
     if (tempatTanggal) {
-      this.doc.text(bersihkan(tempatTanggal), ML + lebar * (kolom.length - 0.5), this.y, { align: "center" });
-      this.y += 5 * this.k;
+      this.font("normal", 10.5);
+      this.doc.text(bersihkan(tempatTanggal), ML + CW, this.y, { align: "right" });
+      this.y += lh + 1;
     }
-    kolom.forEach((k, i) => this.doc.text(bersihkan(k.jabatan), ML + lebar * (i + 0.5), this.y, { align: "center" }));
-    this.y += 22;
-    this.font("bold", 10.5);
+    const yAwal = this.y;
     kolom.forEach((k, i) => {
-      const x = ML + lebar * (i + 0.5);
+      const cx = ML + lebar * (i + 0.5);
+      let y = yAwal;
+      this.font("normal", 10.5);
+      this.doc.text(bersihkan(k.jabatan), cx, y, { align: "center" });
+      y += lh;
+      const yRuang = y;
+      const adaCap = !!k.gambarCap;
+      const adaTtd = !!k.gambarTtd;
+      if (adaCap) {
+        try {
+          const format = k.gambarCap!.includes("image/jpeg") ? "JPEG" : "PNG";
+          const props = this.doc.getImageProperties(k.gambarCap!);
+          const sisi = Math.min(lebar - 8, ruangH - 1, 30);
+          const s = Math.min(sisi / props.width, sisi / props.height);
+          const w = props.width * s;
+          const h = props.height * s;
+          // Cap di kiri ruang; TTD di kanan (tumpang sebagian seperti stempel basah).
+          const xCap = adaTtd ? cx - w * 0.55 : cx - w / 2;
+          this.doc.addImage(k.gambarCap!, format, xCap, yRuang + (ruangH - h) / 2 - 1, w, h);
+        } catch {
+          /* cap rusak: lanjut tanpa cap */
+        }
+      }
+      if (adaTtd) {
+        try {
+          const format = k.gambarTtd!.includes("image/jpeg") ? "JPEG" : "PNG";
+          const props = this.doc.getImageProperties(k.gambarTtd!);
+          const maksW = Math.min(lebar - 10, adaCap ? 40 : 48);
+          const maksH = ruangH - 2;
+          const s = Math.min(maksW / props.width, maksH / props.height);
+          const w = props.width * s;
+          const h = props.height * s;
+          const xTtd = adaCap ? cx - w * 0.15 : cx - w / 2;
+          this.doc.addImage(k.gambarTtd!, format, xTtd, yRuang + (ruangH - h) / 2 - 1, w, h);
+        } catch {
+          /* gambar rusak: biarkan ruang kosong untuk TTD basah */
+        }
+      }
+      y += ruangH;
+      this.font("bold", 10.5);
       const n = k.nama ? this.pecah(k.nama, lebar - 6)[0] ?? "" : "(..............................)";
-      this.doc.text(n, x, this.y, { align: "center" });
+      this.doc.text(n, cx, y, { align: "center" });
       if (k.nama) {
         const w = this.doc.getTextWidth(n);
         this.doc.setLineWidth(0.2);
-        this.doc.line(x - w / 2, this.y + 0.8, x + w / 2, this.y + 0.8);
+        this.doc.line(cx - w / 2, y + 0.8, cx + w / 2, y + 0.8);
+      }
+      y += lh;
+      if (k.keterangan) {
+        this.font("normal", 8.5);
+        this.pecah(k.keterangan, lebar - 6)
+          .slice(0, 2)
+          .forEach((l, n) => this.doc.text(l, cx, y + n * lh * 0.9, { align: "center" }));
       }
     });
-    this.y += 8 * this.k;
+    this.y = yAwal + lh + ruangH + lh + barisKet * lh * 0.95 + 3;
   }
 
   async qr(url: string, baris: string[], ukuran = 22) {
@@ -504,6 +573,7 @@ export function ringkasSuratUsaha(d: DataSuratUsaha) {
 export async function buatPdfSuratUsaha(d: DataSuratUsaha, opsi: { nikLengkap: boolean }) {
   const p = d.pengajuan;
   const niu = d.usaha.nomorInduk ?? "-";
+  const [ttdKetua, capKetua] = await Promise.all([ttdAktif(), capAktif()]);
   const L = new Lembar(`Lanjutan Surat Izin Usaha RW 03 No. ${p.nomorBiz}`, `Surat Izin Usaha ${p.nomorBiz}`);
   L.kop();
   L.judul("SURAT IZIN USAHA", "RW3BIZ - IZIN USAHA DI WILAYAH RW 03 PADASUKA", `Nomor: ${p.nomorBiz}`);
@@ -524,7 +594,7 @@ export async function buatPdfSuratUsaha(d: DataSuratUsaha, opsi: { nikLengkap: b
 
   L.paragraf(
     `Ketua Rukun Warga 03 Kelurahan Padasuka, Kecamatan Cimahi Tengah, Kota Cimahi menerangkan bahwa usaha ` +
-      `di bawah ini telah didata, disurvey, dan diizinkan menjalankan kegiatan usaha di wilayah RW 03 dengan keterangan:`,
+      `di bawah ini telah didaftar dan diizinkan menjalankan kegiatan usaha di wilayah RW 03 dengan keterangan:`,
   );
   L.y += 2;
 
@@ -627,19 +697,25 @@ export async function buatPdfSuratUsaha(d: DataSuratUsaha, opsi: { nikLengkap: b
     "Setiap penambahan atau pengurangan kendaraan operasional - milik sendiri maupun charter/sewaan (terutama kolbak dan truk yang membebani jalan lingkungan) - wajib dilaporkan kepada pengurus RW.",
     "Pengurus RW dapat melakukan razia kendaraan. Kendaraan menuju usaha ini yang tidak tercatat di surat ini dikenai denda yang disetor ke Kas RW 03, dan data usaha wajib diperbarui.",
     sumbangsih
-      ? `Sumbangsih yang disanggupkan dalam Surat Pernyataan Sumbangsih SPS/${p.nomorBiz} adalah dana swadaya masyarakat sebagaimana ${PERWAL_RW.pasal} ${PERWAL_RW.singkat}, disetor ke Kas RW 03 paling lambat tanggal ${1 + tarif.tenggangHari} setiap bulan, dan dipakai sesuai RAB RW 03. Setiap setoran diberi kwitansi resmi; simpan kwitansi sebagai bukti.`
-      : `Kontribusi bulanan dibayarkan ke Kas RW 03 paling lambat tanggal ${1 + tarif.tenggangHari} setiap bulan. Setiap pembayaran diberi kwitansi resmi; simpan kwitansi sebagai bukti.`,
+      ? `Sumbangsih yang disanggupkan dalam Surat Pernyataan Sumbangsih SPS/${p.nomorBiz} adalah komitmen bulanan dana swadaya masyarakat sebagaimana ${PERWAL_RW.pasal} ${PERWAL_RW.singkat}. ${teksCaraSetor(tarif.tenggangHari)} Dipakai sesuai RAB RW 03; simpan kwitansi sebagai bukti.`
+      : `Kontribusi bulanan (komitmen tiap bulan): ${teksCaraSetor(tarif.tenggangHari)} Simpan kwitansi sebagai bukti.`,
     "Pemegang izin wajib menjaga kebersihan, ketertiban, dan keamanan lingkungan, serta tidak merusak jalan dan fasilitas umum di wilayah RW 03.",
-    "Pelanggaran (sampah tercecer, kebisingan, parkir menghalangi jalan, limbah/bau, melanggar jam operasional, merusak fasilitas umum, data tidak sesuai, dll) dari aduan warga yang terbukti atau temuan petugas dikenai teguran / denda: denda dasar x tingkat (ringan/sedang/berat) x pengulangan dalam 12 bulan. Denda disetor ke Kas RW 03 dengan kwitansi.",
+    "Pelanggaran (sampah tercecer, kebisingan, parkir menghalangi jalan, limbah/bau, melanggar jam operasional, merusak fasilitas umum, data tidak sesuai, dll) dari aduan warga yang terbukti atau temuan Ketua RW / Linmas dikenai teguran / denda: denda dasar x tingkat (ringan/sedang/berat) x pengulangan dalam 12 bulan. Denda disetor ke Kas RW 03 dengan kwitansi.",
     "Bila kontribusi dan denda yang terkumpul dalam sebulan melebihi kebutuhan anggaran RW, kelebihannya dijadikan voucher belanja bagi warga RW 03 yang hanya dapat dibelanjakan di usaha RW3BIZ yang tertib berkontribusi. Voucher yang diterima usaha ditukar ke Kas RW 03 senilai nominalnya.",
-    "Simpan surat ini di tempat usaha dan tunjukkan bila diminta oleh pengurus RT/RW atau petugas.",
+    "Simpan surat ini di tempat usaha dan tunjukkan bila diminta oleh Ketua RW 03.",
   ], 10, 5 + 44 * L.k);
   L.y += 5;
 
   L.tandaTangan(
     [
       { jabatan: "Pemegang izin,", nama: p.pjNama },
-      { jabatan: `${IDENTITAS_RW.ketua.jabatan},`, nama: IDENTITAS_RW.ketua.nama },
+      {
+        jabatan: "Ketua RW 03,",
+        nama: IDENTITAS_RW.ketua.nama,
+        keterangan: IDENTITAS_RW.ketua.jabatan,
+        gambarTtd: ttdKetua?.dataUrl ?? null,
+        gambarCap: capKetua?.dataUrl ?? null,
+      },
     ],
     `${IDENTITAS_RW.tempat}, ${tgl(d.tanggalTerbit)}`,
   );
@@ -648,7 +724,7 @@ export async function buatPdfSuratUsaha(d: DataSuratUsaha, opsi: { nikLengkap: b
   await L.qr(urlCek, [
     "Pindai untuk memeriksa keaslian, masa berlaku, dan kontribusi usaha ini.",
     urlCek.replace(/^https?:\/\//, ""),
-    "Kode QR bukan tanda tangan elektronik. Surat sah bila ditandatangani basah.",
+    "Ditandatangani & dicap elektronik oleh Ketua RW 03. Pindai QR untuk cek keaslian.",
   ]);
 
   const tidakBerlaku = d.digantiOleh ? `DIGANTI ${d.digantiOleh}` : d.kedaluwarsa ? "MASA BERLAKU HABIS" : null;
@@ -660,7 +736,7 @@ export async function buatPdfSuratUsaha(d: DataSuratUsaha, opsi: { nikLengkap: b
 // ---------------------------------------------------------------- Formulir pendaftaran
 
 const STATUS_LABEL: Record<string, string> = {
-  menunggu_survey: "Menunggu survey",
+  menunggu_survey: "Menunggu persetujuan Ketua RW",
   disetujui: "Disetujui",
   ditolak: "Ditolak",
 };
@@ -683,11 +759,14 @@ export async function buatPdfFormulir(
 ) {
   const { pengajuan: p, orang, usaha } = data;
   const tarif = await loadTarif();
-  const L = new Lembar(`Lanjutan Formulir RW3BIZ ${p.nomorBiz}`, `Formulir RW3BIZ ${p.nomorBiz}`);
+  const [ttdKetua, capKetua] = await Promise.all([ttdAktif(), capAktif()]);
+  const L = new Lembar(`Lanjutan Formulir Komitmen RW3BIZ ${p.nomorBiz}`, `Formulir Komitmen RW3BIZ ${p.nomorBiz}`);
   L.kop();
   L.judul(
-    "FORMULIR PENDAFTARAN USAHA",
-    p.tipe === "perpanjang" ? "RW3BIZ - PEMBARUAN IZIN USAHA" : "RW3BIZ - PENDAFTARAN USAHA BARU",
+    "FORMULIR KOMITMEN PENGUSAHA",
+    p.tipe === "perpanjang"
+      ? "TERHADAP PROGRAM RW 03 PADASUKA — PEMBARUAN"
+      : "TERHADAP PROGRAM RW 03 PADASUKA",
     `Nomor pengajuan: ${p.nomorBiz}`,
   );
 
@@ -752,15 +831,25 @@ export async function buatPdfFormulir(
 
   const sumbangsih = parseSumbangsih(p.sumbangsih);
   const rincian = sumbangsih ? null : parseRincianTersimpan(p.rincianKontribusi);
-  L.subjudul(
-    sumbangsih
-      ? p.status === "disetujui"
-        ? "E. Sumbangsih bulanan untuk program RW 03 (disepakati)"
-        : "E. Sumbangsih bulanan untuk program RW 03 (disanggupkan)"
-      : p.status === "disetujui"
-        ? "E. Kontribusi bulanan (ditetapkan)"
-        : "E. Perkiraan kontribusi bulanan",
+  L.subjudul("E. Manfaat bagi usaha & sumbangsih bulanan");
+  L.paragraf("Manfaat bagi usaha yang berkontribusi:", 9.5, 4.4);
+  L.daftarBernomor(ALASAN_SUMBANGSIH, 9);
+  L.ruang(2);
+  L.font("bold", 10);
+  L.doc.text(
+    bersihkan(
+      sumbangsih
+        ? p.status === "disetujui"
+          ? "Sumbangsih bulanan (disepakati)"
+          : "Sumbangsih bulanan (disanggupkan)"
+        : p.status === "disetujui"
+          ? "Kontribusi bulanan (ditetapkan)"
+          : "Perkiraan kontribusi bulanan",
+    ),
+    ML,
+    L.y,
   );
+  L.y += 5 * L.k;
   if (sumbangsih) {
     const total = totalSumbangsih(sumbangsih);
     L.tabel(
@@ -770,6 +859,13 @@ export async function buatPdfFormulir(
     );
     L.font("italic", 9.5);
     L.paragraf(`(${rupiahTerbilang(total)} per bulan)`, 9.5, 4.6);
+    L.font("bold", 9.5);
+    L.paragraf(
+      `KOMITMEN: Jumlah di atas disetor setiap bulan paling lambat tanggal ${tanggalSetorBulanan(tarif.tenggangHari)} — bukan sekali bayar. ${teksCaraSetor(tarif.tenggangHari)}`,
+      9.5,
+      4.6,
+    );
+    L.paragraf(GARANSI_ANTI_OKNUM, 9, 4.4);
   } else if (rincian) {
     const h = rincian.hasil;
     const rows: string[][] = h.komponen.map((k) => [k.label, formatRp(k.nominal)]);
@@ -784,11 +880,15 @@ export async function buatPdfFormulir(
     L.y += 5 * L.k;
     L.font("italic", 9.5);
     L.paragraf(`(${rupiahTerbilang(total)})`, 9.5, 4.6);
-    if (p.status !== "disetujui") {
-      L.paragraf("Angka final ditetapkan pengurus setelah survey lapangan.", 9.5, 4.6);
-    }
+    L.paragraf(
+      `Jumlah di atas adalah komitmen setiap bulan. ${teksCaraSetor(tarif.tenggangHari)}`,
+      9.5,
+      4.6,
+    );
+    L.paragraf(GARANSI_ANTI_OKNUM, 9, 4.4);
   } else {
     L.paragraf("Belum dihitung.", 10.5);
+    L.paragraf(GARANSI_ANTI_OKNUM, 9, 4.4);
   }
 
   if (p.catatanPemohon?.trim()) {
@@ -796,27 +896,16 @@ export async function buatPdfFormulir(
     L.paragraf(p.catatanPemohon.trim(), 10);
   }
 
-  L.subjudul("F. Hasil survey lapangan (diisi petugas)");
   if (p.catatanSurvey?.trim()) {
+    L.subjudul("F. Catatan Ketua RW 03");
     L.paragraf(p.catatanSurvey.trim(), 10);
-  } else {
-    L.font("normal", 10);
-    for (let i = 0; i < 4; i++) {
-      L.ruang(7);
-      L.doc.setLineWidth(0.15);
-      L.doc.setDrawColor(150);
-      L.doc.line(ML, L.y + 1, ML + CW, L.y + 1);
-      L.doc.setDrawColor(0);
-      L.y += 7;
-    }
   }
-  L.y += 3;
 
-  L.ruang(4.6 * L.k * 2 + 3 + 44 * L.k);
+  L.ruang(4.6 * L.k * 4 + 3 + 44 * L.k);
   L.paragraf(
     sumbangsih
-      ? "Dengan menandatangani formulir ini, pemohon menyatakan data di atas benar, bersedia disurvey, dan sanggup menyetor sumbangsih bulanan di atas ke Kas RW 03 untuk program RW 03."
-      : "Dengan menandatangani formulir ini, pemohon menyatakan data di atas benar, bersedia disurvey, dan sanggup membayar kontribusi bulanan ke Kas RW 03 sesuai ketentuan.",
+      ? `Dengan menandatangani formulir ini, pemohon menyatakan data di atas benar; mengerti manfaat berkontribusi bagi usahanya; rela ikut menanggung program RW 03; mengerti garansi anti-oknum; serta berkomitmen menyetor sumbangsih bulanan di atas (${teksCaraSetor(tarif.tenggangHari)}).`
+      : `Dengan menandatangani formulir ini, pemohon menyatakan data di atas benar; mengerti manfaat berkontribusi dan garansi anti-oknum; serta berkomitmen membayar kontribusi bulanan (${teksCaraSetor(tarif.tenggangHari)}).`,
     9.5,
     4.6,
   );
@@ -824,8 +913,13 @@ export async function buatPdfFormulir(
   L.tandaTangan(
     [
       { jabatan: "Pemohon / penanggung jawab,", nama: p.pjNama },
-      { jabatan: "Petugas survey," },
-      { jabatan: `${IDENTITAS_RW.ketua.jabatan},`, nama: IDENTITAS_RW.ketua.nama },
+      {
+        jabatan: "Ketua RW 03,",
+        nama: IDENTITAS_RW.ketua.nama,
+        keterangan: IDENTITAS_RW.ketua.jabatan,
+        gambarTtd: ttdKetua?.dataUrl ?? null,
+        gambarCap: capKetua?.dataUrl ?? null,
+      },
     ],
     `${IDENTITAS_RW.tempat}, ....................................`,
   );
@@ -834,8 +928,8 @@ export async function buatPdfFormulir(
     L.font("italic", 8.5);
     L.paragraf("Salinan pemohon: NIK dan nomor WhatsApp disamarkan.", 8.5, 4.2);
   }
-  L.kaki(`Formulir RW3BIZ ${p.nomorBiz}${usaha?.nomorInduk ? ` · ${usaha.nomorInduk}` : ""}`);
-  return { buffer: L.buffer(), nama: `Formulir-RW3BIZ-${p.nomorBiz}.pdf` };
+  L.kaki(`Formulir Komitmen RW3BIZ ${p.nomorBiz}${usaha?.nomorInduk ? ` · ${usaha.nomorInduk}` : ""}`);
+  return { buffer: L.buffer(), nama: `Formulir-Komitmen-RW3BIZ-${p.nomorBiz}.pdf` };
 }
 
 // ---------------------------------------------------------------- Surat Pernyataan Sumbangsih
@@ -877,7 +971,7 @@ function tulisDasarHukum(L: Lembar) {
       L.y += lh;
     });
     for (const h of a.huruf ?? []) {
-      L.font(h.startsWith("a.") ? "bold" : "normal", 10);
+      L.font(h.startsWith("c.") ? "bold" : "normal", 10);
       for (const b of L.pecah(h, lebar - 6)) {
         d.text(b, ML + 17, L.y);
         L.y += lh;
@@ -917,6 +1011,7 @@ export async function buatPdfPernyataan(
 ) {
   const { pengajuan: p, orang, usaha } = data;
   const tarif = await loadTarif();
+  const [ttdKetua, capKetua] = await Promise.all([ttdAktif(), capAktif()]);
   const sumbangsih = parseSumbangsih(p.sumbangsih) ?? [];
   const total = totalSumbangsih(sumbangsih);
   const pj = orang.find((o) => o.isPenanggungJawab && !o.isAnak) ?? orang.find((o) => !o.isAnak) ?? null;
@@ -975,24 +1070,32 @@ export async function buatPdfPernyataan(
   L.y += 3;
 
   const yTtd = L.y;
+  const lhTtd = 4.6 * L.k;
   L.tandaTangan(
     [
       { jabatan: "PIHAK PERTAMA,", nama: pj?.namaLengkap ?? p.pjNama },
-      { jabatan: "PIHAK KEDUA,", nama: IDENTITAS_RW.ketua.nama },
+      {
+        jabatan: "PIHAK KEDUA,",
+        nama: IDENTITAS_RW.ketua.nama,
+        keterangan: IDENTITAS_RW.ketua.jabatan,
+        gambarTtd: ttdKetua?.dataUrl ?? null,
+        gambarCap: capKetua?.dataUrl ?? null,
+      },
     ],
     `${IDENTITAS_RW.tempat}, ${p.pernyataanDisetujuiAt ? tgl(tanggalWib(new Date(p.pernyataanDisetujuiAt))) : "...................................."}`,
   );
-  // Kotak meterai di sisi kiri kolom PIHAK PERTAMA, di ruang tanda tangan.
+  // Kotak meterai di ruang TTD kolom PIHAK PERTAMA (setelah tempat-tanggal + label atas).
+  const yMeterai = yTtd + lhTtd + 1 + lhTtd + 1;
   L.doc.setDrawColor(150);
   L.doc.setLineDashPattern([1.2, 1], 0);
-  L.doc.rect(ML + 2, yTtd + 9 * L.k, 22, 15);
+  L.doc.rect(ML + 4, yMeterai, 22, 16);
   L.doc.setLineDashPattern([], 0);
   L.doc.setDrawColor(0);
   L.fontTetap("normal", 6.5);
   L.doc.setTextColor(130);
-  L.doc.text("Meterai", ML + 13, yTtd + 9 * L.k + 6.5, { align: "center" });
-  L.doc.text("Rp10.000", ML + 13, yTtd + 9 * L.k + 9.5, { align: "center" });
-  L.doc.text("(bila diminta)", ML + 13, yTtd + 9 * L.k + 12.5, { align: "center" });
+  L.doc.text("Meterai", ML + 15, yMeterai + 5.5, { align: "center" });
+  L.doc.text("Rp10.000", ML + 15, yMeterai + 8.5, { align: "center" });
+  L.doc.text("(bila diminta)", ML + 15, yMeterai + 11.5, { align: "center" });
   L.doc.setTextColor(0);
 
   if (!opsi.lengkap) {

@@ -342,7 +342,7 @@ function simpulkan(warga: KkCek[], visit: VisitCek[], biz: BizCek[]) {
     } else if (b.dataLama) {
       peringatan.push(`${nama} hanya tercatat di pengajuan lama "${b.namaUsaha}" — tidak ada di izin terbaru.`);
     } else if (b.statusPengajuan === "menunggu_survey") {
-      peringatan.push(`Pengajuan RW3BIZ "${b.namaUsaha}" masih menunggu survey — belum resmi.`);
+      peringatan.push(`Pengajuan RW3BIZ "${b.namaUsaha}" masih menunggu persetujuan Ketua RW — belum resmi.`);
     } else if (b.statusPengajuan === "ditolak") {
       peringatan.push(`Pengajuan RW3BIZ "${b.namaUsaha}" DITOLAK.`);
     } else if (b.statusUsaha && !izinAktif) {

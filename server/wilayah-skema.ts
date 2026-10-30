@@ -47,6 +47,13 @@ export const MIGRASI_WILAYAH: { file: string; terpasang: () => Promise<boolean> 
       return rows[0].ada === true;
     },
   },
+  {
+    file: "0034_surat_cap.sql",
+    terpasang: async () => {
+      const { rows } = await pool.query(`SELECT to_regclass('wil_surat_cap') IS NOT NULL AS ada`);
+      return rows[0].ada === true;
+    },
+  },
 ];
 
 function bacaSql(file: string): string | null {

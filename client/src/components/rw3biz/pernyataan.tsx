@@ -7,6 +7,7 @@ import { useTarifPublik } from "@/components/rw3biz/transparansi";
 import { formatRp } from "@shared/rw3biz-kontribusi";
 import {
   ALASAN_SUMBANGSIH,
+  GARANSI_ANTI_OKNUM,
   PERNYATAAN_VERSI,
   PERWAL_RW,
   pasalPernyataanSumbangsih,
@@ -38,7 +39,7 @@ export function DasarHukumPerwal({ tanpaBingkai = false }: { tanpaBingkai?: bool
               {a.huruf && (
                 <ul className="mt-1 space-y-0.5 pl-1">
                   {a.huruf.map((h) => (
-                    <li key={h} className={h.startsWith("a.") ? "font-semibold" : undefined}>
+                    <li key={h} className={h.startsWith("c.") ? "font-semibold" : undefined}>
                       {h}
                     </li>
                   ))}
@@ -111,12 +112,15 @@ export function KebutuhanRw3({ ringkas = false }: { ringkas?: boolean }) {
         })}
       </ul>
       <div className="space-y-1 rounded-lg bg-muted/40 p-3">
-        <p className="text-sm font-semibold">Kenapa usaha ikut menyumbang?</p>
-          <ul className="list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
+        <p className="text-sm font-semibold">Manfaat bagi usaha Anda bila berkontribusi</p>
+        <ul className="list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
           {ALASAN_SUMBANGSIH.map((a) => (
             <li key={a}>{a}</li>
           ))}
         </ul>
+        <p className="rounded-md border border-brand/40 bg-brand/5 p-2 text-xs font-medium leading-snug text-foreground">
+          {GARANSI_ANTI_OKNUM}
+        </p>
       </div>
       {!ringkas && <DasarHukumPerwal />}
     </div>
@@ -167,7 +171,7 @@ export function DokumenPernyataan({
   const total = items.reduce((s, x) => s + x.nominal, 0);
   const pasal = pasalPernyataanSumbangsih({
     total,
-    tenggangHari: t?.tenggangHari ?? 10,
+    tenggangHari: t?.tenggangHari ?? 0,
     target: t?.targetBulanan ?? 0,
     terminBulan,
   });
@@ -254,7 +258,7 @@ export function PernyataanSumbangsihPanel({
   const dokumenRef = useRef<HTMLDivElement>(null);
   const [sudahBaca, setSudahBaca] = useState(false);
   const total = items.reduce((s, x) => s + x.nominal, 0);
-  const poin = poinPersetujuan({ total, tenggangHari: t?.tenggangHari ?? 10 });
+  const poin = poinPersetujuan({ total, tenggangHari: t?.tenggangHari ?? 0 });
   const [centang, setCentang] = useState<boolean[]>(() => poin.map(() => false));
 
   const cekAkhir = useCallback(() => {

@@ -106,3 +106,46 @@ export function buildVisitrw3Timeline(status: string, alasanTolak?: string | nul
 
   return steps;
 }
+
+/** Timeline status pengajuan RW3BIZ (tanpa konsep survey petugas). */
+export function buildRw3bizTimeline(status: string, alasanTolak?: string | null): TimelineStep[] {
+  const steps: TimelineStep[] = [
+    {
+      id: "submitted",
+      label: "Pengajuan diterima",
+      description: "Data Anda masuk antrian Ketua RW",
+      state: "done",
+    },
+    {
+      id: "review",
+      label: "Persetujuan Ketua RW",
+      description: "Ketua RW 03 meninjau data & sumbangsih",
+      state: status === "menunggu_survey" ? "current" : "done",
+    },
+  ];
+
+  if (status === "disetujui") {
+    steps.push({
+      id: "approved",
+      label: "Disetujui",
+      description: "Nomor Induk Usaha aktif",
+      state: "done",
+    });
+  } else if (status === "ditolak") {
+    steps.push({
+      id: "rejected",
+      label: "Ditolak",
+      description: alasanTolak || "Lihat alasan di bawah",
+      state: "rejected",
+    });
+  } else {
+    steps.push({
+      id: "result",
+      label: "Keputusan",
+      description: "Menunggu keputusan Ketua RW",
+      state: "upcoming",
+    });
+  }
+
+  return steps;
+}

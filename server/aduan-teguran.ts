@@ -14,6 +14,7 @@ import {
   CARA_SERAH_TEGURAN, kunciTeradu, type KategoriAduan, type TingkatTeguran,
 } from "@shared/aduan";
 import { ambilAduan, catatTimeline, petakanTeguran, riwayatTeguran, saranDariRiwayat } from "./aduan";
+import { notifyAduanTeguranTerbit } from "./wa-notify-aduan";
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const hariIniWib = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
@@ -137,6 +138,13 @@ export async function terbitkanTeguran(aktor: Aktor, raw: unknown) {
     }
     return rows[0];
   });
+  if (s.aduan) {
+    notifyAduanTeguranTerbit(s.aduan, {
+      labelTeguran: label,
+      tenggat: tanggalPendek(v.tenggat),
+      nomorSurat,
+    });
+  }
   return petakanTeguran(teguran);
 }
 

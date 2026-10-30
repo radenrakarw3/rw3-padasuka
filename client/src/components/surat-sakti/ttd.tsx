@@ -17,9 +17,14 @@ export interface StatusTtd {
 }
 
 export const KUNCI_TTD = ["/api/wilayah/rw/surat-ttd"];
+export const KUNCI_CAP = ["/api/wilayah/rw/surat-cap"];
 
 export function useStatusTtd() {
   return useQuery<StatusTtd>({ queryKey: KUNCI_TTD, queryFn: () => wil("/api/wilayah/rw/surat-ttd", RW), staleTime: 60_000 });
+}
+
+export function useStatusCap() {
+  return useQuery<StatusTtd>({ queryKey: KUNCI_CAP, queryFn: () => wil("/api/wilayah/rw/surat-cap", RW), staleTime: 60_000 });
 }
 
 /**
@@ -240,13 +245,13 @@ export function PanelTtd() {
   if (error) return <Galat e={error} />;
   if (!data) return null;
   return (
-    <>
+    <div className="space-y-2">
       {data.ada ? (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-white p-3 text-sm">
           {data.gambar && <img src={data.gambar} alt="Tanda tangan Ketua RW" className="h-12 w-28 object-contain" />}
           <div className="min-w-0 flex-1">
             <p className="font-medium">{IDENTITAS_RW.ketua.nama} · {IDENTITAS_RW.ketua.jabatan}</p>
-            <p className="text-xs text-muted-foreground flex items-center gap-1"><QrCode className="w-3.5 h-3.5" /> Tanda tangan + QR keaslian dibubuhkan otomatis pada setiap surat saat terbit.</p>
+            <p className="text-xs text-muted-foreground flex items-center gap-1"><QrCode className="w-3.5 h-3.5" /> Tanda tangan + cap + QR keaslian dibubuhkan otomatis pada setiap surat saat terbit (termasuk RW3BIZ).</p>
           </div>
           <Button type="button" size="sm" variant="outline" onClick={() => setBuka(true)}>Ganti</Button>
         </div>
@@ -257,6 +262,106 @@ export function PanelTtd() {
         </div>
       )}
       <DialogTtd buka={buka} setBuka={setBuka} />
+      <PanelCap />
+    </div>
+  );
+}
+
+function DialogCap({ buka, setBuka }: { buka: boolean; setBuka: (v: boolean) => void }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [hasil, setHasil] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
+  const [sibuk, setSibuk] = useState(false);
+
+  async function simpan() {
+    if (!hasil) return;
+    setSibuk(true);
+    setErr(null);
+    try {
+      await wil("/api/wilayah/rw/surat-cap", { ...RW, body: { gambar: hasil } });
+      await qc.invalidateQueries({ queryKey: KUNCI_CAP });
+      toast({ title: "Cap disimpan", description: "Cap akan dibubuhkan bersama tanda tangan pada surat terbit dan RW3BIZ." });
+      setBuka(false);
+      setHasil(null);
+    } catch (e) {
+      setErr(e);
+    } finally {
+      setSibuk(false);
+    }
+  }
+
+  return (
+    <Dialog open={buka} onOpenChange={setBuka}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Cap / stempel Ketua RW</DialogTitle>
+          <DialogDescription>
+            Unggah foto cap basah (PNG/JPG). Latar putih boleh; warna cap (merah/biru) dipertahankan. Cukup sekali.
+          </DialogDescription>
+        </DialogHeader>
+        <input
+          type="file"
+          accept="image/png,image/jpeg,image/jpg"
+          className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-[hsl(163,55%,22%)] file:px-3 file:py-2 file:text-white"
+          onChange={async (e) => {
+            const f = e.target.files?.[0];
+            if (!f) return;
+            setErr(null);
+            try {
+              const dataUrl = await new Promise<string>((res, rej) => {
+                const r = new FileReader();
+                r.onload = () => res(String(r.result));
+                r.onerror = () => rej(new Error("Gagal membaca berkas"));
+                r.readAsDataURL(f);
+              });
+              setHasil(dataUrl);
+            } catch (x) {
+              setHasil(null);
+              setErr(x);
+            }
+          }}
+        />
+        <Galat e={err} />
+        {hasil && (
+          <div className="rounded-lg border bg-white p-3 text-center">
+            <p className="mb-1 text-xs text-muted-foreground">Pratinjau cap:</p>
+            <img src={hasil} alt="Pratinjau cap" className="mx-auto h-24 object-contain" />
+          </div>
+        )}
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={() => setBuka(false)}>Batal</Button>
+          <Button type="button" disabled={!hasil || sibuk} onClick={simpan}>{sibuk ? "Menyimpan…" : "Simpan cap"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Panel unggah/ganti cap di bawah panel TTD. */
+export function PanelCap() {
+  const { data, error } = useStatusCap();
+  const [buka, setBuka] = useState(false);
+  if (error) return <Galat e={error} />;
+  if (!data) return null;
+  return (
+    <>
+      {data.ada ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-white p-3 text-sm">
+          {data.gambar && <img src={data.gambar} alt="Cap Ketua RW" className="h-14 w-14 object-contain" />}
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">Cap / stempel Ketua RW</p>
+            <p className="text-xs text-muted-foreground">Dibubuhkan bersama tanda tangan pada surat terbit dan surat izin RW3BIZ.</p>
+          </div>
+          <Button type="button" size="sm" variant="outline" onClick={() => setBuka(true)}>Ganti</Button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-amber-300 bg-amber-50/60 p-3 text-sm">
+          <p className="min-w-0 flex-1"><b>Cap Ketua RW belum diunggah.</b> Surat tetap bisa terbit; unggah cap agar stempel muncul otomatis di RW3BIZ dan Surat RW.</p>
+          <Button type="button" size="sm" variant="outline" onClick={() => setBuka(true)}><Upload className="w-4 h-4 mr-1" /> Unggah cap</Button>
+        </div>
+      )}
+      <DialogCap buka={buka} setBuka={setBuka} />
     </>
   );
 }

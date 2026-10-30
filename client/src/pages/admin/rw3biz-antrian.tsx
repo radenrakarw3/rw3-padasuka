@@ -233,7 +233,7 @@ export default function AdminRw3bizAntrian() {
   const sumbangsihDiajukan = parseSumbangsih(p?.sumbangsih);
   const rincianDiajukan = sumbangsihDiajukan ? null : bacaRincian(p?.rincianKontribusi);
   const totalSumbangsihBaru = Object.values(sumbangsihBaru).reduce((s, n) => s + (n > 0 ? n : 0), 0);
-  /** Pengajuan lama (rumus) tanpa sumbangsih: data survey wajib bila sumbangsih tidak diisi admin. */
+  /** Pengajuan lama (rumus) tanpa sumbangsih: data usaha wajib dilengkapi bila sumbangsih tidak diisi admin. */
   const wajibSurvey = !sumbangsihDiajukan && totalSumbangsihBaru <= 0 && !p?.statusTempat;
 
   useEffect(() => {
@@ -248,7 +248,7 @@ export default function AdminRw3bizAntrian() {
 
   const viewOptions = useMemo(
     () => [
-      { value: "belum" as const, label: "Menunggu survey", count: menunggu.length },
+      { value: "belum" as const, label: "Menunggu persetujuan", count: menunggu.length },
       { value: "sudah" as const, label: "Sudah diputus", count: disetujui.length + ditolak.length },
     ],
     [menunggu.length, disetujui.length, ditolak.length],
@@ -258,8 +258,8 @@ export default function AdminRw3bizAntrian() {
     <Visitrw3AdminShell>
       <Visitrw3AdminNav
         product="rw3biz"
-        title={lolosView === "belum" ? "Survey izin usaha" : "Riwayat usaha"}
-        description="Antrian RW3BIZ dari tabel terpisah — data PJ siap untuk notifikasi & blast WA."
+        title={lolosView === "belum" ? "Antrian persetujuan usaha" : "Riwayat usaha"}
+        description="Antrian RW3BIZ — Ketua RW 03 meninjau dan menyetujui. Data PJ siap untuk notifikasi & blast WA."
         actions={
           <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
             <Visitrw3ChipFilters
@@ -278,7 +278,7 @@ export default function AdminRw3bizAntrian() {
       <div className="flex flex-col gap-2 mb-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <p className="text-xs text-muted-foreground">
           {lolosView === "belum"
-            ? "Setujui setelah survey lokasi usaha."
+            ? "Tinjau data & sumbangsih, lalu setujui atau tolak."
             : "Filter disetujui / ditolak."}
         </p>
         {lolosView === "sudah" && (
@@ -340,7 +340,10 @@ export default function AdminRw3bizAntrian() {
               <div className="flex flex-wrap items-center gap-2 mb-1">
                 <Visitrw3MonoId>{row.nomorBiz}</Visitrw3MonoId>
                 <Visitrw3RtBadge rt={row.rt} />
-                <StatusBadge variant={visitrw3StatusVariant(row.status)} />
+                <StatusBadge
+                  variant={visitrw3StatusVariant(row.status)}
+                  label={row.status === "menunggu_survey" ? "Menunggu persetujuan" : undefined}
+                />
               </div>
               <p className="text-sm font-medium flex items-center gap-1 min-w-0 break-words sm:text-xs">
                 <Store className="w-3.5 h-3.5 shrink-0 sm:w-3 sm:h-3" />
@@ -372,7 +375,10 @@ export default function AdminRw3bizAntrian() {
               <div className="flex flex-wrap gap-2 items-center">
                 <p className="font-mono font-bold">{p.nomorBiz}</p>
                 <Visitrw3RtBadge rt={p.rt} />
-                <StatusBadge variant={visitrw3StatusVariant(p.status)} />
+                <StatusBadge
+                  variant={visitrw3StatusVariant(p.status)}
+                  label={p.status === "menunggu_survey" ? "Menunggu persetujuan" : undefined}
+                />
                 {detail?.usaha?.nomorInduk && (
                   <span className="rounded bg-brand/10 px-2 py-0.5 font-mono text-xs font-semibold text-brand">
                     {detail.usaha.nomorInduk}
@@ -411,7 +417,7 @@ export default function AdminRw3bizAntrian() {
                 <RingkasanSumbangsih
                   items={sumbangsihDiajukan}
                   catatan={[
-                    p.status === "menunggu_survey" ? "Isian pemohon. Bisa diubah di bawah bila disepakati lain saat survey." : "",
+                    p.status === "menunggu_survey" ? "Isian pemohon. Bisa diubah di bawah bila disepakati lain dengan pemohon." : "",
                     p.pernyataanDisetujuiAt
                       ? `Surat pernyataan disetujui ${new Date(p.pernyataanDisetujuiAt).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })} (versi ${p.pernyataanVersi}).`
                       : "Surat pernyataan belum disetujui online — minta tanda tangan di formulir kertas.",
@@ -422,7 +428,7 @@ export default function AdminRw3bizAntrian() {
               )}
               <div className="rounded-lg border border-brand/30 p-3 space-y-2">
                 <p className="text-xs font-semibold">
-                  Data usaha {p.statusTempat ? "(hasil survey)" : "— dicatat petugas saat survey"}
+                  Data usaha {p.statusTempat ? "(sudah diisi)" : "— dilengkapi saat menyetujui bila perlu"}
                 </p>
                 <div className="grid grid-cols-1 gap-x-3 gap-y-1 text-xs sm:grid-cols-2 sm:gap-y-0.5">
                   <p><span className="text-muted-foreground">Status tempat: </span>{labelDari(STATUS_TEMPAT_BIZ_LABEL, p.statusTempat)}</p>
@@ -505,7 +511,7 @@ export default function AdminRw3bizAntrian() {
                         onChange={(e) => setUbahSumbangsih(e.target.checked)}
                       />
                       {sumbangsihDiajukan
-                        ? "Ubah sumbangsih (disepakati lain dengan pemohon saat survey)"
+                        ? "Ubah sumbangsih (disepakati lain dengan pemohon)"
                         : "Isi sumbangsih yang disanggupkan pemohon"}
                     </label>
                     {(ubahSumbangsih || !sumbangsihDiajukan) && (
@@ -522,8 +528,8 @@ export default function AdminRw3bizAntrian() {
                         onChange={(e) => setKoreksiAktif(e.target.checked)}
                       />
                       {wajibSurvey
-                        ? "Isi data hasil survey lapangan (wajib untuk pengajuan lama tanpa sumbangsih)"
-                        : "Catat hasil survey lapangan (luas, sampah, parkir, kendaraan & plat)"}
+                        ? "Lengkapi data usaha (wajib untuk pengajuan lama tanpa sumbangsih)"
+                        : "Lengkapi / verifikasi data usaha (luas, sampah, parkir, kendaraan & plat)"}
                     </label>
                     {(koreksiAktif || wajibSurvey) && dataKoreksi && (
                       <KoreksiKontribusiEditor
@@ -545,7 +551,7 @@ export default function AdminRw3bizAntrian() {
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <Label>Catatan survey (opsional)</Label>
+                    <Label>Catatan Ketua RW (opsional)</Label>
                     <Textarea value={catatanSurvey} onChange={(e) => setCatatanSurvey(e.target.value)} rows={2} />
                   </div>
                   <div className="flex gap-2">

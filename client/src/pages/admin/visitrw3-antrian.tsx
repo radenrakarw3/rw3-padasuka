@@ -338,7 +338,7 @@ export default function AdminVisitrw3Antrian({
         title={
           lolosView === "belum"
             ? product === "rw3biz"
-              ? "Menunggu survey usaha"
+              ? "Antrian persetujuan usaha"
               : "Menunggu survey"
             : product === "rw3biz"
               ? "Sudah diputus (usaha)"
@@ -347,7 +347,7 @@ export default function AdminVisitrw3Antrian({
         description={
           lolosView === "belum"
             ? product === "rw3biz"
-              ? "Antrian izin jualan / usaha yang menunggu survey & keputusan admin."
+              ? "Antrian izin usaha yang menunggu persetujuan Ketua RW 03."
               : "Antrian ngontrak / ngekost ber-KTP luar RW 03. Penyewa ber-KTP RW 03 didata di Kependudukan, bukan di sini."
             : "Riwayat pengajuan yang sudah disetujui atau ditolak."
         }

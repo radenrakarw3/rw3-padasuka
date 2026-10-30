@@ -21,6 +21,11 @@ import {
   MODE_IDENTITAS, PRIORITAS_ADUAN, STATUS_ADUAN, STATUS_ADUAN_INFO, TINGKAT_TEGURAN, hitungPrioritas, kunciTeradu, nomorAduan,
   saranTingkatTeguran, type StatusAduan, type TingkatTeguran,
 } from "@shared/aduan";
+import {
+  notifyAduanDiterima,
+  notifyAduanPesanPublik,
+  notifyAduanStatus,
+} from "./wa-notify-aduan";
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const MAKS_ADUAN_PER_WA_HARI = 3;
@@ -142,7 +147,18 @@ export async function kirimAduan(raw: unknown) {
     return baru.id;
   });
   const { rows } = await pool.query(`SELECT nomor FROM aduan WHERE id = $1`, [id]);
-  return { nomor: rows[0].nomor as string, kodeLacak, pin, prioritas };
+  const nomor = rows[0].nomor as string;
+  if (wa) {
+    notifyAduanDiterima({
+      id,
+      nomor,
+      kodeLacak,
+      pin,
+      nomorWa: wa,
+      nama: v.pelaporNama,
+    });
+  }
+  return { nomor, kodeLacak, pin, prioritas };
 }
 
 async function kodeLacakUnik(): Promise<string> {
@@ -432,6 +448,11 @@ export async function ubahAduan(aktor: Aktor, id: number, raw: unknown) {
     }
     await c.query(`UPDATE aduan SET ${set.join(", ")} WHERE id = $1`, param);
   });
+  if (v.status && v.status !== a.status) {
+    notifyAduanStatus(a, v.status, v.pesanPublik);
+  } else if (v.pesanPublik?.trim() && (v.pesanPublik || null) !== a.pesan_publik) {
+    notifyAduanPesanPublik(a, v.pesanPublik);
+  }
   return detailAduan(aktor, id);
 }
 
@@ -467,13 +488,14 @@ const catatanSchema = z.object({
 
 export async function tambahCatatan(aktor: Aktor, id: number, raw: unknown) {
   const v = catatanSchema.parse(raw);
-  await ambilAduan(id);
+  const a = await ambilAduan(id);
   const foto = parseFoto(v.foto);
   await denganTransaksi(async (c) => {
     await simpanBukti(c, id, foto, "petugas");
     await catatTimeline(c, id, v.publik ? "pesan" : "catatan", v.publik ? `Pesan dari pengurus RW: ${v.isi}` : v.isi, v.publik, aktor.label);
     await c.query(`UPDATE aduan SET updated_at = now() WHERE id = $1`, [id]);
   });
+  if (v.publik) notifyAduanPesanPublik(a, v.isi);
   return detailAduan(aktor, id);
 }
 
@@ -488,6 +510,7 @@ export async function gabungkanAduan(aktor: Aktor, id: number, keNomor: string) 
     await catatTimeline(c, id, "status", `${STATUS_ADUAN_INFO.digabung.publik} (${induk.nomor}). Penanganan dilanjutkan pada aduan tersebut.`, true, aktor.label);
     await catatTimeline(c, induk.id, "gabung", `Aduan ${a.nomor} tentang hal yang sama digabungkan ke aduan ini.`, false, aktor.label);
   });
+  notifyAduanStatus(a, "digabung", `Digabung ke aduan ${induk.nomor}`);
   return detailAduan(aktor, id);
 }
 

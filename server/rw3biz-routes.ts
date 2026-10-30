@@ -344,7 +344,7 @@ export function registerRw3bizRoutes(app: Express) {
       const data = await getStatusByNomor(nomor);
       if (!data) return res.status(404).json({ message: "Nomor RW3BIZ tidak ditemukan" });
       const tarif = await loadTarif();
-      // Pembaruan yang masih menunggu survey memuat sumbangsih terbaru yang diajukan.
+      // Pembaruan yang masih menunggu persetujuan memuat sumbangsih terbaru yang diajukan.
       const sumber = data.pengajuan?.status === "menunggu_survey" ? data.pengajuan : data.usaha ?? data.pengajuan;
       const sumbangsih = parseSumbangsih(sumber?.sumbangsih);
       const rincian = sumbangsih ? null : parseRincianTersimpan(sumber?.rincianKontribusi);

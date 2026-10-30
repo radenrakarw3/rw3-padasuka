@@ -67,7 +67,7 @@ export function AturanRw3biz() {
         </ul>
       </div>
       <div className="space-y-1">
-        <p className="font-medium">Denda pelanggaran (aduan warga & temuan petugas)</p>
+        <p className="font-medium">Denda pelanggaran (aduan warga & temuan Ketua RW / Linmas)</p>
         <p className="text-xs">Denda = denda dasar jenis × tingkat × pengulangan dalam 12 bulan, paling banyak {formatRp(t.dendaMaks)}.</p>
         <ul className="space-y-0.5 text-xs">
           {(Object.keys(t.dendaPelanggaran) as Exclude<JenisPelanggaran, "lainnya">[]).map((j) => (
@@ -91,9 +91,12 @@ export function AturanRw3biz() {
       <div className="space-y-1">
         <p className="font-medium">Kemudahan</p>
         <ul className="list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
-          <li>Tenggang {t.tenggangHari} hari tiap bulan, tanpa denda. Boleh dicicil.</li>
+          <li>
+            Komitmen bulanan disetor paling lambat tanggal {1 + t.tenggangHari}: transfer BCA 1390997490 a.n. Raden Raka, atau
+            tunai dalam amplop diambil petugas RW + kwitansi. Tanpa denda keterlambatan; boleh dicicil atau dibayar di muka.
+          </li>
           <li>Sumbangsih boleh diubah saat memperbarui izin, atau ajukan lewat halaman cek status.</li>
-          <li>Keringanan sementara bagi lansia, disabilitas, penerima bansos, atau usaha yang sedang sepi — ajukan ke pengurus.</li>
+          <li>Keringanan sementara bagi lansia, disabilitas, penerima bansos, atau usaha yang sedang sepi — ajukan ke Ketua RW 03.</li>
         </ul>
       </div>
       <PenjelasanVoucher target={t.targetBulanan} />
@@ -111,7 +114,7 @@ export function PenjelasanVoucher({ target }: { target: number }) {
       </p>
       <ul className="list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
         <li>Voucher hanya bisa dibelanjakan di usaha RW3BIZ yang tertib menyetor sumbangsih (tidak menunggak).</li>
-        <li>Usaha yang menerima voucher menukarkannya ke pengurus dan dibayar penuh dari Kas RW 03.</li>
+        <li>Usaha yang menerima voucher menukarkannya ke Ketua RW 03 / bendahara dan dibayar penuh dari Kas RW 03.</li>
         <li>Jadi uang sumbangsih berputar lagi ke usaha di lingkungan sendiri, dan pencairannya tercatat di Kas RW.</li>
       </ul>
     </div>

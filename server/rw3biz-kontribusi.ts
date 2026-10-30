@@ -15,6 +15,7 @@ import {
 } from "@shared/schema";
 import { RW3BIZ_RT_NUMBERS } from "@shared/rt";
 import { tandaiRaziaSelesai } from "./rw3biz-razia";
+import { notifyRw3bizSetoran } from "./wa-notify-rw3biz";
 import {
   ASAL_ORANG_BIZ,
   JENIS_TEMPAT_BIZ,
@@ -489,7 +490,7 @@ export const bayarSchema = z.object({
 
 export async function bayarTagihan(tagihanId: number, input: z.infer<typeof bayarSchema>, admin: string) {
   const { jumlah, tanggal } = bayarSchema.parse(input);
-  return db.transaction(async (tx) => {
+  const hasil = await db.transaction(async (tx) => {
     const [row] = await tx
       .select({ tagihan: rw3bizTagihan, usaha: rw3bizUsaha })
       .from(rw3bizTagihan)
@@ -523,8 +524,30 @@ export async function bayarTagihan(tagihanId: number, input: z.infer<typeof baya
       .set({ terbayar, status: lunas ? "lunas" : "sebagian", tanggalBayar: tanggal, dicatatOleh: admin })
       .where(eq(rw3bizTagihan.id, tagihanId))
       .returning();
-    return { ...updated, pembayaranId: bayar.id, nomorKwitansi: nomorKwitansi(bayar.id, tanggal) };
+    const nomorKw = nomorKwitansi(bayar.id, tanggal);
+    return {
+      ...updated,
+      pembayaranId: bayar.id,
+      nomorKwitansi: nomorKw,
+      _notif: {
+        usaha,
+        jumlah,
+        periode: tagihan.periode,
+        pembayaranId: bayar.id,
+        nomorKwitansi: nomorKw,
+        tanggal,
+      },
+    };
   });
+  const { _notif, ...out } = hasil;
+  notifyRw3bizSetoran(_notif.usaha, {
+    jumlah: _notif.jumlah,
+    periode: _notif.periode,
+    pembayaranId: _notif.pembayaranId,
+    nomorKwitansi: _notif.nomorKwitansi,
+    tanggal: _notif.tanggal,
+  });
+  return out;
 }
 
 export async function batalkanPembayaran(tagihanId: number) {

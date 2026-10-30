@@ -81,10 +81,12 @@ export interface OpsiPdf {
   rata?: boolean;
   /** Gambar tanda tangan Ketua RW; hanya dibubuhkan pada dokumen terbit. */
   ttd?: { dataUrl: string; mime: string } | null;
+  /** Cap/stempel Ketua RW; dibubuhkan bersama TTD pada dokumen terbit. */
+  cap?: { dataUrl: string; mime: string } | null;
 }
 
 const KET_TTD_ELEKTRONIK =
-  "Dokumen ini ditandatangani secara elektronik oleh Ketua RW 03 melalui sistem RW 03. Pindai kode QR untuk memeriksa keaslian nomor, tanggal, penandatangan, dan status dokumen.";
+  "Dokumen ini ditandatangani dan dicap secara elektronik oleh Ketua RW 03 melalui sistem RW 03. Pindai kode QR untuk memeriksa keaslian nomor, tanggal, penandatangan, dan status dokumen.";
 
 class Penulis {
   doc = new jsPDF({ unit: "mm", format: [F4.w, F4.h], compress: true });
@@ -92,6 +94,7 @@ class Penulis {
   readonly lh: number;
   draft = false;
   gambarTtd: { dataUrl: string; format: "PNG" | "JPEG"; w: number; h: number } | null = null;
+  gambarCap: { dataUrl: string; format: "PNG" | "JPEG"; w: number; h: number } | null = null;
   qrData: string | null = null;
   qrTerpasang = false;
   constructor(
@@ -330,22 +333,36 @@ class Penulis {
     this.font();
   }
 
-  /** Tanda tangan Ketua RW di ruang tanda tangan; QR keaslian di kiri kolom bila muat (qrX), selain itu di bawah dokumen. */
+  /** Tanda tangan + cap Ketua RW di ruang tanda tangan; QR keaslian di kiri kolom bila muat (qrX), selain itu di bawah dokumen. */
   private bubuhkanTtd(cx: number, yAtas: number, maksW: number, maksH: number, qrX: number | null, ukuranQr: number) {
     if (this.draft) {
       this.doc.setTextColor(140);
       this.font("italic", 8);
-      this.doc.text("(tanda tangan & QR dibubuhkan saat terbit)", cx, yAtas + maksH / 2 + 1, { align: "center" });
+      this.doc.text("(tanda tangan, cap & QR dibubuhkan saat terbit)", cx, yAtas + maksH / 2 + 1, { align: "center" });
       this.doc.setTextColor(0);
       return;
     }
+    const cap = this.gambarCap;
     const g = this.gambarTtd;
+    if (cap) {
+      const sisi = Math.min(maksH, maksW * 0.7, 30);
+      const s = Math.min(sisi / cap.w, sisi / cap.h);
+      const w = cap.w * s;
+      const h = cap.h * s;
+      try {
+        const x = g ? cx - w * 0.55 : cx - w / 2;
+        this.doc.addImage(cap.dataUrl, cap.format, x, yAtas + (maksH - h) / 2, w, h);
+      } catch {
+        /* cap rusak: lanjut tanpa cap */
+      }
+    }
     if (g) {
       const s = Math.min(maksW / g.w, maksH / g.h);
       const w = g.w * s;
       const h = g.h * s;
       try {
-        this.doc.addImage(g.dataUrl, g.format, cx - w / 2, yAtas + (maksH - h) / 2, w, h);
+        const x = cap ? cx - w * 0.15 : cx - w / 2;
+        this.doc.addImage(g.dataUrl, g.format, x, yAtas + (maksH - h) / 2, w, h);
       } catch {
         /* gambar rusak: ruang tetap kosong untuk tanda tangan basah */
       }
@@ -419,6 +436,14 @@ export async function buatPdf(o: OpsiPdf): Promise<{ buffer: Buffer; halaman: nu
       p.gambarTtd = { dataUrl: o.ttd.dataUrl, format: o.ttd.mime === "image/jpeg" ? "JPEG" : "PNG", w: props.width, h: props.height };
     } catch {
       p.gambarTtd = null;
+    }
+  }
+  if (!o.draft && o.cap) {
+    try {
+      const props = p.doc.getImageProperties(o.cap.dataUrl);
+      p.gambarCap = { dataUrl: o.cap.dataUrl, format: o.cap.mime === "image/jpeg" ? "JPEG" : "PNG", w: props.width, h: props.height };
+    } catch {
+      p.gambarCap = null;
     }
   }
   if (!o.draft && o.verifikasiUrl) {

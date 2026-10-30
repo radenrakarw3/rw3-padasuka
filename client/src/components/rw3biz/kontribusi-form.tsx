@@ -17,7 +17,6 @@ import {
   OPERASIONAL_MALAM,
   OPERASIONAL_MALAM_LABEL,
   PERAN_ORANG_BIZ_LABEL,
-  PILIHAN_CEPAT_SUMBANGSIH,
   STATUS_TEMPAT_BIZ,
   STATUS_TEMPAT_BIZ_LABEL,
   SUMBANGSIH_MAKS_PER_PROGRAM,
@@ -25,6 +24,7 @@ import {
   turunkanOperasionalMalam,
   type PosAnggaran,
 } from "@shared/rw3biz-kontribusi";
+import { JANGKAR_SUMBANGSIH_DETAIL, teksBagianSayaRab } from "@shared/rw3biz-pernyataan";
 
 export const JENIS_TEMPAT_BIZ_OPTIONS = JENIS_TEMPAT_BIZ.map((v) => ({ value: v, label: JENIS_TEMPAT_BIZ_LABEL[v] }));
 
@@ -216,7 +216,7 @@ function PilihSelect({
   );
 }
 
-/** Data tempat & kendaraan usaha (perpanjang). Dicek pengurus saat survey; tidak menentukan sumbangsih. */
+/** Data tempat & kendaraan usaha (perpanjang). Diverifikasi Ketua RW saat menyetujui; tidak menentukan sumbangsih. */
 export function UsahaKontribusiFields({
   value: f,
   onChange,
@@ -236,7 +236,7 @@ export function UsahaKontribusiFields({
     <div className="space-y-4 rounded-xl border border-brand/20 bg-brand/5 p-4">
       <div>
         <p className="font-semibold text-sm">Tempat & kendaraan usaha</p>
-        <p className="text-xs text-muted-foreground">Isi sesuai keadaan sekarang. Pengurus mencocokkannya saat survey.</p>
+        <p className="text-xs text-muted-foreground">Isi sesuai keadaan sekarang. Ketua RW 03 dapat memverifikasi saat menyetujui.</p>
       </div>
       <div className="space-y-2">
         <Label>Status tempat usaha *</Label>
@@ -537,8 +537,10 @@ export function SumbangsihFields({
   tanpaPengantar?: boolean;
 }) {
   const { program, isLoading } = useProgramRw3();
+  const { data: tarif } = useTarifPublik();
   const total = totalIsianSumbangsih(value, program);
   const ubah = (id: string, n: number) => onChange({ ...value, [id]: n });
+  const target = tarif?.targetBulanan ?? 0;
 
   if (isLoading) return <Skeleton className="h-64 w-full rounded-xl" />;
   return (
@@ -549,13 +551,43 @@ export function SumbangsihFields({
             <HeartHandshake className="h-4 w-4 text-brand" /> Sumbangsih untuk program RW 03
           </p>
           <p className="text-muted-foreground">
-            Tidak ada tarif atau hitungan. Tulis sendiri berapa yang ingin Anda sumbangkan <b>setiap bulan</b> untuk program yang
-            ingin Anda dukung — boleh satu program atau beberapa.
+            Tidak ada tarif. Tulis sebesar kemampuan Anda <b>setiap bulan</b>. Setor lewat transfer{" "}
+            <b>BCA 1390997490 a.n. Raden Raka</b>, atau tunai dalam amplop — petugas RW mengambil sambil memberi kwitansi. Oknum di
+            luar saluran resmi berhak ditolak.
           </p>
         </div>
       )}
       <KebutuhanRw3 ringkas />
-      <p className="pt-1 text-sm font-semibold">Pilih program yang ingin Anda dukung:</p>
+      {target > 0 && (
+        <div className="space-y-2 rounded-xl border border-brand/30 bg-card p-3 text-xs leading-snug">
+          <p className="font-medium text-sm">Level sanggupan (bukan tarif)</p>
+          <p className="text-muted-foreground">{teksBagianSayaRab(target)}</p>
+          <p className="text-muted-foreground">Ketuk level — total dimasukkan ke program pertama; Anda bisa bagi ke 1–3 program.</p>
+          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+            {JANGKAR_SUMBANGSIH_DETAIL.map((j) => {
+              const aktif = total === j.nominal;
+              return (
+                <button
+                  key={j.nominal}
+                  type="button"
+                  onClick={() => {
+                    const pertama = program[0]?.id;
+                    if (!pertama) return;
+                    onChange({ [pertama]: j.nominal });
+                  }}
+                  className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+                    aktif ? "border-brand bg-brand text-white" : "bg-background hover:bg-muted"
+                  }`}
+                >
+                  <span className="block text-sm font-semibold tabular-nums">{j.labelPendek}/bulan</span>
+                  <span className={`block text-[11px] ${aktif ? "text-white/90" : "text-muted-foreground"}`}>{j.setara}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      <p className="pt-1 text-sm font-semibold">Rincian per program (utamakan 1–3):</p>
       {program.map((p) => {
         const n = value[p.id] ?? 0;
         return (
@@ -570,31 +602,22 @@ export function SumbangsihFields({
               )}
             </div>
             <InputRupiah value={n} onChange={(v) => ubah(p.id, v)} label={`Sumbangsih untuk ${p.label}`} />
-            <div className="flex flex-wrap gap-1.5">
-              {PILIHAN_CEPAT_SUMBANGSIH.map((cepat) => (
-                <button
-                  key={cepat}
-                  type="button"
-                  onClick={() => ubah(p.id, cepat)}
-                  className={`rounded-full border px-3 py-1.5 text-xs tabular-nums transition-colors ${
-                    n === cepat ? "border-brand bg-brand text-white" : "bg-background hover:bg-muted"
-                  }`}
-                >
-                  {formatRp(cepat)}
-                </button>
-              ))}
-              {n > 0 && (
-                <button type="button" onClick={() => ubah(p.id, 0)} className="rounded-full px-3 py-1.5 text-xs text-muted-foreground underline">
-                  Kosongkan
-                </button>
-              )}
-            </div>
+            {n > 0 && (
+              <button type="button" onClick={() => ubah(p.id, 0)} className="text-xs text-muted-foreground underline">
+                Kosongkan
+              </button>
+            )}
           </div>
         );
       })}
-      <div className="sticky bottom-2 z-10 flex items-baseline justify-between gap-2 rounded-xl border-2 border-brand/30 bg-card/95 p-3 shadow-md backdrop-blur">
-        <span className="text-sm font-medium">Jumlah sumbangsih</span>
-        <span className="text-lg font-bold tabular-nums text-brand">{formatRp(total)}/bulan</span>
+      <div className="sticky bottom-2 z-10 space-y-1 rounded-xl border-2 border-brand/30 bg-card/95 p-3 shadow-md backdrop-blur">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-sm font-medium">Jumlah sumbangsih</span>
+          <span className="text-lg font-bold tabular-nums text-brand">{formatRp(total)}/bulan</span>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Ini komitmen Anda setiap bulan paling lambat tanggal 1 — bukan sekali bayar.
+        </p>
       </div>
     </div>
   );
@@ -618,6 +641,9 @@ export function RingkasanSumbangsih({ items, catatan }: { items: { label: string
         <span className="font-semibold">Per bulan</span>
         <span className="text-xl font-bold tabular-nums text-brand">{formatRp(total)}</span>
       </div>
+      <p className="text-xs text-muted-foreground">
+        Komitmen setiap bulan paling lambat tanggal 1 — bukan sekali bayar.
+      </p>
       {catatan && <p className="text-xs text-muted-foreground">{catatan}</p>}
     </div>
   );

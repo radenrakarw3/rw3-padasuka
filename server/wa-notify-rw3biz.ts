@@ -1,6 +1,7 @@
 import { notifyWaSafe, sendWaIfConfigured } from "./wa-notify";
 import { normalizeStarSenderPhone } from "./starsender";
-import type { Rw3bizPengajuan, Rw3bizOrang } from "@shared/schema";
+import type { Rw3bizPengajuan, Rw3bizOrang, Rw3bizUsaha } from "@shared/schema";
+import { teksCaraSetor } from "@shared/rw3biz-pernyataan";
 
 const PUBLIC_SITE_URL = process.env.PUBLIC_SITE_URL?.trim() || "https://rw3padasukacimahi.org";
 const SENDER_LABEL = "KPP RW 03 Padasuka";
@@ -44,8 +45,8 @@ export function notifyRw3bizPengajuanBaru(
     await sendWaIfConfigured(
       kontak.nomorWa,
       `${salam(kontak.nama)}\n\n` +
-        `Pengajuan izin usaha RW3BIZ untuk *${pengajuan.namaUsaha}* (*${pengajuan.nomorBiz}*) sudah kami terima dan sedang *menunggu survey RW*.\n\n` +
-        `Tim RW akan datang untuk verifikasi. Pantau perkembangan di:\n${statusUrl}\n\n` +
+        `Pengajuan izin usaha RW3BIZ untuk *${pengajuan.namaUsaha}* (*${pengajuan.nomorBiz}*) sudah kami terima dan sedang *menunggu persetujuan Ketua RW 03*.\n\n` +
+        `Pantau perkembangan di:\n${statusUrl}\n\n` +
         `— ${SENDER_LABEL}`,
       {
         eventKey: `rw3biz:submitted:${pengajuan.id}:${normalizeStarSenderPhone(kontak.nomorWa)}`,
@@ -67,7 +68,7 @@ export function notifyRw3bizPerpanjang(pengajuan: Rw3bizPengajuan, nomorLama: st
         `Permohonan *perpanjangan* izin usaha RW3BIZ untuk *${pengajuan.namaUsaha}* sudah kami terima.\n\n` +
         `Nomor lama: *${nomorLama}*\n` +
         `Nomor antrian baru: *${pengajuan.nomorBiz}*\n` +
-        `Status: *menunggu survey RW*\n\n` +
+        `Status: *menunggu persetujuan Ketua RW 03*\n\n` +
         `Pantau perkembangan di:\n${statusUrl}\n\n` +
         `— ${SENDER_LABEL}`,
       {
@@ -79,26 +80,64 @@ export function notifyRw3bizPerpanjang(pengajuan: Rw3bizPengajuan, nomorLama: st
   });
 }
 
-export function notifyRw3bizDisetujui(pengajuan: Rw3bizPengajuan): void {
+export function notifyRw3bizDisetujui(pengajuan: Rw3bizPengajuan, usaha?: Rw3bizUsaha | null): void {
   notifyWaSafe(async () => {
     const kontak = pjKontak(pengajuan);
     if (!kontak) return;
     const berlaku = pengajuan.tanggalBerlakuSampai ? formatTanggalId(pengajuan.tanggalBerlakuSampai) : "-";
-    const statusUrl = siteUrl("/rw3biz/status");
-    const tipeLabel = pengajuan.tipe === "perpanjang" ? "Perpanjangan" : "Pengajuan";
+    const niu = usaha?.nomorInduk?.trim() || null;
+    const cekNomor = niu ?? pengajuan.nomorBiz;
+    const statusUrl = siteUrl(`/rw3biz/status?nomor=${encodeURIComponent(cekNomor)}`);
+    const tipeLabel = pengajuan.tipe === "perpanjang" ? "perpanjangan" : "pendaftaran";
     await sendWaIfConfigured(
       kontak.nomorWa,
       `${salam(kontak.nama)}\n\n` +
-        `*${tipeLabel} izin usaha RW3BIZ disetujui!*\n\n` +
-        `Usaha: *${pengajuan.namaUsaha}*\n` +
-        `Nomor: *${pengajuan.nomorBiz}*\n` +
+        `*Terima kasih — usaha Anda resmi menjadi bagian dari RW3BIZ!*\n\n` +
+        `${tipeLabel === "perpanjangan" ? "Perpanjangan" : "Pendaftaran"} *${pengajuan.namaUsaha}* telah disetujui Ketua RW 03.\n\n` +
+        (niu ? `Nomor Induk Usaha: *${niu}*\n` : "") +
+        `Nomor surat: *${pengajuan.nomorBiz}*\n` +
         `Berlaku sampai: *${berlaku}*\n\n` +
-        `Terima kasih atas kerja samanya. Cek detail di:\n${statusUrl}\n\n` +
+        `Kartu anggota & kwitansi setiap setoran ada di halaman status:\n${statusUrl}\n\n` +
+        `${teksCaraSetor(0)}\n\n` +
+        `Selamat bergabung di komunitas usaha RW 03. Semoga usaha makin berkah.\n\n` +
         `— ${SENDER_LABEL}`,
       {
         eventKey: `rw3biz:approved:${pengajuan.id}:${normalizeStarSenderPhone(kontak.nomorWa)}`,
         referenceType: "rw3biz_pengajuan",
         referenceId: pengajuan.id,
+      },
+    );
+  });
+}
+
+/** WA setelah setoran dicatat admin — tautan kwitansi. */
+export function notifyRw3bizSetoran(
+  usaha: Pick<Rw3bizUsaha, "id" | "namaUsaha" | "nomorInduk" | "nomorBiz" | "pjNomorWhatsapp" | "pjNama">,
+  opsi: { jumlah: number; periode: string; pembayaranId: number; nomorKwitansi: string; tanggal: string },
+): void {
+  notifyWaSafe(async () => {
+    const nomorWa = usaha.pjNomorWhatsapp?.trim();
+    if (!nomorWa) return;
+    const cekNomor = usaha.nomorInduk ?? usaha.nomorBiz;
+    const statusUrl = siteUrl(`/rw3biz/status?nomor=${encodeURIComponent(cekNomor)}`);
+    const kwUrl = siteUrl(`/api/public/rw3biz/kwitansi/${opsi.pembayaranId}?nomor=${encodeURIComponent(cekNomor)}`);
+    const rp = `Rp${opsi.jumlah.toLocaleString("id-ID")}`;
+    await sendWaIfConfigured(
+      nomorWa,
+      `${salam(usaha.pjNama)}\n\n` +
+        `Setoran RW3BIZ *${usaha.namaUsaha}* sudah dicatat.\n\n` +
+        `Jumlah: *${rp}*\n` +
+        `Periode: *${opsi.periode}*\n` +
+        `Tanggal: *${formatTanggalId(opsi.tanggal)}*\n` +
+        `Kwitansi: *${opsi.nomorKwitansi}*\n\n` +
+        `Unduh kwitansi:\n${kwUrl}\n\n` +
+        `Semua kwitansi juga ada di kartu anggota:\n${statusUrl}\n\n` +
+        `Terima kasih sudah menjadi bagian dari RW3BIZ.\n\n` +
+        `— ${SENDER_LABEL}`,
+      {
+        eventKey: `rw3biz:setoran:${opsi.pembayaranId}:${normalizeStarSenderPhone(nomorWa)}`,
+        referenceType: "rw3biz_pembayaran",
+        referenceId: opsi.pembayaranId,
       },
     );
   });

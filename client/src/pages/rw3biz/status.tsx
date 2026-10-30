@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { apiRequest, getApiErrorMessage, readJsonSafely } from "@/lib/queryClient";
 import { Download, FileText, Loader2, Printer, Receipt, RefreshCw, Search } from "lucide-react";
 import { StatusBadge, visitrw3StatusVariant } from "@/components/gov/status-badge";
-import { StatusTimeline, buildVisitrw3Timeline } from "@/components/gov/status-timeline";
+import { StatusTimeline, buildRw3bizTimeline } from "@/components/gov/status-timeline";
 import { EmptyState } from "@/components/gov/empty-state";
 import { FeatureExplain } from "@/components/gov/feature-explain";
 import { RW3BIZ_ROUTES } from "@/lib/rw3biz-routes";
@@ -116,48 +116,89 @@ function tglPanjang(iso: string) {
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
 }
 
-function KartuSurat({ s }: { s: RingkasSurat }) {
+function KartuSurat({
+  s,
+  tagihan = [],
+  nomorUsaha,
+}: {
+  s: RingkasSurat;
+  tagihan?: TagihanPublik[];
+  nomorUsaha: string;
+}) {
   const tidakBerlaku = Boolean(s.digantiOleh) || s.kedaluwarsa;
   const wajibPerbarui = !tidakBerlaku && s.sisaHari <= 14;
   const urlSurat = `/api/public/rw3biz/surat/${encodeURIComponent(s.nomor)}`;
+  const semuaKwitansi = tagihan.flatMap((t) =>
+    t.pembayaran.map((b) => ({ ...b, periode: t.periode })),
+  );
   return (
     <div className="space-y-3">
       <div
-        className="relative overflow-hidden rounded-2xl p-5 text-white shadow-lg border border-[hsl(40,55%,58%)]/50"
+        className="relative overflow-hidden rounded-2xl text-white shadow-lg border border-[hsl(40,55%,58%)]/50"
         style={{ background: "linear-gradient(135deg, hsl(163, 52%, 12%) 0%, hsl(163, 48%, 20%) 45%, hsl(163, 55%, 16%) 100%)" }}
       >
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <p className="text-[9px] uppercase tracking-[0.3em] text-[hsl(40,45%,72%)]">Surat izin usaha</p>
-            <p className="text-2xl font-extrabold leading-tight">
-              RW3<span className="text-[hsl(40,58%,68%)]">BIZ</span>
-            </p>
+        <div className="p-5">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="text-[9px] uppercase tracking-[0.3em] text-[hsl(40,45%,72%)]">Kartu anggota usaha</p>
+              <p className="text-2xl font-extrabold leading-tight">
+                RW3<span className="text-[hsl(40,58%,68%)]">BIZ</span>
+              </p>
+            </div>
+            <span
+              className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full ${
+                tidakBerlaku ? "bg-red-500/90" : wajibPerbarui ? "bg-amber-500/90" : "bg-emerald-500/80"
+              }`}
+            >
+              {s.digantiOleh ? "Diganti" : s.kedaluwarsa ? "Habis" : wajibPerbarui ? "Segera perbarui" : "Anggota aktif"}
+            </span>
           </div>
-          <span
-            className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full ${
-              tidakBerlaku ? "bg-red-500/90" : wajibPerbarui ? "bg-amber-500/90" : "bg-emerald-500/80"
-            }`}
-          >
-            {s.digantiOleh ? "Diganti" : s.kedaluwarsa ? "Habis" : wajibPerbarui ? "Segera perbarui" : "Berlaku"}
-          </span>
+          {s.nomorInduk && (
+            <div className="mt-3">
+              <p className="text-[9px] uppercase tracking-widest text-[hsl(40,45%,72%)]">Nomor Induk Usaha</p>
+              <p className="font-mono text-xl font-bold tracking-wide">{s.nomorInduk}</p>
+            </div>
+          )}
+          <p className="mt-1 text-sm">{s.namaUsaha}</p>
+          <p className="font-mono text-xs text-white/70">Surat No. {s.nomor}</p>
+          <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/15 pt-3">
+            <div>
+              <p className="text-[9px] uppercase tracking-widest text-[hsl(40,45%,72%)]">Terbit</p>
+              <p className="text-sm font-semibold">{tglPanjang(s.tanggalTerbit)}</p>
+            </div>
+            <div>
+              <p className="text-[9px] uppercase tracking-widest text-[hsl(40,45%,72%)]">Berlaku sampai ({s.terminBulan} bln)</p>
+              <p className="text-lg font-extrabold leading-tight">{tglPanjang(s.berlakuSampai)}</p>
+            </div>
+          </div>
         </div>
-        {s.nomorInduk && (
-          <div className="mt-3">
-            <p className="text-[9px] uppercase tracking-widest text-[hsl(40,45%,72%)]">Nomor Induk Usaha</p>
-            <p className="font-mono text-xl font-bold tracking-wide">{s.nomorInduk}</p>
-          </div>
-        )}
-        <p className="mt-1 text-sm">{s.namaUsaha}</p>
-        <p className="font-mono text-xs text-white/70">Surat No. {s.nomor}</p>
-        <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/15 pt-3">
-          <div>
-            <p className="text-[9px] uppercase tracking-widest text-[hsl(40,45%,72%)]">Terbit</p>
-            <p className="text-sm font-semibold">{tglPanjang(s.tanggalTerbit)}</p>
-          </div>
-          <div>
-            <p className="text-[9px] uppercase tracking-widest text-[hsl(40,45%,72%)]">Berlaku sampai ({s.terminBulan} bln)</p>
-            <p className="text-lg font-extrabold leading-tight">{tglPanjang(s.berlakuSampai)}</p>
-          </div>
+
+        <div className="border-t border-white/15 bg-black/20 px-5 py-3">
+          <p className="text-[9px] uppercase tracking-widest text-[hsl(40,45%,72%)]">Kwitansi setiap setoran</p>
+          {semuaKwitansi.length === 0 ? (
+            <p className="mt-1 text-xs text-white/75">
+              Belum ada setoran. Setelah transfer / amplop dicatat, kwitansi muncul di sini.
+            </p>
+          ) : (
+            <ul className="mt-2 max-h-40 space-y-1.5 overflow-y-auto text-xs">
+              {semuaKwitansi.map((b) => (
+                <li key={b.id}>
+                  <a
+                    href={`/api/public/rw3biz/kwitansi/${b.id}?nomor=${encodeURIComponent(nomorUsaha)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-2 rounded-lg bg-white/10 px-2.5 py-1.5 hover:bg-white/20"
+                  >
+                    <Receipt className="h-3.5 w-3.5 shrink-0 text-[hsl(40,58%,68%)]" />
+                    <span className="min-w-0 flex-1 truncate">
+                      {b.nomorKwitansi} · {labelPeriode(b.periode)}
+                    </span>
+                    <span className="shrink-0 tabular-nums font-semibold">{formatRp(b.jumlah)}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
 
@@ -190,7 +231,7 @@ function KartuSurat({ s }: { s: RingkasSurat }) {
         </Button>
       </Link>
       <p className="text-xs text-muted-foreground">
-        Salinan ini menyamarkan NIK. Surat asli bertanda tangan Ketua RW dapat diambil di sekretariat RW 03.
+        Kartu ini bukti usaha Anda bagian dari RW3BIZ. Setiap setoran otomatis muncul sebagai kwitansi di dalam kartu.
       </p>
     </div>
   );
@@ -298,16 +339,19 @@ export default function Rw3bizStatus() {
           <EmptyState icon={Search} title="Tidak ditemukan" description="Periksa kembali Nomor Induk Usaha atau nomor BIZ Anda." />
         )}
 
-        {data?.surat && <KartuSurat s={data.surat} />}
+        {data?.surat && <KartuSurat s={data.surat} tagihan={tagihan} nomorUsaha={nomorUsaha || data.surat.nomor} />}
 
         {pengajuan && (
           <div className="space-y-3 rounded-xl border bg-card p-4">
             <div className="flex flex-wrap items-center gap-2">
               <p className="font-mono font-bold">{pengajuan.nomorBiz}</p>
-              <StatusBadge variant={visitrw3StatusVariant(pengajuan.status)} />
+              <StatusBadge
+                variant={visitrw3StatusVariant(pengajuan.status)}
+                label={pengajuan.status === "menunggu_survey" ? "Menunggu persetujuan" : undefined}
+              />
               <span className="text-xs text-muted-foreground">{pengajuan.tipe === "perpanjang" ? "Pembaruan" : "Pendaftaran baru"}</span>
             </div>
-            <StatusTimeline steps={buildVisitrw3Timeline(pengajuan.status)} />
+            <StatusTimeline steps={buildRw3bizTimeline(pengajuan.status)} />
             <p className="text-sm font-medium">{pengajuan.namaUsaha}</p>
             <p className="text-xs text-muted-foreground">
               RT {String(pengajuan.rt).padStart(2, "0")} · PJ {pengajuan.pjNama}
@@ -324,7 +368,7 @@ export default function Rw3bizStatus() {
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <a href={`/api/public/rw3biz/formulir/${encodeURIComponent(pengajuan.nomorBiz)}`} target="_blank" rel="noreferrer">
                 <Button variant="outline" size="sm" className="w-full gap-1.5">
-                  <FileText className="w-4 h-4" /> Formulir pendaftaran
+                  <FileText className="w-4 h-4" /> Formulir komitmen
                 </Button>
               </a>
               <a href={`/api/public/rw3biz/pernyataan/${encodeURIComponent(pengajuan.nomorBiz)}`} target="_blank" rel="noreferrer">
@@ -340,7 +384,7 @@ export default function Rw3bizStatus() {
           <div className="space-y-2">
             <RingkasanSumbangsih
               items={kontribusi.sumbangsih}
-              catatan={kontribusi.final ? "Disepakati saat survey. Disetor tiap bulan ke Kas RW 03." : "Diajukan — dikonfirmasi pengurus saat survey."}
+              catatan={kontribusi.final ? "Komitmen bulanan. Transfer BCA 1390997490 a.n. Raden Raka tiap tgl 1, atau amplop tunai + kwitansi." : "Diajukan — menunggu persetujuan Ketua RW 03."}
             />
             {kontribusi.keringanan && (
               <p className="text-xs text-success">
@@ -354,7 +398,7 @@ export default function Rw3bizStatus() {
           <div className="space-y-3 rounded-xl border-2 border-brand/30 bg-card p-4">
             <div className="flex items-baseline justify-between gap-2">
               <p className="font-semibold text-sm">Kontribusi bulanan</p>
-              <span className="text-xs text-muted-foreground">{kontribusi.final ? "Ditetapkan setelah survey" : "Estimasi — menunggu survey"}</span>
+              <span className="text-xs text-muted-foreground">{kontribusi.final ? "Disetujui Ketua RW" : "Diajukan — menunggu persetujuan"}</span>
             </div>
             <RincianKontribusi hasil={kontribusi.hasil} />
             {kontribusi.final && kontribusi.bulanan !== kontribusi.hasil.total && (
@@ -476,7 +520,7 @@ export default function Rw3bizStatus() {
           <div className="space-y-2 rounded-xl border bg-card p-4">
             <p className="font-semibold text-sm">Catatan pelanggaran</p>
             <p className="text-xs text-muted-foreground">
-              Dari aduan warga yang terbukti atau temuan petugas. Pelanggaran berulang dalam 12 bulan dendanya makin besar.
+              Dari aduan warga yang terbukti atau temuan Ketua RW / Linmas. Pelanggaran berulang dalam 12 bulan dendanya makin besar.
             </p>
             <ul className="divide-y text-xs">
               {data!.pelanggaran!.map((p) => (

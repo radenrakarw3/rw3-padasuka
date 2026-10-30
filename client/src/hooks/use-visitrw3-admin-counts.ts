@@ -23,7 +23,7 @@ export function useVisitrw3AdminCounts(
     queryKey: [isBiz ? "/api/admin/rw3biz/pengajuan" : "/api/admin/visitrw3/pengajuan", "menunggu_survey", product],
     queryFn: async () => {
       const res = await fetch(path, { credentials: "include" });
-      if (!res.ok) throw new Error("Gagal memuat antrian survey");
+      if (!res.ok) throw new Error(isBiz ? "Gagal memuat antrian persetujuan" : "Gagal memuat antrian survey");
       return res.json();
     },
     staleTime: 30_000,

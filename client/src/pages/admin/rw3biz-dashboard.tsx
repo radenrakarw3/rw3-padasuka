@@ -266,7 +266,7 @@ export default function AdminRw3bizDashboard() {
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <Visitrw3StatCard
-              title="Menunggu survey"
+              title="Menunggu persetujuan"
               value={String(surveyMenunggu)}
               description="Pengajuan belum diproses"
               icon={ClipboardList}

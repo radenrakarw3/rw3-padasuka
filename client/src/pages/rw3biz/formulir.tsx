@@ -6,9 +6,22 @@ import { Rw3bizShell } from "@/components/rw3biz-shell";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlirF4, AreaCetak, GayaCetakF4, KopHemat, LembarF4 } from "@/components/cetak/lembar-f4";
+import { BlokTtdDuaKolom, kolomKetuaRw } from "@/components/cetak/ttd-ketua";
 import { useProgramRw3 } from "@/components/rw3biz/kontribusi-form";
 import { useTarifPublik } from "@/components/rw3biz/transparansi";
-import { PERNYATAAN_VERSI, PERWAL_RW, pasalPernyataanSumbangsih } from "@shared/rw3biz-pernyataan";
+import {
+  GARANSI_ANTI_OKNUM,
+  JANGKAR_SUMBANGSIH_DETAIL,
+  LABEL_REKENING_SUMBANGSIH,
+  MANFAAT_RINGKAS,
+  PERNYATAAN_VERSI,
+  PERWAL_RW,
+  REKOGNISI_USAHA_TERTIB,
+  pasalPernyataanSumbangsih,
+  tanggalSetorBulanan,
+  teksBagianSayaRab,
+  teksCaraSetor,
+} from "@shared/rw3biz-pernyataan";
 import { RW3BIZ_RT_NUMBERS } from "@shared/rt";
 import { RW3BIZ_ROUTES } from "@/lib/rw3biz-routes";
 import { IDENTITAS_RW } from "@shared/surat-sakti/identitas";
@@ -32,18 +45,30 @@ const TERMIN = ["1 bulan", "3 bulan", "6 bulan", "1 tahun"];
 
 const huruf = (pt: number): CSSProperties => ({ fontSize: `${pt}pt` });
 
-/** Kotak centang besar (5 mm) agar mudah ditandai pulpen. */
-function Pilih({ teks }: { teks: string }) {
+/** Kotak centang besar agar mudah ditandai pulpen. `padat` = hemat tinggi halaman 1. */
+function Pilih({ teks, padat = false }: { teks: string; padat?: boolean }) {
+  const s = padat ? 4.2 : 5;
   return (
-    <span className="mr-[5mm] inline-flex items-center gap-[1.5mm] whitespace-nowrap" style={{ lineHeight: "8mm" }}>
-      <span className="inline-block border-[1.5px] border-black" style={{ width: "5mm", height: "5mm" }} />
+    <span
+      className="mr-[4mm] inline-flex items-center gap-[1.2mm] whitespace-nowrap"
+      style={{ lineHeight: padat ? "6.5mm" : "8mm" }}
+    >
+      <span className="inline-block border-[1.5px] border-black" style={{ width: `${s}mm`, height: `${s}mm` }} />
       {teks}
     </span>
   );
 }
 
-/** Garis isian setinggi tulisan tangan (9 mm). */
-function Garis({ label, lebar = "100%", tinggi = 9 }: { label?: ReactNode; lebar?: string; tinggi?: number }) {
+/** Garis isian setinggi tulisan tangan. */
+function Garis({
+  label,
+  lebar = "100%",
+  tinggi = 9,
+}: {
+  label?: ReactNode;
+  lebar?: string;
+  tinggi?: number;
+}) {
   return (
     <span className="inline-flex items-end gap-[2mm] align-bottom" style={{ width: lebar, height: `${tinggi}mm` }}>
       {label && <span className="whitespace-nowrap">{label}</span>}
@@ -53,7 +78,9 @@ function Garis({ label, lebar = "100%", tinggi = 9 }: { label?: ReactNode; lebar
 }
 
 /** Kotak per angka (NIK, nomor WA, tanggal). */
-function KotakAngka({ jumlah, pisah = [] }: { jumlah: number; pisah?: number[] }) {
+function KotakAngka({ jumlah, pisah = [], padat = false }: { jumlah: number; pisah?: number[]; padat?: boolean }) {
+  const w = padat ? 5.6 : 6.2;
+  const h = padat ? 6.5 : 8;
   return (
     <span className="inline-flex items-center align-middle">
       {Array.from({ length: jumlah }).map((_, i) => (
@@ -61,7 +88,7 @@ function KotakAngka({ jumlah, pisah = [] }: { jumlah: number; pisah?: number[] }
           {pisah.includes(i) && <span className="px-[1mm] font-bold">–</span>}
           <span
             className="inline-block border border-black"
-            style={{ width: "6.2mm", height: "8mm", marginLeft: i && !pisah.includes(i) ? "-1px" : 0 }}
+            style={{ width: `${w}mm`, height: `${h}mm`, marginLeft: i && !pisah.includes(i) ? "-1px" : 0 }}
           />
         </span>
       ))}
@@ -69,226 +96,385 @@ function KotakAngka({ jumlah, pisah = [] }: { jumlah: number; pisah?: number[] }
   );
 }
 
-function Bagian({ huruf: h, judul, sub, children }: { huruf: string; judul: string; sub?: string; children: ReactNode }) {
+function Bagian({
+  huruf: h,
+  judul,
+  sub,
+  children,
+  padat = false,
+}: {
+  huruf: string;
+  judul: string;
+  sub?: string;
+  children: ReactNode;
+  padat?: boolean;
+}) {
   return (
-    <section className="jaga" style={{ marginTop: "3mm" }}>
-      <div className="flex items-center gap-[2mm] border-b-2 border-black" style={{ paddingBottom: "1mm", marginBottom: "1.5mm" }}>
-        <span className="inline-flex items-center justify-center bg-black font-bold text-white" style={{ width: "6.5mm", height: "6.5mm", ...huruf(12) }}>
+    <section className="jaga" style={{ marginTop: padat ? "2mm" : "3mm" }}>
+      <div
+        className="flex items-center gap-[2mm] border-b-2 border-black"
+        style={{ paddingBottom: "0.8mm", marginBottom: padat ? "1mm" : "1.5mm" }}
+      >
+        <span
+          className="inline-flex items-center justify-center bg-black font-bold text-white"
+          style={{ width: padat ? "5.5mm" : "6.5mm", height: padat ? "5.5mm" : "6.5mm", ...huruf(padat ? 11 : 12) }}
+        >
           {h}
         </span>
-        <span className="font-bold" style={huruf(12.5)}>{judul}</span>
-        {sub && <span style={huruf(9.5)}>{sub}</span>}
+        <span className="font-bold" style={huruf(padat ? 11.5 : 12.5)}>
+          {judul}
+        </span>
+        {sub && <span style={huruf(9)}>{sub}</span>}
       </div>
-      <div className="space-y-[1.2mm]" style={huruf(11)}>{children}</div>
+      <div className={padat ? "space-y-[0.6mm]" : "space-y-[1.2mm]"} style={huruf(padat ? 10 : 11)}>
+        {children}
+      </div>
     </section>
   );
 }
 
-function Baris({ no, children }: { no: number; children: ReactNode }) {
+function Baris({ no, children, padat = false }: { no: number; children: ReactNode; padat?: boolean }) {
   return (
     <div className="flex gap-[2mm]">
-      <span className="w-[6mm] shrink-0 font-bold" style={{ lineHeight: "9mm" }}>{no}.</span>
+      <span className="w-[5.5mm] shrink-0 font-bold" style={{ lineHeight: padat ? "7mm" : "9mm" }}>
+        {no}.
+      </span>
       <div className="min-w-0 flex-1">{children}</div>
     </div>
   );
 }
 
-function Halaman1({ qrSvg }: { qrSvg: string }) {
+function Halaman1({ qrSvg, target }: { qrSvg: string; target: number }) {
+  const g = 7.2; // tinggi garis isian halaman 1 (hemat agar tidak kepotong)
+  const lh = "7mm";
   return (
     <LembarF4>
       <KopHemat kecil />
-      <div className="flex items-start justify-between gap-[4mm]" style={{ marginTop: "2mm" }}>
+      <div className="flex items-start justify-between gap-[3mm]" style={{ marginTop: "1.5mm" }}>
         <div>
-          <p className="font-bold" style={huruf(16)}>FORMULIR PENDAFTARAN USAHA</p>
-          <p style={huruf(10.5)}>RW3BIZ · Izin usaha, warung, dan lapak di wilayah RW 03 Padasuka</p>
+          <p className="font-bold" style={{ ...huruf(12.5), lineHeight: 1.25 }}>
+            FORMULIR KOMITMEN PENGUSAHA
+          </p>
+          <p className="font-bold" style={{ ...huruf(10.5), lineHeight: 1.25 }}>
+            TERHADAP PROGRAM RW 03 PADASUKA
+          </p>
+          <p style={huruf(9)}>RW3BIZ · Izin usaha, warung, dan lapak di wilayah RW 03 Padasuka</p>
+          <p style={huruf(8.5)}>
+            Ditandatangani <b>Ketua RW 03</b> — {IDENTITAS_RW.ketua.nama}
+          </p>
         </div>
-        <div className="shrink-0 border-[1.5px] border-black" style={{ width: "56mm", padding: "1mm 2.5mm", ...huruf(9) }}>
-          <p className="font-bold">Diisi petugas</p>
-          <p style={{ lineHeight: "6.5mm" }}>No. BIZ: ............................</p>
-          <p style={{ lineHeight: "6.5mm" }}>Tgl terima: ........................</p>
+        <div className="shrink-0 border-[1.5px] border-black" style={{ width: "50mm", padding: "1mm 2mm", ...huruf(8.5) }}>
+          <p className="font-bold">Diterima Ketua RW 03</p>
+          <p style={{ lineHeight: "5.5mm" }}>No. BIZ: ........................</p>
+          <p style={{ lineHeight: "5.5mm" }}>Tgl terima: ....................</p>
         </div>
       </div>
 
-      <div className="flex items-center gap-[4mm] border border-dashed border-black" style={{ marginTop: "2mm", padding: "2mm 3mm" }}>
-        <ol className="flex-1 list-decimal space-y-[0.3mm] pl-[5mm]" style={huruf(10.5)}>
-          <li>Tulis dengan <b>HURUF KAPITAL</b> memakai pulpen.</li>
-          <li>Beri tanda <b>✓</b> pada kotak yang sesuai.</li>
-          <li>Lampirkan <b>fotokopi KTP</b> pemilik / penanggung jawab.</li>
-          <li>Serahkan ke pengurus RT/RW 03 atau sekretariat RW. Petugas akan datang untuk survey.</li>
+      <div className="jaga" style={{ marginTop: "1.5mm", border: "1.5px solid #000", padding: "1.5mm 2mm" }}>
+        <p className="font-bold" style={huruf(10)}>
+          Mengapa ikut berkontribusi?
+        </p>
+        <div className="grid grid-cols-2 gap-x-[3mm]" style={{ ...huruf(8.5), lineHeight: 1.25, marginTop: "0.5mm" }}>
+          {MANFAAT_RINGKAS.map((m) => (
+            <p key={m}>• {m}</p>
+          ))}
+        </div>
+        <p style={{ ...huruf(8.5), marginTop: "1mm", textAlign: "justify", lineHeight: 1.25 }}>
+          <b>Sumbangsih = komitmen tiap tanggal 1</b> (bukan sekali bayar). Tidak ada tarif — di halaman 2 centang level
+          sanggupan. Hanya ke <b>Ketua RW 03</b>. Detail RAB: {teksBagianSayaRab(target)}
+        </p>
+      </div>
+
+      <div className="flex items-center gap-[3mm] border border-dashed border-black" style={{ marginTop: "1.5mm", padding: "1.2mm 2mm" }}>
+        <ol className="flex-1 list-decimal space-y-[0.1mm] pl-[4.5mm]" style={{ ...huruf(9.5), lineHeight: 1.3 }}>
+          <li>
+            Tulis <b>HURUF KAPITAL</b> · centang kotak · lampirkan fotokopi KTP
+          </li>
+          <li>
+            Halaman 2: <b>level sanggupan</b> + rincian program (= komitmen tgl 1)
+          </li>
+          <li>
+            Serahkan ke <b>Ketua RW 03</b> ({IDENTITAS_RW.ketua.nama}) / sekretariat
+          </li>
         </ol>
-        <div className="flex shrink-0 items-center gap-[2mm]" style={huruf(8.5)}>
+        <div className="flex shrink-0 items-center gap-[1.5mm]" style={huruf(7.5)}>
           <div className="text-right leading-tight">
-            <p>Atau isi online,</p>
-            <p>scan kode ini:</p>
-            <p className="font-bold">{SITUS_PENDEK}</p>
-            <p className="font-bold">/rw3biz</p>
+            <p>Isi online:</p>
+            <p className="font-bold">{SITUS_PENDEK}/rw3biz</p>
           </div>
-          {qrSvg ? <div className="qr" style={{ width: "21mm", height: "21mm" }} dangerouslySetInnerHTML={{ __html: qrSvg }} /> : null}
+          {qrSvg ? <div className="qr" style={{ width: "16mm", height: "16mm" }} dangerouslySetInnerHTML={{ __html: qrSvg }} /> : null}
         </div>
       </div>
 
-      <Bagian huruf="A" judul="DATA USAHA">
-        <Baris no={1}><Garis label="Nama usaha:" /></Baris>
-        <Baris no={2}>
-          <p style={{ lineHeight: "9mm" }}>Jenis tempat usaha:</p>
-          <div style={huruf(10.5)}>
-            {JENIS_TEMPAT_BIZ.filter((j) => j !== "lainnya").map((j) => <Pilih key={j} teks={JENIS_TEMPAT_BIZ_LABEL[j]} />)}
-            <span className="inline-flex items-end" style={{ width: "62mm" }}><Pilih teks="Lainnya:" /><Garis /></span>
+      <Bagian huruf="A" judul="DATA USAHA" padat>
+        <Baris no={1} padat>
+          <Garis label="Nama usaha:" tinggi={g} />
+        </Baris>
+        <Baris no={2} padat>
+          <p style={{ lineHeight: lh }}>Jenis tempat usaha:</p>
+          <div style={huruf(9.5)}>
+            {JENIS_TEMPAT_BIZ.filter((j) => j !== "lainnya").map((j) => (
+              <Pilih key={j} teks={JENIS_TEMPAT_BIZ_LABEL[j]} padat />
+            ))}
+            <span className="inline-flex items-end" style={{ width: "55mm" }}>
+              <Pilih teks="Lainnya:" padat />
+              <Garis tinggi={g} />
+            </span>
           </div>
         </Baris>
-        <Baris no={3}>
-          <p style={{ lineHeight: "9mm" }}>Jenis dagangan / jasa <i style={huruf(9.5)}>(boleh lebih dari satu)</i>:</p>
-          <div className="grid grid-cols-3" style={huruf(10.5)}>
-            {KATEGORI_UMUM.map((k) => <Pilih key={k} teks={k} />)}
+        <Baris no={3} padat>
+          <p style={{ lineHeight: lh }}>
+            Jenis dagangan / jasa <i style={huruf(8.5)}>(boleh lebih dari satu)</i>:
+          </p>
+          <div className="grid grid-cols-3" style={huruf(9.5)}>
+            {KATEGORI_UMUM.map((k) => (
+              <Pilih key={k} teks={k} padat />
+            ))}
           </div>
-          <div className="flex items-end"><Pilih teks="Lainnya:" /><Garis lebar="72%" /></div>
+          <div className="flex items-end">
+            <Pilih teks="Lainnya:" padat />
+            <Garis lebar="70%" tinggi={g} />
+          </div>
         </Baris>
-        <Baris no={4}>
-          <Garis label="Alamat lokasi usaha:" />
-          <Garis />
+        <Baris no={4} padat>
+          <Garis label="Alamat lokasi usaha:" tinggi={g} />
           <div className="flex items-center gap-[1mm]">
-            <span className="mr-[2mm]" style={{ lineHeight: "9mm" }}>RT:</span>
-            {RW3BIZ_RT_NUMBERS.map((n) => <Pilih key={n} teks={String(n).padStart(2, "0")} />)}
-            <span style={{ lineHeight: "9mm" }}>/ RW 03</span>
+            <span className="mr-[2mm]" style={{ lineHeight: lh }}>
+              RT:
+            </span>
+            {RW3BIZ_RT_NUMBERS.map((n) => (
+              <Pilih key={n} teks={String(n).padStart(2, "0")} padat />
+            ))}
+            <span style={{ lineHeight: lh }}>/ RW 03</span>
           </div>
         </Baris>
-        <Baris no={5}><Garis label="Patokan / nomor lapak (bila ada):" /></Baris>
-        <Baris no={6}>
-          <div className="flex flex-wrap items-center gap-[2mm]" style={{ minHeight: "9mm" }}>
+        <Baris no={5} padat>
+          <Garis label="Patokan / nomor lapak (bila ada):" tinggi={g} />
+        </Baris>
+        <Baris no={6} padat>
+          <div className="flex flex-wrap items-center gap-[2mm]" style={{ minHeight: lh }}>
             <span>Jam buka:</span>
-            <KotakAngka jumlah={2} /><b>.</b><KotakAngka jumlah={2} />
+            <KotakAngka jumlah={2} padat />
+            <b>.</b>
+            <KotakAngka jumlah={2} padat />
             <span>s.d.</span>
-            <KotakAngka jumlah={2} /><b>.</b><KotakAngka jumlah={2} />
+            <KotakAngka jumlah={2} padat />
+            <b>.</b>
+            <KotakAngka jumlah={2} padat />
             <span>WIB</span>
-            <span style={huruf(9)}>(format 24 jam, contoh 07.00 s.d. 21.00)</span>
+            <span style={huruf(8)}>(24 jam, mis. 07.00–21.00)</span>
           </div>
         </Baris>
       </Bagian>
 
-      <Bagian huruf="B" judul="PEMILIK / PENANGGUNG JAWAB" sub="(cukup satu orang, data pegawai tidak perlu)">
-        <Baris no={7}>
-          <span style={{ lineHeight: "9mm" }}>Sebagai: </span>
-          <Pilih teks="Pemilik" />
-          <Pilih teks="Penanggung jawab" />
+      <Bagian huruf="B" judul="PEMILIK / PENANGGUNG JAWAB" sub="(satu orang)" padat>
+        <Baris no={7} padat>
+          <span style={{ lineHeight: lh }}>Sebagai: </span>
+          <Pilih teks="Pemilik" padat />
+          <Pilih teks="Penanggung jawab" padat />
         </Baris>
-        <Baris no={8}><Garis label="Nama lengkap (sesuai KTP):" /></Baris>
-        <Baris no={9}>
-          <div className="flex items-center gap-[3mm]" style={{ minHeight: "9mm" }}><span className="w-[40mm]">NIK (16 angka):</span><KotakAngka jumlah={16} /></div>
+        <Baris no={8} padat>
+          <Garis label="Nama lengkap (sesuai KTP):" tinggi={g} />
         </Baris>
-        <Baris no={10}>
-          <div className="flex flex-wrap items-center gap-[3mm]" style={{ minHeight: "9mm" }}>
-            <span className="w-[40mm]">Tgl lahir <span style={huruf(9)}>(tgl–bln–thn)</span>:</span>
-            <KotakAngka jumlah={8} pisah={[2, 4]} />
-            <span className="ml-[3mm]">Kelamin:</span>
-            <Pilih teks="Laki-laki" />
-            <Pilih teks="Perempuan" />
+        <Baris no={9} padat>
+          <div className="flex items-center gap-[2mm]" style={{ minHeight: lh }}>
+            <span className="w-[36mm]">NIK (16 angka):</span>
+            <KotakAngka jumlah={16} padat />
           </div>
         </Baris>
-        <Baris no={11}>
-          <div className="flex items-center gap-[3mm]" style={{ minHeight: "9mm" }}><span className="w-[40mm]">No. WhatsApp aktif:</span><KotakAngka jumlah={13} /></div>
+        <Baris no={10} padat>
+          <div className="flex flex-wrap items-center gap-[2mm]" style={{ minHeight: lh }}>
+            <span className="w-[36mm]">
+              Tgl lahir <span style={huruf(8)}>(tgl–bln–thn)</span>:
+            </span>
+            <KotakAngka jumlah={8} pisah={[2, 4]} padat />
+            <span className="ml-[2mm]">Kelamin:</span>
+            <Pilih teks="Laki-laki" padat />
+            <Pilih teks="Perempuan" padat />
+          </div>
         </Baris>
-        <Baris no={12}>
+        <Baris no={11} padat>
+          <div className="flex items-center gap-[2mm]" style={{ minHeight: lh }}>
+            <span className="w-[36mm]">No. WhatsApp aktif:</span>
+            <KotakAngka jumlah={13} padat />
+          </div>
+        </Baris>
+        <Baris no={12} padat>
           <div>
-            <span style={{ lineHeight: "9mm" }}>Tempat tinggal: </span>
-            <Pilih teks="Warga RW 03" />
-            <Pilih teks="Luar RW 03, alamat:" />
+            <span style={{ lineHeight: lh }}>Tempat tinggal: </span>
+            <Pilih teks="Warga RW 03" padat />
+            <Pilih teks="Luar RW 03, alamat:" padat />
           </div>
-          <Garis />
+          <Garis tinggi={g} />
         </Baris>
       </Bagian>
-      <p className="mt-auto text-right" style={huruf(9.5)}>Lanjut ke halaman 2 →</p>
+      <div
+        className="mt-auto jaga flex flex-col justify-end"
+        style={{ marginTop: "auto", paddingTop: "2mm", minHeight: "22mm" }}
+      >
+        <div
+          style={{
+            border: "1.5px solid #000",
+            padding: "2.5mm 3mm",
+            textAlign: "center",
+            ...huruf(10.5),
+            lineHeight: 1.4,
+          }}
+        >
+          <p className="font-bold" style={huruf(11)}>
+            Pengusaha yang bertransaksi di wilayah RW 03,
+          </p>
+          <p style={{ marginTop: "1mm" }}>
+            alangkah baiknya ikut berkontribusi juga untuk wilayah RW 03 — agar lingkungan usaha tetap aman, bersih, dan maju
+            bersama.
+          </p>
+        </div>
+        <p className="text-right" style={{ ...huruf(8.5), marginTop: "1.5mm" }}>
+          Lanjut ke halaman 2 →
+        </p>
+      </div>
     </LembarF4>
   );
 }
 
-function Halaman2({ program, target }: { program: PosAnggaran[]; target: number }) {
+function Halaman2({ program, target, tenggangHari }: { program: PosAnggaran[]; target: number; tenggangHari: number }) {
   const sel: CSSProperties = { border: "1px solid #000", padding: "1.5mm 2mm", verticalAlign: "middle" };
+  const tglSetor = tanggalSetorBulanan(tenggangHari);
   return (
     <AlirF4>
       <div className="flex items-baseline justify-between border-b border-black" style={{ paddingBottom: "1mm", ...huruf(9.5) }}>
-        <span className="font-bold">FORMULIR PENDAFTARAN USAHA RW3BIZ · halaman 2</span>
+        <span className="font-bold">FORMULIR KOMITMEN PENGUSAHA · RW3BIZ · halaman 2</span>
         <span>Nama usaha: ........................................................</span>
       </div>
 
       <Bagian huruf="C" judul="SUMBANGSIH UNTUK PROGRAM RW 03">
-        <p style={{ ...huruf(10.5), textAlign: "justify" }}>
-          <b>Tidak ada tarif.</b> Tuliskan sendiri berapa yang ingin Bapak/Ibu sumbangkan <b>setiap bulan</b> untuk program RW 03
-          yang ingin didukung — boleh satu atau beberapa. Contoh: kebersihan Rp10.000 + Linmas Rp10.000 = Rp20.000/bulan.
-          Sumbangsih disetor ke Kas RW 03 dengan kwitansi.
+        <div className="jaga" style={{ border: "2px solid #000", padding: "2mm 2.5mm", marginBottom: "2mm" }}>
+          <p className="font-bold" style={huruf(11)}>1. Centang level sanggupan Anda (bukan tarif — pilih satu)</p>
+          <p style={{ ...huruf(9), marginTop: "0.5mm", marginBottom: "1.5mm", textAlign: "justify" }}>
+            Bandingkan dengan omzet harian usaha Anda. Makin besar kemampuan, centang level yang lebih tinggi — atau isi “Lainnya”.
+          </p>
+          <div className="space-y-[1.5mm]">
+            {JANGKAR_SUMBANGSIH_DETAIL.map((j) => (
+              <div key={j.nominal} className="flex items-start gap-[2mm]" style={{ ...huruf(10.5), lineHeight: 1.3 }}>
+                <span className="mt-[0.5mm] inline-block shrink-0 border-[1.5px] border-black" style={{ width: "5mm", height: "5mm" }} />
+                <span>
+                  <b>{j.labelPendek}/bulan</b>
+                  <span style={huruf(9)}> — {j.setara}</span>
+                </span>
+              </div>
+            ))}
+            <div className="flex items-end gap-[2mm]" style={{ ...huruf(10.5), minHeight: "8mm" }}>
+              <span className="mb-[1mm] inline-block shrink-0 border-[1.5px] border-black" style={{ width: "5mm", height: "5mm" }} />
+              <span className="font-bold shrink-0">Lainnya / lebih besar:</span>
+              <span className="flex-1 border-b border-black" style={{ height: "7mm" }}>
+                <span className="pl-[1mm]">Rp</span>
+              </span>
+              <span className="shrink-0" style={huruf(9)}>/bulan</span>
+            </div>
+          </div>
+          <p style={{ ...huruf(9), marginTop: "1.5mm", textAlign: "justify", lineHeight: 1.3 }}>
+            <b>Bagian saya:</b> {teksBagianSayaRab(target)} {REKOGNISI_USAHA_TERTIB}
+          </p>
+        </div>
+
+        <p className="font-bold" style={{ ...huruf(10.5), marginBottom: "1mm" }}>
+          2. Rincian ke program (utamakan 1–3 program) — jumlah harus sama dengan level di atas
+        </p>
+        <p style={{ ...huruf(9.5), textAlign: "justify", marginBottom: "1.5mm" }}>
+          Manfaat: {MANFAAT_RINGKAS.join(" · ")} {teksCaraSetor(tenggangHari)}
         </p>
         <table className="w-full border-collapse" style={huruf(10.5)}>
           <thead>
             <tr style={{ background: "#eee" }}>
               <th style={{ ...sel, width: "8mm" }}>No</th>
               <th style={{ ...sel, textAlign: "left" }}>Program RW 03</th>
-              <th style={{ ...sel, width: "30mm" }}>Kebutuhan RW / bulan</th>
-              <th style={{ ...sel, width: "52mm" }}>Sumbangsih saya / bulan</th>
+              <th style={{ ...sel, width: "28mm" }}>Kebutuhan RW</th>
+              <th style={{ ...sel, width: "48mm" }}>Sumbangsih saya / bulan</th>
             </tr>
           </thead>
           <tbody>
             {program.map((p, i) => (
-              <tr key={p.id} style={{ height: "9.5mm" }}>
+              <tr key={p.id} style={{ height: "9mm" }}>
                 <td style={{ ...sel, textAlign: "center" }}>{i + 1}</td>
-                <td style={{ ...sel, lineHeight: 1.2 }}>
+                <td style={{ ...sel, lineHeight: 1.15 }}>
                   <span className="font-bold">{p.label}</span>
-                  {p.keterangan && <span style={huruf(8)}> — {p.keterangan}</span>}
+                  {p.keterangan && <span style={huruf(7.5)}> — {p.keterangan}</span>}
                 </td>
-                <td style={{ ...sel, textAlign: "right", ...huruf(9.5) }}>{formatRp(p.nominal)}</td>
+                <td style={{ ...sel, textAlign: "right", ...huruf(9) }}>{formatRp(p.nominal)}</td>
                 <td style={{ ...sel, verticalAlign: "bottom" }}>Rp</td>
               </tr>
             ))}
-            <tr style={{ height: "12mm" }}>
-              <td style={{ ...sel, textAlign: "right", fontWeight: 700 }} colSpan={2}>JUMLAH PER BULAN</td>
-              <td style={{ ...sel, textAlign: "right", fontWeight: 700, ...huruf(9.5) }}>{formatRp(target)}</td>
+            <tr style={{ height: "11mm" }}>
+              <td style={{ ...sel, textAlign: "right", fontWeight: 700 }} colSpan={2}>JUMLAH PER BULAN (= level di atas)</td>
+              <td style={{ ...sel, textAlign: "right", fontWeight: 700, ...huruf(9) }}>{formatRp(target)}</td>
               <td style={{ ...sel, verticalAlign: "bottom", fontWeight: 700, borderWidth: "2px" }}>Rp</td>
             </tr>
           </tbody>
         </table>
-        <p style={{ ...huruf(9.5), textAlign: "justify" }}>
-          Kebutuhan RW 03 <b>{formatRp(target * 12)}/tahun</b> ditanggung bersama secara gotong royong. Dasar:{" "}
-          <b>{PERWAL_RW.singkat} {PERWAL_RW.pasal}</b> (pembiayaan RW dari swadaya masyarakat).
+        <div
+          className="jaga"
+          style={{
+            marginTop: "2mm",
+            border: "2px solid #000",
+            padding: "2mm 2.5mm",
+            ...huruf(10),
+            textAlign: "justify",
+            fontWeight: 700,
+            lineHeight: 1.35,
+          }}
+        >
+          KOMITMEN: Jumlah di atas = janji setor <u>setiap bulan paling lambat tanggal {tglSetor}</u> — bukan sekali bayar.
+          <br />
+          <span style={{ fontWeight: 600 }}>
+            Transfer <b>{LABEL_REKENING_SUMBANGSIH}</b>, atau tunai dalam amplop — petugas RW mengambil sambil memberi kwitansi.
+          </span>
+        </div>
+        <p className="font-bold" style={{ ...huruf(9), marginTop: "1.5mm", textAlign: "justify", lineHeight: 1.3 }}>
+          {GARANSI_ANTI_OKNUM}
+        </p>
+        <p style={{ ...huruf(8.5), textAlign: "justify", marginTop: "1mm" }}>
+          Dasar: <b>{PERWAL_RW.singkat} {PERWAL_RW.pasal}</b> (swadaya — bukan pajak/retribusi). RAB{" "}
+          <b>{formatRp(target)}/bulan</b>.
         </p>
       </Bagian>
 
       <Bagian huruf="D" judul="MASA BERLAKU IZIN">
         <div>{TERMIN.map((t) => <Pilih key={t} teks={t} />)}</div>
-        <p style={huruf(9.5)}>Izin mulai berlaku sejak sumbangsih pertama diterima pengurus saat survey. Perpanjangan bisa lewat online.</p>
+        <p style={huruf(9.5)}>
+          Izin mulai berlaku sejak sumbangsih pertama diterima. Setelah itu setor setiap tanggal {tglSetor} ke{" "}
+          <b>{LABEL_REKENING_SUMBANGSIH}</b> atau amplop tunai berkwitansi. Perpanjangan bisa lewat online.
+        </p>
         <Garis label="Catatan (bila ada):" tinggi={8} />
       </Bagian>
 
       <Bagian huruf="E" judul="PERNYATAAN">
-        <p style={{ ...huruf(10.5), textAlign: "justify" }}>
-          Saya menyatakan data di atas benar, bersedia didatangi petugas survey, menaati tata tertib lingkungan RW 03, serta sanggup
-          menyetor sumbangsih yang saya tulis di atas setiap bulan ke Kas RW 03 sebagaimana <b>Surat Pernyataan Sumbangsih</b> pada
-          halaman berikutnya yang juga saya tanda tangani.
+        <p style={{ ...huruf(10), textAlign: "justify", lineHeight: 1.35 }}>
+          Saya menyatakan data di atas benar; mengerti manfaat berkontribusi bagi usaha saya; rela ikut menanggung program RW 03;
+          tidak menolak kontribusi resmi; mengerti garansi anti-oknum (hanya Ketua RW 03 / bendahara resmi); menaati tata tertib
+          lingkungan RW 03; serta berkomitmen menyetor sumbangsih di atas <b>setiap bulan paling lambat tanggal {tglSetor}</b> ke
+          Kas RW 03 sebagaimana <b>Surat Pernyataan Sumbangsih</b> (versi {PERNYATAAN_VERSI}) pada halaman berikutnya.
         </p>
-        <div className="flex justify-between" style={{ marginTop: "2mm", ...huruf(10.5) }}>
-          <div className="text-center" style={{ width: "46%" }}>
-            <p>{IDENTITAS_RW.tempat}, ........................ 20.....</p>
-            <p>Pemohon,</p>
-            <div style={{ height: "12mm" }} />
-            <p>(........................................................)</p>
-            <p style={huruf(8.5)}>tanda tangan & nama jelas</p>
-          </div>
-          <div className="text-center" style={{ width: "46%" }}>
-            <p>&nbsp;</p>
-            <p>Diterima pengurus RT/RW 03,</p>
-            <div style={{ height: "12mm" }} />
-            <p>(........................................................)</p>
-          </div>
-        </div>
+        <BlokTtdDuaKolom
+          kiri={{ atas: "Pemohon,", petunjuk: "tanda tangan & nama jelas" }}
+          kanan={kolomKetuaRw()}
+          tinggiRuang="20mm"
+        />
       </Bagian>
 
-      <div className="jaga" style={{ marginTop: "2mm", borderTop: "1.5px dashed #000", paddingTop: "1.5mm", ...huruf(10) }}>
+      <div className="jaga" style={{ marginTop: "3mm", borderTop: "1.5px dashed #000", paddingTop: "1.5mm", ...huruf(10) }}>
         <p className="text-center" style={huruf(8)}>✂ gunting di sini — bukti untuk pemohon</p>
-        <p className="font-bold" style={{ marginTop: "1mm" }}>BUKTI PENYERAHAN FORMULIR RW3BIZ <span className="font-normal">(diisi pengurus yang menerima)</span></p>
+        <p className="font-bold" style={{ marginTop: "1mm" }}>
+          BUKTI PENYERAHAN FORMULIR KOMITMEN RW3BIZ{" "}
+          <span className="font-normal">(diisi Ketua RW 03 — {IDENTITAS_RW.ketua.nama})</span>
+        </p>
         <div className="flex gap-[4mm]">
           <Garis label="Nama usaha:" lebar="55%" tinggi={8} />
           <Garis label="Diterima tgl:" lebar="25%" tinggi={8} />
           <Garis label="Paraf:" lebar="20%" tinggi={8} />
         </div>
         <p style={{ ...huruf(9), marginTop: "1mm" }}>
-          Nomor pendaftaran (BIZ-…) dikabarkan lewat WhatsApp. Cek status di <b>{SITUS_PENDEK}/rw3biz/status</b>.
+          Status: menunggu persetujuan Ketua RW. Nomor (BIZ-…) dikabarkan lewat WhatsApp. Cek di{" "}
+          <b>{SITUS_PENDEK}/rw3biz/status</b>.
         </p>
       </div>
     </AlirF4>
@@ -311,7 +497,7 @@ function DasarHukumCetak() {
             <span className="shrink-0">{a.no}</span>
             <div style={{ textAlign: "justify" }}>
               {a.teks}
-              {a.huruf?.map((h) => <p key={h} style={{ paddingLeft: "3mm", fontWeight: h.startsWith("a.") ? 700 : 400 }}>{h}</p>)}
+              {a.huruf?.map((h) => <p key={h} style={{ paddingLeft: "3mm", fontWeight: h.startsWith("c.") ? 700 : 400 }}>{h}</p>)}
             </div>
           </li>
         ))}
@@ -329,12 +515,35 @@ function DasarHukumCetak() {
 /** Surat Pernyataan Sumbangsih kosong untuk ditandatangani (isi pasal sama dengan versi online). */
 function HalamanPernyataan({ target, tenggangHari }: { target: number; tenggangHari: number }) {
   const pasal = pasalPernyataanSumbangsih({ total: null, tenggangHari, target });
+  const tglSetor = tanggalSetorBulanan(tenggangHari);
   return (
     <AlirF4>
       <KopHemat kecil />
       <div className="text-center" style={{ marginTop: "3mm" }}>
         <p className="font-bold underline" style={huruf(14)}>SURAT PERNYATAAN SUMBANGSIH</p>
         <p style={huruf(9.5)}>RW3BIZ · Sumbangsih usaha untuk program RW 03 · versi {PERNYATAAN_VERSI}</p>
+        <p style={{ ...huruf(9), marginTop: "1mm" }}>
+          PIHAK KEDUA: {IDENTITAS_RW.ketua.jabatan} — {IDENTITAS_RW.ketua.nama} · Setor tgl {tglSetor}: {LABEL_REKENING_SUMBANGSIH} / amplop + kwitansi
+        </p>
+      </div>
+      <div className="jaga" style={{ marginTop: "2mm", border: "1.5px solid #000", padding: "2mm 2.5mm" }}>
+        <p className="font-bold" style={huruf(10)}>Ringkasan manfaat &amp; bagian saya</p>
+        <ul className="list-disc pl-[5mm]" style={{ ...huruf(9), lineHeight: 1.3, marginTop: "1mm" }}>
+          {MANFAAT_RINGKAS.map((m) => (
+            <li key={m}>{m}</li>
+          ))}
+        </ul>
+        <p style={{ ...huruf(8.5), marginTop: "1mm", textAlign: "justify", lineHeight: 1.3 }}>{teksBagianSayaRab(target)}</p>
+        <ul className="list-none pl-0" style={{ ...huruf(8.5), marginTop: "1mm", lineHeight: 1.3 }}>
+          {JANGKAR_SUMBANGSIH_DETAIL.map((j) => (
+            <li key={j.nominal}>
+              <b>{j.labelPendek}/bulan</b> — {j.setara}
+            </li>
+          ))}
+        </ul>
+        <p className="font-bold" style={{ ...huruf(8.5), marginTop: "1.5mm", textAlign: "justify", lineHeight: 1.3 }}>
+          {GARANSI_ANTI_OKNUM}
+        </p>
       </div>
       <DasarHukumCetak />
       <div style={{ ...huruf(10.5), marginTop: "3mm" }}>
@@ -350,9 +559,9 @@ function HalamanPernyataan({ target, tenggangHari }: { target: number; tenggangH
           <Garis label="RT:" lebar="22%" />
         </div>
         <p style={{ marginTop: "2mm", textAlign: "justify" }}>
-          selanjutnya disebut <b>PIHAK PERTAMA</b>, dengan ini menyatakan kepada Pengurus Rukun Warga 03 Kelurahan Padasuka yang
-          diwakili oleh {IDENTITAS_RW.ketua.jabatan} (selanjutnya disebut <b>PIHAK KEDUA</b>; bersama-sama disebut <b>PARA PIHAK</b>),
-          hal-hal sebagai berikut:
+          selanjutnya disebut <b>PIHAK PERTAMA</b>, dengan ini menyatakan kepada {IDENTITAS_RW.ketua.jabatan}{" "}
+          ({IDENTITAS_RW.ketua.nama}) selaku <b>PIHAK KEDUA</b> (bersama-sama disebut <b>PARA PIHAK</b>), bahwa jumlah sumbangsih
+          pada formulir adalah <b>komitmen setiap bulan paling lambat tanggal {tglSetor}</b>, serta menyatakan hal-hal berikut:
         </p>
       </div>
       <div style={{ ...huruf(9.5), marginTop: "2mm", lineHeight: 1.4 }}>
@@ -365,26 +574,24 @@ function HalamanPernyataan({ target, tenggangHari }: { target: number; tenggangH
           </section>
         ))}
       </div>
-      <div className="jaga flex justify-between" style={{ marginTop: "5mm", ...huruf(10.5) }}>
-        <div className="text-center" style={{ width: "46%" }}>
-          <p>{IDENTITAS_RW.tempat}, ........................ 20.....</p>
-          <p className="font-bold">PIHAK PERTAMA,</p>
-          <div className="flex items-center justify-center" style={{ height: "24mm" }}>
-            <div className="border border-dashed border-gray-500 text-center text-gray-500" style={{ width: "24mm", padding: "2mm 1mm", ...huruf(7) }}>
-              Meterai Rp10.000<br />(bila diminta)
+      <BlokTtdDuaKolom
+        kiri={{
+          atas: "PIHAK PERTAMA,",
+          petunjuk: "tanda tangan & nama jelas",
+          ruang: (
+            <div
+              className="border border-dashed border-gray-500 text-center text-gray-500"
+              style={{ width: "24mm", padding: "2mm 1mm", ...huruf(7) }}
+            >
+              Meterai Rp10.000
+              <br />
+              (bila diminta)
             </div>
-          </div>
-          <p>(........................................................)</p>
-          <p style={huruf(8.5)}>tanda tangan & nama jelas</p>
-        </div>
-        <div className="text-center" style={{ width: "46%" }}>
-          <p>&nbsp;</p>
-          <p className="font-bold">PIHAK KEDUA,</p>
-          <p style={huruf(9)}>{IDENTITAS_RW.ketua.jabatan}</p>
-          <div style={{ height: "19mm" }} />
-          <p className="font-bold underline">{IDENTITAS_RW.ketua.nama}</p>
-        </div>
-      </div>
+          ),
+        }}
+        kanan={kolomKetuaRw({ atas: "PIHAK KEDUA," })}
+        tinggiRuang="24mm"
+      />
     </AlirF4>
   );
 }
@@ -401,16 +608,18 @@ export default function Rw3bizFormulir() {
   }, []);
 
   return (
-    <Rw3bizShell title="Formulir kertas" backHref={RW3BIZ_ROUTES.hub}>
+    <Rw3bizShell title="Formulir komitmen" backHref={RW3BIZ_ROUTES.hub}>
       <GayaCetakF4 />
       <div className="space-y-3 print:hidden">
         <p className="text-base">
-          Formulir pendaftaran usaha untuk diisi dengan <strong>tulisan tangan</strong>, beserta{" "}
-          <strong>Surat Pernyataan Sumbangsih</strong> yang ditandatangani. Cetak semua halaman (boleh bolak-balik), isi, lalu
-          serahkan ke pengurus RT/RW 03 beserta fotokopi KTP.
+          <strong>Formulir Komitmen Pengusaha terhadap Program RW 03 Padasuka</strong> — diisi dengan{" "}
+          <strong>tulisan tangan</strong>, beserta <strong>Surat Pernyataan Sumbangsih</strong>. Isinya memuat manfaat bagi
+          usaha, komitmen setor tanggal 1, dan ditandatangani hanya oleh pemohon +{" "}
+          <strong>Ketua RW 03 ({IDENTITAS_RW.ketua.nama})</strong> — tanpa petugas survey. Cetak semua halaman, isi, serahkan
+          ke Ketua RW 03 beserta fotokopi KTP.
         </p>
         <Button className="h-12 w-full gap-2 text-base" disabled={isLoading || !program.length} onClick={() => window.print()}>
-          <Printer className="h-5 w-5" /> Cetak formulir
+          <Printer className="h-5 w-5" /> Cetak formulir komitmen
         </Button>
         <p className="text-xs text-muted-foreground">
           Ukuran kertas <b>F4 / folio</b>. Bila printer hanya memakai A4, pilih <b>Sesuaikan ke halaman (Fit to page)</b> di
@@ -427,9 +636,9 @@ export default function Rw3bizFormulir() {
         <Skeleton className="h-96 w-full" />
       ) : (
         <AreaCetak>
-          <Halaman1 qrSvg={qrSvg} />
-          <Halaman2 program={program} target={target} />
-          <HalamanPernyataan target={target} tenggangHari={tarif?.tenggangHari ?? 10} />
+          <Halaman1 qrSvg={qrSvg} target={target} />
+          <Halaman2 program={program} target={target} tenggangHari={tarif?.tenggangHari ?? 0} />
+          <HalamanPernyataan target={target} tenggangHari={tarif?.tenggangHari ?? 0} />
         </AreaCetak>
       )}
     </Rw3bizShell>

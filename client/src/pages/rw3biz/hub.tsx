@@ -9,7 +9,7 @@ export default function Rw3bizHub() {
   return (
     <Rw3bizShell title="RW3BIZ" backHref="/">
       <p className="mb-4 text-base">
-        Izin <strong>usaha, warung, atau lapak</strong> di wilayah RW 03 Padasuka. Setelah disurvey pengurus,
+        Izin <strong>usaha, warung, atau lapak</strong> di wilayah RW 03 Padasuka. Setelah disetujui Ketua RW 03,
         usaha Anda mendapat nomor izin.
       </p>
       <p className="mb-2 flex items-center gap-2 text-sm font-semibold">
@@ -28,13 +28,18 @@ export default function Rw3bizHub() {
           href={RW3BIZ_ROUTES.formulir}
           icon={Printer}
           eyebrow="Cara 2"
-          title="Cetak formulir kertas"
-          description="Cetak, isi dengan tulisan tangan, lalu serahkan ke pengurus RT/RW."
+          title="Cetak formulir komitmen"
+          description="Formulir komitmen pengusaha terhadap program RW 03 — cetak, isi tangan, serahkan ke Ketua RW 03."
           variant="outline"
         />
       </div>
       <div className="mt-6 space-y-2">
-        <p className="text-sm font-semibold">Untuk apa sumbangsih usaha?</p>
+        <p className="text-sm font-semibold">Manfaat berkontribusi bagi usaha Anda</p>
+        <p className="text-sm text-muted-foreground">
+          Lingkungan aman &amp; bersih, izin resmi yang bisa dicek online, setoran berkwitansi (transfer BCA 1390997490 a.n.
+          Raden Raka atau amplop tunai diambil petugas), kelebihan kas bisa kembali sebagai voucher belanja warga di usaha yang
+          tertib — oknum di luar saluran resmi boleh ditolak dan dilaporkan.
+        </p>
         <KebutuhanRw3 ringkas />
       </div>
       <div className="mt-6 space-y-6">

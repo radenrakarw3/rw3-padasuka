@@ -147,7 +147,7 @@ export default function Rw3bizPerpanjang() {
           referenceValue={hasil.nomorInduk ?? hasil.nomorBiz}
           nextSteps={[
             `Nomor pengajuan pembaruan: ${hasil.nomorBiz}.`,
-            "Pengurus memeriksa data baru (bisa survey ulang) dan mengonfirmasi sumbangsih Anda.",
+            "Ketua RW 03 memeriksa data baru dan menyetujui sumbangsih Anda.",
             "Setelah disetujui, surat izin baru bisa dicetak dari halaman cek status.",
           ]}
           primaryAction={{ label: "Cek status", href: `${RW3BIZ_ROUTES.status}?nomor=${encodeURIComponent(hasil.nomorInduk ?? hasil.nomorBiz)}` }}

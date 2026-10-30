@@ -40,7 +40,7 @@ const VONIS: Record<VonisCek, { judul: string; kelas: string; icon: typeof Shiel
 
 const STATUS_PENGAJUAN: Record<string, { label: string; kelas: string }> = {
   disetujui: { label: "Disetujui", kelas: "bg-emerald-100 text-emerald-800" },
-  menunggu_survey: { label: "Menunggu survey", kelas: "bg-amber-100 text-amber-800" },
+  menunggu_survey: { label: "Menunggu keputusan", kelas: "bg-amber-100 text-amber-800" },
   ditolak: { label: "Ditolak", kelas: "bg-red-100 text-red-800" },
 };
 

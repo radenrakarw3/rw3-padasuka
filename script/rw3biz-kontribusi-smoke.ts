@@ -292,12 +292,21 @@ uji("parse konfigurasi rusak kembali ke default", () => {
 });
 
 uji("RAB tersimpan versi lama diganti RAB baru sekali; versi baru tidak ditimpa", () => {
-  const lama = parseTarifKontribusi(JSON.stringify({ targetBulanan: 5_000_000, posAnggaran: [{ id: "x", label: "Lama", nominal: 1 }] }));
+  const lama = parseTarifKontribusi(
+    JSON.stringify({ targetBulanan: 5_000_000, tenggangHari: 10, posAnggaran: [{ id: "x", label: "Lama", nominal: 1 }] }),
+  );
   assert.equal(lama.targetBulanan, 18_000_000);
   assert.equal(lama.posAnggaran.length, 10);
+  assert.equal(lama.tenggangHari, 0, "migrasi RAB: jatuh tempo default tanggal 1");
   const baru = parseTarifKontribusi(JSON.stringify({ ...lama, targetBulanan: 20_000_000, posAnggaran: [{ id: "x", label: "Admin", nominal: 1 }] }));
   assert.equal(baru.targetBulanan, 20_000_000);
   assert.equal(baru.posAnggaran[0].label, "Admin");
+});
+
+uji("default tenggangHari 0 → setor tanggal 1", () => {
+  assert.equal(tarif.tenggangHari, 0);
+  const custom = parseTarifKontribusi(JSON.stringify({ ...tarif, tenggangHari: 5 }));
+  assert.equal(custom.tenggangHari, 5);
 });
 
 uji("faktor penyesuaian dicari agar mencapai target", () => {

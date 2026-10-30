@@ -1281,13 +1281,16 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
           referenceValue={nomorHasil}
           nextSteps={[
             "Simpan nomor ini untuk cek status dan perpanjang nanti.",
-            "Admin RW akan melakukan survey kelengkapan data.",
             ...(product === "rw3biz"
               ? [
+                  "Pengajuan menunggu persetujuan Ketua RW 03.",
                   "Anda akan dihubungi lewat WhatsApp jika diperlukan klarifikasi.",
-                  "Sumbangsih yang Anda sanggupkan tampil di halaman cek status dan dikonfirmasi pengurus saat survey.",
+                  "Sumbangsih yang Anda sanggupkan adalah komitmen bulanan (paling lambat tanggal 1) dan tampil di halaman cek status.",
                 ]
-              : ["Setelah disetujui, Surat Izin Tinggal Sementara terbit — bisa dilihat & dicetak dari halaman cek status."]),
+              : [
+                  "Admin RW akan melakukan survey kelengkapan data.",
+                  "Setelah disetujui, Surat Izin Tinggal Sementara terbit — bisa dilihat & dicetak dari halaman cek status.",
+                ]),
           ]}
           primaryAction={{
             label: "Cek status",
@@ -1628,8 +1631,10 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
             </div>
           </div>
           <p className="text-xs text-muted-foreground -mt-2">
-            Format 24 jam (00:00–23:59), tanpa AM/PM. Petugas survey menyesuaikan kunjungan dengan jam buka.
-            {product === "rw3biz" && " Luas tempat, sampah, parkir, dan kendaraan usaha dicatat petugas saat survey."}
+            Format 24 jam (00:00–23:59), tanpa AM/PM.
+            {product === "rw3biz"
+              ? " Data tempat dan kendaraan dapat diverifikasi Ketua RW 03 saat menyetujui."
+              : " Petugas survey menyesuaikan kunjungan dengan jam buka."}
           </p>
           <PesanGalat pesan={errMsg} />
           <div className="flex gap-2">
@@ -1846,7 +1851,9 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                         }
                       />
                       <p className="text-xs text-muted-foreground">
-                        Pengurus mengabari hasil survey lewat nomor ini.
+                        {product === "rw3biz"
+                          ? "Ketua RW 03 mengabari hasil persetujuan lewat nomor ini."
+                          : "Pengurus mengabari hasil survey lewat nomor ini."}
                       </p>
                     </div>
                     <div className="space-y-2">
@@ -2173,7 +2180,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
             <>
               <RingkasanSumbangsih
                 items={ringkasSumbangsih}
-                catatan="Disetor tiap bulan ke Kas RW 03 dengan kwitansi, boleh dicicil. Bisa diubah saat survey atau saat memperbarui izin."
+                catatan="Komitmen setiap bulan paling lambat tanggal 1 ke Kas RW 03 dengan kwitansi; boleh dicicil. Bisa diubah saat memperbarui izin."
               />
               <div className="space-y-1">
                 <p className="text-sm font-semibold">Surat Pernyataan Sumbangsih</p>

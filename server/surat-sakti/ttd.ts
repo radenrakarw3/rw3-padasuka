@@ -8,6 +8,7 @@ import { catatAudit, WilayahError, type Aktor } from "../wilayah-auth";
 import { denganTransaksi } from "../wilayah-data";
 import { parseGambar } from "../visitrw3-dokumen";
 import { hanyaRw } from "./akses";
+import { capAktif } from "./cap";
 
 const MAKS_BYTES = 1_500_000;
 
@@ -22,6 +23,24 @@ export async function ttdAktif(): Promise<TtdAktif | null> {
   const { rows } = await pool.query(`SELECT id, mime, data, sha256 FROM wil_surat_ttd WHERE aktif ORDER BY id DESC LIMIT 1`);
   const r = rows[0];
   return r ? { id: r.id, mime: r.mime, dataUrl: `data:${r.mime};base64,${r.data}`, sha256: r.sha256 } : null;
+}
+
+/** Gambar TTD Ketua RW untuk dokumen publik (formulir cetak, PDF RW3BIZ) — tanpa metadata admin. */
+export async function ttdPublik(): Promise<{ ada: false } | { ada: true; gambar: string }> {
+  const t = await ttdAktif();
+  return t ? { ada: true, gambar: t.dataUrl } : { ada: false };
+}
+
+/** TTD + cap Ketua RW untuk dokumen/cetak publik. */
+export async function atributKetuaPublik(): Promise<{
+  ttd: { ada: false } | { ada: true; gambar: string };
+  cap: { ada: false } | { ada: true; gambar: string };
+}> {
+  const [t, c] = await Promise.all([ttdAktif(), capAktif()]);
+  return {
+    ttd: t ? { ada: true, gambar: t.dataUrl } : { ada: false },
+    cap: c ? { ada: true, gambar: c.dataUrl } : { ada: false },
+  };
 }
 
 export async function statusTtd(aktor: Aktor) {

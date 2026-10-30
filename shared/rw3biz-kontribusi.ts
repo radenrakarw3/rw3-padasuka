@@ -312,7 +312,7 @@ export type TarifKontribusi = {
 
 /** RAB RW 03 (Anggaran Penerimaan dan Pengeluaran RW, Perwal Cimahi 53/2021 Pasal 114 ayat 4). */
 export const POS_ANGGARAN_DEFAULT: PosAnggaran[] = [
-  { id: "insentif_pelayanan", label: "Insentif kinerja pelayanan", nominal: 1_500_000, keterangan: "Pengurus yang melayani surat, survey, izin, dan pendataan" },
+  { id: "insentif_pelayanan", label: "Insentif kinerja pelayanan", nominal: 1_500_000, keterangan: "Pelayanan surat, izin, dan pendataan oleh Ketua RW 03" },
   { id: "linmas_keamanan", label: "Linmas & keamanan", nominal: 3_000_000, keterangan: "Ronda malam, insentif Linmas, pos ronda, portal, CCTV" },
   { id: "kebersihan", label: "Kebersihan lingkungan (petugas sapu RW)", nominal: 2_000_000, keterangan: "Petugas sapu, angkut sampah, alat kebersihan" },
   { id: "operasional_rt", label: "Operasional 7 RT", nominal: 1_400_000, keterangan: "Rp200.000 per RT per bulan" },
@@ -325,7 +325,7 @@ export const POS_ANGGARAN_DEFAULT: PosAnggaran[] = [
 ];
 
 /** Naikkan bila POS_ANGGARAN_DEFAULT diganti: konfigurasi tersimpan versi lama ikut diperbarui sekali. */
-export const RAB_VERSI = 2;
+export const RAB_VERSI = 3;
 
 // ---------------------------------------------------------------- Sumbangsih program RW 03
 
@@ -336,7 +336,6 @@ export const RAB_VERSI = 2;
 export type SumbangsihProgram = { posId: string; label: string; nominal: number };
 
 export const SUMBANGSIH_MAKS_PER_PROGRAM = 10_000_000;
-export const PILIHAN_CEPAT_SUMBANGSIH = [5_000, 10_000, 25_000, 50_000];
 
 export function totalSumbangsih(list: { nominal: number }[]): number {
   return list.reduce((s, x) => s + Math.max(0, Math.round(Number(x.nominal) || 0)), 0);
@@ -441,7 +440,7 @@ export const TARIF_DEFAULT: TarifKontribusi = {
   transisiPersen: [50, 50, 75],
   bulanGratisUsahaBaru: 1,
   potonganTermin: { "1": 0, "3": 5, "6": 7, "12": 10 },
-  tenggangHari: 10,
+  tenggangHari: 0,
   posAnggaran: POS_ANGGARAN_DEFAULT,
   rabVersi: RAB_VERSI,
 };
@@ -533,7 +532,8 @@ export function parseTarifKontribusi(raw: string | null | undefined): TarifKontr
     transisiPersen,
     bulanGratisUsahaBaru: Math.min(12, Math.floor(angka(o.bulanGratisUsahaBaru, d.bulanGratisUsahaBaru))),
     potonganTermin,
-    tenggangHari: Math.min(28, Math.floor(angka(o.tenggangHari, d.tenggangHari))),
+    // RAB_VERSI naik: setor default tanggal 1 (tenggang 0). Setelah itu admin boleh ubah.
+    tenggangHari: rabLama ? d.tenggangHari : Math.min(28, Math.floor(angka(o.tenggangHari, d.tenggangHari))),
     posAnggaran,
     rabVersi: RAB_VERSI,
   };

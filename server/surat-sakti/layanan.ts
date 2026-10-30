@@ -17,6 +17,7 @@ import {
 } from "@shared/surat-sakti";
 import { buatPdf } from "./pdf";
 import { ttdAktif } from "./ttd";
+import { capAktif } from "./cap";
 import { hanyaRw, kondisiBacaRt, pastikanBoleh } from "./akses";
 
 export function situs(): string {
@@ -259,6 +260,7 @@ export async function terbitkan(aktor: Aktor, id: number) {
   hanyaRw(aktor);
   const ttd = await ttdAktif();
   if (!ttd) throw new WilayahError(400, "Tanda tangan Ketua RW belum diunggah. Unggah sekali di halaman Surat RW (bagian Tanda tangan Ketua RW), lalu terbitkan lagi.");
+  const cap = await capAktif();
   return denganTransaksi(async (c) => {
     const { rows } = await c.query(`SELECT * FROM surat_rw WHERE id = $1 FOR UPDATE`, [id]);
     const s = rows[0];
@@ -280,12 +282,18 @@ export async function terbitkan(aktor: Aktor, id: number) {
     const meta = { nomor, tanggal: s.tanggal_surat, perihal: s.perihal, draft: false, jumlahLampiran: lamp[0].n };
     const bloks = renderDokumen(jenis, data, meta, s.akses);
     const verifikasiUrl = `${situs()}/verify/surat/${token}`;
-    const { buffer, halaman } = await buatPdf({ bloks, nomor, draft: false, verifikasiUrl, judul: s.perihal, ttd });
+    const { buffer, halaman } = await buatPdf({ bloks, nomor, draft: false, verifikasiUrl, judul: s.perihal, ttd, cap });
     const sha = crypto.createHash("sha256").update(buffer).digest("hex");
     const snapshot = {
       format: 1, kode: jenis.kode, label: jenis.label, templateVersi: jenis.versi, meta, data, bloks,
       peringatan: v.peringatan, penerbit: aktor.label, diterbitkanPada: new Date().toISOString(), pdfSha256: sha,
-      penandatangan: { nama: IDENTITAS_RW.ketua.nama, jabatan: IDENTITAS_RW.ketua.jabatan, ttdId: ttd.id, ttdSha256: ttd.sha256 },
+      penandatangan: {
+        nama: IDENTITAS_RW.ketua.nama,
+        jabatan: IDENTITAS_RW.ketua.jabatan,
+        ttdId: ttd.id,
+        ttdSha256: ttd.sha256,
+        ...(cap ? { capId: cap.id, capSha256: cap.sha256 } : {}),
+      },
     };
     await c.query(
       `UPDATE surat_rw SET status = 'terbit', nomor_surat = $2, nomor_urut = $3, tahun_nomor = $4, diterbitkan_at = now(), updated_at = now(),
