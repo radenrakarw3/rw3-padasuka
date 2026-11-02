@@ -15,6 +15,7 @@ import { denganTransaksi, detailKeluarga, indukKeluarga, ringkasKeluarga, simpan
 import { registri, standarAktif } from "./wilayah-standar";
 import { HUBUNGAN_KELUARGA, isoTanggal, umurTahun, validasiNilaiFakta, type IsiUsulan } from "@shared/wilayah";
 import { looksLikeNik, normalizeNomorHp } from "@shared/kontak";
+import { notifyUsulanDikirim, notifyUsulanDiputuskan } from "./wa-notify-wilayah";
 
 const MASA_BERLAKU_HARI = 180;
 const ALFABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
@@ -389,20 +390,29 @@ export async function kirimUsulan(raw: string, body: unknown, ip: string) {
 
   const ipHash = crypto.createHmac("sha256", rahasia()).update(ip).digest("hex").slice(0, 32);
   const kodeTerima = acak(10);
-  return denganTransaksi(async (c) => {
+  const hasil = await denganTransaksi(async (c) => {
     await c.query(`UPDATE wil_usulan SET status = 'digantikan' WHERE kk_id = $1 AND status IN ('menunggu', 'klarifikasi')`, [t.kkId]);
     const { rows } = await c.query(
       `INSERT INTO wil_usulan (token_id, kk_id, rt, isi, idempotency_key, kode_terima, ip_hash)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
-       ON CONFLICT (idempotency_key) DO NOTHING RETURNING kode_terima`,
+       ON CONFLICT (idempotency_key) DO NOTHING RETURNING id, kode_terima`,
       [t.id, t.kkId, t.rt, JSON.stringify(d.isi), d.idempotencyKey, kodeTerima, ipHash],
     );
     if (!rows[0]) {
       const { rows: ada } = await c.query(`SELECT kode_terima FROM wil_usulan WHERE idempotency_key = $1`, [d.idempotencyKey]);
-      return { kodeTerima: ada[0].kode_terima as string, ulang: true };
+      return { kodeTerima: ada[0].kode_terima as string, ulang: true as const, id: undefined as number | undefined };
     }
-    return { kodeTerima: rows[0].kode_terima as string, ulang: false };
+    return { kodeTerima: rows[0].kode_terima as string, ulang: false as const, id: rows[0].id as number };
   });
+  if (!hasil.ulang && d.isi.nomorHp) {
+    notifyUsulanDikirim({
+      nomorHp: d.isi.nomorHp,
+      namaPengisi: d.isi.namaPengisi,
+      kodeTerima: hasil.kodeTerima,
+      usulanId: hasil.id,
+    });
+  }
+  return { kodeTerima: hasil.kodeTerima, ulang: hasil.ulang };
 }
 
 /** Status pengiriman berdasarkan kode tanda terima — tanpa isi data. */
@@ -482,7 +492,11 @@ export async function putuskanUsulan(aktor: Aktor, id: number, input: unknown) {
   const rt = aktor.rt;
   const d = putusanSchema.parse(input);
   const hasil = await denganTransaksi(async (c) => {
-    const { rows } = await c.query(`SELECT id, kk_id, rt, status FROM wil_usulan WHERE id = $1 FOR UPDATE`, [id]);
+    const { rows } = await c.query(
+      `SELECT id, kk_id, rt, status, kode_terima, isi->>'nomorHp' AS nomor_hp, isi->>'namaPengisi' AS nama_pengisi
+         FROM wil_usulan WHERE id = $1 FOR UPDATE`,
+      [id],
+    );
     const u = rows[0];
     if (!u || u.rt !== rt) throw new WilayahError(404, "Usulan tidak ditemukan");
     if (u.status !== "menunggu" && u.status !== "klarifikasi") throw new WilayahError(409, "Usulan ini sudah diputus atau digantikan kiriman baru");
@@ -492,10 +506,16 @@ export async function putuskanUsulan(aktor: Aktor, id: number, input: unknown) {
       if (kk[0]?.rt !== rt) throw new WilayahError(409, "KK sudah tidak berada di RT Anda");
     }
 
+    const kontak = {
+      nomorHp: (u.nomor_hp as string | null) ?? null,
+      namaPengisi: (u.nama_pengisi as string | null) ?? null,
+      kodeTerima: u.kode_terima as string,
+    };
+
     if (d.aksi !== "terima") {
       await c.query(`UPDATE wil_usulan SET status = $2, catatan_rt = $3, diputus_at = now(), diputus_oleh = $4 WHERE id = $1`, [id, d.aksi === "tolak" ? "ditolak" : "klarifikasi", d.catatan, aktor.label]);
       await catatAudit(aktor, `usulan_${d.aksi}`, "usulan", id, rt, null, { catatan: d.catatan }, c);
-      return { ok: true, diterapkan: 0 };
+      return { ok: true, diterapkan: 0, aksi: d.aksi as "tolak" | "klarifikasi", catatan: d.catatan, kontak };
     }
 
     if (!kkId) {
@@ -532,8 +552,18 @@ export async function putuskanUsulan(aktor: Aktor, id: number, input: unknown) {
     }
     await c.query(`UPDATE wil_usulan SET status = 'diterima', catatan_rt = $2, diputus_at = now(), diputus_oleh = $3 WHERE id = $1`, [id, d.catatan ?? null, aktor.label]);
     await catatAudit(aktor, "usulan_terima", "usulan", id, rt, null, { diterapkan: n }, c);
-    return { ok: true, diterapkan: n };
+    return { ok: true, diterapkan: n, aksi: "terima" as const, catatan: d.catatan ?? null, kontak };
   });
   if (hasil.diterapkan > 0) invalidateWarga();
-  return hasil;
+  if (hasil.kontak.nomorHp) {
+    notifyUsulanDiputuskan({
+      nomorHp: hasil.kontak.nomorHp,
+      namaPengisi: hasil.kontak.namaPengisi,
+      kodeTerima: hasil.kontak.kodeTerima,
+      usulanId: id,
+      aksi: hasil.aksi === "tolak" ? "tolak" : hasil.aksi === "klarifikasi" ? "klarifikasi" : "terima",
+      catatan: hasil.catatan,
+    });
+  }
+  return { ok: hasil.ok, diterapkan: hasil.diterapkan };
 }

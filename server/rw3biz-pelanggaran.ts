@@ -14,6 +14,11 @@ import {
   type TingkatPelanggaran,
 } from "@shared/rw3biz-kontribusi";
 import { loadTarif } from "./rw3biz-kontribusi";
+import {
+  notifyRw3bizAduanUsahaDiterima,
+  notifyRw3bizPelanggaranBayar,
+  notifyRw3bizPelanggaranTerbukti,
+} from "./wa-notify-rw3biz";
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const FOTO_REGEX = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
@@ -107,7 +112,16 @@ export async function ajukanAduan(raw: unknown, ip: string) {
       status: "menunggu_verifikasi",
     })
     .returning({ id: rw3bizPelanggaran.id });
-  return { id: row.id, nomorAduan: nomorAduan(row.id), namaUsaha: usaha?.namaUsaha ?? input.namaUsahaLain?.trim() ?? null };
+  const namaUsaha = usaha?.namaUsaha ?? input.namaUsahaLain?.trim() ?? "usaha di RW 03";
+  const nomor = nomorAduan(row.id);
+  notifyRw3bizAduanUsahaDiterima({
+    pelaporWa: wa,
+    pelaporNama: input.pelaporNama,
+    nomorAduan: nomor,
+    pelanggaranId: row.id,
+    namaUsaha,
+  });
+  return { id: row.id, nomorAduan: nomor, namaUsaha: usaha?.namaUsaha ?? input.namaUsahaLain?.trim() ?? null };
 }
 
 /** Daftar usaha aktif untuk dipilih pelapor (data yang memang tercantum di surat izin). */
@@ -182,9 +196,11 @@ async function tetapkan(id: number, o: z.infer<typeof verifikasiSchema>, admin: 
     return u;
   }
   const usahaId = o.usahaId ?? r.usahaId;
+  let usahaRow: typeof rw3bizUsaha.$inferSelect | null = null;
   if (usahaId) {
-    const [u] = await db.select({ id: rw3bizUsaha.id }).from(rw3bizUsaha).where(eq(rw3bizUsaha.id, usahaId));
+    const [u] = await db.select().from(rw3bizUsaha).where(eq(rw3bizUsaha.id, usahaId));
     if (!u) throw new Error("Usaha tidak ditemukan");
+    usahaRow = u;
   }
   const jenis = o.jenis ?? (r.jenis as JenisPelanggaran);
   if (jenis === "lainnya" && o.dasarManual == null && o.denda == null) throw new Error("Isi denda dasar untuk pelanggaran lainnya");
@@ -211,6 +227,16 @@ async function tetapkan(id: number, o: z.infer<typeof verifikasiSchema>, admin: 
     })
     .where(eq(rw3bizPelanggaran.id, id))
     .returning();
+  if (usahaRow) {
+    notifyRw3bizPelanggaranTerbukti(usahaRow, {
+      pelanggaranId: u.id,
+      nomorAduan: nomorAduan(u.id),
+      jenisLabel: labelJenis(jenis),
+      tingkatLabel: TINGKAT_PELANGGARAN_LABEL[o.tingkat],
+      denda,
+      tanggalKejadian: u.tanggalKejadian,
+    });
+  }
   return u;
 }
 
@@ -306,7 +332,7 @@ export const bayarDendaPelanggaranSchema = z.object({
 
 export async function bayarDendaPelanggaran(id: number, raw: unknown) {
   const { tanggal, pembayarNama } = bayarDendaPelanggaranSchema.parse(raw);
-  return db.transaction(async (tx) => {
+  const hasil = await db.transaction(async (tx) => {
     const [r] = await tx.select().from(rw3bizPelanggaran).where(eq(rw3bizPelanggaran.id, id)).for("update");
     if (!r) throw new Error("Pelanggaran tidak ditemukan");
     if (r.dendaStatus !== "belum") throw new Error("Denda tidak dalam status belum dibayar");
@@ -318,7 +344,7 @@ export async function bayarDendaPelanggaran(id: number, raw: unknown) {
         tipe: "pemasukan",
         kategori: KATEGORI_KAS_DENDA_PELANGGARAN,
         jumlah: r.denda,
-        keterangan: `Denda ${labelJenis(r.jenis).toLowerCase()} ${r.tanggalKejadian} (${nomorAduan(r.id)})${usaha ? ` — ${usaha.nomorInduk ?? usaha.nomorBiz} ${usaha.namaUsaha}` : r.namaUsahaLain ? ` — ${r.namaUsahaLain}` : ""}`,
+        keterangan: KATEGORI_KAS_DENDA_PELANGGARAN,
         tanggal,
         createdBy: "rw3biz-sistem",
       })
@@ -328,8 +354,20 @@ export async function bayarDendaPelanggaran(id: number, raw: unknown) {
       .set({ dendaStatus: "lunas", tanggalBayar: tanggal, pembayarNama: pembayar, kasRwId: kas.id })
       .where(eq(rw3bizPelanggaran.id, id))
       .returning();
-    return { ...u, fotoData: undefined, nomorKwitansi: nomorKwitansiPelanggaran(u.id, tanggal) };
+    return {
+      row: { ...u, fotoData: undefined, nomorKwitansi: nomorKwitansiPelanggaran(u.id, tanggal) },
+      usaha,
+    };
   });
+  if (hasil.usaha) {
+    notifyRw3bizPelanggaranBayar(hasil.usaha, {
+      pelanggaranId: hasil.row.id,
+      nomorKwitansi: hasil.row.nomorKwitansi,
+      jumlah: hasil.row.denda,
+      tanggal,
+    });
+  }
+  return hasil.row;
 }
 
 export async function batalBayarDendaPelanggaran(id: number) {

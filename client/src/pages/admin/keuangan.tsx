@@ -33,7 +33,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import type { KasRw } from "@shared/schema";
 
 const KATEGORI_CADANGAN = {
-  pemasukan: ["Kontribusi RW3BIZ", "Iuran Warga", "Donasi", "Sumbangan", "Lainnya"],
+  pemasukan: ["Kontribusi pengusaha", "Denda razia kendaraan", "Denda pelanggaran usaha", "Iuran Warga", "Donasi", "Sumbangan", "Lainnya"],
   pengeluaran: ["Lainnya"],
 };
 

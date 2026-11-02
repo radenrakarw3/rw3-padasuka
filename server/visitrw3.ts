@@ -641,10 +641,22 @@ export async function createPerpanjang(input: z.infer<typeof perpanjangSchema>) 
     .returning();
 
   const singgahId = pengajuan.wargaSinggahId ?? wsId;
+  let waTerkirim = false;
   if (singgahId) {
     const [ws] = await db.select().from(wargaSinggah).where(eq(wargaSinggah.id, singgahId)).limit(1);
     if (ws?.nomorWhatsapp) {
       notifyVisitrw3Perpanjang(pengajuan, nomor, ws.nomorWhatsapp, ws.namaLengkap);
+      waTerkirim = true;
+    }
+  }
+  if (!waTerkirim) {
+    const dewasa = await db
+      .select()
+      .from(visitrw3Penghuni)
+      .where(and(eq(visitrw3Penghuni.pengajuanId, pengajuan.id), eq(visitrw3Penghuni.isAnak, false)));
+    const denganWa = dewasa.find((p) => p.nomorWhatsapp?.trim());
+    if (denganWa?.nomorWhatsapp) {
+      notifyVisitrw3Perpanjang(pengajuan, nomor, denganWa.nomorWhatsapp, denganWa.namaLengkap);
     }
   }
 

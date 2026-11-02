@@ -188,13 +188,20 @@ export default function AdminRw3bizAntrian() {
       });
       return readJsonSafely(res);
     },
-    onSuccess: () => {
-      toast({ title: "Disetujui", description: "Usaha aktif, sumbangsih bulanan ditetapkan dan tagihan dibuat" });
+    onSuccess: (hasil: { setoranAwal?: { nomorKwitansi?: string } | null } | undefined) => {
+      const kw = hasil?.setoranAwal?.nomorKwitansi;
+      toast({
+        title: "Disetujui",
+        description: kw
+          ? `Usaha aktif, tagihan dibuat, setoran pertama dicatat · kwitansi ${kw}`
+          : "Usaha aktif, sumbangsih bulanan ditetapkan dan tagihan dibuat",
+      });
       setDetailId(null);
       queryClient.invalidateQueries({ queryKey: ["/api/admin/rw3biz/pengajuan"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/rw3biz/usaha"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/rw3biz/rab"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/rw3biz/tagihan"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/kas-rw"] });
     },
     onError: (e: unknown) =>
       toast({ title: "Gagal", description: getApiErrorMessage(e), variant: "destructive" }),

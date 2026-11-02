@@ -15,14 +15,21 @@ import {
 } from "@shared/schema";
 import { RW3BIZ_RT_NUMBERS } from "@shared/rt";
 import { tandaiRaziaSelesai } from "./rw3biz-razia";
-import { notifyRw3bizSetoran } from "./wa-notify-rw3biz";
+import {
+  notifyRw3bizKeberatanDiajukan,
+  notifyRw3bizKeberatanDitanggapi,
+  notifyRw3bizSetoran,
+} from "./wa-notify-rw3biz";
 import {
   ASAL_ORANG_BIZ,
   JENIS_TEMPAT_BIZ,
   KATEGORI_KAS_DENDA_PELANGGARAN,
   KATEGORI_KAS_DENDA_RAZIA,
   KATEGORI_KAS_KONTRIBUSI,
+  KATEGORI_KAS_KONTRIBUSI_LAMA,
   KATEGORI_KAS_VOUCHER,
+  keteranganKasKontribusi,
+  nomorInvoiceTagihan,
   KERINGANAN_JENIS,
   hitungSurplusVoucher,
   OPERASIONAL_MALAM,
@@ -467,11 +474,16 @@ export async function listTagihan(periode: string, status?: string) {
   return rows.map((r) => ({
     ...r.tagihan,
     catatan: parseCatatan(r.tagihan.catatan),
+    nomorInvoice: nomorInvoiceTagihan(r.tagihan.id, r.tagihan.periode),
     jatuhTempo: tempo,
     telat: (r.tagihan.status === "belum" || r.tagihan.status === "sebagian") && hariIni > tempo,
     usaha: r.usaha,
     pembayaran: bayar.get(r.tagihan.id) ?? [],
   }));
+}
+
+function isKategoriKontribusi(kategori: string): boolean {
+  return kategori === KATEGORI_KAS_KONTRIBUSI || kategori === KATEGORI_KAS_KONTRIBUSI_LAMA;
 }
 
 function parseCatatan(raw: string | null): string[] {
@@ -510,7 +522,7 @@ export async function bayarTagihan(tagihanId: number, input: z.infer<typeof baya
         tipe: "pemasukan",
         kategori: KATEGORI_KAS_KONTRIBUSI,
         jumlah,
-        keterangan: `${usaha.nomorInduk ?? usaha.nomorBiz} ${usaha.namaUsaha} — periode ${tagihan.periode}${lunas ? "" : " (cicilan)"}`,
+        keterangan: keteranganKasKontribusi(!lunas),
         tanggal,
         createdBy: "rw3biz-sistem",
       })
@@ -550,20 +562,70 @@ export async function bayarTagihan(tagihanId: number, input: z.infer<typeof baya
   return out;
 }
 
-export async function batalkanPembayaran(tagihanId: number) {
+/** Batalkan satu cicilan (`pembayaranId`) atau seluruh pembayaran tagihan. */
+export async function batalkanPembayaran(tagihanId: number, pembayaranId?: number) {
   return db.transaction(async (tx) => {
-    const bayar = await tx.select().from(rw3bizPembayaran).where(eq(rw3bizPembayaran.tagihanId, tagihanId));
+    const [tagihan] = await tx.select().from(rw3bizTagihan).where(eq(rw3bizTagihan.id, tagihanId)).for("update");
+    if (!tagihan) throw new Error("Tagihan tidak ditemukan");
+
+    const bayar = pembayaranId
+      ? await tx
+          .select()
+          .from(rw3bizPembayaran)
+          .where(and(eq(rw3bizPembayaran.tagihanId, tagihanId), eq(rw3bizPembayaran.id, pembayaranId)))
+      : await tx.select().from(rw3bizPembayaran).where(eq(rw3bizPembayaran.tagihanId, tagihanId));
+    if (!bayar.length) throw new Error("Pembayaran tidak ditemukan");
+
     const kasIds = bayar.map((b) => b.kasRwId).filter((x): x is number => x != null);
-    await tx.delete(rw3bizPembayaran).where(eq(rw3bizPembayaran.tagihanId, tagihanId));
+    const potong = bayar.reduce((s, b) => s + b.jumlah, 0);
+    for (const b of bayar) {
+      await tx.delete(rw3bizPembayaran).where(eq(rw3bizPembayaran.id, b.id));
+    }
     if (kasIds.length) await tx.delete(kasRw).where(inArray(kasRw.id, kasIds));
+
+    const terbayar = Math.max(0, tagihan.terbayar - potong);
+    const sisaBayar = await tx.select().from(rw3bizPembayaran).where(eq(rw3bizPembayaran.tagihanId, tagihanId));
+    const tanggalBayar = sisaBayar.length
+      ? sisaBayar.map((b) => b.tanggal).sort().at(-1) ?? null
+      : null;
+    const status =
+      tagihan.jumlah === 0
+        ? "dibebaskan"
+        : terbayar <= 0
+          ? "belum"
+          : terbayar >= tagihan.jumlah
+            ? "lunas"
+            : "sebagian";
     const [t] = await tx
       .update(rw3bizTagihan)
-      .set({ terbayar: 0, tanggalBayar: null, status: sql`CASE WHEN ${rw3bizTagihan.jumlah} = 0 THEN 'dibebaskan' ELSE 'belum' END` })
+      .set({ terbayar, tanggalBayar, status })
       .where(eq(rw3bizTagihan.id, tagihanId))
       .returning();
-    if (!t) throw new Error("Tagihan tidak ditemukan");
     return t;
   });
+}
+
+/**
+ * Setelah approve: catat lunas tagihan periode pertama (bulan tanggal setor)
+ * supaya Kas RW + kwitansi langsung terbentuk.
+ */
+export async function catatSetoranAwalUsaha(
+  usahaId: number,
+  tanggalBayar: string,
+  admin: string,
+): Promise<{ pembayaranId: number; nomorKwitansi: string; tagihanId: number } | null> {
+  const periode = tanggalBayar.slice(0, 7);
+  const [tagihan] = await db
+    .select()
+    .from(rw3bizTagihan)
+    .where(and(eq(rw3bizTagihan.usahaId, usahaId), eq(rw3bizTagihan.periode, periode)))
+    .limit(1);
+  if (!tagihan || tagihan.jumlah <= 0) return null;
+  if (tagihan.status === "lunas" || tagihan.status === "dibebaskan") return null;
+  const sisa = tagihan.jumlah - tagihan.terbayar;
+  if (sisa <= 0) return null;
+  const out = await bayarTagihan(tagihan.id, { jumlah: sisa, tanggal: tanggalBayar }, admin);
+  return { pembayaranId: out.pembayaranId, nomorKwitansi: out.nomorKwitansi, tagihanId: tagihan.id };
 }
 
 export async function bebaskanTagihan(tagihanId: number, alasan: string, admin: string) {
@@ -676,6 +738,7 @@ export async function ajukanKeberatan(input: z.infer<typeof keberatanPublikSchem
     .limit(1);
   if (masih) throw new Error("Masih ada pengajuan peninjauan yang menunggu tanggapan");
   const [row] = await db.insert(rw3bizKeberatan).values({ usahaId: usaha.id, alasan: p.alasan }).returning();
+  notifyRw3bizKeberatanDiajukan(usaha, row.id);
   return row;
 }
 
@@ -712,6 +775,14 @@ export async function tanggapiKeberatan(id: number, input: z.infer<typeof tangga
     .where(and(eq(rw3bizKeberatan.id, id), eq(rw3bizKeberatan.status, "menunggu")))
     .returning();
   if (!row) throw new Error("Keberatan tidak ditemukan atau sudah ditanggapi");
+  const [usaha] = await db.select().from(rw3bizUsaha).where(eq(rw3bizUsaha.id, row.usahaId)).limit(1);
+  if (usaha) {
+    notifyRw3bizKeberatanDitanggapi(usaha, {
+      keberatanId: row.id,
+      status: p.status,
+      tanggapan: p.tanggapan,
+    });
+  }
   return row;
 }
 
@@ -736,10 +807,10 @@ export async function rabBulan(periode: string) {
 
   const kas = await kasBulan(periode);
   const realisasiKontribusi = kas
-    .filter((k) => k.tipe === "pemasukan" && k.kategori === KATEGORI_KAS_KONTRIBUSI)
+    .filter((k) => k.tipe === "pemasukan" && isKategoriKontribusi(k.kategori))
     .reduce((s, k) => s + k.jumlah, 0);
   const pemasukanLain = kas
-    .filter((k) => k.tipe === "pemasukan" && k.kategori !== KATEGORI_KAS_KONTRIBUSI)
+    .filter((k) => k.tipe === "pemasukan" && !isKategoriKontribusi(k.kategori))
     .reduce((s, k) => s + k.jumlah, 0);
   const voucher = ringkasVoucher(kas, tarif.targetBulanan);
   const pengeluaran = kas.filter((k) => k.tipe === "pengeluaran");
@@ -845,7 +916,7 @@ export async function transparansiPublik(periode: string) {
   const tarif = await loadTarif();
   const kas = await kasBulan(periode);
   const masuk = kas
-    .filter((k) => k.tipe === "pemasukan" && k.kategori === KATEGORI_KAS_KONTRIBUSI)
+    .filter((k) => k.tipe === "pemasukan" && isKategoriKontribusi(k.kategori))
     .reduce((s, k) => s + k.jumlah, 0);
   const [{ n }] = await db
     .select({ n: sql<number>`count(*)::int` })
@@ -870,7 +941,7 @@ export async function transparansiPublik(periode: string) {
 function ringkasVoucher(kas: { tipe: string; kategori: string; jumlah: number }[], target: number) {
   const jumlah = (tipe: string, kategori: string[]) =>
     kas.filter((k) => k.tipe === tipe && kategori.includes(k.kategori)).reduce((s, k) => s + k.jumlah, 0);
-  const kontribusi = jumlah("pemasukan", [KATEGORI_KAS_KONTRIBUSI]);
+  const kontribusi = jumlah("pemasukan", [KATEGORI_KAS_KONTRIBUSI, KATEGORI_KAS_KONTRIBUSI_LAMA]);
   const denda = jumlah("pemasukan", [KATEGORI_KAS_DENDA_RAZIA, KATEGORI_KAS_DENDA_PELANGGARAN]);
   const { terkumpul, surplus } = hitungSurplusVoucher({ kontribusi, denda, target });
   return { kontribusi, denda, terkumpul, surplus, tersalur: jumlah("pengeluaran", [KATEGORI_KAS_VOUCHER]) };
@@ -901,6 +972,7 @@ export async function tagihanUntukUsaha(usahaId: number) {
       terbayar: t.terbayar,
       status: t.status,
       catatan: parseCatatan(t.catatan),
+      nomorInvoice: nomorInvoiceTagihan(t.id, t.periode),
       jatuhTempo: tempo,
       telat: (t.status === "belum" || t.status === "sebagian") && hariIni > tempo,
       pembayaran: bayar.get(t.id) ?? [],

@@ -18,10 +18,13 @@ import {
   notifyUsahaDisetujui,
   notifyUsahaDitolak,
   notifyUsahaStikerPerpanjang,
+  notifyUsahaSurveySelesai,
+  notifyVisitrw3KontrakDiperpanjangAdmin,
   ensureWaNotifikasiSchema,
   logWaStartupStatus,
   startVisitrw3ReminderScheduler,
 } from "./wa-notify";
+import { startRw3bizReminderScheduler } from "./wa-notify-rw3biz";
 import { buildKependudukanStats } from "./kependudukan-stats";
 import { daftarStatistikWarga, statistikWarga } from "./statistik-warga";
 import { startSinkronUmurScheduler } from "./sinkron-umur";
@@ -126,6 +129,7 @@ export async function registerRoutes(
   });
   logWaStartupStatus();
   startVisitrw3ReminderScheduler();
+  startRw3bizReminderScheduler();
   startSinkronUmurScheduler();
 
   const isProduction = process.env.NODE_ENV === "production";
@@ -934,6 +938,7 @@ Isi dokumen tidak ditampilkan di sini.</p></div></div></body></html>`);
       }
       const result = await storage.perpanjangKontrak(id, tanggalMulaiBaru, tanggalHabisBaru);
       if (!result) return res.status(404).json({ message: "Warga singgah tidak ditemukan" });
+      notifyVisitrw3KontrakDiperpanjangAdmin(result);
       invalidateVisitrw3Dashboard();
       res.json(result);
     } catch (error: any) {
@@ -1052,6 +1057,8 @@ Isi dokumen tidak ditampilkan di sini.</p></div></div></body></html>`);
       const surveyData = { ...req.body, usahaId };
       const survey = await storage.createSurveyUsaha(surveyData);
       await storage.updateUsahaStatus(usahaId, "survey");
+      const updated = await storage.getUsahaById(usahaId);
+      if (updated) notifyUsahaSurveySelesai(updated);
       res.json(survey);
     } catch (error: any) {
       res.status(500).json({ message: error.message });

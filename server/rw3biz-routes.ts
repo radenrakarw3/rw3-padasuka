@@ -519,7 +519,11 @@ export function registerRw3bizRoutes(app: Express) {
 
   app.post("/api/admin/rw3biz/tagihan/:id/batal", requireAdmin, async (req, res) => {
     try {
-      res.json(await batalkanPembayaran(idParam(req.params.id)));
+      const pembayaranId = req.body?.pembayaranId != null ? Number(req.body.pembayaranId) : undefined;
+      if (pembayaranId != null && (!Number.isFinite(pembayaranId) || pembayaranId <= 0)) {
+        return res.status(400).json({ message: "pembayaranId tidak valid" });
+      }
+      res.json(await batalkanPembayaran(idParam(req.params.id), pembayaranId));
     } catch (error: unknown) {
       res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal membatalkan pembayaran") });
     }

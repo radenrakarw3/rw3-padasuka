@@ -97,7 +97,10 @@ export const KERINGANAN_JENIS_LABEL: Record<KeringananJenis, string> = {
   lainnya: "Alasan lain",
 };
 
-export const KATEGORI_KAS_KONTRIBUSI = "Kontribusi RW3BIZ";
+/** Kategori Kas RW untuk setoran sumbangsih — tanpa identitas per usaha. */
+export const KATEGORI_KAS_KONTRIBUSI = "Kontribusi pengusaha";
+/** Nama lama (pra-rename); dipakai backfill & filter agregat. */
+export const KATEGORI_KAS_KONTRIBUSI_LAMA = "Kontribusi RW3BIZ";
 
 export type KodeKendaraanBiz = "kendaraanMotor" | "kendaraanMobil" | "kendaraanKolbak" | "kendaraanTruk" | "kendaraanTrukBesar";
 
@@ -370,6 +373,16 @@ export function parseSumbangsih(raw: string | null | undefined): SumbangsihProgr
 /** Nomor kwitansi tetap dari id pembayaran: KW/RW03/BIZ/2026/00012. */
 export function nomorKwitansi(pembayaranId: number, tanggal: string): string {
   return `KW/RW03/BIZ/${tanggal.slice(0, 4)}/${String(pembayaranId).padStart(5, "0")}`;
+}
+
+/** Nomor tagihan/invoice (belum / sudah bayar): TG/RW03/BIZ/202610/00012. */
+export function nomorInvoiceTagihan(tagihanId: number, periode: string): string {
+  return `TG/RW03/BIZ/${periode.replace("-", "")}/${String(tagihanId).padStart(5, "0")}`;
+}
+
+/** Keterangan Kas RW untuk setoran — hanya kategori, tanpa nama/NIU usaha. */
+export function keteranganKasKontribusi(cicilan: boolean): string {
+  return cicilan ? "Kontribusi pengusaha (cicilan)" : "Kontribusi pengusaha";
 }
 
 const NAMA_BULAN_ID = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];

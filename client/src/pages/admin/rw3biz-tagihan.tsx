@@ -60,6 +60,7 @@ type TagihanRow = {
   terbayar: number;
   status: string;
   catatan: string[];
+  nomorInvoice?: string;
   tanggalBayar: string | null;
   jatuhTempo: string;
   telat: boolean;
@@ -199,7 +200,7 @@ export default function AdminRw3bizTagihan() {
     onSuccess: (hasil) => {
       toast({
         title: "Pembayaran dicatat",
-        description: `Masuk Kas RW kategori Kontribusi RW3BIZ${hasil?.nomorKwitansi ? ` · kwitansi ${hasil.nomorKwitansi}` : ""}`,
+        description: `Masuk Kas RW kategori Kontribusi pengusaha${hasil?.nomorKwitansi ? ` · kwitansi ${hasil.nomorKwitansi}` : ""}`,
       });
       if (hasil?.pembayaranId) window.open(`/api/admin/rw3biz/kwitansi/${hasil.pembayaranId}`, "_blank", "noopener");
       setBayar(null);
@@ -209,7 +210,12 @@ export default function AdminRw3bizTagihan() {
   });
 
   const batalMutation = useMutation({
-    mutationFn: async (id: number) => readJsonSafely(await apiRequest("POST", `/api/admin/rw3biz/tagihan/${id}/batal`)),
+    mutationFn: async (opts: { tagihanId: number; pembayaranId?: number }) =>
+      readJsonSafely(
+        await apiRequest("POST", `/api/admin/rw3biz/tagihan/${opts.tagihanId}/batal`, {
+          ...(opts.pembayaranId != null ? { pembayaranId: opts.pembayaranId } : {}),
+        }),
+      ),
     onSuccess: () => {
       toast({ title: "Pembayaran dibatalkan", description: "Catatan kas terkait ikut dihapus" });
       invalidateTagihan();
@@ -324,9 +330,14 @@ export default function AdminRw3bizTagihan() {
                 const bisaBayar = sisa > 0 && t.status !== "dibebaskan";
                 const bisaBatal = t.terbayar > 0;
                 const bisaBebas = t.terbayar === 0 && t.status !== "dibebaskan";
-                const batalkan = () => {
+                const batalkanSemua = () => {
                   if (window.confirm(`Batalkan semua pembayaran ${t.usaha.namaUsaha} periode ${t.periode}? Catatan kas ikut dihapus.`)) {
-                    batalMutation.mutate(t.id);
+                    batalMutation.mutate({ tagihanId: t.id });
+                  }
+                };
+                const batalkanSatu = (pembayaranId: number, nomor: string) => {
+                  if (window.confirm(`Batalkan ${nomor}? Catatan kas terkait ikut dihapus.`)) {
+                    batalMutation.mutate({ tagihanId: t.id, pembayaranId });
                   }
                 };
                 const bukaBebas = () => {
@@ -374,10 +385,10 @@ export default function AdminRw3bizTagihan() {
                             variant="ghost"
                             className="hidden gap-1 sm:inline-flex sm:h-8"
                             disabled={batalMutation.isPending}
-                            onClick={batalkan}
+                            onClick={batalkanSemua}
                           >
                             <RotateCcw className="w-3.5 h-3.5" />
-                            Batal
+                            Batal semua
                           </Button>
                         )}
                         {bisaBebas && (
@@ -409,8 +420,8 @@ export default function AdminRw3bizTagihan() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="min-w-52">
                             {bisaBatal && (
-                              <DropdownMenuItem className="min-h-11 gap-2" disabled={batalMutation.isPending} onSelect={batalkan}>
-                                <RotateCcw className="h-4 w-4" /> Batalkan pembayaran
+                              <DropdownMenuItem className="min-h-11 gap-2" disabled={batalMutation.isPending} onSelect={batalkanSemua}>
+                                <RotateCcw className="h-4 w-4" /> Batalkan semua pembayaran
                               </DropdownMenuItem>
                             )}
                             {bisaBebas && (
@@ -438,21 +449,31 @@ export default function AdminRw3bizTagihan() {
                       </p>
                     )}
                     <p className="text-xs text-muted-foreground break-words">
+                      {t.nomorInvoice ? `${t.nomorInvoice} · ` : ""}
                       {labelPeriode(t.periode)} · tagihan {formatRp(t.jumlah)}
                       {t.jumlah !== t.kontribusiBulanan ? ` (sumbangsih ${formatRp(t.kontribusiBulanan)})` : ""} · terbayar{" "}
                       {formatRp(t.terbayar)} · tempo {t.jatuhTempo}
                     </p>
                     {t.catatan.length > 0 && <p className="text-xs text-muted-foreground break-words">{t.catatan.join(" · ")}</p>}
                     {(t.pembayaran ?? []).map((b) => (
-                      <a
-                        key={b.id}
-                        href={`/api/admin/rw3biz/kwitansi/${b.id}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex min-h-10 items-center gap-1 text-xs text-brand hover:underline sm:min-h-0 sm:text-[11px]"
-                      >
-                        <Receipt className="h-3 w-3" /> {b.nomorKwitansi} · {formatRp(b.jumlah)} · {b.tanggal}
-                      </a>
+                      <div key={b.id} className="flex flex-wrap items-center gap-2 text-xs sm:text-[11px]">
+                        <a
+                          href={`/api/admin/rw3biz/kwitansi/${b.id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex min-h-10 items-center gap-1 text-brand hover:underline sm:min-h-0"
+                        >
+                          <Receipt className="h-3 w-3" /> {b.nomorKwitansi} · {formatRp(b.jumlah)} · {b.tanggal}
+                        </a>
+                        <button
+                          type="button"
+                          className="text-muted-foreground underline-offset-2 hover:underline disabled:opacity-50"
+                          disabled={batalMutation.isPending}
+                          onClick={() => batalkanSatu(b.id, b.nomorKwitansi)}
+                        >
+                          Batalkan
+                        </button>
+                      </div>
                     ))}
                   </Visitrw3ListItem>
                 );

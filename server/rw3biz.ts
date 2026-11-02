@@ -21,11 +21,19 @@ import {
   notifyRw3bizDisetujui,
   notifyRw3bizDitolak,
 } from "./wa-notify-rw3biz";
-import { JENIS_TEMPAT_BIZ, parseSumbangsih, turunkanOperasionalMalam } from "@shared/rw3biz-kontribusi";
+import {
+  JENIS_TEMPAT_BIZ,
+  KATEGORI_KAS_KONTRIBUSI,
+  KATEGORI_KAS_KONTRIBUSI_LAMA,
+  keteranganKasKontribusi,
+  parseSumbangsih,
+  turunkanOperasionalMalam,
+} from "@shared/rw3biz-kontribusi";
 import { PERNYATAAN_VERSI } from "@shared/rw3biz-pernyataan";
 import { tandaiRaziaSelesai } from "./rw3biz-razia";
 import {
   buatTagihanTermin,
+  catatSetoranAwalUsaha,
   cocokkanWargaRw3,
   dataUsahaDariBaris,
   dataUsahaSchema,
@@ -707,8 +715,13 @@ export async function approvePengajuan(id: number, adminUsername: string, input?
     return { updated: p, usaha: usahaRow };
   });
 
+  const setoranAwal = await catatSetoranAwalUsaha(usaha.id, updated.tanggalBayar, adminUsername).catch((err) => {
+    console.error("[rw3biz] gagal catat setoran awal setelah approve:", err);
+    return null;
+  });
+
   notifyRw3bizDisetujui(updated, usaha);
-  return { pengajuan: updated, usaha };
+  return { pengajuan: updated, usaha, setoranAwal };
 }
 
 export async function rejectPengajuan(id: number, adminUsername: string, alasanTolak: string) {
@@ -841,4 +854,34 @@ export async function ensureRw3bizSchema() {
     }
     await pool.query(fs.readFileSync(lokasi, "utf8"));
   }
+
+  // Samakan entri Kas RW lama: kategori generik, tanpa identitas usaha di keterangan.
+  await pool.query(
+    `UPDATE kas_rw
+        SET kategori = $1
+      WHERE kategori = $2`,
+    [KATEGORI_KAS_KONTRIBUSI, KATEGORI_KAS_KONTRIBUSI_LAMA],
+  ).catch((err) => console.error("[rw3biz] backfill kategori kas kontribusi:", err));
+  await pool.query(
+    `UPDATE kas_rw
+        SET keterangan = CASE
+          WHEN keterangan ILIKE '%cicilan%' THEN $2
+          ELSE $1
+        END
+      WHERE created_by = 'rw3biz-sistem'
+        AND kategori = $3
+        AND (
+          keterangan IS NULL
+          OR keterangan = ''
+          OR keterangan NOT IN ($1, $2)
+        )`,
+    [keteranganKasKontribusi(false), keteranganKasKontribusi(true), KATEGORI_KAS_KONTRIBUSI],
+  ).catch((err) => console.error("[rw3biz] backfill keterangan kas kontribusi:", err));
+  await pool.query(
+    `UPDATE kas_rw
+        SET keterangan = kategori
+      WHERE created_by = 'rw3biz-sistem'
+        AND kategori IN ('Denda razia kendaraan', 'Denda pelanggaran usaha')
+        AND keterangan IS DISTINCT FROM kategori`,
+  ).catch((err) => console.error("[rw3biz] backfill keterangan kas denda:", err));
 }

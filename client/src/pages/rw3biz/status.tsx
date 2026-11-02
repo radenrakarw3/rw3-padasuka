@@ -26,6 +26,7 @@ type TagihanPublik = {
   terbayar: number;
   status: string;
   catatan: string[];
+  nomorInvoice?: string;
   jatuhTempo: string;
   telat: boolean;
   pembayaran: { id: number; jumlah: number; tanggal: string; nomorKwitansi: string }[];
@@ -439,6 +440,7 @@ export default function Rw3bizStatus() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="font-medium">{labelPeriode(t.periode)}</p>
+                      {t.nomorInvoice && <p className="font-mono text-[11px] text-muted-foreground">{t.nomorInvoice}</p>}
                       {t.catatan.length > 0 && <p className="text-muted-foreground">{t.catatan.join(" · ")}</p>}
                     </div>
                     <div className="text-right">
@@ -466,7 +468,7 @@ export default function Rw3bizStatus() {
               ))}
             </ul>
             <p className="text-[11px] text-muted-foreground">
-              Setiap pembayaran masuk Kas RW 03 dan diberi kwitansi. Tanpa denda keterlambatan.
+              Setiap pembayaran masuk Kas RW 03 sebagai kategori Kontribusi pengusaha dan diberi kwitansi. Tanpa denda keterlambatan.
             </p>
           </div>
         )}

@@ -13,6 +13,7 @@ import {
   type KodeKendaraanBiz,
 } from "@shared/rw3biz-kontribusi";
 import { dataUsahaDariBaris, loadTarif } from "./rw3biz-kontribusi";
+import { notifyRw3bizRaziaBayar, notifyRw3bizRaziaDenda } from "./wa-notify-rw3biz";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -151,6 +152,18 @@ export async function catatRazia(raw: unknown, admin: string) {
       dicatatOleh: admin,
     })
     .returning();
+  if (row.usahaId && row.denda > 0) {
+    const [usaha] = await db.select().from(rw3bizUsaha).where(eq(rw3bizUsaha.id, row.usahaId)).limit(1);
+    if (usaha) {
+      notifyRw3bizRaziaDenda(usaha, {
+        raziaId: row.id,
+        plat: row.plat,
+        jenisLabel: labelJenis(row.jenis),
+        denda: row.denda,
+        tanggal: row.tanggal,
+      });
+    }
+  }
   return { ...row, temuanSebelumnya: cocok.temuanSebelumnya };
 }
 
@@ -191,7 +204,7 @@ export const bayarDendaSchema = z.object({
 
 export async function bayarDenda(id: number, raw: unknown, admin: string) {
   const { tanggal, pembayarNama } = bayarDendaSchema.parse(raw);
-  return db.transaction(async (tx) => {
+  const hasil = await db.transaction(async (tx) => {
     const [r] = await tx.select().from(rw3bizRazia).where(eq(rw3bizRazia.id, id)).for("update");
     if (!r) throw new Error("Temuan razia tidak ditemukan");
     if (r.dendaStatus !== "belum") throw new Error("Denda tidak dalam status belum dibayar");
@@ -203,7 +216,7 @@ export async function bayarDenda(id: number, raw: unknown, admin: string) {
         tipe: "pemasukan",
         kategori: KATEGORI_KAS_DENDA_RAZIA,
         jumlah: r.denda,
-        keterangan: `Denda razia ${r.plat} (${labelJenis(r.jenis).toLowerCase()}) ${r.tanggal}${usaha ? ` — ${usaha.nomorInduk ?? usaha.nomorBiz} ${usaha.namaUsaha}` : ""}`,
+        keterangan: KATEGORI_KAS_DENDA_RAZIA,
         tanggal,
         createdBy: "rw3biz-sistem",
       })
@@ -213,8 +226,18 @@ export async function bayarDenda(id: number, raw: unknown, admin: string) {
       .set({ dendaStatus: "lunas", tanggalBayar: tanggal, pembayarNama: pembayar, kasRwId: kas.id })
       .where(eq(rw3bizRazia.id, id))
       .returning();
-    return { ...u, nomorKwitansi: nomorKwitansiRazia(u.id, tanggal) };
+    return { row: { ...u, nomorKwitansi: nomorKwitansiRazia(u.id, tanggal) }, usaha };
   });
+  if (hasil.usaha) {
+    notifyRw3bizRaziaBayar(hasil.usaha, {
+      raziaId: hasil.row.id,
+      nomorKwitansi: hasil.row.nomorKwitansi,
+      jumlah: hasil.row.denda,
+      tanggal,
+      plat: hasil.row.plat,
+    });
+  }
+  return hasil.row;
 }
 
 export async function batalBayarDenda(id: number) {

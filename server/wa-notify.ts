@@ -363,13 +363,35 @@ export function notifyUsahaDidaftar(row: Usaha): void {
     await sendWaIfConfigured(
       row.nomorWaPemilik,
       `${salam(row.namaPemilik)}\n\n` +
-        `Pendaftaran usaha *${row.namaUsaha}* sudah kami terima.\n\n` +
+        `*Pendaftaran usaha diterima*\n\n` +
+        `Usaha: *${row.namaUsaha}*\n` +
         `Status: *menunggu survey* lapangan pengurus RW\n` +
         `RT ${String(row.rt).padStart(2, "0")} · ${row.jenisUsaha}\n\n` +
         `Tim RW akan menghubungi Anda untuk survey. Simpan pesan ini sebagai bukti pendaftaran.\n\n` +
         `— ${SENDER_LABEL}`,
       {
         eventKey: `usaha:submitted:${row.id}:${normalizeStarSenderPhone(row.nomorWaPemilik)}`,
+        referenceType: "usaha",
+        referenceId: row.id,
+      },
+    );
+  });
+}
+
+export function notifyUsahaSurveySelesai(row: Usaha): void {
+  notifyWaSafe(async () => {
+    if (!row.nomorWaPemilik?.trim()) return;
+
+    await sendWaIfConfigured(
+      row.nomorWaPemilik,
+      `${salam(row.namaPemilik)}\n\n` +
+        `*Survey usaha selesai*\n\n` +
+        `Usaha: *${row.namaUsaha}*\n` +
+        `Status: *menunggu verifikasi* pengurus RW\n\n` +
+        `Hasil keputusan (disetujui / ditolak) akan dikirim ke nomor ini.\n\n` +
+        `— ${SENDER_LABEL}`,
+      {
+        eventKey: `usaha:survey:${row.id}:${normalizeStarSenderPhone(row.nomorWaPemilik)}`,
         referenceType: "usaha",
         referenceId: row.id,
       },
@@ -490,6 +512,56 @@ async function notifyKontrakReminder(
       dedup: true,
     });
   }
+
+  if (row.nomorWaPemilik?.trim()) {
+    const bodyPemilik =
+      `${salam(row.namaPemilik || undefined)}\n\n` +
+      (kind === "h7"
+        ? `Pengingat: kontrak penghuni *${row.namaLengkap}* (Visit RW3 *${nomor}*) akan berakhir dalam 7 hari (${berlaku}).\n\n`
+        : kind === "h1"
+          ? `Penting: kontrak penghuni *${row.namaLengkap}* (Visit RW3 *${nomor}*) besok berakhir (${berlaku}).\n\n`
+          : `Kontrak penghuni *${row.namaLengkap}* (Visit RW3 *${nomor}*) berakhir hari ini (${berlaku}).\n\n`) +
+      `Mohon informasikan agar segera perpanjang di:\n${perpanjangUrl}\n\n` +
+      `— ${SENDER_LABEL}`;
+    await sendWaIfConfigured(row.nomorWaPemilik, bodyPemilik, {
+      eventKey: `${eventPrefix}:pemilik:${normalizeStarSenderPhone(row.nomorWaPemilik)}`,
+      referenceType: "warga_singgah",
+      referenceId: row.id,
+      dedup: true,
+    });
+  }
+}
+
+/** Perpanjangan kontrak warga singgah oleh admin (bukan alur form publik). */
+export function notifyVisitrw3KontrakDiperpanjangAdmin(
+  ws: {
+    id: number;
+    namaLengkap: string;
+    nomorWhatsapp?: string | null;
+    nomorVisitrw3?: string | null;
+    tanggalHabisKontrak: string;
+  },
+): void {
+  notifyWaSafe(async () => {
+    if (!ws.nomorWhatsapp?.trim()) return;
+    const berlaku = formatTanggalId(ws.tanggalHabisKontrak);
+    const nomor = ws.nomorVisitrw3 ?? "-";
+    const statusUrl = siteUrl("/visitrw3/status");
+    await sendWaIfConfigured(
+      ws.nomorWhatsapp,
+      `${salam(ws.namaLengkap)}\n\n` +
+        `*Kontrak Visit RW3 diperpanjang*\n\n` +
+        `Nomor: *${nomor}*\n` +
+        `Berlaku sampai: *${berlaku}*\n\n` +
+        `Cek status di:\n${statusUrl}\n\n` +
+        `— ${SENDER_LABEL}`,
+      {
+        eventKey: `visitrw3:admin-perpanjang:${ws.id}:${ws.tanggalHabisKontrak}:${normalizeStarSenderPhone(ws.nomorWhatsapp)}`,
+        referenceType: "warga_singgah",
+        referenceId: ws.id,
+      },
+    );
+  });
 }
 
 export async function runVisitrw3KontrakReminders(): Promise<void> {
