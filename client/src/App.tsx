@@ -132,6 +132,7 @@ function singgahLegacyRedirect(rest?: string): string {
 function AdminLoginForm() {
 
   const { login } = useAuth();
+  const [, setLocation] = useLocation();
 
   const [username, setUsername] = useState("");
 
@@ -258,6 +259,20 @@ function AdminLoginForm() {
           </button>
 
         </form>
+
+        <button
+          type="button"
+          onClick={() => setLocation("/")}
+          className="flex w-full items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-left shadow-sm transition-colors hover:bg-muted/40"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[hsl(163,55%,22%)]/10 text-[hsl(163,55%,22%)] text-xs font-bold">
+            W
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-foreground">Portal warga</span>
+            <span className="block text-[11px] text-muted-foreground">Buka halaman layanan publik RW 03</span>
+          </span>
+        </button>
 
       </div>
 

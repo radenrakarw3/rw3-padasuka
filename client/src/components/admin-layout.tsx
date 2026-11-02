@@ -201,7 +201,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const keluar = async () => {
     await logout();
-    setLocation("/");
+    // Hard navigate agar keluar dari shell /admin/* (bukan hanya ganti path di layout).
+    window.location.assign("/");
   };
 
   return (

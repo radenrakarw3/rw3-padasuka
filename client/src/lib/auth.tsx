@@ -52,8 +52,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    await apiRequest("POST", "/api/auth/logout");
     setUser(null);
+    try {
+      await apiRequest("POST", "/api/auth/logout");
+    } catch {
+      // Sesi lokal sudah dibersihkan; gagal API tidak boleh menahan keluar.
+    }
   }, []);
 
   return (

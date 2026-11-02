@@ -25,18 +25,21 @@ export function PublicKioskLayout({
   if (variant === "hero") {
     return (
       <div className={cn("min-h-screen flex flex-col surface-kiosk", className)}>
-        <header className="px-4 py-6 text-center text-white">
-          <img
-            src={logoGold}
-            alt="RW 03 Padasuka"
-            className="w-20 h-20 mx-auto mb-3 object-contain"
-            loading="eager"
-          />
-          <p className="text-xs uppercase tracking-[0.28em] text-brand-accent-muted">
-            Portal Warga
-          </p>
-          <h1 className="text-display text-white mt-1">RW 03 Padasuka</h1>
-          <p className="text-caption text-white/70 mt-1">Kelurahan Padasuka, Kota Cimahi</p>
+        <header className="px-4 pt-5 pb-2 text-center text-white">
+          <div className="flex items-center justify-center gap-2">
+            <img
+              src={logoGold}
+              alt=""
+              className="h-8 w-8 object-contain"
+              loading="eager"
+              aria-hidden
+            />
+            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-brand-accent-muted">
+              Portal Warga
+            </p>
+          </div>
+          <h1 className="text-display text-white mt-2">RW 03 Padasuka</h1>
+          <p className="text-caption text-white/70 mt-0.5">Kelurahan Padasuka, Kota Cimahi</p>
         </header>
         <main className="flex-1 px-4 pb-8 max-w-lg mx-auto w-full space-y-4">{children}</main>
         {showFooter && <KioskFooter variant="hero" />}
@@ -88,6 +91,15 @@ function KioskFooter({ variant }: { variant: "hero" | "service" }) {
       )}
     >
       <p>Kelurahan Padasuka · RW 03</p>
+      {variant === "hero" && (
+        <p className="mt-2">
+          <Link href="/admin">
+            <span className="inline-block px-1 text-[9px] font-medium uppercase tracking-widest text-white/35 hover:text-white/55">
+              rw
+            </span>
+          </Link>
+        </p>
+      )}
     </footer>
   );
 }
