@@ -2,7 +2,7 @@
  * Dokumen cetak RW3BIZ (F4, jsPDF):
  * - Surat Izin Usaha RW 03 — terbit setiap pengajuan disetujui; wajib diperbarui sebelum masa berlaku habis.
  * - Formulir pendaftaran — salinan lengkap isian pengajuan (semua status), untuk arsip & persetujuan Ketua RW.
- * - Kwitansi — bukti setiap pembayaran kontribusi / denda razia yang masuk Kas RW 03.
+ * - Kwitansi — bukti setiap pembayaran kontribusi yang masuk Kas RW 03.
  */
 import { jsPDF } from "jspdf";
 import QRCode from "qrcode";
@@ -28,14 +28,8 @@ import {
   ASAL_ORANG_BIZ_LABEL,
   JENIS_TEMPAT_BIZ_LABEL,
   CHARTER_BIZ,
-  JENIS_PELANGGARAN_INFO,
-  KATEGORI_KAS_DENDA_PELANGGARAN,
-  KATEGORI_KAS_DENDA_RAZIA,
   KATEGORI_KAS_KONTRIBUSI,
   KENDARAAN_BIZ,
-  nomorKwitansiPelanggaran,
-  nomorKwitansiRazia,
-  type JenisPelanggaran,
   OPERASIONAL_MALAM_LABEL,
   PERAN_ORANG_BIZ_LABEL,
   RENTANG_OMZET_LABEL,
@@ -63,8 +57,6 @@ import {
 } from "@shared/rw3biz-pernyataan";
 import { bersihkan, muatLogo, SKALA_SURAT, tulisRata } from "./surat-sakti/pdf";
 import { dataUsahaDariBaris, loadTarif, parseRincianTersimpan } from "./rw3biz-kontribusi";
-import type { getDataKwitansiRazia } from "./rw3biz-razia";
-import type { getDataKwitansiPelanggaran } from "./rw3biz-pelanggaran";
 
 /** Batas pengajuan perpanjang: H-7 sebelum masa berlaku habis. */
 export const HARI_BATAS_PERBARUI_BIZ = 7;
@@ -695,13 +687,12 @@ export async function buatPdfSuratUsaha(d: DataSuratUsaha, opsi: { nikLengkap: b
     "Surat ini hanya berlaku untuk usaha, lokasi, dan kendaraan yang tercantum, sampai tanggal BERLAKU SAMPAI.",
     `Surat wajib diperbarui sebelum masa berlaku habis (paling lambat ${tgl(d.perbaruiPalingLambat)}) sekaligus memperbarui data kendaraan operasional dan sumbangsih. Setelah disetujui, terbit surat baru dan surat ini tidak berlaku lagi. Nomor Induk Usaha tetap sama.`,
     "Setiap penambahan atau pengurangan kendaraan operasional - milik sendiri maupun charter/sewaan (terutama kolbak dan truk yang membebani jalan lingkungan) - wajib dilaporkan kepada pengurus RW.",
-    "Pengurus RW dapat melakukan razia kendaraan. Kendaraan menuju usaha ini yang tidak tercatat di surat ini dikenai denda yang disetor ke Kas RW 03, dan data usaha wajib diperbarui.",
     sumbangsih
       ? `Sumbangsih yang disanggupkan dalam Surat Pernyataan Sumbangsih SPS/${p.nomorBiz} adalah komitmen bulanan dana swadaya masyarakat sebagaimana ${PERWAL_RW.pasal} ${PERWAL_RW.singkat}. ${teksCaraSetor(tarif.tenggangHari)} Dipakai sesuai RAB RW 03; simpan kwitansi sebagai bukti.`
       : `Kontribusi bulanan (komitmen tiap bulan): ${teksCaraSetor(tarif.tenggangHari)} Simpan kwitansi sebagai bukti.`,
     "Pemegang izin wajib menjaga kebersihan, ketertiban, dan keamanan lingkungan, serta tidak merusak jalan dan fasilitas umum di wilayah RW 03.",
-    "Pelanggaran (sampah tercecer, kebisingan, parkir menghalangi jalan, limbah/bau, melanggar jam operasional, merusak fasilitas umum, data tidak sesuai, dll) dari aduan warga yang terbukti atau temuan Ketua RW / Linmas dikenai teguran / denda: denda dasar x tingkat (ringan/sedang/berat) x pengulangan dalam 12 bulan. Denda disetor ke Kas RW 03 dengan kwitansi.",
-    "Bila kontribusi dan denda yang terkumpul dalam sebulan melebihi kebutuhan anggaran RW, kelebihannya dijadikan voucher belanja bagi warga RW 03 yang hanya dapat dibelanjakan di usaha RW3BIZ yang tertib berkontribusi. Voucher yang diterima usaha ditukar ke Kas RW 03 senilai nominalnya.",
+    "Pelanggaran (sampah tercecer, kebisingan, parkir menghalangi jalan, limbah/bau, melanggar jam operasional, merusak fasilitas umum, data tidak sesuai, dll) dari aduan warga yang terbukti atau temuan Ketua RW / Linmas ditangani melalui teguran resmi bertingkat (teguran lisan, SP-1, SP-2, SP-3) tanpa denda uang.",
+    "Bila sumbangsih yang terkumpul dalam sebulan melebihi kebutuhan anggaran RW, kelebihannya dijadikan voucher belanja bagi warga RW 03 yang hanya dapat dibelanjakan di usaha RW3BIZ yang tertib berkontribusi. Voucher yang diterima usaha ditukar ke Kas RW 03 senilai nominalnya.",
     "Simpan surat ini di tempat usaha dan tunjukkan bila diminta oleh Ketua RW 03.",
   ], 10, 5 + 44 * L.k);
   L.y += 5;
@@ -1147,49 +1138,6 @@ export async function buatPdfKwitansi(d: NonNullable<Awaited<ReturnType<typeof g
     ],
     nomorCek: usaha.nomorInduk ?? usaha.nomorBiz,
     catatanKaki: "Kwitansi sah bila ditandatangani penerima. Seluruh kontribusi masuk Kas RW 03 dan dilaporkan terbuka di halaman RW3BIZ.",
-  });
-}
-
-export async function buatPdfKwitansiRazia(d: NonNullable<Awaited<ReturnType<typeof getDataKwitansiRazia>>>) {
-  const { razia: r, usaha } = d;
-  const tanggalBayar = r.tanggalBayar!;
-  const jenis = KENDARAAN_BIZ.find((k) => k.kode === r.jenis)?.label ?? r.jenis;
-  return pdfKwitansi({
-    nomor: nomorKwitansiRazia(r.id, tanggalBayar),
-    jumlah: r.denda,
-    tanggal: tanggalBayar,
-    dicatatOleh: r.dicatatOleh,
-    baris: [
-      ["Telah terima dari", r.pembayarNama || (usaha ? `${usaha.pjNama} - ${usaha.namaUsaha}` : r.namaSopir || "-")],
-      ...(usaha ? ([["Nomor Induk Usaha", usaha.nomorInduk ?? usaha.nomorBiz]] as [string, string][]) : []),
-      ["Uang sejumlah", rupiahTerbilang(r.denda)],
-      ["Untuk pembayaran", `Denda razia kendaraan tidak terdaftar: ${jenis} ${r.plat}, ${tgl(r.tanggal)} di ${r.lokasi}`],
-      ["Disetor ke", `Kas RW 03 - kategori "${KATEGORI_KAS_DENDA_RAZIA}"${r.kasRwId ? ` (ref. kas #${r.kasRwId})` : ""}`],
-    ],
-    nomorCek: usaha ? usaha.nomorInduk ?? usaha.nomorBiz : null,
-    catatanKaki: "Kwitansi sah bila ditandatangani penerima. Denda razia masuk Kas RW 03 untuk pemeliharaan jalan lingkungan.",
-  });
-}
-
-export async function buatPdfKwitansiPelanggaran(d: NonNullable<Awaited<ReturnType<typeof getDataKwitansiPelanggaran>>>) {
-  const { p, usaha } = d;
-  const tanggalBayar = p.tanggalBayar!;
-  const jenis = JENIS_PELANGGARAN_INFO[p.jenis as JenisPelanggaran]?.label ?? p.jenis;
-  return pdfKwitansi({
-    nomor: nomorKwitansiPelanggaran(p.id, tanggalBayar),
-    jumlah: p.denda,
-    tanggal: tanggalBayar,
-    dicatatOleh: p.diverifikasiOleh ?? p.dicatatOleh ?? "-",
-    baris: [
-      ["Telah terima dari", p.pembayarNama || (usaha ? `${usaha.pjNama} - ${usaha.namaUsaha}` : p.namaUsahaLain || "-")],
-      ...(usaha ? ([["Nomor Induk Usaha", usaha.nomorInduk ?? usaha.nomorBiz]] as [string, string][]) : []),
-      ["Uang sejumlah", rupiahTerbilang(p.denda)],
-      ["Untuk pembayaran", `Denda pelanggaran: ${jenis}, ${tgl(p.tanggalKejadian)}${p.lokasi ? ` di ${p.lokasi}` : ""}`],
-      ["Perhitungan", p.dendaRincian ?? "-"],
-      ["Disetor ke", `Kas RW 03 - kategori "${KATEGORI_KAS_DENDA_PELANGGARAN}"${p.kasRwId ? ` (ref. kas #${p.kasRwId})` : ""}`],
-    ],
-    nomorCek: usaha ? usaha.nomorInduk ?? usaha.nomorBiz : null,
-    catatanKaki: "Kwitansi sah bila ditandatangani penerima. Denda masuk Kas RW 03 dan dilaporkan terbuka di halaman RW3BIZ.",
   });
 }
 

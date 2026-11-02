@@ -31,6 +31,12 @@ import { startSinkronUmurScheduler } from "./sinkron-umur";
 import { daftarRekapWarga, ringkasanRekapWarga } from "./rekap-warga";
 import { getKategoriRekap } from "@shared/rekap-kategori";
 import { cekWarga, pastikanIndexCekWarga } from "./cek-warga";
+import {
+  hubungiWargaKirimSchema,
+  hubungiWargaPreviewSchema,
+  kirimHubungiWarga,
+  previewHubungiWarga,
+} from "./wa-notify-kependudukan";
 import { isKategoriDaftar, perluNilai } from "@shared/statistik-warga";
 import { ACTIVE_RT_NUMBERS } from "@shared/rt";
 
@@ -606,6 +612,43 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("[cek-warga]", error);
       res.status(500).json({ message: "Gagal mengecek warga. Coba lagi." });
+    }
+  });
+
+  app.post("/api/admin/hubungi-warga/preview", requireAdmin, async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    try {
+      const parsed = hubungiWargaPreviewSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message || "Data tidak valid" });
+      }
+      const result = await previewHubungiWarga(parsed.data);
+      if (!result.ok) return res.status(result.status).json({ message: result.message });
+      return res.json(result);
+    } catch (error: any) {
+      console.error("[hubungi-warga/preview]", error);
+      return res.status(500).json({ message: error?.message || "Gagal membuat pratinjau pesan" });
+    }
+  });
+
+  app.post("/api/admin/hubungi-warga/kirim", requireAdmin, async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    try {
+      const parsed = hubungiWargaKirimSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message || "Data tidak valid" });
+      }
+      const result = await kirimHubungiWarga(parsed.data);
+      if (!result.ok) {
+        return res.status(result.status).json({
+          message: result.message,
+          code: "code" in result ? result.code : undefined,
+        });
+      }
+      return res.json(result);
+    } catch (error: any) {
+      console.error("[hubungi-warga/kirim]", error);
+      return res.status(500).json({ message: error?.message || "Gagal mengirim WhatsApp" });
     }
   });
 

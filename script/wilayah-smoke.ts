@@ -92,8 +92,12 @@ async function main() {
     pastikan(W.validasiNilaiFakta(def("s_bansos"), "pkh,pkh") !== null, "banyak ganda lolos");
     pastikan(W.validasiNilaiFakta(def("s_bansos"), "pkh,emas") !== null, "banyak asing lolos");
     pastikan(W.validasiNilaiFakta(def("s_air_cukup"), "mungkin") !== null, "ya/tidak asal lolos");
-    sama(W.validasiNilaiFakta(def("s_kontak_darurat"), "0812 3456 7890 (Bu Ani)"), null, "teks sah");
-    pastikan(W.validasiNilaiFakta(def("s_kontak_darurat"), "3277011234567890") !== null, "NIK di teks lolos");
+    const defTeks: W.DefinisiFakta = {
+      kunci: "uji_teks", subjek: "kk", kelompok: "Uji", label: "Uji teks", tipe: "teks",
+      pertanyaan: "Isian singkat uji",
+    };
+    sama(W.validasiNilaiFakta(defTeks, "0812 3456 7890 (Bu Ani)"), null, "teks sah");
+    pastikan(W.validasiNilaiFakta(defTeks, "3277011234567890") !== null, "NIK di teks lolos");
   });
   await uji("tanda perhatian & label pilih beberapa", () => {
     pastikan(W.kenaPerhatian(def("s_penyakit"), "tidak_ada,tbc"), "tbc tidak ditandai");

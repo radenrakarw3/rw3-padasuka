@@ -82,7 +82,7 @@ export type Visitrw3DashboardStats = {
 };
 
 export const visitrw3StatusLabels: Record<string, string> = {
-  menunggu_survey: "Menunggu survey",
+  menunggu_survey: "Menunggu verifikasi",
   disetujui: "Disetujui",
   ditolak: "Ditolak",
 };

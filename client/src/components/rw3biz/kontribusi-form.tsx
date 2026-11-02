@@ -400,7 +400,7 @@ export function UsahaKontribusiFields({
               onChange={(e) => onChange({ charterPenyedia: e.target.value })}
             />
             <p className="text-[11px] text-muted-foreground">
-              Saat razia, kendaraan charter menuju usaha ini dianggap terdaftar. Yang tidak didaftarkan dikenai denda.
+              Catat charter yang rutin datang ke lokasi usaha (kolbak/truk sewaan), agar data beban jalan lingkungan akurat.
             </p>
           </div>
         )}

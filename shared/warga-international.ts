@@ -2,7 +2,7 @@
  * Konstanta & aturan form warga — selaras UN / ILO / UNESCO / Washington Group / CRVS.
  */
 
-/** UNESCO — literasi fungsional. */
+/** @deprecated Field literasi dihapus dari form/kelengkapan; dipertahankan untuk data lama. */
 export const LITERASI_OPTIONS = ["Ya", "Tidak", "Sebagian"] as const;
 
 /** Washington Group — tingkat kesulitan per domain (Short Set disederhanakan). */
@@ -16,8 +16,9 @@ export const WG_DOMAIN_LEVEL_OPTIONS = [
 /** ILO — status yang memerlukan rincian pekerjaan. */
 export const ILO_EMPLOYED_STATUSES = ["Bekerja", "Wiraswasta", "Pelaku Usaha", "Pekerja Lepas"] as const;
 
-export function needsLiterasi(age: number | null): boolean {
-  return age !== null && age >= 7;
+/** @deprecated Literasi tidak lagi diwajibkan / ditampilkan. */
+export function needsLiterasi(_age: number | null): boolean {
+  return false;
 }
 
 /** Registrasi sipil anak (SDG 16.9 / CRVS). */

@@ -5,7 +5,21 @@
  */
 import { bulanIni, formatBulanTahun } from "./visitrw3-kendaraan";
 
-export type KeperluanTinggal = "Kerja" | "Kuliah" | "Usaha" | "Lainnya";
+export const KEPERLUAN_TINGGAL_OPSI = [
+  "Kerja",
+  "Kuliah",
+  "Sekolah",
+  "Usaha",
+  "Magang / PKL",
+  "Kursus / pelatihan",
+  "Dinas / penempatan",
+  "Mencari kerja",
+  "Menemani keluarga",
+  "Pengobatan",
+  "Lainnya",
+] as const;
+
+export type KeperluanTinggal = (typeof KEPERLUAN_TINGGAL_OPSI)[number];
 
 export type DetailKeperluan = {
   /** Alamat kantor / kampus / lokasi usaha / tempat kegiatan. */
@@ -35,7 +49,13 @@ export type AturanKeperluan = {
   uraian: FieldTeks;
 };
 
-export const STATUS_KERJA = ["Karyawan tetap", "Karyawan kontrak", "Harian lepas / freelance", "Magang / PKL", "Penempatan proyek"] as const;
+export const STATUS_KERJA = [
+  "Karyawan tetap",
+  "Karyawan kontrak",
+  "Harian lepas / freelance",
+  "Magang / PKL",
+  "Penempatan proyek",
+] as const;
 export const SEMESTER_KULIAH = [
   "Semester 1–2",
   "Semester 3–4",
@@ -46,52 +66,181 @@ export const SEMESTER_KULIAH = [
   "Profesi / koas",
   "Kursus / pelatihan",
 ] as const;
+export const TINGKAT_SEKOLAH = ["SD", "SMP", "SMA / SMK", "Paket A/B/C", "Lainnya"] as const;
+
+const ATURAN_KERJA: AturanKeperluan = {
+  tempat: {
+    label: "Nama perusahaan / tempat kerja",
+    placeholder: "Contoh: PT Sinar Jaya, RS Mitra Cimahi",
+    wajib: true,
+  },
+  alamat: { label: "Alamat tempat kerja", placeholder: "Jalan, kelurahan, kota", wajib: true },
+  peran: { label: "Jabatan / bagian", placeholder: "Contoh: Operator produksi, perawat", wajib: true },
+  status: { label: "Status kerja", opsi: STATUS_KERJA },
+  sampaiLabel: "Kontrak kerja / penempatan sampai",
+  tidakTentuLabel: "Tidak ada batas (karyawan tetap)",
+  uraian: {
+    label: "Keterangan tambahan (opsional)",
+    placeholder: "Mis. dimutasi dari Bandung, shift malam",
+    wajib: false,
+  },
+};
+
+const ATURAN_KULIAH: AturanKeperluan = {
+  tempat: {
+    label: "Nama kampus / sekolah",
+    placeholder: "Contoh: Universitas Jenderal Achmad Yani",
+    wajib: true,
+  },
+  alamat: { label: "Alamat kampus", placeholder: "Jalan, kelurahan, kota", wajib: true },
+  peran: { label: "Fakultas / jurusan", placeholder: "Contoh: Teknik Informatika", wajib: true },
+  status: { label: "Semester / tingkat", opsi: SEMESTER_KULIAH },
+  sampaiLabel: "Perkiraan lulus / selesai",
+  tidakTentuLabel: null,
+  uraian: {
+    label: "Keterangan tambahan (opsional)",
+    placeholder: "Mis. sedang skripsi, program beasiswa",
+    wajib: false,
+  },
+};
+
+const ATURAN_LAIN: AturanKeperluan = {
+  tempat: {
+    label: "Instansi / tempat kegiatan (opsional)",
+    placeholder: "Bila ada, contoh: RS Dustira",
+    wajib: false,
+  },
+  alamat: { label: "Alamat kegiatan (opsional)", placeholder: "Bila ada", wajib: false },
+  peran: null,
+  status: null,
+  sampaiLabel: "Rencana tinggal sampai",
+  tidakTentuLabel: null,
+  uraian: {
+    label: "Jelaskan keperluan tinggal",
+    placeholder: "Mis. menemani keluarga dirawat, mencari kerja, pelatihan 3 bulan",
+    wajib: true,
+  },
+};
 
 export const ATURAN_KEPERLUAN: Record<KeperluanTinggal, AturanKeperluan> = {
-  Kerja: {
-    tempat: { label: "Nama perusahaan / tempat kerja", placeholder: "Contoh: PT Sinar Jaya, RS Mitra Cimahi", wajib: true },
-    alamat: { label: "Alamat tempat kerja", placeholder: "Jalan, kelurahan, kota", wajib: true },
-    peran: { label: "Jabatan / bagian", placeholder: "Contoh: Operator produksi, perawat", wajib: true },
-    status: { label: "Status kerja", opsi: STATUS_KERJA },
-    sampaiLabel: "Kontrak kerja / penempatan sampai",
-    tidakTentuLabel: "Tidak ada batas (karyawan tetap)",
-    uraian: { label: "Keterangan tambahan (opsional)", placeholder: "Mis. dimutasi dari Bandung, shift malam", wajib: false },
-  },
-  Kuliah: {
-    tempat: { label: "Nama kampus / sekolah", placeholder: "Contoh: Universitas Jenderal Achmad Yani", wajib: true },
-    alamat: { label: "Alamat kampus", placeholder: "Jalan, kelurahan, kota", wajib: true },
-    peran: { label: "Fakultas / jurusan", placeholder: "Contoh: Teknik Informatika", wajib: true },
-    status: { label: "Semester / tingkat", opsi: SEMESTER_KULIAH },
-    sampaiLabel: "Perkiraan lulus / selesai",
+  Kerja: ATURAN_KERJA,
+  Kuliah: ATURAN_KULIAH,
+  Sekolah: {
+    tempat: { label: "Nama sekolah", placeholder: "Contoh: SMAN 1 Cimahi", wajib: true },
+    alamat: { label: "Alamat sekolah", placeholder: "Jalan, kelurahan, kota", wajib: true },
+    peran: { label: "Kelas / jurusan", placeholder: "Contoh: Kelas 11 IPA / TKJ", wajib: true },
+    status: { label: "Jenjang", opsi: TINGKAT_SEKOLAH },
+    sampaiLabel: "Perkiraan lulus",
     tidakTentuLabel: null,
-    uraian: { label: "Keterangan tambahan (opsional)", placeholder: "Mis. sedang skripsi, program beasiswa", wajib: false },
+    uraian: {
+      label: "Keterangan tambahan (opsional)",
+      placeholder: "Mis. pindahan dari luar kota",
+      wajib: false,
+    },
   },
   Usaha: {
     tempat: { label: "Nama usaha", placeholder: "Contoh: Warung Bu Siti", wajib: true },
     alamat: { label: "Lokasi usaha", placeholder: "Alamat tempat usaha", wajib: true },
-    peran: { label: "Jenis usaha / barang / jasa", placeholder: "Contoh: Jual makanan, servis HP", wajib: true },
+    peran: {
+      label: "Jenis usaha / barang / jasa",
+      placeholder: "Contoh: Jual makanan, servis HP",
+      wajib: true,
+    },
     status: null,
     sampaiLabel: "Rencana usaha di sini sampai",
     tidakTentuLabel: "Belum ditentukan (usaha menetap)",
-    uraian: { label: "Keterangan tambahan (opsional)", placeholder: "Mis. buka cabang, usaha musiman", wajib: false },
+    uraian: {
+      label: "Keterangan tambahan (opsional)",
+      placeholder: "Mis. buka cabang, usaha musiman",
+      wajib: false,
+    },
   },
-  Lainnya: {
-    tempat: { label: "Instansi / tempat kegiatan (opsional)", placeholder: "Bila ada, contoh: RS Dustira", wajib: false },
-    alamat: { label: "Alamat kegiatan (opsional)", placeholder: "Bila ada", wajib: false },
-    peran: null,
+  "Magang / PKL": {
+    ...ATURAN_KERJA,
+    tempat: {
+      label: "Nama tempat magang / PKL",
+      placeholder: "Contoh: PT Astra, RS Dustira",
+      wajib: true,
+    },
+    peran: { label: "Bagian / program", placeholder: "Contoh: Produksi, keperawatan", wajib: true },
     status: null,
-    sampaiLabel: "Rencana tinggal sampai",
+    sampaiLabel: "Magang / PKL sampai",
     tidakTentuLabel: null,
     uraian: {
-      label: "Jelaskan keperluan tinggal",
-      placeholder: "Mis. menemani keluarga dirawat, mencari kerja, pelatihan 3 bulan",
+      label: "Keterangan tambahan (opsional)",
+      placeholder: "Mis. dari kampus Unjani, 3 bulan",
+      wajib: false,
+    },
+  },
+  "Kursus / pelatihan": {
+    tempat: {
+      label: "Nama lembaga kursus / pelatihan",
+      placeholder: "Contoh: LPK Bahasa Inggris",
+      wajib: true,
+    },
+    alamat: { label: "Alamat lembaga", placeholder: "Jalan, kelurahan, kota", wajib: true },
+    peran: { label: "Program / bidang", placeholder: "Contoh: Bahasa Inggris, menjahit", wajib: true },
+    status: null,
+    sampaiLabel: "Kursus / pelatihan sampai",
+    tidakTentuLabel: null,
+    uraian: {
+      label: "Keterangan tambahan (opsional)",
+      placeholder: "Mis. kelas malam, 6 bulan",
+      wajib: false,
+    },
+  },
+  "Dinas / penempatan": {
+    ...ATURAN_KERJA,
+    tempat: {
+      label: "Instansi / tempat dinas",
+      placeholder: "Contoh: Kodim, Dinas Kesehatan",
+      wajib: true,
+    },
+    peran: { label: "Jabatan / tugas", placeholder: "Contoh: Staf administrasi", wajib: true },
+    sampaiLabel: "Penempatan sampai",
+    tidakTentuLabel: "Tidak ada batas (penempatan tetap)",
+  },
+  "Mencari kerja": {
+    ...ATURAN_LAIN,
+    uraian: {
+      label: "Jelaskan rencana mencari kerja",
+      placeholder: "Mis. melamar di kawasan industri Cimahi, target 3 bulan",
       wajib: true,
     },
   },
+  "Menemani keluarga": {
+    ...ATURAN_LAIN,
+    tempat: {
+      label: "Nama keluarga yang ditemani (opsional)",
+      placeholder: "Contoh: orang tua / suami / istri",
+      wajib: false,
+    },
+    uraian: {
+      label: "Jelaskan keperluan menemani",
+      placeholder: "Mis. menemani orang tua sakit, istri melahirkan",
+      wajib: true,
+    },
+  },
+  Pengobatan: {
+    ...ATURAN_LAIN,
+    tempat: {
+      label: "Nama rumah sakit / klinik (opsional)",
+      placeholder: "Contoh: RS Dustira, Klinik Pratama",
+      wajib: false,
+    },
+    uraian: {
+      label: "Jelaskan keperluan pengobatan",
+      placeholder: "Mis. rawat jalan rutin, menunggu operasi",
+      wajib: true,
+    },
+  },
+  Lainnya: ATURAN_LAIN,
 };
 
 export function aturanKeperluan(keperluan?: string | null): AturanKeperluan | null {
-  return keperluan && keperluan in ATURAN_KEPERLUAN ? ATURAN_KEPERLUAN[keperluan as KeperluanTinggal] : null;
+  return keperluan && keperluan in ATURAN_KEPERLUAN
+    ? ATURAN_KEPERLUAN[keperluan as KeperluanTinggal]
+    : null;
 }
 
 function teks(v: unknown, max = 200): string | null {

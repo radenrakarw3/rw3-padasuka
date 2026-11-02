@@ -308,7 +308,10 @@ async function faktaAktif(subjek: SubjekFakta, ids: number[], q: Q = pool): Prom
 }
 
 export async function detailKeluarga(aktor: Aktor, kkId: number) {
-  const { rows: kkRows } = await pool.query(`SELECT id, rt, alamat, no_unit, nomor_kk FROM kartu_keluarga WHERE id = $1`, [kkId]);
+  const { rows: kkRows } = await pool.query(
+    `SELECT id, rt, alamat, no_unit, nomor_kk, label_rw FROM kartu_keluarga WHERE id = $1`,
+    [kkId],
+  );
   const kk = kkRows[0];
   if (!kk) throw new WilayahError(404, "KK tidak ditemukan");
   cekBaca(aktor, kk.rt);
@@ -357,7 +360,15 @@ export async function detailKeluarga(aktor: Aktor, kkId: number) {
 
   const acuan = hariIni();
   return {
-    kk: { id: kk.id, rt: kk.rt, alamat: kk.alamat, noUnit: kk.no_unit, nomorKk: rw ? maskNik(kk.nomor_kk) : kk.nomor_kk },
+    kk: {
+      id: kk.id,
+      rt: kk.rt,
+      alamat: kk.alamat,
+      noUnit: kk.no_unit,
+      nomorKk: rw ? maskNik(kk.nomor_kk) : kk.nomor_kk,
+      /** Tag internal Ketua RW — tidak ada di portal warga publik. */
+      labelRw: kk.label_rw ?? null,
+    },
     anggota: anggota.map((a) => ({
       id: a.id,
       nama: a.nama_lengkap,

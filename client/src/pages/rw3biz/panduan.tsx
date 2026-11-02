@@ -69,15 +69,11 @@ export default function Rw3bizPanduan() {
               mengambil sambil memberi kwitansi. Perbarui surat (kendaraan &amp; sumbangsih) sebelum masa berlaku habis.
             </FlowStep>
             <FlowStep n={6}>
-              Ada razia kendaraan berat. Kendaraan menuju usaha yang plat/charternya belum terdaftar dikenai denda (masuk Kas RW, ada
-              kwitansi) dan usaha wajib memperbarui datanya.
+              Jaga lingkungan. Aduan warga yang terbukti (sampah tercecer, bising, parkir menutup jalan, limbah/bau, dll) atau temuan
+              Ketua RW / Linmas ditangani lewat teguran resmi bertingkat (teguran lisan, SP-1, SP-2, SP-3) tanpa denda uang.
             </FlowStep>
             <FlowStep n={7}>
-              Jaga lingkungan. Aduan warga yang terbukti (sampah tercecer, bising, parkir menutup jalan, limbah/bau, dll) atau temuan
-              Ketua RW / Linmas dikenai teguran tertulis, lalu denda yang makin besar bila berulang dalam 12 bulan.
-            </FlowStep>
-            <FlowStep n={8}>
-              Bila sumbangsih dan denda sebulan melebihi kebutuhan RW, kelebihannya jadi <strong>voucher belanja warga</strong> yang hanya
+              Bila sumbangsih sebulan melebihi kebutuhan RW, kelebihannya jadi <strong>voucher belanja warga</strong> yang hanya
               bisa dipakai di usaha RW3BIZ yang tertib. Voucher yang Anda terima ditukar ke Kas RW 03 senilai penuh.
             </FlowStep>
           </ol>

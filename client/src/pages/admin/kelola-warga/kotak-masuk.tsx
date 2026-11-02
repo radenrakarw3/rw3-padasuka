@@ -1,3 +1,4 @@
+import { useLocation } from "wouter";
 import { useRtKelola } from "./konteks";
 import { DaftarUsulan } from "./usulan";
 import { DaftarPindah } from "./pindah";
@@ -21,12 +22,18 @@ function Bagian({ judul, jumlah, keterangan, children }: { judul: string; jumlah
 
 /** Semua yang menunggu keputusan pengurus untuk RT terpilih: isian QR warga dan permintaan pindah RT. */
 export default function KotakMasuk() {
+  const [, go] = useLocation();
   const rt = useRtKelola();
   const { data } = useKotakMasuk();
   const angka = data?.perRt.find((r) => r.rt === rt);
   return (
     <div className="space-y-6">
-      <Judul sub="Periksa lalu terima atau tolak. Data baru berubah setelah diputuskan.">Kotak masuk</Judul>
+      <Judul
+        kembali={() => go("/warga")}
+        sub="Periksa lalu terima atau tolak. Data baru berubah setelah diputuskan."
+      >
+        Kotak masuk
+      </Judul>
       <Bagian judul="Isian QR & formulir warga" jumlah={angka?.usulan} keterangan="Perubahan data yang dikirim keluarga lewat QR atau dititipkan RW.">
         <DaftarUsulan />
       </Bagian>

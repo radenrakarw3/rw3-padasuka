@@ -15,7 +15,6 @@ function wargaToTierSlice(w: Warga, kkId?: number): WargaTierFormSlice {
     kkId: kkId?.toString() ?? String(w.kkId),
     tanggalLahir: w.tanggalLahir,
     kedudukanKeluarga: w.kedudukanKeluarga,
-    literasi: w.literasi,
     pendidikan: w.pendidikan,
     statusPekerjaan: w.statusPekerjaan,
     pekerjaan: w.pekerjaan,
@@ -25,8 +24,6 @@ function wargaToTierSlice(w: Warga, kkId?: number): WargaTierFormSlice {
     wgKesulitanMelihat: w.wgKesulitanMelihat,
     wgKesulitanBerjalan: w.wgKesulitanBerjalan,
     nomorWhatsapp: w.nomorWhatsapp,
-    namaKontakDarurat: w.namaKontakDarurat,
-    nomorKontakDarurat: w.nomorKontakDarurat,
   };
 }
 
@@ -47,10 +44,7 @@ export const TIER_FIELD_LABELS: Record<string, string> = {
   tempatLahir: "Tempat Lahir",
   kedudukanKeluarga: "Kedudukan Keluarga",
   statusKependudukan: "Status Kependudukan",
-  literasi: "Literasi baca-tulis",
   nomorWhatsapp: "No. WhatsApp",
-  namaKontakDarurat: "Nama Kontak Darurat",
-  nomorKontakDarurat: "No. Kontak Darurat",
   pendidikan: "Pendidikan (ISCED)",
   statusPekerjaan: "Status angkatan kerja (ILO)",
   pekerjaan: "Pekerjaan",

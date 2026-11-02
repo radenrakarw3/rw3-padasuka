@@ -214,9 +214,9 @@ export function validateSinglePenghuni(
   const u = umur(p.tanggalLahir);
   if (u < 21 && !p.namaSekolah.trim()) return "Isi nama sekolah (usia di bawah 21 tahun)";
 
-  if (!p.punyaKendaraan) return "Jawab dulu: punya kendaraan atau tidak";
+  // Kendaraan opsional (Visit RW3); bila dipilih "ya" tetap wajib isi detail.
   if (p.punyaKendaraan === "ya") {
-    if (p.kendaraanList.length === 0) return "Isi minimal satu kendaraan";
+    if (p.kendaraanList.length === 0) return "Isi minimal satu kendaraan atau pilih tidak punya";
     for (let ki = 0; ki < p.kendaraanList.length; ki++) {
       const err = validateKendaraanRow(p.kendaraanList[ki], ki + 1);
       if (err) return err;
@@ -307,18 +307,14 @@ export function validateLokasiWargaSinggah(input: {
   ukuranTinggal?: string;
 }): string | null {
   if (!input.rt) return "Pilih RT";
-  if (!input.alamat.trim() || input.alamat.trim().length < 5) {
-    return input.jenisWarga === "jualan"
-      ? "Alamat lokasi usaha minimal 5 karakter"
-      : input.jenisWarga === "kost"
-        ? "Alamat kost minimal 5 karakter"
-        : "Alamat kontrakan minimal 5 karakter";
+  // Alamat lengkap opsional untuk Visit RW3 (kost/kontrak).
+  if (input.jenisWarga === "jualan") {
+    if (!input.alamat.trim() || input.alamat.trim().length < 5) {
+      return "Alamat lokasi usaha minimal 5 karakter";
+    }
   }
   if (input.jenisWarga === "kost" && !input.nomorUnit?.trim()) {
     return "Nomor kamar/unit wajib diisi";
-  }
-  if ((input.jenisWarga === "kost" || input.jenisWarga === "kontrak") && !input.ukuranTinggal) {
-    return input.jenisWarga === "kost" ? "Pilih ukuran kamar kost" : "Pilih jumlah kamar tidur kontrakan";
   }
   return null;
 }

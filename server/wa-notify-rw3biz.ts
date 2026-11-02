@@ -244,7 +244,6 @@ export function notifyRw3bizPelanggaranTerbukti(
     nomorAduan: string;
     jenisLabel: string;
     tingkatLabel: string;
-    denda: number;
     tanggalKejadian: string;
   },
 ): void {
@@ -253,10 +252,6 @@ export function notifyRw3bizPelanggaranTerbukti(
     if (!kontak) return;
     const cekNomor = usaha.nomorInduk ?? usaha.nomorBiz;
     const statusUrl = siteUrl(`/rw3biz/status?nomor=${encodeURIComponent(cekNomor)}`);
-    const dendaBaris =
-      opsi.denda > 0
-        ? `Denda: *${formatRp(opsi.denda)}* (segera lunasi)\n`
-        : `Denda: *tidak ada* (teguran)\n`;
     await sendWaIfConfigured(
       kontak.nomorWa,
       `${salam(kontak.nama)}\n\n` +
@@ -264,102 +259,14 @@ export function notifyRw3bizPelanggaranTerbukti(
         `Usaha: *${usaha.namaUsaha}*\n` +
         `Nomor: *${opsi.nomorAduan}*\n` +
         `Jenis: *${opsi.jenisLabel}* (${opsi.tingkatLabel})\n` +
-        `Tanggal kejadian: *${formatTanggalId(opsi.tanggalKejadian)}*\n` +
-        dendaBaris +
-        `\nDetail & panduan di:\n${statusUrl}\n\n` +
+        `Tanggal kejadian: *${formatTanggalId(opsi.tanggalKejadian)}*\n\n` +
+        `Penanganan dilanjutkan melalui teguran resmi RW 03 (bukan denda).\n` +
+        `Detail di:\n${statusUrl}\n\n` +
         `— ${SENDER_LABEL}`,
       {
         eventKey: `rw3biz:pelanggaran:terbukti:${opsi.pelanggaranId}:${normalizeStarSenderPhone(kontak.nomorWa)}`,
         referenceType: "rw3biz_pelanggaran",
         referenceId: opsi.pelanggaranId,
-      },
-    );
-  });
-}
-
-export function notifyRw3bizPelanggaranBayar(
-  usaha: Pick<Rw3bizUsaha, "id" | "namaUsaha" | "nomorInduk" | "nomorBiz" | "pjNomorWhatsapp" | "pjNama">,
-  opsi: { pelanggaranId: number; nomorKwitansi: string; jumlah: number; tanggal: string },
-): void {
-  notifyWaSafe(async () => {
-    const kontak = usahaKontak(usaha);
-    if (!kontak) return;
-    const cekNomor = usaha.nomorInduk ?? usaha.nomorBiz;
-    const kwUrl = siteUrl(
-      `/api/public/rw3biz/pelanggaran/${opsi.pelanggaranId}/kwitansi?nomor=${encodeURIComponent(cekNomor)}`,
-    );
-    await sendWaIfConfigured(
-      kontak.nomorWa,
-      `${salam(kontak.nama)}\n\n` +
-        `*Pembayaran denda pelanggaran dicatat*\n\n` +
-        `Usaha: *${usaha.namaUsaha}*\n` +
-        `Jumlah: *${formatRp(opsi.jumlah)}*\n` +
-        `Tanggal: *${formatTanggalId(opsi.tanggal)}*\n` +
-        `Kwitansi: *${opsi.nomorKwitansi}*\n\n` +
-        `Unduh kwitansi:\n${kwUrl}\n\n` +
-        `— ${SENDER_LABEL}`,
-      {
-        eventKey: `rw3biz:pelanggaran:bayar:${opsi.pelanggaranId}:${normalizeStarSenderPhone(kontak.nomorWa)}`,
-        referenceType: "rw3biz_pelanggaran",
-        referenceId: opsi.pelanggaranId,
-      },
-    );
-  });
-}
-
-export function notifyRw3bizRaziaDenda(
-  usaha: Pick<Rw3bizUsaha, "id" | "namaUsaha" | "nomorInduk" | "nomorBiz" | "pjNomorWhatsapp" | "pjNama">,
-  opsi: { raziaId: number; plat: string; jenisLabel: string; denda: number; tanggal: string },
-): void {
-  notifyWaSafe(async () => {
-    const kontak = usahaKontak(usaha);
-    if (!kontak) return;
-    const cekNomor = usaha.nomorInduk ?? usaha.nomorBiz;
-    const statusUrl = siteUrl(`/rw3biz/status?nomor=${encodeURIComponent(cekNomor)}`);
-    await sendWaIfConfigured(
-      kontak.nomorWa,
-      `${salam(kontak.nama)}\n\n` +
-        `*Temuan razia RW3BIZ*\n\n` +
-        `Usaha: *${usaha.namaUsaha}*\n` +
-        `Plat: *${opsi.plat}*\n` +
-        `Jenis: *${opsi.jenisLabel}*\n` +
-        `Tanggal: *${formatTanggalId(opsi.tanggal)}*\n` +
-        `Denda: *${formatRp(opsi.denda)}*\n\n` +
-        `Detail di:\n${statusUrl}\n\n` +
-        `— ${SENDER_LABEL}`,
-      {
-        eventKey: `rw3biz:razia:denda:${opsi.raziaId}:${normalizeStarSenderPhone(kontak.nomorWa)}`,
-        referenceType: "rw3biz_razia",
-        referenceId: opsi.raziaId,
-      },
-    );
-  });
-}
-
-export function notifyRw3bizRaziaBayar(
-  usaha: Pick<Rw3bizUsaha, "id" | "namaUsaha" | "nomorInduk" | "nomorBiz" | "pjNomorWhatsapp" | "pjNama">,
-  opsi: { raziaId: number; nomorKwitansi: string; jumlah: number; tanggal: string; plat: string },
-): void {
-  notifyWaSafe(async () => {
-    const kontak = usahaKontak(usaha);
-    if (!kontak) return;
-    const cekNomor = usaha.nomorInduk ?? usaha.nomorBiz;
-    const kwUrl = siteUrl(`/api/public/rw3biz/razia/${opsi.raziaId}/kwitansi?nomor=${encodeURIComponent(cekNomor)}`);
-    await sendWaIfConfigured(
-      kontak.nomorWa,
-      `${salam(kontak.nama)}\n\n` +
-        `*Pembayaran denda razia dicatat*\n\n` +
-        `Usaha: *${usaha.namaUsaha}*\n` +
-        `Plat: *${opsi.plat}*\n` +
-        `Jumlah: *${formatRp(opsi.jumlah)}*\n` +
-        `Tanggal: *${formatTanggalId(opsi.tanggal)}*\n` +
-        `Kwitansi: *${opsi.nomorKwitansi}*\n\n` +
-        `Unduh kwitansi:\n${kwUrl}\n\n` +
-        `— ${SENDER_LABEL}`,
-      {
-        eventKey: `rw3biz:razia:bayar:${opsi.raziaId}:${normalizeStarSenderPhone(kontak.nomorWa)}`,
-        referenceType: "rw3biz_razia",
-        referenceId: opsi.raziaId,
       },
     );
   });

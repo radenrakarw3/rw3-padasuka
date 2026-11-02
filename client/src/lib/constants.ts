@@ -106,7 +106,14 @@ export const jenisBansosOptions = [
 export const keperluanTinggalOptions = [
   "Kerja",
   "Kuliah",
+  "Sekolah",
   "Usaha",
+  "Magang / PKL",
+  "Kursus / pelatihan",
+  "Dinas / penempatan",
+  "Mencari kerja",
+  "Menemani keluarga",
+  "Pengobatan",
   "Lainnya",
 ];
 
@@ -372,16 +379,6 @@ export const statusTinggalIndividuOptions = [
   "Lainnya",
 ];
 
-export const hubunganKontakDaruratOptions = [
-  "Orang Tua",
-  "Pasangan",
-  "Saudara Kandung",
-  "Anak",
-  "Tetangga",
-  "Kerabat",
-  "Lainnya",
-];
-
 /** Status angkatan kerja — kerangka ILO (disederhanakan). */
 export const statusPekerjaanOptions = [
   "Bekerja",
@@ -482,12 +479,5 @@ export const statusProgramOptions = [
   "dibatalkan",
 ];
 
-/** Label internal KK — hanya petugas/ketua RW. */
-export const kkLabelRwSuggestions = [
-  "Prioritas bansos",
-  "Perlu kunjungan ulang",
-  "Keluarga rentan",
-  "Usaha informal",
-  "Butuh bantuan kesehatan",
-  "Data belum lengkap",
-];
+/** Label internal KK — katalog lengkap di shared/kk-label-rw.ts */
+export { KK_TAG_SEMUA as kkLabelRwSuggestions, KK_TAG_KATEGORI } from "@shared/kk-label-rw";

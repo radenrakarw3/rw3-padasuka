@@ -1,4 +1,7 @@
-/** Estimasi kontribusi Visit RW3 — tarif berjenjang (ukuran & jenis). */
+/** Estimasi kontribusi Visit RW3 — tarif tinggal flat Rp1.000/bulan. */
+
+/** Kontribusi penghuni kost/kontrakan per bulan (tetap). */
+export const KONTRIBUSI_TINGGAL_PER_BULAN = 1000;
 
 /** Tanggal + N bulan; hari dijepit ke akhir bulan (31 Jan + 1 bln = 28/29 Feb). Bebas zona waktu. */
 export function hitungTanggalBerlaku(tanggalBayar: string, terminBulan: number): string {
@@ -62,28 +65,29 @@ export function labelUkuranTinggal(jenis: string | null | undefined, ukuran: Uku
 }
 
 export function tarifTinggalPerBulan(
-  jenis: string | null | undefined,
-  ukuran: UkuranProperti,
-  settings: KontribusiSettings,
+  _jenis?: string | null,
+  _ukuran?: UkuranProperti | null,
+  _settings?: KontribusiSettings,
 ): number {
-  return feeTinggalPerUnitBulan(jenisTinggal(jenis) === "kontrak" ? "kontrakan" : "kost", ukuran, settings);
+  return KONTRIBUSI_TINGGAL_PER_BULAN;
 }
 
-/** Kontribusi penghuni kost/kontrakan: tarif ukuran tempat × jumlah bulan masa berlaku. */
+/** Kontribusi penghuni kost/kontrakan: Rp1.000 × jumlah bulan masa berlaku. */
 export function hitungKontribusiTinggal(params: {
   jenisWarga: string | null | undefined;
-  ukuran: UkuranProperti;
+  ukuran?: UkuranProperti | null;
   terminBulan: number;
-  settings: KontribusiSettings;
+  settings?: KontribusiSettings;
 }): KontribusiRincian {
   const jenis = jenisTinggal(params.jenisWarga);
-  const tarifSatuan = tarifTinggalPerBulan(jenis, params.ukuran, params.settings);
+  const tarifSatuan = KONTRIBUSI_TINGGAL_PER_BULAN;
   const jenisLabel = jenis === "kontrak" ? "kontrakan" : "kost";
+  const ukuran = params.ukuran && isUkuranTinggal(params.ukuran) ? params.ukuran : undefined;
   return {
     jenis: jenisLabel,
-    label: `Kontribusi ${jenisLabel} (per ${jenis === "kontrak" ? "unit" : "kamar"}/bulan)`,
-    kelompok: labelUkuranTinggal(jenis, params.ukuran),
-    ukuranProperti: params.ukuran,
+    label: `Kontribusi ${jenisLabel} (per bulan)`,
+    kelompok: ukuran ? labelUkuranTinggal(jenis, ukuran) : "Tarif tetap Rp1.000 / bulan",
+    ukuranProperti: ukuran,
     terminBulan: params.terminBulan,
     tarifSatuan,
     satuanLabel: "bulan",
@@ -141,8 +145,7 @@ export type Visitrw3Tarif = {
 export function parseKontribusiSettings(rows: { key: string; value: string }[]): KontribusiSettings {
   const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   const legacyBisnis = intVal(map, "fee_bisnis_per_hari", 5000);
-  const legacyKost = intVal(map, "fee_kost_per_unit_bulan", 6000);
-  const legacyKontrakan = intVal(map, "fee_kontrakan_per_unit_bulan", 9000);
+  const flatTinggal = intVal(map, "fee_kost_per_unit_bulan", KONTRIBUSI_TINGGAL_PER_BULAN);
   const legacyPemilik = intVal(map, "fee_pemilik_per_bulan", 50000);
 
   return {
@@ -151,12 +154,12 @@ export function parseKontribusiSettings(rows: { key: string; value: string }[]):
     feeBisnisLapakPerHari: intVal(map, "fee_bisnis_lapak_per_hari", 3000),
     feeBisnisKioskPerHari: intVal(map, "fee_bisnis_kiosk_per_hari", legacyBisnis),
     feeBisnisLainPerHari: intVal(map, "fee_bisnis_lain_per_hari", 8000),
-    feeKostKecilPerUnitBulan: intVal(map, "fee_kost_kecil_per_unit_bulan", legacyKost - 1000),
-    feeKostSedangPerUnitBulan: intVal(map, "fee_kost_sedang_per_unit_bulan", legacyKost),
-    feeKostBesarPerUnitBulan: intVal(map, "fee_kost_besar_per_unit_bulan", legacyKost + 1000),
-    feeKontrakanKecilPerUnitBulan: intVal(map, "fee_kontrakan_kecil_per_unit_bulan", legacyKontrakan - 1000),
-    feeKontrakanSedangPerUnitBulan: intVal(map, "fee_kontrakan_sedang_per_unit_bulan", legacyKontrakan),
-    feeKontrakanBesarPerUnitBulan: intVal(map, "fee_kontrakan_besar_per_unit_bulan", legacyKontrakan + 1000),
+    feeKostKecilPerUnitBulan: intVal(map, "fee_kost_kecil_per_unit_bulan", flatTinggal),
+    feeKostSedangPerUnitBulan: intVal(map, "fee_kost_sedang_per_unit_bulan", flatTinggal),
+    feeKostBesarPerUnitBulan: intVal(map, "fee_kost_besar_per_unit_bulan", flatTinggal),
+    feeKontrakanKecilPerUnitBulan: intVal(map, "fee_kontrakan_kecil_per_unit_bulan", flatTinggal),
+    feeKontrakanSedangPerUnitBulan: intVal(map, "fee_kontrakan_sedang_per_unit_bulan", flatTinggal),
+    feeKontrakanBesarPerUnitBulan: intVal(map, "fee_kontrakan_besar_per_unit_bulan", flatTinggal),
     feePemilikLapakPerBulan: intVal(map, "fee_pemilik_lapak_per_bulan", 30000),
     feePemilikKioskPerBulan: intVal(map, "fee_pemilik_kiosk_per_bulan", 35000),
     feePemilikKostKecilPerBulan: intVal(map, "fee_pemilik_kost_kecil_per_bulan", Math.round(legacyPemilik * 0.8)),
@@ -210,22 +213,6 @@ function feeBisnisPerHari(
   }
   if (jenisTempatUsaha === "lainnya") return settings.feeBisnisLainPerHari;
   return settings.feeBisnisKioskPerHari;
-}
-
-function feeTinggalPerUnitBulan(
-  jenisProperti: string | null | undefined,
-  ukuran: UkuranProperti,
-  settings: KontribusiSettings,
-): number {
-  const isKontrakan = jenisProperti === "kontrakan";
-  if (isKontrakan) {
-    if (ukuran === "besar") return settings.feeKontrakanBesarPerUnitBulan;
-    if (ukuran === "sedang") return settings.feeKontrakanSedangPerUnitBulan;
-    return settings.feeKontrakanKecilPerUnitBulan;
-  }
-  if (ukuran === "besar") return settings.feeKostBesarPerUnitBulan;
-  if (ukuran === "sedang") return settings.feeKostSedangPerUnitBulan;
-  return settings.feeKostKecilPerUnitBulan;
 }
 
 export function diffDaysInclusive(start: string, end: string): number {
@@ -283,24 +270,12 @@ export function hitungEstimasiPenyewa(params: {
     };
   }
 
-  if (isUkuranTinggal(ukuranTinggal)) {
-    return hitungKontribusiTinggal({ jenisWarga: jenisProperti, ukuran: ukuranTinggal, terminBulan, settings });
-  }
-
-  const pintu = jumlahPintu ?? 1;
-  const ukuran = getUkuranProperti(pintu, settings);
-  const tarifSatuan = feeTinggalPerUnitBulan(jenisProperti, ukuran, settings);
-  const jenisLabel = jenisProperti === "kontrakan" ? "kontrakan" : "kost";
-  return {
-    jenis: jenisLabel,
-    label: `Kontribusi ${jenisLabel} (per unit/bulan)`,
-    kelompok: `Properti ${labelUkuranProperti(ukuran, settings)} · ${pintu} pintu terdaftar`,
-    ukuranProperti: ukuran,
+  return hitungKontribusiTinggal({
+    jenisWarga: jenisProperti,
+    ukuran: isUkuranTinggal(ukuranTinggal) ? ukuranTinggal : null,
     terminBulan,
-    tarifSatuan,
-    satuanLabel: "bulan",
-    total: terminBulan * tarifSatuan,
-  };
+    settings,
+  });
 }
 
 export function hitungEstimasiPemilik(params: {
@@ -371,7 +346,7 @@ export function hitungEstimasiPemilik(params: {
   };
 }
 
-/** Satuan tarif kontribusi ditetapkan saat survey admin. */
+/** Satuan tarif kontribusi (legacy survey / arsip). */
 export const KONTRIBUSI_SATUAN_VALUES = ["hari", "minggu", "bulan", "tahun"] as const;
 export type KontribusiSatuan = (typeof KONTRIBUSI_SATUAN_VALUES)[number];
 

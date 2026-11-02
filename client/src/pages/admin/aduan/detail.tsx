@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import {
   ArrowLeft, CalendarClock, CheckCircle2, Eye, FileText, Gavel, GitMerge, Globe, Loader2, Lock, MessageCircle, Search,
-  Send, Store, UserCog, XCircle,
+  Send, UserCog, XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,7 +72,7 @@ export default function AdminAduanDetail({ id }: { id: number }) {
   const [, go] = useLocation();
   const kunci = ["/api/admin/aduan", id];
   const { data: a, isLoading, error } = useQuery<Detail>({ queryKey: kunci, queryFn: () => ambilAduanJson(`/api/admin/aduan/${id}`) });
-  const [dialog, setDialog] = useState<null | "identitas" | "teradu" | "klarifikasi" | "teguran" | "tutup" | "gabung" | "rw3biz">(null);
+  const [dialog, setDialog] = useState<null | "identitas" | "teradu" | "klarifikasi" | "teguran" | "tutup" | "gabung">(null);
   const [tutupStatus, setTutupStatus] = useState<"selesai" | "tidak_terbukti">("selesai");
 
   const segarkan = (d?: Detail) => {
@@ -166,11 +166,6 @@ export default function AdminAduanDetail({ id }: { id: number }) {
                 <Button className="h-auto justify-start gap-2 bg-red-700 py-3 hover:bg-red-800" onClick={() => setDialog("teguran")} disabled={!adaTeradu}>
                   <Gavel className="h-4 w-4" /> Terbitkan teguran{a.saranTingkat ? ` (${TINGKAT_TEGURAN_INFO[a.saranTingkat].label})` : ""}
                 </Button>
-                {a.teradu.jenis === "usaha" && !a.rw3bizPelanggaranId && (
-                  <Button variant="outline" className="h-auto justify-start gap-2 py-3" onClick={() => setDialog("rw3biz")}>
-                    <Store className="h-4 w-4" /> Teruskan ke denda RW3BIZ
-                  </Button>
-                )}
                 {a.status !== "terbukti" && a.status !== "teguran" && (
                   <Button variant="outline" className="h-auto justify-start gap-2 py-3" onClick={() => ubah.mutate({ status: "terbukti" })}>
                     <CheckCircle2 className="h-4 w-4" /> Nyatakan terbukti
@@ -188,9 +183,6 @@ export default function AdminAduanDetail({ id }: { id: number }) {
               </div>
             )}
             {!adaTeradu && !tutup && <p className="mt-2 text-xs text-amber-800">Tetapkan pihak teradu dulu untuk mengundang klarifikasi atau menerbitkan teguran.</p>}
-            {a.rw3bizPelanggaranId && (
-              <p className="mt-3 text-sm">Sudah diteruskan ke RW3BIZ. <Link href="/admin/rw3biz/pelanggaran" className="font-semibold text-brand underline">Buka pelanggaran usaha</Link></p>
-            )}
           </Kartu>
 
           {a.teguran.length > 0 && (
@@ -276,7 +268,6 @@ export default function AdminAduanDetail({ id }: { id: number }) {
       <DialogTeguran buka={dialog === "teguran"} tutup={() => setDialog(null)} a={a} onTerbit={() => segarkan()} />
       <DialogTutup buka={dialog === "tutup"} tutup={() => setDialog(null)} status={tutupStatus} kirim={(pesan) => ubah.mutate({ status: tutupStatus, pesanPublik: pesan }, { onSuccess: () => setDialog(null) })} memuat={ubah.isPending} />
       <DialogGabung buka={dialog === "gabung"} tutup={() => setDialog(null)} id={id} onSimpan={segarkan} />
-      <DialogRw3biz buka={dialog === "rw3biz"} tutup={() => setDialog(null)} id={id} onSelesai={() => segarkan()} />
     </div>
   );
 }
@@ -363,8 +354,13 @@ export function ItemTeguran({ t, onBerubah }: { t: Teguran & { teraduNama?: stri
       <div className="mt-2 flex flex-wrap gap-1.5">
         {t.suratId && (
           <a href={`/api/wilayah/surat/${t.suratId}/pdf`} target="_blank" rel="noreferrer">
-            <Button size="sm" variant="outline" className="h-8 gap-1"><FileText className="h-3.5 w-3.5" />Cetak surat</Button>
+            <Button size="sm" variant={t.tingkat === "lisan" ? "default" : "outline"} className={cn("h-8 gap-1", t.tingkat === "lisan" && "bg-red-700 hover:bg-red-800")}>
+              <FileText className="h-3.5 w-3.5" />{t.tingkat === "lisan" ? "Cetak & bawa ke teradu" : "Cetak surat"}
+            </Button>
           </a>
+        )}
+        {t.tingkat === "lisan" && !t.caraSerah && t.status === "aktif" && (
+          <p className="mt-1 w-full text-[11px] text-muted-foreground">Cetak surat ini, bawa saat menyampaikan teguran lisan kepada teradu, lalu catat penyerahan.</p>
         )}
         {t.status === "aktif" && (
           <>
@@ -598,7 +594,10 @@ function DialogTeguran({ buka, tutup, a, onTerbit }: { buka: boolean; tutup: () 
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Gavel className="h-5 w-5 text-red-700" />Terbitkan teguran resmi</DialogTitle>
-          <DialogDescription>Kepada <b>{a.teradu.nama}</b>. Surat bernomor resmi dengan QR verifikasi. Nama pelapor tidak dicetak.</DialogDescription>
+          <DialogDescription>
+            Kepada <b>{a.teradu.nama}</b>. Surat bernomor resmi dengan QR verifikasi. Nama pelapor tidak dicetak.
+            {tingkat === "lisan" && " Cetak surat ini lalu bawa saat menyampaikan teguran lisan kepada teradu."}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
@@ -628,6 +627,11 @@ function DialogTeguran({ buka, tutup, a, onTerbit }: { buka: boolean; tutup: () 
             <Input type="date" value={tenggat} onChange={(e) => setTenggat(e.target.value)} />
           </div>
           <p className="rounded-xl bg-muted p-3 text-sm"><b>Konsekuensi yang dicetak:</b> {info.konsekuensi}</p>
+          {tingkat === "lisan" && (
+            <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+              Setelah terbit, cetak PDF lalu bawa surat ini saat menyampaikan teguran lisan kepada pihak teradu.
+            </p>
+          )}
           <label className="flex items-start gap-2 rounded-xl border-2 border-red-200 bg-red-50 p-3 text-sm">
             <Checkbox checked={yakin} onCheckedChange={(c) => setYakin(Boolean(c))} className="mt-0.5" />
             Saya sudah memeriksa aduan ini dan teguran layak diterbitkan. Surat yang terbit tidak dapat diubah (hanya dibatalkan).
@@ -636,7 +640,7 @@ function DialogTeguran({ buka, tutup, a, onTerbit }: { buka: boolean; tutup: () 
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={lihat} disabled={pratinjau}>{pratinjau ? <Loader2 className="h-4 w-4 animate-spin" /> : "Pratinjau PDF"}</Button>
           <Button className="bg-red-700 hover:bg-red-800" disabled={!yakin || m.isPending} onClick={() => m.mutate()}>
-            {m.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Terbitkan ${info.label}`}
+            {m.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : tingkat === "lisan" ? "Terbitkan & cetak surat" : `Terbitkan ${info.label}`}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -686,33 +690,6 @@ function DialogGabung({ buka, tutup, id, onSimpan }: { buka: boolean; tutup: () 
         <DialogFooter>
           <Button variant="outline" onClick={tutup}>Batal</Button>
           <Button disabled={nomor.length < 8 || m.isPending} onClick={() => m.mutate()}>Gabungkan</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function DialogRw3biz({ buka, tutup, id, onSelesai }: { buka: boolean; tutup: () => void; id: number; onSelesai: () => void }) {
-  const { toast } = useToast();
-  const [, go] = useLocation();
-  const m = useMutation({
-    mutationFn: () => kirimAduanJson<{ pelanggaranId: number }>(`/api/admin/aduan/${id}/rw3biz`, "POST", {}),
-    onSuccess: () => { onSelesai(); tutup(); toast({ title: "Diteruskan ke RW3BIZ" }); go("/admin/rw3biz/pelanggaran"); },
-    onError: (e) => toast({ title: "Gagal", description: (e as Error).message, variant: "destructive" }),
-  });
-  return (
-    <Dialog open={buka} onOpenChange={(o) => !o && tutup()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Teruskan ke denda RW3BIZ</DialogTitle>
-          <DialogDescription>
-            Aduan dicatat sebagai pelanggaran usaha (menunggu verifikasi) beserta foto pertama. Denda dihitung di halaman Pelanggaran & aduan RW3BIZ.
-            Identitas pelapor tidak ikut diteruskan.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button variant="outline" onClick={tutup}>Batal</Button>
-          <Button disabled={m.isPending} onClick={() => m.mutate()}>Teruskan</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

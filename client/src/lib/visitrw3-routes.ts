@@ -7,6 +7,7 @@ export type Visitrw3PeranPublik = JenisWarga;
 export const VISITRW3_ROUTES = {
   hub: "/visitrw3",
   panduan: "/visitrw3/panduan",
+  formulir: "/visitrw3/formulir",
   pengajuan: "/visitrw3/pengajuan",
   perpanjang: "/visitrw3/perpanjang",
   status: "/visitrw3/status",

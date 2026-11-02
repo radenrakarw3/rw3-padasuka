@@ -3,16 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { readJsonSafely } from "@/lib/queryClient";
-import {
-  JENIS_PELANGGARAN_INFO,
-  KENDARAAN_BIZ,
-  TINGKAT_PELANGGARAN,
-  TINGKAT_PELANGGARAN_LABEL,
-  bulanIni,
-  formatRp,
-  type JenisPelanggaran,
-  type TarifKontribusi,
-} from "@shared/rw3biz-kontribusi";
+import { bulanIni, formatRp, type TarifKontribusi } from "@shared/rw3biz-kontribusi";
 
 type TarifPublik = Omit<TarifKontribusi, "programMulai">;
 
@@ -39,53 +30,17 @@ export function useTarifPublik(enabled = true) {
   });
 }
 
-function Baris({ kiri, kanan }: { kiri: React.ReactNode; kanan: React.ReactNode }) {
-  return (
-    <li className="flex justify-between gap-3">
-      <span className="text-muted-foreground">{kiri}</span>
-      <span className="tabular-nums text-right">{kanan}</span>
-    </li>
-  );
-}
-
-/** Aturan RW3BIZ yang berlaku: sumbangsih, denda razia & pelanggaran — angka dari pengaturan admin. */
+/** Aturan RW3BIZ yang berlaku: sumbangsih & penanganan pelanggaran — angka dari pengaturan admin. */
 export function AturanRw3biz() {
   const { data: t, isLoading } = useTarifPublik();
   if (isLoading || !t) return <Skeleton className="h-40 w-full" />;
   return (
     <div className="space-y-4 text-sm">
       <div className="space-y-1">
-        <p className="font-medium">Razia kendaraan</p>
+        <p className="font-medium">Pelanggaran & aduan</p>
         <p className="text-xs">
-          Kendaraan menuju usaha yang tidak didaftarkan (milik maupun charter) dikenai denda per kendaraan berikut. Bila berulang dalam
-          12 bulan, denda dikalikan pengali pengulangan di bawah (minimal 1×). Denda disetor ke Kas RW 03 dengan kwitansi.
-        </p>
-        <ul className="space-y-0.5 text-xs">
-          {KENDARAAN_BIZ.map((k) => (
-            <Baris key={k.kode} kiri={k.label} kanan={formatRp(Math.round(t[k.kode] * t.dendaRaziaKali))} />
-          ))}
-        </ul>
-      </div>
-      <div className="space-y-1">
-        <p className="font-medium">Denda pelanggaran (aduan warga & temuan Ketua RW / Linmas)</p>
-        <p className="text-xs">Denda = denda dasar jenis × tingkat × pengulangan dalam 12 bulan, paling banyak {formatRp(t.dendaMaks)}.</p>
-        <ul className="space-y-0.5 text-xs">
-          {(Object.keys(t.dendaPelanggaran) as Exclude<JenisPelanggaran, "lainnya">[]).map((j) => (
-            <Baris key={j} kiri={JENIS_PELANGGARAN_INFO[j].label} kanan={formatRp(t.dendaPelanggaran[j])} />
-          ))}
-        </ul>
-        <ul className="space-y-0.5 text-xs">
-          <Baris
-            kiri="Tingkat"
-            kanan={TINGKAT_PELANGGARAN.map((k) => `${TINGKAT_PELANGGARAN_LABEL[k].toLowerCase()} ×${t.dendaTingkat[k]}`).join(" · ")}
-          />
-          <Baris
-            kiri="Pengulangan"
-            kanan={t.dendaPengulangan.map((p, i) => `ke-${i + 1}${i === t.dendaPengulangan.length - 1 ? "+" : ""}: ${p === 0 ? "teguran" : `×${p}`}`).join(" · ")}
-          />
-        </ul>
-        <p className="text-[11px] text-muted-foreground">
-          Aduan warga dicek dulu ke lokasi; identitas pelapor dirahasiakan. Pelanggaran berat langsung didenda walau pertama kali.
+          Aduan warga dicek dulu ke lokasi; identitas pelapor dirahasiakan. Pelanggaran yang terbukti ditangani lewat teguran resmi
+          bertingkat (teguran lisan, SP-1, SP-2, SP-3) tanpa denda uang.
         </p>
       </div>
       <div className="space-y-1">
@@ -109,7 +64,7 @@ export function PenjelasanVoucher({ target }: { target: number }) {
     <div className="space-y-1 rounded-lg border border-[hsl(40,45%,55%)]/50 bg-[hsl(40,45%,55%)]/10 p-3">
       <p className="font-medium">Kelebihan dana kembali ke warga & usaha</p>
       <p className="text-xs">
-        Kebutuhan anggaran RW {formatRp(target)} per bulan. Bila sumbangsih ditambah denda yang terkumpul dalam sebulan{" "}
+        Kebutuhan anggaran RW {formatRp(target)} per bulan. Bila sumbangsih yang terkumpul dalam sebulan{" "}
         <strong>melebihi</strong> kebutuhan itu, kelebihannya dijadikan <strong>voucher belanja warga RW 03</strong>.
       </p>
       <ul className="list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
@@ -144,11 +99,8 @@ export function TransparansiKontribusi() {
         <>
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-lg bg-muted/40 p-2">
-              <p className="text-xs text-muted-foreground">Sumbangsih + denda masuk</p>
-              <p className="font-semibold tabular-nums">{formatRp(data.voucher.terkumpul)}</p>
-              {data.voucher.denda > 0 && (
-                <p className="text-[11px] text-muted-foreground">termasuk denda {formatRp(data.voucher.denda)}</p>
-              )}
+              <p className="text-xs text-muted-foreground">Sumbangsih masuk</p>
+              <p className="font-semibold tabular-nums">{formatRp(data.voucher.kontribusi)}</p>
             </div>
             <div className="rounded-lg bg-muted/40 p-2">
               <p className="text-xs text-muted-foreground">Kebutuhan / bulan</p>

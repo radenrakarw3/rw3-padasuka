@@ -59,9 +59,9 @@ import {
 import { PlatNomorInput } from "@/components/gov/plat-nomor-input";
 import { FormStepper } from "@/components/gov/form-stepper";
 import { SuccessPanel } from "@/components/gov/success-panel";
-import { KontribusiTinggalInfo, PilihUkuranTinggal, Visitrw3SyaratPanel } from "@/components/gov/visitrw3-syarat-panel";
+import { KontribusiTinggalInfo, Visitrw3SyaratPanel } from "@/components/gov/visitrw3-syarat-panel";
 import { FeatureExplain } from "@/components/gov/feature-explain";
-import { isUkuranTinggal, labelUkuranTinggal, settingsRowsToMap } from "@/lib/visitrw3-kontribusi";
+import { settingsRowsToMap } from "@/lib/visitrw3-kontribusi";
 import { buildKategoriUsahaPayload } from "@shared/visitrw3-kategori-usaha";
 import {
   VISITRW3_ROUTES,
@@ -453,9 +453,9 @@ function KendaraanFields({
   return (
     <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
       <div className="space-y-1">
-        <Label>Punya kendaraan yang dibawa/dipakai di RW 03? *</Label>
+        <Label>Punya kendaraan di RW 03? (opsional)</Label>
         <p className="text-xs text-muted-foreground">
-          Untuk keamanan lingkungan. Cukup jenis dan plat nomor — STNK diperiksa petugas saat survey.
+          Boleh dilewati. Jika punya, isi jenis dan plat nomor.
         </p>
       </div>
       <div className="grid grid-cols-2 gap-2">
@@ -562,6 +562,10 @@ type DraftPengajuan = {
   alamat: string;
   nomorUnit: string;
   ukuranTinggal?: string;
+  asalKabKota?: string;
+  asalKecamatan?: string;
+  asalKelurahan?: string;
+  asalAlamat?: string;
   namaUsaha: string;
   jenisTempatUsaha: string;
   jenisTempatUsahaLain: string;
@@ -768,7 +772,11 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
   const [rt, setRt] = useState("");
   const [alamat, setAlamat] = useState("");
   const [nomorUnit, setNomorUnit] = useState("");
-  const [ukuranTinggal, setUkuranTinggal] = useState("");
+  /** Asal tempat tinggal sebelum di RW 03 (Visit). */
+  const [asalKabKota, setAsalKabKota] = useState("");
+  const [asalKecamatan, setAsalKecamatan] = useState("");
+  const [asalKelurahan, setAsalKelurahan] = useState("");
+  const [asalAlamat, setAsalAlamat] = useState("");
   const [namaUsaha, setNamaUsaha] = useState("");
   const [jenisTempatUsaha, setJenisTempatUsaha] = useState("");
   const [jenisTempatUsahaLain, setJenisTempatUsahaLain] = useState("");
@@ -782,7 +790,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
   const jumlah = jumlahDewasa + jumlahAnak;
   const aturanKk = product === "visit" ? aturanFotoKk(jenisWarga, jumlahAnak) : "tidak";
   const [penghuni, setPenghuni] = useState<PenghuniForm[]>([emptyPenghuni(false)]);
-  const [terminBulan, setTerminBulan] = useState("3");
+  const [terminBulan, setTerminBulan] = useState(product === "visit" ? "1" : "3");
   const [catatan, setCatatan] = useState("");
   const [setujuTataTertib, setSetujuTataTertib] = useState(false);
   const [nomorHasil, setNomorHasil] = useState<string | null>(null);
@@ -794,9 +802,21 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
   const [draftDipulihkan, setDraftDipulihkan] = useState(false);
 
   const catatanKirim = () => {
-    const isi = catatan.trim();
-    if (!petugas) return isi || null;
-    return `[Diisi petugas dari formulir kertas]${isi ? ` ${isi}` : ""}`;
+    const bagian: string[] = [];
+    if (product === "visit") {
+      const asal = [
+        asalKabKota.trim() && `Kab/Kota ${asalKabKota.trim()}`,
+        asalKecamatan.trim() && `Kec. ${asalKecamatan.trim()}`,
+        asalKelurahan.trim() && `Kel/Desa ${asalKelurahan.trim()}`,
+        asalAlamat.trim(),
+      ]
+        .filter(Boolean)
+        .join(", ");
+      if (asal) bagian.push(`Asal tinggal: ${asal}`);
+    }
+    if (petugas) bagian.unshift("[Diisi petugas dari formulir kertas]");
+    if (catatan.trim()) bagian.push(catatan.trim());
+    return bagian.length ? bagian.join(" · ") : null;
   };
 
   const keperluan = jenisWarga ? keperluanFromJenisWarga(jenisWarga) : "tinggal";
@@ -825,7 +845,10 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
     setRt(d?.rt ?? "");
     setAlamat(d?.alamat ?? "");
     setNomorUnit(d?.nomorUnit ?? "");
-    setUkuranTinggal(d?.ukuranTinggal ?? "");
+    setAsalKabKota(d?.asalKabKota ?? "");
+    setAsalKecamatan(d?.asalKecamatan ?? "");
+    setAsalKelurahan(d?.asalKelurahan ?? "");
+    setAsalAlamat(d?.asalAlamat ?? "");
     setNamaUsaha(d?.namaUsaha ?? "");
     setJenisTempatUsaha(d?.jenisTempatUsaha ?? "");
     setJenisTempatUsahaLain(d?.jenisTempatUsahaLain ?? "");
@@ -851,7 +874,8 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
         : [emptyPenghuni(false)],
     );
     setPenghuniIndex(d?.penghuniIndex ?? 0);
-    if (d?.terminBulan) setTerminBulan(d.terminBulan);
+    if (product === "visit") setTerminBulan("1");
+    else if (d?.terminBulan) setTerminBulan(d.terminBulan);
     setCatatan(d?.catatan ?? "");
     setSetujuTataTertib(false);
     setFotoKk(d?.fotoKk ?? "");
@@ -879,7 +903,10 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
         rt,
         alamat,
         nomorUnit,
-        ukuranTinggal,
+        asalKabKota,
+        asalKecamatan,
+        asalKelurahan,
+        asalAlamat,
         namaUsaha,
         jenisTempatUsaha,
         jenisTempatUsahaLain,
@@ -900,7 +927,8 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
     }, 400);
     return () => window.clearTimeout(t);
   }, [
-    draftKey, draftSiapKey, nomorHasil, step, rt, alamat, nomorUnit, ukuranTinggal, namaUsaha,
+    draftKey, draftSiapKey, nomorHasil, step, rt, alamat, nomorUnit,
+    asalKabKota, asalKecamatan, asalKelurahan, asalAlamat, namaUsaha,
     jenisTempatUsaha, jenisTempatUsahaLain, kategoriUsaha, kategoriUsahaLain,
     jamBuka, jamTutup, sumbangsih, jumlahDewasa, jumlahAnak, penghuni, penghuniIndex,
     terminBulan, catatan, setujuTataTertib, fotoKk,
@@ -1139,7 +1167,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
         alamat: alamat.trim(),
         nomorUnit:
           formProfile.nomorUnitMode === "hidden" ? null : nomorUnit.trim() || null,
-        ukuranTinggal: jenisWarga === "kost" || jenisWarga === "kontrak" ? ukuranTinggal || null : null,
+        ukuranTinggal: null,
         namaUsaha: null,
         jenisTempatUsaha: null,
         jenisTempatUsahaLain: null,
@@ -1288,8 +1316,8 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                   "Sumbangsih yang Anda sanggupkan adalah komitmen bulanan (paling lambat tanggal 1) dan tampil di halaman cek status.",
                 ]
               : [
-                  "Admin RW akan melakukan survey kelengkapan data.",
-                  "Setelah disetujui, Surat Izin Tinggal Sementara terbit — bisa dilihat & dicetak dari halaman cek status.",
+                  "Pengurus RW akan memverifikasi data (biasanya dari formulir kertas yang dikumpulkan).",
+                  "Setelah disetujui, izin tinggal aktif 1 bulan (kontribusi Rp1.000) — surat bisa dilihat & dicetak dari cek status.",
                 ]),
           ]}
           primaryAction={{
@@ -1399,8 +1427,8 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
       )}
       {petugas && (
         <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-          <b>Mode petugas:</b> diisi petugas dari formulir kertas. Salin isian sesuai formulir, foto KTP dari fotokopi yang dilampirkan.
-          Pengajuan tetap masuk antrean survey seperti biasa.
+          <b>Mode petugas:</b> salin dari formulir kertas. Wajib isi asal tinggal + kepentingan detail.
+          Unggah fotokopi KTP <b>semua anggota dewasa</b> (anak: KK). Lalu setujui di antrian + bayar Rp1.000.
         </div>
       )}
       {draftDipulihkan && (
@@ -1460,19 +1488,52 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
               <p className="text-xs text-muted-foreground">{formProfile.nomorUnitHint}</p>
             </div>
           )}
-          {(jenisWarga === "kost" || jenisWarga === "kontrak") && (
-            <div className="space-y-2">
-              <Label>{jenisWarga === "kost" ? "Ukuran kamar kost" : "Jumlah kamar tidur kontrakan"}</Label>
-              <PilihUkuranTinggal
-                jenis={jenisWarga}
-                settingsRows={settingsRows}
-                value={ukuranTinggal}
-                onChange={setUkuranTinggal}
-              />
-              <p className="text-xs text-muted-foreground">
-                Kontribusi dihitung dari ukuran tempat yang Anda tempati, bukan jumlah pintu bangunan. Pengurus RW
-                mencocokkannya saat survey.
-              </p>
+          {product === "visit" && (
+            <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+              <div>
+                <Label className="text-base">Asal tempat tinggal *</Label>
+                <p className="text-xs text-muted-foreground">
+                  Domisili sebelum tinggal di RW 03 — wajib.
+                </p>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label>Kabupaten / Kota *</Label>
+                  <Input
+                    className="h-11"
+                    value={asalKabKota}
+                    onChange={(e) => setAsalKabKota(e.target.value)}
+                    placeholder="Contoh: Bandung / Kota Cimahi"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Kecamatan *</Label>
+                  <Input
+                    className="h-11"
+                    value={asalKecamatan}
+                    onChange={(e) => setAsalKecamatan(e.target.value)}
+                    placeholder="Nama kecamatan"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Kelurahan / Desa</Label>
+                  <Input
+                    className="h-11"
+                    value={asalKelurahan}
+                    onChange={(e) => setAsalKelurahan(e.target.value)}
+                    placeholder="Opsional"
+                  />
+                </div>
+                <div className="space-y-1 sm:col-span-2">
+                  <Label>Alamat lengkap asal</Label>
+                  <Input
+                    className="h-11"
+                    value={asalAlamat}
+                    onChange={(e) => setAsalAlamat(e.target.value)}
+                    placeholder="Jl., RT/RW asal — opsional"
+                  />
+                </div>
+              </div>
             </div>
           )}
           {jenisWarga === "kost" && (
@@ -1512,9 +1573,12 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                   alamat,
                   jenisWarga,
                   nomorUnit,
-                  ukuranTinggal,
                 });
                 if (err) return showErr(err);
+                if (product === "visit") {
+                  if (asalKabKota.trim().length < 2) return showErr("Isi kabupaten/kota asal tinggal");
+                  if (asalKecamatan.trim().length < 2) return showErr("Isi kecamatan asal tinggal");
+                }
                 setPenghuniIndex(0);
                 goStep(1);
               }}
@@ -1634,7 +1698,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
             Format 24 jam (00:00–23:59), tanpa AM/PM.
             {product === "rw3biz"
               ? " Data tempat dan kendaraan dapat diverifikasi Ketua RW 03 saat menyetujui."
-              : " Petugas survey menyesuaikan kunjungan dengan jam buka."}
+              : ""}
           </p>
           <PesanGalat pesan={errMsg} />
           <div className="flex gap-2">
@@ -1853,7 +1917,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                       <p className="text-xs text-muted-foreground">
                         {product === "rw3biz"
                           ? "Ketua RW 03 mengabari hasil persetujuan lewat nomor ini."
-                          : "Pengurus mengabari hasil survey lewat nomor ini."}
+                          : "Pengurus mengabari hasil verifikasi lewat nomor ini."}
                       </p>
                     </div>
                     <div className="space-y-2">
@@ -2066,9 +2130,20 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
             current={1}
             total={1}
             title="Periksa lalu kirim"
-            hint="Pilih lama berlaku, cek isian, lalu setujui tata tertib."
+            hint={
+              product === "visit"
+                ? "Masa berlaku 1 bulan · kontribusi Rp1.000. Cek isian, lalu setujui tata tertib."
+                : "Pilih lama berlaku, cek isian, lalu setujui tata tertib."
+            }
           />
-          <PilihTermin value={terminBulan} onChange={setTerminBulan} />
+          {product === "rw3biz" ? (
+            <PilihTermin value={terminBulan} onChange={setTerminBulan} />
+          ) : (
+            <div className="rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+              <span className="text-muted-foreground">Masa berlaku &amp; kontribusi: </span>
+              <strong>1 bulan · Rp1.000</strong>
+            </div>
+          )}
           <div className="space-y-2">
             <Label>Catatan (opsional)</Label>
             <Textarea
@@ -2088,11 +2163,6 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                   RT {rt ? rt.padStart(2, "0") : "—"} · {alamat.trim() || "—"}
                   {nomorUnit.trim() ? ` · ${nomorUnit.trim()}` : ""}
                 </p>
-                {(jenisWarga === "kost" || jenisWarga === "kontrak") && (
-                  <p className="text-xs text-muted-foreground">
-                    {isUkuranTinggal(ukuranTinggal) ? labelUkuranTinggal(jenisWarga, ukuranTinggal) : "Ukuran belum dipilih"}
-                  </p>
-                )}
               </div>
               <Button type="button" variant="ghost" size="sm" className="h-auto px-2 py-1 text-brand" onClick={() => lompatKe("lokasi")}>
                 Ubah
@@ -2206,12 +2276,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
               tataKhusus={settingsMap.tata_tertib_penyewa ?? ""}
               kontribusi={
                 jenisWarga === "kost" || jenisWarga === "kontrak" ? (
-                  <KontribusiTinggalInfo
-                    jenis={jenisWarga}
-                    settingsRows={settingsRows}
-                    terminBulan={parseInt(terminBulan, 10)}
-                    ukuran={ukuranTinggal}
-                  />
+                  <KontribusiTinggalInfo jenis={jenisWarga} terminBulan={1} />
                 ) : null
               }
               setuju={setujuTataTertib}
@@ -2230,7 +2295,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
               onClick={() => {
                 const err = validateStepBayar(terminBulan, setujuTataTertib);
                 if (err) return showErr(err);
-                const errLokasi = validateLokasiWargaSinggah({ rt, alamat, jenisWarga, nomorUnit, ukuranTinggal });
+                const errLokasi = validateLokasiWargaSinggah({ rt, alamat, jenisWarga, nomorUnit });
                 if (errLokasi) {
                   lompatKe("lokasi");
                   return showErr(errLokasi, { step: indeksLangkah("lokasi") });

@@ -25,11 +25,6 @@ import {
 } from "@shared/visitrw3-kontribusi";
 import { stringifyKategoriUsaha } from "@shared/visitrw3-kategori-usaha";
 import {
-  getChecklistSurveyPengajuan,
-  validateSurveyChecklist,
-  type SurveyChecklistItem,
-} from "@shared/visitrw3-survey-checklist";
-import {
   type Visitrw3DashboardStats,
   emptyVisitrw3DashboardStats,
   kelompokUsiaLabel,
@@ -146,7 +141,8 @@ async function generateNomorVisitrw3(): Promise<string> {
 }
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
-const TERMIN_VALUES = [1, 3, 6, 12] as const;
+/** Visit RW3: masa berlaku selalu 1 bulan (kontribusi Rp1.000). */
+const TERMIN_VALUES = [1] as const;
 
 export { hitungTanggalBerlaku } from "@shared/visitrw3-kontribusi";
 
@@ -176,7 +172,8 @@ export const pengajuanBaruSchema = z.object({
     .number({ invalid_type_error: "Pilih RT" })
     .int()
     .refine((n) => (ACTIVE_RT_NUMBERS as readonly number[]).includes(n), "RT tidak valid"),
-  alamat: z.string().trim().min(5, "Alamat lengkap wajib diisi"),
+  /** Alamat opsional — cukup RT (+ nomor kamar untuk kost). */
+  alamat: z.string().trim().optional().nullable().default(""),
   namaUsaha: z.string().optional().nullable(),
   jenisUsaha: z.string().optional().nullable(),
   jenisTempatUsaha: z.enum(["lapak", "kiosk", "usaha_rumahan", "lainnya"]).optional().nullable(),
@@ -193,7 +190,7 @@ export const pengajuanBaruSchema = z.object({
   tanggalBayar: z.string().regex(DATE_REGEX, "Tanggal bayar tidak valid").optional().default(() => hariIniWib()),
   terminBulan: z.number().refine(
     (n): n is (typeof TERMIN_VALUES)[number] => TERMIN_VALUES.includes(n as (typeof TERMIN_VALUES)[number]),
-    "Pilih termin 1, 3, 6, atau 12 bulan",
+    "Masa berlaku Visit RW3 adalah 1 bulan",
   ),
   catatanPemohon: z.string().max(1000, "Catatan maksimal 1000 karakter").optional().nullable(),
   penghuni: z.array(penghuniInputSchema).min(1, "Data penghuni wajib diisi"),
@@ -252,15 +249,15 @@ export const perpanjangSchema = z.object({
 export const approveVisitrw3SurveySchema = z.object({
   catatanSurvey: z.string().optional().nullable(),
   checklistSurvey: z.record(z.string(), z.boolean()).optional(),
-  /** Koreksi ukuran tempat hasil survey; kosong = pakai pilihan penghuni. */
+  /** Legacy — tidak lagi dipakai untuk hitung kontribusi. */
   ukuranTinggal: z.enum(UKURAN_TINGGAL_VALUES).optional().nullable(),
   /** Tanggal uang kontribusi diterima; masa berlaku dihitung ulang dari tanggal ini. */
-  tanggalBayar: z.string().regex(DATE_REGEX, "Tanggal bayar tidak valid").optional().nullable(),
+  tanggalBayar: z.string().regex(DATE_REGEX, "Tanggal bayar tidak valid"),
 });
 
-/** Kolom kontribusi penghuni kost/kontrakan menurut ukuran tempat yang ditempati. */
+/** Kolom kontribusi penghuni: flat Rp1.000 × termin bulan. */
 async function kolomKontribusiTinggal(jenisWarga: string | null, ukuran: UkuranProperti | null, terminBulan: number) {
-  if (!ukuran || (jenisWarga !== "kost" && jenisWarga !== "kontrak")) {
+  if (jenisWarga !== "kost" && jenisWarga !== "kontrak") {
     return { ukuranTinggal: ukuran, estimasiKontribusi: null, rincianKontribusi: null, settingsVersi: null };
   }
   const [settings, settingsVersi] = await Promise.all([getKontribusiSettings(), getSettingsVersi()]);
@@ -271,11 +268,6 @@ async function kolomKontribusiTinggal(jenisWarga: string | null, ukuran: UkuranP
     rincianKontribusi: JSON.stringify(rincian),
     settingsVersi,
   };
-}
-
-function assertChecklistSurvey(items: SurveyChecklistItem[], checked?: Record<string, boolean>) {
-  const err = validateSurveyChecklist(items, checked);
-  if (err) throw new Error(err);
 }
 
 const parseKendaraanFromPenghuni = parseKendaraan;
@@ -338,13 +330,11 @@ function validatePenghuni(
       throw new Error(`Penghuni ${p.namaLengkap}: nama sekolah wajib diisi (usia di bawah 21 tahun)`);
     }
     if (!p.fotoKtpPath?.trim()) throw new Error(`Penghuni ${p.namaLengkap}: foto KTP wajib diunggah`);
-    if (typeof p.punyaKendaraan !== "boolean") {
-      throw new Error(`Penghuni ${p.namaLengkap}: jawab apakah punya kendaraan (ya/tidak)`);
-    }
+    // Kendaraan opsional untuk Visit RW3 — jika diisi, tetap divalidasi.
     if (p.punyaKendaraan) {
       const kendaraan = parseKendaraanFromPenghuni(p.jenisKendaraan, p.platNomor);
       if (kendaraan.length === 0) {
-        throw new Error(`Penghuni ${p.namaLengkap}: isi minimal satu kendaraan`);
+        throw new Error(`Penghuni ${p.namaLengkap}: isi minimal satu kendaraan atau pilih tidak punya`);
       }
       if (kendaraan.length > 10) throw new Error(`Penghuni ${p.namaLengkap}: maksimal 10 kendaraan`);
       for (let i = 0; i < kendaraan.length; i++) {
@@ -430,9 +420,6 @@ export async function createPengajuanBaru(input: z.infer<typeof pengajuanBaruSch
   } else if (jenisWarga === "kost" && !parsed.nomorUnit?.trim()) {
     throw new Error("Nomor kamar / unit kost wajib diisi");
   }
-  if ((jenisWarga === "kost" || jenisWarga === "kontrak") && !parsed.ukuranTinggal) {
-    throw new Error(jenisWarga === "kost" ? "Pilih ukuran kamar kost" : "Pilih jumlah kamar tidur kontrakan");
-  }
 
   // Normalisasi payload sesuai jenis (hindari data usaha menempel di kontrak/kost).
   const namaUsaha = jenisWarga === "jualan" ? parsed.namaUsaha?.trim() || null : null;
@@ -486,7 +473,7 @@ export async function createPengajuanBaru(input: z.infer<typeof pengajuanBaruSch
   const tanggalBerlakuSampai = hitungTanggalBerlaku(parsed.tanggalBayar, parsed.terminBulan);
   const kontribusi = await kolomKontribusiTinggal(jenisWarga, parsed.ukuranTinggal ?? null, parsed.terminBulan);
   const nomorVisitrw3 = await generateNomorVisitrw3();
-  const alamat = parsed.alamat.trim();
+  const alamat = (parsed.alamat ?? "").trim() || "-";
   const isJualan = jenisWarga === "jualan";
 
   return db.transaction(async (tx) => {
@@ -944,37 +931,26 @@ export async function approvePengajuan(
   const { penghuni } = detail;
   if (detail.pengajuan.status !== "menunggu_survey") throw new Error("Pengajuan sudah diproses");
 
-  const masaBerlaku = parsedSurvey.tanggalBayar
-    ? {
-        tanggalBayar: parsedSurvey.tanggalBayar,
-        tanggalBerlakuSampai: hitungTanggalBerlaku(parsedSurvey.tanggalBayar, detail.pengajuan.terminBulan),
-      }
-    : {};
+  const terminBulan = 1;
+  const masaBerlaku = {
+    tanggalBayar: parsedSurvey.tanggalBayar,
+    tanggalBerlakuSampai: hitungTanggalBerlaku(parsedSurvey.tanggalBayar, terminBulan),
+    terminBulan,
+  };
   const pengajuan = { ...detail.pengajuan, ...masaBerlaku };
 
-  assertChecklistSurvey(
-    getChecklistSurveyPengajuan(
-      pengajuan.keperluanPengajuan as "tinggal" | "bisnis",
-      true,
-    ),
-    parsedSurvey.checklistSurvey,
+  const kontribusi = await kolomKontribusiTinggal(
+    pengajuan.jenisWarga,
+    isUkuranTinggal(pengajuan.ukuranTinggal) ? pengajuan.ukuranTinggal : null,
+    terminBulan,
   );
-
-  const ukuranSurvey = parsedSurvey.ukuranTinggal ?? null;
-  const koreksiUkuran =
-    ukuranSurvey && ukuranSurvey !== pengajuan.ukuranTinggal
-      ? await kolomKontribusiTinggal(pengajuan.jenisWarga, ukuranSurvey, pengajuan.terminBulan)
-      : {};
-  if ((pengajuan.jenisWarga === "kost" || pengajuan.jenisWarga === "kontrak") && !ukuranSurvey && !pengajuan.ukuranTinggal) {
-    throw new Error("Tentukan ukuran tempat tinggal hasil survey sebelum menyetujui");
-  }
 
   const baseUpdate = {
     status: "disetujui" as const,
     catatanSurvey: parsedSurvey.catatanSurvey || null,
     reviewedAt: new Date(),
     reviewedBy: adminUsername,
-    ...koreksiUkuran,
+    ...kontribusi,
     ...masaBerlaku,
   };
 

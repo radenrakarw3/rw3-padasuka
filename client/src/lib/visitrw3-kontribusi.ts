@@ -24,6 +24,7 @@ export {
   labelUkuranTinggal,
   tarifTinggalPerBulan,
   hitungKontribusiTinggal,
+  KONTRIBUSI_TINGGAL_PER_BULAN,
   KONTRIBUSI_SATUAN_VALUES,
   KONTRIBUSI_SATUAN_LABEL,
   suggestedSatuanFromRincian,

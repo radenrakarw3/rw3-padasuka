@@ -174,7 +174,7 @@ export function RabKartu({ rab }: { rab: RabData }) {
         <div className="rounded-lg border border-[hsl(40,45%,55%)]/50 bg-[hsl(40,45%,55%)]/10 p-3 text-xs space-y-1">
           <p className="font-medium">Dana voucher belanja warga</p>
           <p>
-            Sumbangsih {formatRp(rab.voucher.kontribusi)} + denda {formatRp(rab.voucher.denda)} = {formatRp(rab.voucher.terkumpul)} dari
+            Sumbangsih {formatRp(rab.voucher.kontribusi)} = {formatRp(rab.voucher.terkumpul)} dari
             kebutuhan {formatRp(rab.target)}.{" "}
             {rab.voucher.surplus > 0 ? (
               <strong>Kelebihan {formatRp(rab.voucher.surplus)} siap dijadikan voucher.</strong>

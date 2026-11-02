@@ -70,13 +70,13 @@ export function buildVisitrw3Timeline(status: string, alasanTolak?: string | nul
     {
       id: "submitted",
       label: "Pengajuan diterima",
-      description: "Data Anda masuk antrian",
+      description: "Data masuk antrian (formulir kertas / online)",
       state: "done",
     },
     {
-      id: "survey",
-      label: "Survey admin",
-      description: "Tim RW meninjau kelengkapan",
+      id: "verifikasi",
+      label: "Verifikasi admin",
+      description: "Cek data, KTP, asal tinggal & bayar Rp1.000",
       state: status === "menunggu_survey" ? "current" : "done",
     },
   ];
@@ -99,7 +99,7 @@ export function buildVisitrw3Timeline(status: string, alasanTolak?: string | nul
     steps.push({
       id: "result",
       label: "Keputusan",
-      description: "Menunggu hasil survey",
+      description: "Menunggu persetujuan pengurus",
       state: "upcoming",
     });
   }

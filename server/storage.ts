@@ -1,7 +1,7 @@
 import { eq, and, or, desc, sql, count, gte, asc, getTableColumns, inArray } from "drizzle-orm";
 import { ACTIVE_RT_NUMBERS } from "@shared/rt";
 import { getWargaAge } from "@shared/warga-form-tier";
-import { needsLiterasi, needsStatusAngkatanKerja } from "@shared/warga-international";
+import { needsStatusAngkatanKerja } from "@shared/warga-international";
 import {
   buildKelompokUsiaMap,
   isUmurLansia,
@@ -174,7 +174,7 @@ export interface IStorage {
   getWargaByRt(rt: number): Promise<(Warga & { nomorKk: string; rt: number })[]>;
   getAllWargaWithKk(): Promise<(Warga & { nomorKk: string; rt: number; alamat: string })[]>;
   /** Warga + KK, hanya RT 01–04 (pemukiman). */
-  getAllWargaWithKkPemukiman(): Promise<(Warga & { nomorKk: string; rt: number; alamat: string })[]>;
+  getAllWargaWithKkPemukiman(): Promise<(Warga & { nomorKk: string; rt: number; alamat: string; penghasilanBulanan: string | null })[]>;
 
   getAdminByUsername(username: string): Promise<AdminUser | undefined>;
   getAllAdmins(): Promise<AdminUser[]>;
@@ -1071,13 +1071,14 @@ export class DatabaseStorage implements IStorage {
     return results;
   }
 
-  async getAllWargaWithKkPemukiman(): Promise<(Warga & { nomorKk: string; rt: number; alamat: string })[]> {
+  async getAllWargaWithKkPemukiman(): Promise<(Warga & { nomorKk: string; rt: number; alamat: string; penghasilanBulanan: string | null })[]> {
     const results = await db
       .select({
         ...getTableColumns(warga),
         nomorKk: kartuKeluarga.nomorKk,
         rt: kartuKeluarga.rt,
         alamat: kartuKeluarga.alamat,
+        penghasilanBulanan: kartuKeluarga.penghasilanBulanan,
       })
       .from(warga)
       .innerJoin(kartuKeluarga, eq(warga.kkId, kartuKeluarga.id))
@@ -2358,17 +2359,11 @@ export class DatabaseStorage implements IStorage {
     const pengangguranP = Math.max(0, 100 - Math.round((pengangguranCount / totalW) * 100));
     const laporanP = allLaporanData.length > 0 ? Math.round((laporanSelesai / allLaporanData.length) * 100) : 100;
 
-    const literasiEligible = allWarga.filter((w) => needsLiterasi(getWargaAge(w.tanggalLahir)));
-    const literasiFilled = literasiEligible.filter((w) => (w.literasi || "").trim() !== "").length;
-    const literasiP = literasiEligible.length
-      ? Math.round((literasiFilled / literasiEligible.length) * 100)
-      : 100;
-
     const iloEligible = allWarga.filter((w) => needsStatusAngkatanKerja(getWargaAge(w.tanggalLahir)));
     const iloFilled = iloEligible.filter((w) => (w.statusPekerjaan || "").trim() !== "").length;
     const iloP = iloEligible.length ? Math.round((iloFilled / iloEligible.length) * 100) : 100;
 
-    const indeks = Math.round((waP + bansosP + usahaP + pengangguranP + laporanP + literasiP + iloP) / 7);
+    const indeks = Math.round((waP + bansosP + usahaP + pengangguranP + laporanP + iloP) / 6);
 
     const snapshotData: InsertMonthlySnapshot = {
       month: currentMonth,

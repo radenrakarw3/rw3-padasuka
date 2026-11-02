@@ -349,7 +349,7 @@ function BahanPendataan({ rt }: { rt: number }) {
     qc.removeQueries({ predicate: (q) => String(q.queryKey[0] ?? "").startsWith("/api/wilayah/rt") });
   }, [qc]);
   return (
-    <RtKelolaContext.Provider value={rt}>
+    <RtKelolaContext.Provider value={{ rt, setRt: () => {} }}>
       <Suspense fallback={<Memuat />}>
         <Cetak key={rt} />
       </Suspense>

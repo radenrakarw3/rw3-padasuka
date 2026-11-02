@@ -17,7 +17,6 @@ export const RW3BIZ_ROUTES = {
     dashboard: "/admin/rw3biz/dashboard",
     tagihan: "/admin/rw3biz/tagihan",
     tarif: "/admin/rw3biz/tarif",
-    razia: "/admin/rw3biz/razia",
     pelanggaran: "/admin/rw3biz/pelanggaran",
   },
   kas: "/admin/keuangan",

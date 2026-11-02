@@ -1,4 +1,4 @@
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Printer } from "lucide-react";
 import { Visitrw3WorkflowSteps } from "@/components/admin/visitrw3-workflow-steps";
 import { RW3BIZ_ROUTES } from "@/lib/rw3biz-routes";
 import { VISITRW3_ROUTES } from "@/lib/visitrw3-routes";
@@ -30,6 +30,17 @@ export function Visitrw3AdminNav({ title, description, actions, product = "visit
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           {actions}
+          {product === "visit" ? (
+            <a
+              href={VISITRW3_ROUTES.formulir}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted sm:min-h-0"
+            >
+              <Printer className="h-3.5 w-3.5" />
+              Cetak formulir A4
+            </a>
+          ) : null}
           <a
             href={publicHref}
             target="_blank"

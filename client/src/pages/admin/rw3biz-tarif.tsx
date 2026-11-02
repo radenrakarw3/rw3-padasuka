@@ -12,14 +12,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, getApiErrorMessage, queryClient, readJsonSafely } from "@/lib/queryClient";
 import { useTarifAdmin } from "@/components/rw3biz/koreksi-kontribusi";
-import {
-  JENIS_PELANGGARAN_INFO,
-  TINGKAT_PELANGGARAN,
-  TINGKAT_PELANGGARAN_LABEL,
-  formatRp,
-  hitungDendaPelanggaran,
-  type TarifKontribusi,
-} from "@shared/rw3biz-kontribusi";
+import { formatRp, type TarifKontribusi } from "@shared/rw3biz-kontribusi";
 
 function Angka({
   label,
@@ -99,30 +92,19 @@ export default function AdminRw3bizTarif() {
   const { toast } = useToast();
   const { data: tersimpan, isLoading } = useTarifAdmin();
   const [t, setT] = useState<TarifKontribusi | null>(null);
-  const [pengulanganTeks, setPengulanganTeks] = useState("");
 
   useEffect(() => {
     if (!tersimpan) return;
     setT(tersimpan);
-    setPengulanganTeks(tersimpan.dendaPengulangan.join(", "));
   }, [tersimpan]);
 
   const ubah = (patch: Partial<TarifKontribusi>) => setT((prev) => (prev ? { ...prev, ...patch } : prev));
 
   const totalPos = useMemo(() => (t ? t.posAnggaran.reduce((s, p) => s + p.nominal, 0) : 0), [t]);
-  const draft = () => {
-    if (!t) return null;
-    const dendaPengulangan = pengulanganTeks
-      .split(/[,\s]+/)
-      .filter(Boolean)
-      .map((s) => Number(s.replace(",", ".")))
-      .filter((n) => Number.isFinite(n) && n >= 0 && n <= 10);
-    return { ...t, dendaPengulangan: dendaPengulangan.length ? dendaPengulangan : t.dendaPengulangan };
-  };
-  const berubah = JSON.stringify(draft()) !== JSON.stringify(tersimpan);
+  const berubah = JSON.stringify(t) !== JSON.stringify(tersimpan);
 
   const simpanMutation = useMutation({
-    mutationFn: async () => readJsonSafely<TarifKontribusi>(await apiRequest("PUT", "/api/admin/rw3biz/settings", draft())),
+    mutationFn: async () => readJsonSafely<TarifKontribusi>(await apiRequest("PUT", "/api/admin/rw3biz/settings", t)),
     onSuccess: (baru) => {
       queryClient.setQueryData(["/api/admin/rw3biz/settings"], baru);
       queryClient.invalidateQueries({ queryKey: ["/api/admin/rw3biz/rab"] });
@@ -150,8 +132,8 @@ export default function AdminRw3bizTarif() {
     <Visitrw3AdminShell>
       <Visitrw3AdminNav
         product="rw3biz"
-        title="Program & denda"
-        description="Daftar program RW 03 yang bisa didukung lewat sumbangsih, serta aturan denda razia & pelanggaran."
+        title="Program sumbangsih"
+        description="Daftar program RW 03 yang bisa didukung lewat sumbangsih pengusaha."
         actions={
           <div className="hidden gap-2 sm:flex">
             <Button className="h-9 gap-1" disabled={!berubah || simpanMutation.isPending} onClick={() => simpanMutation.mutate()}>
@@ -172,67 +154,6 @@ export default function AdminRw3bizTarif() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             <Angka label="Kebutuhan RAB / bulan" value={t.targetBulanan} onChange={(n) => ubah({ targetBulanan: n })} />
             <Angka label="Tenggang setelah tgl 1 (hari)" value={t.tenggangHari} onChange={(n) => ubah({ tenggangHari: n })} />
-          </div>
-        </Bagian>
-
-        <Bagian
-          judul="Denda razia"
-          keterangan="Kendaraan tidak terdaftar saat razia: denda = pengali × dasar denda jenis kendaraan. Bisa diubah per temuan."
-        >
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Angka label="Dasar motor" value={t.kendaraanMotor} onChange={(n) => ubah({ kendaraanMotor: n })} />
-            <Angka label="Dasar mobil / minibus" value={t.kendaraanMobil} onChange={(n) => ubah({ kendaraanMobil: n })} />
-            <Angka label="Dasar kolbak / pick-up" value={t.kendaraanKolbak} onChange={(n) => ubah({ kendaraanKolbak: n })} />
-            <Angka label="Dasar truk engkel / sedang" value={t.kendaraanTruk} onChange={(n) => ubah({ kendaraanTruk: n })} />
-            <Angka label="Dasar truk besar" value={t.kendaraanTrukBesar} onChange={(n) => ubah({ kendaraanTrukBesar: n })} />
-            <Angka
-              label="Pengali denda"
-              value={t.dendaRaziaKali}
-              onChange={(n) => ubah({ dendaRaziaKali: n })}
-              desimal
-              hint={`Truk besar: ${formatRp(Math.round(t.kendaraanTrukBesar * t.dendaRaziaKali))}`}
-            />
-          </div>
-        </Bagian>
-
-        <Bagian
-          judul="Denda pelanggaran (aduan warga & temuan Ketua RW / Linmas)"
-          keterangan="Denda = dasar jenis × tingkat × pengulangan dalam 12 bulan, dibulatkan, paling banyak batas maksimal. Pengali pengulangan juga berlaku untuk razia (minimal 1×)."
-        >
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-            {(Object.keys(t.dendaPelanggaran) as (keyof TarifKontribusi["dendaPelanggaran"])[]).map((j) => (
-              <Angka
-                key={j}
-                label={JENIS_PELANGGARAN_INFO[j].label}
-                value={t.dendaPelanggaran[j]}
-                onChange={(n) => ubah({ dendaPelanggaran: { ...t.dendaPelanggaran, [j]: n } })}
-              />
-            ))}
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-            {TINGKAT_PELANGGARAN.map((k) => (
-              <Angka
-                key={k}
-                label={`Pengali ${TINGKAT_PELANGGARAN_LABEL[k].toLowerCase()}`}
-                value={t.dendaTingkat[k]}
-                desimal
-                onChange={(n) => ubah({ dendaTingkat: { ...t.dendaTingkat, [k]: n } })}
-              />
-            ))}
-            <Angka label="Denda maksimal" value={t.dendaMaks} onChange={(n) => ubah({ dendaMaks: n })} />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-sm sm:text-xs">Pengali pelanggaran ke-1, ke-2, … (0 = teguran tertulis)</Label>
-            <Input
-              className="sm:h-9 sm:text-sm sm:w-64"
-              value={pengulanganTeks}
-              onChange={(e) => setPengulanganTeks(e.target.value)}
-              placeholder="0, 1, 2, 3"
-            />
-            <p className="text-xs text-muted-foreground">
-              Angka terakhir berlaku untuk pelanggaran seterusnya. Contoh sampah tercecer sedang ke-3:{" "}
-              {formatRp(hitungDendaPelanggaran({ jenis: "sampah_tercecer", tingkat: "sedang", keBerapa: 3 }, draft() ?? t).denda)}.
-            </p>
           </div>
         </Bagian>
 

@@ -297,9 +297,8 @@ export function pasalPernyataanSumbangsih(d: DataPernyataan): PasalPernyataan[] 
     {
       judul: "Ketertiban Lingkungan",
       ayat: [
-        "Pelanggaran tata tertib lingkungan (sampah tercecer, kebisingan, parkir menghalangi jalan, limbah atau bau, melanggar jam operasional, merusak fasilitas umum, atau data tidak sesuai) yang terbukti dari aduan warga atau temuan Ketua RW / Linmas dikenai teguran tertulis dan/atau denda sesuai ketentuan RW3BIZ, dengan kwitansi resmi.",
-        "Kendaraan menuju tempat usaha yang tidak terdaftar saat razia dapat dikenai denda sesuai ketentuan RW3BIZ.",
-        "Teguran dan denda tidak berkaitan dengan besar kecilnya sumbangsih.",
+        "Pelanggaran tata tertib lingkungan (sampah tercecer, kebisingan, parkir menghalangi jalan, limbah atau bau, melanggar jam operasional, merusak fasilitas umum, atau data tidak sesuai) yang terbukti dari aduan warga atau temuan Ketua RW / Linmas ditangani melalui teguran resmi bertingkat (teguran lisan, Surat Peringatan SP-1 sampai SP-3) tanpa denda uang.",
+        "Teguran tidak berkaitan dengan besar kecilnya sumbangsih.",
       ],
     },
     {

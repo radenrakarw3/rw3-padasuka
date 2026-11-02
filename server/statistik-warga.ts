@@ -116,8 +116,9 @@ async function daftarSinggah(rt: number | null): Promise<OrangDaftar[]> {
 }
 
 async function daftarStandarData(kategori: "belumDiisi" | "perhatian" | "kelengkapan", kkRows: OrangDaftar[]): Promise<OrangDaftar[]> {
-  const ringkas = await ringkasKeluarga(kkRows.map((k) => k.id));
-  const dengan = kkRows.map((k) => ({ k, r: ringkas.get(k.id)! }));
+  const kkIds = kkRows.map((k) => k.kkId).filter((id): id is number => id != null);
+  const ringkas = await ringkasKeluarga(kkIds);
+  const dengan = kkRows.map((k) => ({ k, r: ringkas.get(k.kkId!)! }));
   if (kategori === "belumDiisi") {
     return dengan.filter(({ r }) => r.terjawab === 0).map(({ k }) => k);
   }

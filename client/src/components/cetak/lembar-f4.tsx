@@ -1,19 +1,27 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { ChevronDown, Printer } from "lucide-react";
-import { F4 } from "@shared/kertas";
+import { A4, F4, type UkuranKertas } from "@shared/kertas";
 import { IDENTITAS_RW } from "@shared/surat-sakti/identitas";
 import logoBlack from "@assets/RW03-Cimahi-Logo-Black.svg";
 
 /**
- * Gaya cetak F4 bersama. Hanya isi `.area-cetak` yang tercetak; sisanya (sidebar, tombol) disembunyikan.
+ * Gaya cetak kertas bersama (default F4). Hanya isi `.area-cetak` yang tercetak.
  * Di layar, lembar diperkecil supaya terlihat utuh sebagai pratinjau.
+ * Cetak hemat tinta: hitam-putih + print-color-adjust economy.
  */
-export function GayaCetakF4({ margin = F4.margin }: { margin?: number } = {}) {
-  const isiW = F4.w - 2 * margin;
-  const isiH = F4.h - 2 * margin;
+export function GayaCetakF4({
+  margin,
+  kertas = F4,
+}: {
+  margin?: number;
+  kertas?: UkuranKertas;
+} = {}) {
+  const m = margin ?? kertas.margin;
+  const isiW = kertas.w - 2 * m;
+  const isiH = kertas.h - 2 * m;
   return (
     <style>{`
-      @page { size: ${F4.w}mm ${F4.h}mm; margin: ${margin}mm; }
+      @page { size: ${kertas.w}mm ${kertas.h}mm; margin: ${m}mm; }
       .lembar-f4 { width: ${isiW}mm; height: ${isiH}mm; box-sizing: border-box; overflow: hidden; background: #fff; color: #000; position: relative; break-after: page; page-break-after: always; display: flex; flex-direction: column; }
       .alir-f4 { width: ${isiW}mm; box-sizing: border-box; background: #fff; color: #000; break-after: page; page-break-after: always; }
       .lembar-f4:last-child, .alir-f4:last-child { break-after: auto; page-break-after: auto; }
@@ -23,7 +31,7 @@ export function GayaCetakF4({ margin = F4.margin }: { margin?: number } = {}) {
       .jaga { break-inside: avoid; page-break-inside: avoid; }
       @media screen {
         .area-cetak { overflow-x: auto; padding-bottom: 8px; }
-        .lembar-f4, .alir-f4 { zoom: 0.42; margin: 0 auto 12px; box-sizing: content-box; padding: ${margin}mm; box-shadow: 0 0 0 1px #d6d3d1, 0 4px 14px rgba(0,0,0,.08); }
+        .lembar-f4, .alir-f4 { zoom: 0.42; margin: 0 auto 12px; box-sizing: content-box; padding: ${m}mm; box-shadow: 0 0 0 1px #d6d3d1, 0 4px 14px rgba(0,0,0,.08); }
         .alir-f4 { min-height: ${isiH}mm; }
         @media (min-width: 1024px) { .lembar-f4, .alir-f4 { zoom: 0.6; } }
       }
@@ -31,11 +39,17 @@ export function GayaCetakF4({ margin = F4.margin }: { margin?: number } = {}) {
         html, body { background: #fff !important; }
         body * { visibility: hidden; }
         .area-cetak, .area-cetak * { visibility: visible; }
-        .area-cetak { position: absolute; left: 0; top: 0; width: ${F4.w}mm; margin: 0 !important; padding: 0 !important; }
+        .area-cetak { position: absolute; left: 0; top: 0; width: ${kertas.w}mm; margin: 0 !important; padding: 0 !important; }
         .area-cetak * { box-shadow: none !important; print-color-adjust: economy; -webkit-print-color-adjust: economy; }
+        .area-cetak img { filter: grayscale(100%); }
       }
     `}</style>
   );
+}
+
+/** Shortcut gaya cetak A4 (210 × 297 mm). */
+export function GayaCetakA4({ margin = A4.margin }: { margin?: number } = {}) {
+  return <GayaCetakF4 kertas={A4} margin={margin} />;
 }
 
 /** Bidang cetak F4 setelah margin printer. */
@@ -101,32 +115,68 @@ export function KotakDigit({ jumlah }: { jumlah: number }) {
   );
 }
 
-/** Panduan pengaturan printer Epson L3210 + kertas F4. */
-export function PanduanPrinter({ bolakBalik = false, buka: bukaAwal = false }: { bolakBalik?: boolean; buka?: boolean }) {
+/** Panduan pengaturan printer Epson L3210 + kertas F4 atau A4. */
+export function PanduanPrinter({
+  bolakBalik = false,
+  buka: bukaAwal = false,
+  ukuran = "f4",
+}: {
+  bolakBalik?: boolean;
+  buka?: boolean;
+  /** Default F4; Visit formulir pakai A4 75 gsm. */
+  ukuran?: "f4" | "a4";
+}) {
   const [buka, setBuka] = useState(bukaAwal);
+  const a4 = ukuran === "a4";
   return (
     <div className="print:hidden rounded-2xl border border-amber-200 bg-amber-50/70 text-sm text-amber-950">
       <button type="button" onClick={() => setBuka(!buka)} className="flex w-full items-center gap-2 px-4 py-3 text-left font-semibold">
         <Printer className="h-4 w-4 shrink-0" />
-        <span className="flex-1">Pengaturan cetak: Epson L3210 · kertas F4 (215 × 330 mm)</span>
+        <span className="flex-1">
+          {a4
+            ? "Pengaturan cetak: Epson L3210 · A4 210 × 297 mm · 75 gsm"
+            : "Pengaturan cetak: Epson L3210 · kertas F4 (215 × 330 mm)"}
+        </span>
         <ChevronDown className={`h-4 w-4 transition-transform ${buka ? "rotate-180" : ""}`} />
       </button>
       {buka && (
         <div className="space-y-2 border-t border-amber-200 px-4 pb-4 pt-3">
           <ol className="list-decimal space-y-1 pl-5">
-            <li>Masukkan kertas F4 ke baki belakang, geser pemandu kertas sampai pas.</li>
-            <li>Tekan <b>Cetak</b>, lalu pilih printer <b>EPSON L3210</b>.</li>
             <li>
-              Ukuran kertas: <b>F4 215 × 330</b>. Jika belum ada di daftar, buat sekali di Windows: <i>Pengaturan › Bluetooth &amp; perangkat › Printer &amp; pemindai › Properti server cetak › tab Formulir</i>,
-              centang <b>Buat formulir baru</b>, nama "F4", lebar 21,5 cm, tinggi 33 cm, <b>Simpan formulir</b>, lalu tutup dan buka lagi browser.
-              Sementara belum dibuat, pilih <b>Indian Legal 215 × 345</b>: isi tetap tercetak benar, hanya sisa 1,5 cm di bawah yang tidak terpakai.
+              Masukkan kertas {a4 ? "A4 (210 × 297 mm, 75 gsm)" : "F4"} ke baki belakang, geser pemandu sampai pas.
+              {a4 ? " Kertas 75 gsm lebih tipis — isi baki maksimal ±40 lembar agar tidak macet." : ""}
             </li>
+            <li>Tekan <b>Cetak</b>, lalu pilih printer <b>EPSON L3210</b>.</li>
+            {a4 ? (
+              <li>
+                Ukuran kertas: <b>A4</b> (sudah ada di daftar Windows/Epson). Jangan pilih F4 / Legal.
+              </li>
+            ) : (
+              <li>
+                Ukuran kertas: <b>F4 215 × 330</b>. Jika belum ada di daftar, buat sekali di Windows: <i>Pengaturan › Bluetooth &amp; perangkat › Printer &amp; pemindai › Properti server cetak › tab Formulir</i>,
+                centang <b>Buat formulir baru</b>, nama "F4", lebar 21,5 cm, tinggi 33 cm, <b>Simpan formulir</b>, lalu tutup dan buka lagi browser.
+                Sementara belum dibuat, pilih <b>Indian Legal 215 × 345</b>: isi tetap tercetak benar, hanya sisa 1,5 cm di bawah yang tidak terpakai.
+              </li>
+            )}
             <li>Skala <b>100% / Ukuran sebenarnya</b> (jangan "Sesuaikan dengan halaman"). Margin: <b>Default</b> (sudah diatur dari halaman ini).</li>
             <li>Matikan <b>Header dan footer</b> browser. Grafik latar boleh dimatikan (hemat tinta).</li>
-            <li>Kualitas: <b>Standar</b> untuk surat, <b>Draf/Cepat</b> untuk formulir dan rekap. Warna: <b>Skala abu-abu / Hitam</b>.</li>
-            {bolakBalik && <li><b>Bolak-balik manual</b> (L3210 tidak bisa otomatis): cetak <b>Halaman ganjil</b> dulu, balik tumpukan kertas (sisi tercetak menghadap ke depan, bagian atas tetap di atas), masukkan lagi, lalu cetak <b>Halaman genap</b>. Coba 1 lembar dulu.</li>}
+            <li>
+              Kualitas: <b>Draf / Cepat</b> untuk formulir (hemat tinta). Warna: <b>Skala abu-abu / Hitam</b> — formulir sudah
+              hitam-putih.
+            </li>
+            {bolakBalik && (
+              <li>
+                <b>Bolak-balik manual</b> (L3210 tidak bisa otomatis): cetak <b>Halaman ganjil</b> dulu, balik tumpukan kertas
+                (sisi tercetak menghadap ke depan, bagian atas tetap di atas), masukkan lagi, lalu cetak <b>Halaman genap</b>.
+                Coba 1 lembar dulu.
+              </li>
+            )}
           </ol>
-          <p className="text-xs text-amber-800">Kertas 80 gsm: isi baki maksimal ±50 lembar agar tidak macet.</p>
+          <p className="text-xs text-amber-800">
+            {a4
+              ? "A4 75 gsm · margin 12 mm · 2 halaman. Coba cetak 1 set dulu sebelum menggandakan."
+              : "Kertas 80 gsm: isi baki maksimal ±50 lembar agar tidak macet."}
+          </p>
         </div>
       )}
     </div>

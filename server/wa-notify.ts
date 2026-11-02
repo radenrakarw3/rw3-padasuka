@@ -11,7 +11,15 @@ import {
 import { storage } from "./storage";
 import { HARI_BATAS_PERPANJANG } from "./visitrw3-surat";
 import { isNomorHpValid, looksLikeNik } from "@shared/kontak";
+import { KONTRIBUSI_TINGGAL_PER_BULAN } from "@shared/visitrw3-kontribusi";
 import type { Visitrw3Penghuni, Visitrw3Pengajuan, PemilikKost, Usaha } from "@shared/schema";
+
+const RP_TINGGAL = new Intl.NumberFormat("id-ID", {
+  style: "currency",
+  currency: "IDR",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+}).format(KONTRIBUSI_TINGGAL_PER_BULAN);
 
 const PUBLIC_SITE_URL =
   process.env.PUBLIC_SITE_URL?.trim() || "https://rw3padasukacimahi.org";
@@ -138,7 +146,13 @@ async function finalizeLog(
     .where(and(eq(waNotifikasiLog.eventKey, eventKey), eq(waNotifikasiLog.nomorWhatsapp, normalized)));
 }
 
-export async function sendWaIfConfigured(
+export type SendWaResult =
+  | { status: "sent"; phone: string; eventKey: string }
+  | { status: "skipped"; reason: "invalid_phone" | "starsender_off" | "dedup"; phone?: string; eventKey?: string }
+  | { status: "failed"; phone: string; eventKey: string; error: string };
+
+/** Kirim WA dan kembalikan status terstruktur (untuk aksi admin 1-per-1). */
+export async function sendWaWithResult(
   to: string,
   body: string,
   opts?: {
@@ -147,20 +161,20 @@ export async function sendWaIfConfigured(
     referenceId?: number;
     dedup?: boolean;
   },
-): Promise<void> {
+): Promise<SendWaResult> {
   const normalized = normalizeStarSenderPhone(to);
   if (!normalized || normalized.replace(/\D/g, "").length < 9) {
     if (opts?.eventKey) {
       console.warn(`[wa-notify] nomor tidak valid, dilewati: ${opts.eventKey} → ${to}`);
     }
-    return;
+    return { status: "skipped", reason: "invalid_phone" };
   }
 
   if (!isStarSenderConfigured()) {
     if (opts?.eventKey) {
       console.log(`[wa-notify] skipped (StarSender off): ${opts.eventKey} → ${normalized}`);
     }
-    return;
+    return { status: "skipped", reason: "starsender_off", phone: normalized, eventKey: opts?.eventKey };
   }
 
   const eventKey = opts?.eventKey ?? `adhoc:${Date.now()}:${normalized}`;
@@ -170,7 +184,7 @@ export async function sendWaIfConfigured(
     const claimed = await claimEventKey(eventKey, normalized, opts?.referenceType, opts?.referenceId);
     if (!claimed) {
       console.log(`[wa-notify] sudah terkirim, dilewati: ${eventKey}`);
-      return;
+      return { status: "skipped", reason: "dedup", phone: normalized, eventKey };
     }
   }
 
@@ -187,9 +201,25 @@ export async function sendWaIfConfigured(
 
   if (result.ok) {
     console.log(`[wa-notify] terkirim: ${eventKey} → ${normalized}`);
-  } else {
-    console.error(`[wa-notify] gagal kirim ${eventKey}:`, result.error || result.message);
+    return { status: "sent", phone: normalized, eventKey };
   }
+
+  const error = result.error || result.message || "Gagal mengirim WhatsApp";
+  console.error(`[wa-notify] gagal kirim ${eventKey}:`, error);
+  return { status: "failed", phone: normalized, eventKey, error };
+}
+
+export async function sendWaIfConfigured(
+  to: string,
+  body: string,
+  opts?: {
+    eventKey?: string;
+    referenceType?: string;
+    referenceId?: number;
+    dedup?: boolean;
+  },
+): Promise<void> {
+  await sendWaWithResult(to, body, opts);
 }
 
 async function sendToRecipients(
@@ -241,8 +271,9 @@ export function notifyVisitrw3PengajuanBaru(
       recipients,
       (nama) =>
         `${salam(nama)}\n\n` +
-        `Pengajuan Visit RW3 Anda (*${pengajuan.nomorVisitrw3}*) sudah kami terima dan sedang *menunggu survey RT*.\n\n` +
-        `Tim RW akan datang untuk verifikasi. Pantau perkembangan di:\n${statusUrl}\n\n` +
+        `Data Visit RW3 Anda (*${pengajuan.nomorVisitrw3}*) sudah kami terima dan sedang *menunggu verifikasi* pengurus RW.\n\n` +
+        `Kontribusi periode ini: *${RP_TINGGAL}* (1 bulan).\n` +
+        `Pantau status di:\n${statusUrl}\n\n` +
         `— ${SENDER_LABEL}`,
       {
         eventKeyPrefix: `visitrw3:submitted:${pengajuan.id}`,
@@ -265,10 +296,11 @@ export function notifyVisitrw3Perpanjang(
     await sendWaIfConfigured(
       nomorWa,
       `${salam(nama)}\n\n` +
-        `Permohonan *perpanjangan* Visit RW3 Anda sudah kami terima.\n\n` +
+        `Permohonan *perpanjangan* izin tinggal Visit RW3 sudah kami terima.\n\n` +
         `Nomor lama: *${nomorLama}*\n` +
         `Nomor antrian baru: *${pengajuan.nomorVisitrw3}*\n` +
-        `Status: *menunggu survey RT*\n\n` +
+        `Status: *menunggu verifikasi*\n` +
+        `Tagihan perpanjang: *${RP_TINGGAL}* (1 bulan)\n\n` +
         `Pantau perkembangan di:\n${statusUrl}\n\n` +
         `— ${SENDER_LABEL}`,
       {
@@ -292,7 +324,7 @@ export function notifyVisitrw3Disetujui(
       ? formatTanggalId(pengajuan.tanggalBerlakuSampai)
       : "-";
     const statusUrl = siteUrl(`/visitrw3/status?nomor=${encodeURIComponent(pengajuan.nomorVisitrw3)}`);
-    const tipeLabel = pengajuan.tipe === "perpanjang" ? "Perpanjangan" : "Pengajuan";
+    const tipeLabel = pengajuan.tipe === "perpanjang" ? "Perpanjangan" : "Izin tinggal";
     const batasPerpanjang = pengajuan.tanggalBerlakuSampai
       ? formatTanggalId(
           new Date(Date.parse(`${pengajuan.tanggalBerlakuSampai}T00:00:00Z`) - HARI_BATAS_PERPANJANG * 86_400_000)
@@ -300,16 +332,27 @@ export function notifyVisitrw3Disetujui(
             .slice(0, 10),
         )
       : "-";
+    const bayar = pengajuan.tanggalBayar ? formatTanggalId(pengajuan.tanggalBayar) : null;
+    const nominal =
+      typeof pengajuan.estimasiKontribusi === "number" && pengajuan.estimasiKontribusi > 0
+        ? new Intl.NumberFormat("id-ID", {
+            style: "currency",
+            currency: "IDR",
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+          }).format(pengajuan.estimasiKontribusi)
+        : RP_TINGGAL;
 
     await sendToRecipients(
       recipients,
       (nama) =>
         `${salam(nama)}\n\n` +
-        `*${tipeLabel} Visit RW3 disetujui!*\n\n` +
-        `Nomor: *${pengajuan.nomorVisitrw3}*\n` +
+        `*${tipeLabel} Visit RW3 AKTIF*\n\n` +
+        `Nomor VRW3: *${pengajuan.nomorVisitrw3}*\n` +
         `Berlaku sampai: *${berlaku}*\n` +
-        `Wajib perpanjang paling lambat: *${batasPerpanjang}*\n\n` +
-        `Surat Izin Tinggal Sementara Anda sudah terbit. Lihat & unduh suratnya di:\n${statusUrl}\n` +
+        `Kontribusi periode ini: *${nominal}*${bayar ? ` (diterima ${bayar})` : ""}\n` +
+        `Urus perizinan tinggal lagi paling lambat: *${batasPerpanjang}*\n\n` +
+        `Surat Izin Tinggal Sementara sudah terbit. Lihat & unduh di:\n${statusUrl}\n` +
         `Surat asli bertanda tangan Ketua RW dapat diambil di sekretariat RW 03.\n\n` +
         `— ${SENDER_LABEL}`,
       {
@@ -331,13 +374,16 @@ export function notifyVisitrw3Ditolak(
     if (!recipients.length) return;
 
     const statusUrl = siteUrl("/visitrw3/status");
+    const formulirUrl = siteUrl("/visitrw3/formulir");
     await sendToRecipients(
       recipients,
       (nama) =>
         `${salam(nama)}\n\n` +
         `Mohon maaf, pengajuan Visit RW3 *${pengajuan.nomorVisitrw3}* belum dapat kami setujui.\n\n` +
         `Alasan: ${alasanTolak.trim()}\n\n` +
-        `Jika ada pertanyaan, silakan hubungi pengurus RW atau cek status di:\n${statusUrl}\n\n` +
+        `Anda dapat mengisi ulang formulir atau menghubungi pengurus RW.\n` +
+        `Formulir: ${formulirUrl}\n` +
+        `Status: ${statusUrl}\n\n` +
         `— ${SENDER_LABEL}`,
       {
         eventKeyPrefix: `visitrw3:rejected:${pengajuan.id}`,
@@ -485,20 +531,22 @@ async function notifyKontrakReminder(
   if (kind === "h7") {
     bodyPenghuni =
       `${salam(row.namaLengkap)}\n\n` +
-      `Pengingat: izin Visit RW3 (*${nomor}*) akan *berakhir dalam 7 hari* (${berlaku}).\n\n` +
-      `Segera ajukan perpanjangan di:\n${perpanjangUrl}\n\n` +
+      `*Tagihan & pengingat perizinan tinggal*\n\n` +
+      `Izin Visit RW3 (*${nomor}*) berakhir dalam *7 hari* (${berlaku}).\n\n` +
+      `Siapkan kontribusi *${RP_TINGGAL}*, lalu urus perpanjangan di:\n${perpanjangUrl}\n` +
+      `atau ambil formulir ke pengurus RW.\n\n` +
       `— ${SENDER_LABEL}`;
   } else if (kind === "h1") {
     bodyPenghuni =
       `${salam(row.namaLengkap)}\n\n` +
-      `Penting: izin Visit RW3 (*${nomor}*) *besok berakhir* (${berlaku}).\n\n` +
-      `Ajukan perpanjangan hari ini di:\n${perpanjangUrl}\n\n` +
+      `Penting: izin tinggal Visit RW3 (*${nomor}*) *besok berakhir* (${berlaku}).\n\n` +
+      `Segera urus perizinan tinggal lagi + kontribusi *${RP_TINGGAL}*:\n${perpanjangUrl}\n\n` +
       `— ${SENDER_LABEL}`;
   } else {
     bodyPenghuni =
       `${salam(row.namaLengkap)}\n\n` +
-      `Izin Visit RW3 (*${nomor}*) *berakhir hari ini* (${berlaku}).\n\n` +
-      `Segera ajukan perpanjangan agar status tetap aktif:\n${perpanjangUrl}\n\n` +
+      `Izin tinggal Visit RW3 (*${nomor}*) *berakhir hari ini* (${berlaku}).\n\n` +
+      `Segera perpanjang agar status tetap aktif (kontribusi *${RP_TINGGAL}*):\n${perpanjangUrl}\n\n` +
       `— ${SENDER_LABEL}`;
   }
 
@@ -550,9 +598,10 @@ export function notifyVisitrw3KontrakDiperpanjangAdmin(
     await sendWaIfConfigured(
       ws.nomorWhatsapp,
       `${salam(ws.namaLengkap)}\n\n` +
-        `*Kontrak Visit RW3 diperpanjang*\n\n` +
+        `*Izin tinggal Visit RW3 diperpanjang — AKTIF*\n\n` +
         `Nomor: *${nomor}*\n` +
-        `Berlaku sampai: *${berlaku}*\n\n` +
+        `Berlaku sampai: *${berlaku}*\n` +
+        `Kontribusi periode ini: *${RP_TINGGAL}*\n\n` +
         `Cek status di:\n${statusUrl}\n\n` +
         `— ${SENDER_LABEL}`,
       {

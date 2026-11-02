@@ -37,36 +37,18 @@ import {
 } from "./rw3biz-kontribusi";
 import { bulanIni, parseSumbangsih, totalSumbangsih } from "@shared/rw3biz-kontribusi";
 import {
-  bayarDenda,
-  batalBayarDenda,
-  bebaskanDenda,
-  catatRazia,
-  cocokkanRazia,
-  getDataKwitansiRazia,
-  hapusRazia,
-  listRazia,
-  raziaUntukUsaha,
-} from "./rw3biz-razia";
-import {
   ajukanAduan,
-  batalBayarDendaPelanggaran,
-  bayarDendaPelanggaran,
-  bebaskanDendaPelanggaran,
   catatTemuan,
   daftarUsahaPublik,
   fotoPelanggaran,
-  getDataKwitansiPelanggaran,
   hapusPelanggaran,
   listPelanggaran,
   pelanggaranUntukUsaha,
-  pratinjauDenda,
   verifikasiAduan,
 } from "./rw3biz-pelanggaran";
 import {
   buatPdfFormulir,
   buatPdfKwitansi,
-  buatPdfKwitansiPelanggaran,
-  buatPdfKwitansiRazia,
   buatPdfPernyataan,
   buatPdfSuratUsaha,
   getDataFormulir,
@@ -149,19 +131,6 @@ export function registerRw3bizRoutes(app: Express) {
         data && nomor && (nomor === data.usaha.nomorInduk || nomor === data.usaha.nomorBiz);
       if (!data || !cocok) return res.status(404).json({ message: "Kwitansi tidak ditemukan" });
       kirimPdf(res, await buatPdfKwitansi(data), req.query.unduh === "1");
-    } catch (error: unknown) {
-      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal membuat kwitansi") });
-    }
-  });
-
-  app.get("/api/public/rw3biz/razia/:id/kwitansi", async (req, res) => {
-    try {
-      const id = parseInt(String(req.params.id), 10);
-      const nomor = String(req.query.nomor ?? "").trim().toUpperCase();
-      const data = Number.isFinite(id) ? await getDataKwitansiRazia(id) : null;
-      const cocok = data?.usaha && nomor && (nomor === data.usaha.nomorInduk || nomor === data.usaha.nomorBiz);
-      if (!data || !cocok) return res.status(404).json({ message: "Kwitansi tidak ditemukan" });
-      kirimPdf(res, await buatPdfKwitansiRazia(data), req.query.unduh === "1");
     } catch (error: unknown) {
       res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal membuat kwitansi") });
     }
@@ -273,19 +242,6 @@ export function registerRw3bizRoutes(app: Express) {
     }
   });
 
-  app.get("/api/public/rw3biz/pelanggaran/:id/kwitansi", async (req, res) => {
-    try {
-      const id = parseInt(String(req.params.id), 10);
-      const nomor = String(req.query.nomor ?? "").trim().toUpperCase();
-      const data = Number.isFinite(id) ? await getDataKwitansiPelanggaran(id) : null;
-      const cocok = data?.usaha && nomor && (nomor === data.usaha.nomorInduk || nomor === data.usaha.nomorBiz);
-      if (!data || !cocok) return res.status(404).json({ message: "Kwitansi tidak ditemukan" });
-      kirimPdf(res, await buatPdfKwitansiPelanggaran(data), req.query.unduh === "1");
-    } catch (error: unknown) {
-      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal membuat kwitansi") });
-    }
-  });
-
   app.post("/api/public/rw3biz/keberatan", async (req, res) => {
     try {
       const row = await ajukanKeberatan(req.body);
@@ -383,9 +339,8 @@ export function registerRw3bizRoutes(app: Express) {
       const usaha = data.usaha ? samarkanPj(data.usaha) : null;
       const dataSurat = data.usaha?.nomorInduk ? await getDataSuratUsaha(data.usaha.nomorInduk) : null;
       const surat = dataSurat ? ringkasSuratUsaha(dataSurat) : null;
-      const razia = data.usaha ? await raziaUntukUsaha(data.usaha.id) : [];
       const pelanggaran = data.usaha ? await pelanggaranUntukUsaha(data.usaha.id) : [];
-      res.json({ ...data, pengajuan, riwayat, usaha, orang, kontribusi, tagihan, surat, razia, pelanggaran });
+      res.json({ ...data, pengajuan, riwayat, usaha, orang, kontribusi, tagihan, surat, pelanggaran });
     } catch (error: unknown) {
       res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat status pengajuan") });
     }
@@ -555,82 +510,6 @@ export function registerRw3bizRoutes(app: Express) {
     }
   });
 
-  // --- Razia kendaraan ---
-
-  app.post("/api/admin/rw3biz/razia/cek", requireAdmin, async (req, res) => {
-    try {
-      res.json(await cocokkanRazia(req.body ?? {}));
-    } catch (error: unknown) {
-      res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal mencocokkan kendaraan") });
-    }
-  });
-
-  app.get("/api/admin/rw3biz/razia", requireAdmin, async (req, res) => {
-    try {
-      res.json(
-        await listRazia({
-          bulan: req.query.bulan ? String(req.query.bulan) : undefined,
-          hasil: req.query.hasil ? String(req.query.hasil) : undefined,
-          denda: req.query.denda ? String(req.query.denda) : undefined,
-          q: req.query.q ? String(req.query.q) : undefined,
-        }),
-      );
-    } catch (error: unknown) {
-      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat data razia") });
-    }
-  });
-
-  app.post("/api/admin/rw3biz/razia", requireAdmin, async (req, res) => {
-    try {
-      res.json(await catatRazia(req.body ?? {}, admin(req)));
-    } catch (error: unknown) {
-      res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal mencatat temuan razia") });
-    }
-  });
-
-  app.delete("/api/admin/rw3biz/razia/:id", requireAdmin, async (req, res) => {
-    try {
-      await hapusRazia(idParam(req.params.id));
-      res.json({ ok: true });
-    } catch (error: unknown) {
-      res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal menghapus temuan") });
-    }
-  });
-
-  app.post("/api/admin/rw3biz/razia/:id/bayar", requireAdmin, async (req, res) => {
-    try {
-      res.json(await bayarDenda(idParam(req.params.id), req.body ?? {}, admin(req)));
-    } catch (error: unknown) {
-      res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal mencatat pembayaran denda") });
-    }
-  });
-
-  app.post("/api/admin/rw3biz/razia/:id/batal", requireAdmin, async (req, res) => {
-    try {
-      res.json(await batalBayarDenda(idParam(req.params.id)));
-    } catch (error: unknown) {
-      res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal membatalkan pembayaran denda") });
-    }
-  });
-
-  app.post("/api/admin/rw3biz/razia/:id/bebaskan", requireAdmin, async (req, res) => {
-    try {
-      res.json(await bebaskanDenda(idParam(req.params.id), String(req.body?.alasan ?? ""), admin(req)));
-    } catch (error: unknown) {
-      res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal membebaskan denda") });
-    }
-  });
-
-  app.get("/api/admin/rw3biz/razia/:id/kwitansi", requireAdmin, async (req, res) => {
-    try {
-      const data = await getDataKwitansiRazia(idParam(req.params.id));
-      if (!data) return res.status(404).json({ message: "Denda belum dibayar / tidak ditemukan" });
-      kirimPdf(res, await buatPdfKwitansiRazia(data), req.query.unduh === "1");
-    } catch (error: unknown) {
-      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal membuat kwitansi denda") });
-    }
-  });
-
   // --- Pelanggaran usaha (aduan warga & temuan petugas) ---
 
   app.get("/api/admin/rw3biz/pelanggaran", requireAdmin, async (req, res) => {
@@ -638,21 +517,12 @@ export function registerRw3bizRoutes(app: Express) {
       res.json(
         await listPelanggaran({
           status: req.query.status ? String(req.query.status) : undefined,
-          denda: req.query.denda ? String(req.query.denda) : undefined,
           bulan: req.query.bulan ? String(req.query.bulan) : undefined,
           q: req.query.q ? String(req.query.q) : undefined,
         }),
       );
     } catch (error: unknown) {
       res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal memuat pelanggaran") });
-    }
-  });
-
-  app.post("/api/admin/rw3biz/pelanggaran/pratinjau", requireAdmin, async (req, res) => {
-    try {
-      res.json(await pratinjauDenda(req.body ?? {}));
-    } catch (error: unknown) {
-      res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal menghitung denda") });
     }
   });
 
@@ -684,46 +554,12 @@ export function registerRw3bizRoutes(app: Express) {
     }
   });
 
-  app.post("/api/admin/rw3biz/pelanggaran/:id/bayar", requireAdmin, async (req, res) => {
-    try {
-      res.json(await bayarDendaPelanggaran(idParam(req.params.id), req.body ?? {}));
-    } catch (error: unknown) {
-      res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal mencatat pembayaran denda") });
-    }
-  });
-
-  app.post("/api/admin/rw3biz/pelanggaran/:id/batal", requireAdmin, async (req, res) => {
-    try {
-      res.json(await batalBayarDendaPelanggaran(idParam(req.params.id)));
-    } catch (error: unknown) {
-      res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal membatalkan pembayaran denda") });
-    }
-  });
-
-  app.post("/api/admin/rw3biz/pelanggaran/:id/bebaskan", requireAdmin, async (req, res) => {
-    try {
-      res.json(await bebaskanDendaPelanggaran(idParam(req.params.id), String(req.body?.alasan ?? ""), admin(req)));
-    } catch (error: unknown) {
-      res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal membebaskan denda") });
-    }
-  });
-
   app.delete("/api/admin/rw3biz/pelanggaran/:id", requireAdmin, async (req, res) => {
     try {
       await hapusPelanggaran(idParam(req.params.id));
       res.json({ ok: true });
     } catch (error: unknown) {
       res.status(400).json({ message: visitrw3ApiErrorMessage(error, "Gagal menghapus pelanggaran") });
-    }
-  });
-
-  app.get("/api/admin/rw3biz/pelanggaran/:id/kwitansi", requireAdmin, async (req, res) => {
-    try {
-      const data = await getDataKwitansiPelanggaran(idParam(req.params.id));
-      if (!data) return res.status(404).json({ message: "Denda belum dibayar / tidak ditemukan" });
-      kirimPdf(res, await buatPdfKwitansiPelanggaran(data), req.query.unduh === "1");
-    } catch (error: unknown) {
-      res.status(500).json({ message: visitrw3ApiErrorMessage(error, "Gagal membuat kwitansi denda") });
     }
   });
 

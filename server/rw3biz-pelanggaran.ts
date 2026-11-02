@@ -1,22 +1,17 @@
 import { z } from "zod";
 import { and, desc, eq, gte, ilike, ne, or, sql } from "drizzle-orm";
 import { db } from "./db";
-import { kasRw, rw3bizPelanggaran, rw3bizUsaha } from "@shared/schema";
+import { rw3bizPelanggaran, rw3bizUsaha } from "@shared/schema";
 import {
   JENIS_PELANGGARAN,
   JENIS_PELANGGARAN_INFO,
-  KATEGORI_KAS_DENDA_PELANGGARAN,
   TINGKAT_PELANGGARAN,
   TINGKAT_PELANGGARAN_LABEL,
-  hitungDendaPelanggaran,
-  nomorKwitansiPelanggaran,
   type JenisPelanggaran,
   type TingkatPelanggaran,
 } from "@shared/rw3biz-kontribusi";
-import { loadTarif } from "./rw3biz-kontribusi";
 import {
   notifyRw3bizAduanUsahaDiterima,
-  notifyRw3bizPelanggaranBayar,
   notifyRw3bizPelanggaranTerbukti,
 } from "./wa-notify-rw3biz";
 
@@ -155,30 +150,11 @@ async function pelanggaranKe(usahaId: number | null, tanggal: string, kecualiId?
   return n + 1;
 }
 
-export const pratinjauDendaSchema = z.object({
-  usahaId: z.number().int().positive().optional().nullable(),
-  jenis: z.enum(JENIS_PELANGGARAN),
-  tingkat: z.enum(TINGKAT_PELANGGARAN),
-  tanggalKejadian: z.string().regex(DATE_REGEX),
-  dasarManual: z.number().int().min(0).max(10_000_000).optional().nullable(),
-  kecualiId: z.number().int().optional(),
-});
-
-export async function pratinjauDenda(raw: unknown) {
-  const o = pratinjauDendaSchema.parse(raw);
-  const tarif = await loadTarif();
-  const keBerapa = await pelanggaranKe(o.usahaId ?? null, o.tanggalKejadian, o.kecualiId);
-  return { keBerapa, ...hitungDendaPelanggaran({ jenis: o.jenis, tingkat: o.tingkat, keBerapa, dasarManual: o.dasarManual }, tarif) };
-}
-
 export const verifikasiSchema = z.object({
   terbukti: z.boolean(),
   usahaId: z.number().int().positive().optional().nullable(),
   jenis: z.enum(JENIS_PELANGGARAN).optional(),
   tingkat: z.enum(TINGKAT_PELANGGARAN).default("sedang"),
-  dasarManual: z.number().int().min(0).max(10_000_000).optional().nullable(),
-  /** Kosong = denda dari rumus. */
-  denda: z.number().int().min(0).max(10_000_000).optional().nullable(),
   catatan: z.string().trim().max(1000).optional().nullable(),
 });
 
@@ -203,12 +179,7 @@ async function tetapkan(id: number, o: z.infer<typeof verifikasiSchema>, admin: 
     usahaRow = u;
   }
   const jenis = o.jenis ?? (r.jenis as JenisPelanggaran);
-  if (jenis === "lainnya" && o.dasarManual == null && o.denda == null) throw new Error("Isi denda dasar untuk pelanggaran lainnya");
-  const tarif = await loadTarif();
   const keBerapa = await pelanggaranKe(usahaId, r.tanggalKejadian, id);
-  const h = hitungDendaPelanggaran({ jenis, tingkat: o.tingkat, keBerapa, dasarManual: o.dasarManual }, tarif);
-  const denda = o.denda ?? h.denda;
-  const rincian = o.denda != null && o.denda !== h.denda ? `Ditetapkan petugas Rp${denda.toLocaleString("id-ID")} (rumus: ${h.rincian})` : h.rincian;
   const [u] = await db
     .update(rw3bizPelanggaran)
     .set({
@@ -218,9 +189,9 @@ async function tetapkan(id: number, o: z.infer<typeof verifikasiSchema>, admin: 
       tingkat: o.tingkat,
       status: "terbukti",
       keBerapa,
-      denda,
-      dendaRincian: rincian,
-      dendaStatus: denda > 0 ? "belum" : "tidak_ada",
+      denda: 0,
+      dendaRincian: null,
+      dendaStatus: "tidak_ada",
       catatanVerifikasi: o.catatan?.trim() || null,
       diverifikasiOleh: admin,
       diverifikasiAt: new Date(),
@@ -233,7 +204,6 @@ async function tetapkan(id: number, o: z.infer<typeof verifikasiSchema>, admin: 
       nomorAduan: nomorAduan(u.id),
       jenisLabel: labelJenis(jenis),
       tingkatLabel: TINGKAT_PELANGGARAN_LABEL[o.tingkat],
-      denda,
       tanggalKejadian: u.tanggalKejadian,
     });
   }
@@ -253,8 +223,6 @@ export const temuanSchema = z.object({
   lokasi: z.string().trim().max(300).optional().nullable(),
   uraian: z.string().trim().min(5, "Tulis uraian temuan").max(2000),
   foto,
-  dasarManual: z.number().int().min(0).max(10_000_000).optional().nullable(),
-  denda: z.number().int().min(0).max(10_000_000).optional().nullable(),
   catatan: z.string().trim().max(1000).optional().nullable(),
 });
 
@@ -278,15 +246,14 @@ export async function catatTemuan(raw: unknown, admin: string) {
       dicatatOleh: admin,
     })
     .returning({ id: rw3bizPelanggaran.id });
-  return tetapkan(row.id, { terbukti: true, tingkat: o.tingkat, dasarManual: o.dasarManual, denda: o.denda, catatan: o.catatan }, admin);
+  return tetapkan(row.id, { terbukti: true, tingkat: o.tingkat, catatan: o.catatan }, admin);
 }
 
-// ---------------------------------------------------------------- Daftar, bayar, bebaskan
+// ---------------------------------------------------------------- Daftar
 
-export async function listPelanggaran(filter: { status?: string; denda?: string; bulan?: string; q?: string }) {
+export async function listPelanggaran(filter: { status?: string; bulan?: string; q?: string }) {
   const kondisi = [];
   if (filter.status && filter.status !== "semua") kondisi.push(eq(rw3bizPelanggaran.status, filter.status));
-  if (filter.denda && filter.denda !== "semua") kondisi.push(eq(rw3bizPelanggaran.dendaStatus, filter.denda));
   if (filter.bulan && /^\d{4}-\d{2}$/.test(filter.bulan)) kondisi.push(sql`${rw3bizPelanggaran.tanggalKejadian} LIKE ${`${filter.bulan}%`}`);
   if (filter.q?.trim()) {
     const q = `%${filter.q.trim()}%`;
@@ -315,7 +282,6 @@ export async function listPelanggaran(filter: { status?: string; denda?: string;
     nomorAduan: nomorAduan(p.id),
     jenisLabel: labelJenis(p.jenis),
     usaha: usaha?.id ? usaha : null,
-    nomorKwitansi: p.dendaStatus === "lunas" && p.tanggalBayar ? nomorKwitansiPelanggaran(p.id, p.tanggalBayar) : null,
   }));
 }
 
@@ -325,82 +291,9 @@ export async function fotoPelanggaran(id: number) {
   return m ? { tipe: m[1], buffer: Buffer.from(m[2], "base64") } : null;
 }
 
-export const bayarDendaPelanggaranSchema = z.object({
-  tanggal: z.string().regex(DATE_REGEX),
-  pembayarNama: z.string().trim().max(120).optional().nullable(),
-});
-
-export async function bayarDendaPelanggaran(id: number, raw: unknown) {
-  const { tanggal, pembayarNama } = bayarDendaPelanggaranSchema.parse(raw);
-  const hasil = await db.transaction(async (tx) => {
-    const [r] = await tx.select().from(rw3bizPelanggaran).where(eq(rw3bizPelanggaran.id, id)).for("update");
-    if (!r) throw new Error("Pelanggaran tidak ditemukan");
-    if (r.dendaStatus !== "belum") throw new Error("Denda tidak dalam status belum dibayar");
-    const usaha = r.usahaId ? (await tx.select().from(rw3bizUsaha).where(eq(rw3bizUsaha.id, r.usahaId)))[0] : null;
-    const pembayar = pembayarNama?.trim() || (usaha ? `${usaha.pjNama} - ${usaha.namaUsaha}` : r.namaUsahaLain || "-");
-    const [kas] = await tx
-      .insert(kasRw)
-      .values({
-        tipe: "pemasukan",
-        kategori: KATEGORI_KAS_DENDA_PELANGGARAN,
-        jumlah: r.denda,
-        keterangan: KATEGORI_KAS_DENDA_PELANGGARAN,
-        tanggal,
-        createdBy: "rw3biz-sistem",
-      })
-      .returning();
-    const [u] = await tx
-      .update(rw3bizPelanggaran)
-      .set({ dendaStatus: "lunas", tanggalBayar: tanggal, pembayarNama: pembayar, kasRwId: kas.id })
-      .where(eq(rw3bizPelanggaran.id, id))
-      .returning();
-    return {
-      row: { ...u, fotoData: undefined, nomorKwitansi: nomorKwitansiPelanggaran(u.id, tanggal) },
-      usaha,
-    };
-  });
-  if (hasil.usaha) {
-    notifyRw3bizPelanggaranBayar(hasil.usaha, {
-      pelanggaranId: hasil.row.id,
-      nomorKwitansi: hasil.row.nomorKwitansi,
-      jumlah: hasil.row.denda,
-      tanggal,
-    });
-  }
-  return hasil.row;
-}
-
-export async function batalBayarDendaPelanggaran(id: number) {
-  return db.transaction(async (tx) => {
-    const [r] = await tx.select().from(rw3bizPelanggaran).where(eq(rw3bizPelanggaran.id, id)).for("update");
-    if (!r) throw new Error("Pelanggaran tidak ditemukan");
-    if (r.dendaStatus !== "lunas") throw new Error("Denda belum dibayar");
-    if (r.kasRwId) await tx.delete(kasRw).where(eq(kasRw.id, r.kasRwId));
-    await tx
-      .update(rw3bizPelanggaran)
-      .set({ dendaStatus: "belum", tanggalBayar: null, pembayarNama: null, kasRwId: null })
-      .where(eq(rw3bizPelanggaran.id, id));
-    return { ok: true };
-  });
-}
-
-export async function bebaskanDendaPelanggaran(id: number, alasan: string, admin: string) {
-  if (alasan.trim().length < 3) throw new Error("Alasan pembebasan wajib diisi");
-  const [r] = await db.select().from(rw3bizPelanggaran).where(eq(rw3bizPelanggaran.id, id));
-  if (!r) throw new Error("Pelanggaran tidak ditemukan");
-  if (r.dendaStatus === "lunas") throw new Error("Denda sudah dibayar — batalkan pembayaran dulu");
-  if (r.dendaStatus !== "belum") throw new Error("Tidak ada denda yang bisa dibebaskan");
-  await db
-    .update(rw3bizPelanggaran)
-    .set({ dendaStatus: "dibebaskan", alasanBebas: `${alasan.trim()} (${admin})` })
-    .where(eq(rw3bizPelanggaran.id, id));
-  return { ok: true, dendaStatus: "dibebaskan" };
-}
-
 export async function hapusPelanggaran(id: number) {
   const [r] = await db.select().from(rw3bizPelanggaran).where(eq(rw3bizPelanggaran.id, id));
   if (!r) throw new Error("Pelanggaran tidak ditemukan");
-  if (r.dendaStatus === "lunas") throw new Error("Denda sudah dibayar — batalkan pembayaran dulu");
   await db.delete(rw3bizPelanggaran).where(eq(rw3bizPelanggaran.id, id));
 }
 
@@ -419,20 +312,5 @@ export async function pelanggaranUntukUsaha(usahaId: number) {
     tingkat: TINGKAT_PELANGGARAN_LABEL[r.tingkat as TingkatPelanggaran] ?? r.tingkat,
     keBerapa: r.keBerapa,
     sumber: r.sumber === "aduan_warga" ? "Aduan warga" : "Temuan petugas",
-    denda: r.denda,
-    dendaRincian: r.dendaRincian,
-    dendaStatus: r.dendaStatus,
-    nomorKwitansi: r.dendaStatus === "lunas" && r.tanggalBayar ? nomorKwitansiPelanggaran(r.id, r.tanggalBayar) : null,
   }));
-}
-
-export async function getDataKwitansiPelanggaran(id: number) {
-  const [row] = await db
-    .select({ p: rw3bizPelanggaran, usaha: rw3bizUsaha })
-    .from(rw3bizPelanggaran)
-    .leftJoin(rw3bizUsaha, eq(rw3bizPelanggaran.usahaId, rw3bizUsaha.id))
-    .where(eq(rw3bizPelanggaran.id, id))
-    .limit(1);
-  if (!row || row.p.dendaStatus !== "lunas" || !row.p.tanggalBayar) return null;
-  return row;
 }

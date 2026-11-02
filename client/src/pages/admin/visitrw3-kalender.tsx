@@ -472,7 +472,7 @@ export default function AdminVisitrw3Kalender() {
               <CardHeader className="pb-2 pt-4 px-4">
                 <CardTitle className="text-sm flex items-center gap-1.5">
                   <Clock className="w-4 h-4" />
-                  Pengajuan perpanjang menunggu survey
+                  Pengajuan perpanjang menunggu verifikasi
                 </CardTitle>
               </CardHeader>
               <CardContent className="px-4 pb-4 space-y-2">

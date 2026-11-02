@@ -140,31 +140,8 @@ export function hitungCharter(kedatanganPerMinggu: number, c: (typeof CHARTER_BI
   return Math.min(perDatang, batas);
 }
 
-/**
- * Denda kendaraan tidak terdaftar saat razia = N × tarif bulanan unit jenis tersebut × pengali pengulangan
- * (pelanggaran razia ke-n dalam 12 bulan, minimal 1×).
- */
-export function dendaRazia(jenis: KodeKendaraanBiz, tarif: TarifKontribusi, keBerapa = 1): number {
-  const ulang = Math.max(1, pengaliPengulangan(keBerapa, tarif));
-  return Math.min(tarif.dendaMaks, Math.round(tarif[jenis] * tarif.dendaRaziaKali * ulang));
-}
-
+/** Kategori Kas RW historis (fitur razia sudah dihapus); tetap dipakai agregat laporan. */
 export const KATEGORI_KAS_DENDA_RAZIA = "Denda razia kendaraan";
-
-export const HASIL_RAZIA = ["terdaftar_milik", "terdaftar_charter", "tidak_terdaftar", "usaha_tidak_terdaftar", "lewat"] as const;
-export type HasilRazia = (typeof HASIL_RAZIA)[number];
-export const HASIL_RAZIA_LABEL: Record<HasilRazia, string> = {
-  terdaftar_milik: "Terdaftar (milik usaha)",
-  terdaftar_charter: "Terdaftar (charter usaha)",
-  tidak_terdaftar: "Tidak terdaftar di data usaha",
-  usaha_tidak_terdaftar: "Usaha tujuan belum terdaftar RW3BIZ",
-  lewat: "Hanya melintas",
-};
-
-/** Nomor kwitansi denda razia: KW/RW03/RZ/2026/00012. */
-export function nomorKwitansiRazia(raziaId: number, tanggal: string): string {
-  return `KW/RW03/RZ/${tanggal.slice(0, 4)}/${String(raziaId).padStart(5, "0")}`;
-}
 
 // ---------------------------------------------------------------- Pelanggaran usaha (aduan & temuan)
 
@@ -281,12 +258,10 @@ export type TarifKontribusi = {
   charterKolbakPerDatang: number;
   charterTrukPerDatang: number;
   charterTrukBesarPerDatang: number;
-  /** Denda razia = kali ini × tarif bulanan jenis kendaraan. */
-  dendaRaziaKali: number;
   /** Denda dasar per jenis pelanggaran (lainnya = diisi petugas). */
   dendaPelanggaran: Record<Exclude<JenisPelanggaran, "lainnya">, number>;
   dendaTingkat: Record<TingkatPelanggaran, number>;
-  /** Pengali pelanggaran ke-1, ke-2, ... dalam 12 bulan; 0 = teguran tertulis. Juga dipakai razia (min. 1). */
+  /** Pengali pelanggaran ke-1, ke-2, ... dalam 12 bulan; 0 = teguran tertulis. */
   dendaPengulangan: number[];
   dendaMaks: number;
   /** Per pegawai (semua orang selain pemilik). */
@@ -425,7 +400,6 @@ export const TARIF_DEFAULT: TarifKontribusi = {
   charterKolbakPerDatang: 1_500,
   charterTrukPerDatang: 3_000,
   charterTrukBesarPerDatang: 6_000,
-  dendaRaziaKali: 1,
   dendaPelanggaran: {
     ketertiban: 50_000,
     sampah_tercecer: 50_000,
@@ -526,7 +500,6 @@ export function parseTarifKontribusi(raw: string | null | undefined): TarifKontr
     charterKolbakPerDatang: angka(o.charterKolbakPerDatang, d.charterKolbakPerDatang),
     charterTrukPerDatang: angka(o.charterTrukPerDatang, d.charterTrukPerDatang),
     charterTrukBesarPerDatang: angka(o.charterTrukBesarPerDatang, d.charterTrukBesarPerDatang),
-    dendaRaziaKali: Math.min(10, angka(o.dendaRaziaKali, d.dendaRaziaKali)),
     dendaPelanggaran,
     dendaTingkat,
     dendaPengulangan,

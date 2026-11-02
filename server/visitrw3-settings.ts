@@ -47,21 +47,21 @@ const FEE_KEYS = new Set(
 const DEFAULT_TATA_MASYARAKAT = `Ketentuan bermasyarakat di lingkungan RW:
 
 1. Warga wajib menjaga ketertiban, kebersihan lingkungan, dan sikap toleransi antarwarga.
-2. Kontribusi lingkungan (jika ada) mengikuti ketentuan RW dan ditetapkan setelah penyesuaian/survey apabila diperlukan.
+2. Kontribusi lingkungan (jika ada) mengikuti ketentuan RW — untuk izin tinggal Visit RW3: Rp1.000 per bulan.
 3. Apabila terdapat laporan dari warga, Ketua RW berhak menegur, memanggil pihak terkait, dan menyelesaikan perselisihan melalui musyawarah sesuai peraturan RW.`;
 
 const DEFAULT_TATA_PENYEWA = `Syarat dan tata tertib penyewa / pengguna layanan Visit RW3:
 
 1. Data yang diajukan harus benar dan dapat dipertanggungjawabkan.
 2. Penyewa wajib mematuhi peraturan properti dan lingkungan RW.
-3. Besaran kontribusi ditetapkan pengurus RW setelah survey, mengacu tarif jenis usaha (lapak/kiosk/lain) atau ukuran properti (pintu: kecil/sedang/besar).
-4. Satu pengajuan = satu unit (kamar/lokasi); tarif tinggal mengacu pada skala properti tempat Anda mengajukan.`;
+3. Kontribusi izin tinggal: Rp1.000 (seribu rupiah) untuk setiap 1 bulan masa berlaku.
+4. Satu pengajuan = satu unit (kamar/lokasi). Formulir diisi penghuni; pengurus RW mencatat ke sistem setelah formulir dikumpulkan.`;
 
-const DEFAULT_TATA_PEMILIK = `Syarat pendaftaran properti (pemilik):
+const DEFAULT_TATA_PEMILIK = `Syarat bagi pemilik kost / kontrakan (penyalur formulir):
 
-1. Pemilik atau penanggung jawab wajib memberikan data properti yang akurat (termasuk jumlah pintu/unit).
-2. Properti yang terdaftar dapat diverifikasi oleh pengurus RW.
-3. Besaran kontribusi ditetapkan pengurus RW setelah verifikasi/survey, mengacu jenis properti dan skala jumlah pintu.`;
+1. Pemilik menerima formulir Visit RW3 dari pengurus RW dan menyebarkannya ke penghuni.
+2. Penghuni mengisi formulir kertas; pemilik mengumpulkan kembali dan menyerahkan ke pengurus RW.
+3. Pemilik tidak perlu mendaftarkan properti di situs.`;
 
 const SEED_DEFAULTS: { key: Visitrw3SettingKey; value: string; label: string; keterangan?: string }[] = [
   { key: "tier_pintu_sedang_min", value: "6", label: "Pemilik — batas pintu ukuran sedang", keterangan: "Hanya untuk kontribusi pemilik: ukuran sedang bila pintu ≥ nilai ini" },
@@ -70,14 +70,14 @@ const SEED_DEFAULTS: { key: Visitrw3SettingKey; value: string; label: string; ke
   { key: "fee_bisnis_kiosk_per_hari", value: "5000", label: "Bisnis kiosk — per hari" },
   { key: "fee_bisnis_lain_per_hari", value: "8000", label: "Bisnis lainnya — per hari" },
   { key: "fee_bisnis_per_hari", value: "5000", label: "(Legacy) Bisnis per hari", keterangan: "Cadangan jika tarif tier belum diisi" },
-  { key: "fee_kost_kecil_per_unit_bulan", value: "5000", label: "Penghuni kost kamar kecil (≤ 3×3 m) — per bulan" },
-  { key: "fee_kost_sedang_per_unit_bulan", value: "6000", label: "Penghuni kost kamar sedang (≤ 3×4 m) — per bulan" },
-  { key: "fee_kost_besar_per_unit_bulan", value: "7000", label: "Penghuni kost kamar besar (> 3×4 m) — per bulan" },
-  { key: "fee_kost_per_unit_bulan", value: "6000", label: "(Legacy) Kost per unit/bulan" },
-  { key: "fee_kontrakan_kecil_per_unit_bulan", value: "8000", label: "Penghuni kontrakan 1 kamar tidur — per bulan" },
-  { key: "fee_kontrakan_sedang_per_unit_bulan", value: "9000", label: "Penghuni kontrakan 2 kamar tidur — per bulan" },
-  { key: "fee_kontrakan_besar_per_unit_bulan", value: "10000", label: "Penghuni kontrakan ≥ 3 kamar tidur — per bulan" },
-  { key: "fee_kontrakan_per_unit_bulan", value: "9000", label: "(Legacy) Kontrakan per unit/bulan" },
+  { key: "fee_kost_kecil_per_unit_bulan", value: "1000", label: "Penghuni kost — per bulan (tarif tetap)" },
+  { key: "fee_kost_sedang_per_unit_bulan", value: "1000", label: "Penghuni kost — per bulan (tarif tetap)" },
+  { key: "fee_kost_besar_per_unit_bulan", value: "1000", label: "Penghuni kost — per bulan (tarif tetap)" },
+  { key: "fee_kost_per_unit_bulan", value: "1000", label: "Kost per unit/bulan (tarif tetap Rp1.000)" },
+  { key: "fee_kontrakan_kecil_per_unit_bulan", value: "1000", label: "Penghuni kontrakan — per bulan (tarif tetap)" },
+  { key: "fee_kontrakan_sedang_per_unit_bulan", value: "1000", label: "Penghuni kontrakan — per bulan (tarif tetap)" },
+  { key: "fee_kontrakan_besar_per_unit_bulan", value: "1000", label: "Penghuni kontrakan — per bulan (tarif tetap)" },
+  { key: "fee_kontrakan_per_unit_bulan", value: "1000", label: "Kontrakan per unit/bulan (tarif tetap Rp1.000)" },
   { key: "fee_pemilik_lapak_per_bulan", value: "30000", label: "Pemilik lapak — per bulan" },
   { key: "fee_pemilik_kiosk_per_bulan", value: "35000", label: "Pemilik kiosk — per bulan" },
   { key: "fee_pemilik_kost_kecil_per_bulan", value: "40000", label: "Pemilik kost kecil — per bulan" },
@@ -92,17 +92,10 @@ const SEED_DEFAULTS: { key: Visitrw3SettingKey; value: string; label: string; ke
   { key: "tata_tertib_pemilik", value: DEFAULT_TATA_PEMILIK, label: "Tata tertib pemilik properti" },
 ];
 
-/** Tarif penyewa sebelum Rp5.000–10.000; hanya diganti bila admin belum mengubahnya. */
-const TARIF_PENYEWA_LAMA: Partial<Record<Visitrw3SettingKey, string>> = {
-  fee_kost_kecil_per_unit_bulan: "8000",
-  fee_kost_sedang_per_unit_bulan: "10000",
-  fee_kost_besar_per_unit_bulan: "12000",
-  fee_kost_per_unit_bulan: "10000",
-  fee_kontrakan_kecil_per_unit_bulan: "12000",
-  fee_kontrakan_sedang_per_unit_bulan: "15000",
-  fee_kontrakan_besar_per_unit_bulan: "18000",
-  fee_kontrakan_per_unit_bulan: "15000",
-};
+/** Nilai tarif tinggal lama (tier) → diganti ke Rp1.000 bila masih nilai bawaan. */
+const TARIF_TINGGAL_LAMA = [
+  "5000", "6000", "7000", "8000", "9000", "10000", "12000", "15000", "18000",
+] as const;
 
 export async function seedVisitrw3Settings() {
   for (const s of SEED_DEFAULTS) {
@@ -113,11 +106,14 @@ export async function seedVisitrw3Settings() {
       [s.key, s.value, s.label, s.keterangan ?? null],
     );
   }
-  for (const [key, lama] of Object.entries(TARIF_PENYEWA_LAMA)) {
-    const baru = SEED_DEFAULTS.find((s) => s.key === key)!.value;
+  const feeKeys = SEED_DEFAULTS.filter((s) =>
+    s.key.startsWith("fee_kost_") || s.key.startsWith("fee_kontrakan_"),
+  );
+  for (const s of feeKeys) {
     await pool.query(
-      `UPDATE visitrw3_settings SET value = $2, updated_at = now() WHERE key = $1 AND value = $3`,
-      [key, baru, lama],
+      `UPDATE visitrw3_settings SET value = $2, label = $3, updated_at = now()
+       WHERE key = $1 AND value = ANY($4::text[])`,
+      [s.key, s.value, s.label, [...TARIF_TINGGAL_LAMA]],
     );
   }
 }

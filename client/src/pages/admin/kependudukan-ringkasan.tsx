@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { RefreshCw } from "lucide-react";
+import { Link } from "wouter";
+import { ArrowRight, RefreshCw } from "lucide-react";
 import {
   KategoriUmurPanel,
   PekerjaanPanel,
@@ -17,13 +18,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { KependudukanDataIssues } from "@/components/admin/kependudukan-data-issues";
 import { KependudukanCariWarga } from "@/components/admin/kependudukan-cari-warga";
+import { KependudukanTagKk } from "@/components/admin/kependudukan-tag-kk";
 import { StatistikSatuPintu, useStatistikWarga } from "@/components/admin/statistik-satu-pintu";
 import { GrafikWarga } from "@/components/admin/grafik-warga";
+import { MetadataWargaPanel } from "@/components/admin/metadata-warga-panel";
+import { parseKkLabelRw } from "@shared/kk-label-rw";
 import { ACTIVE_RT_NUMBERS } from "@shared/rt";
 import { isWargaTerhitung } from "@shared/statistik-warga";
-import { buildWargaDataIssueReport, type WargaIssueSlice } from "@shared/warga-data-issues";
+import type { WargaIssueSlice } from "@shared/warga-data-issues";
+import { buildVerifikasiReport } from "@shared/verifikasi-kelengkapan";
 import { fetchPublicJson, getApiErrorMessage } from "@/lib/queryClient";
 
 type WargaWithKk = WargaIssueSlice & {
@@ -35,10 +39,32 @@ type WargaWithKk = WargaIssueSlice & {
   alamat: string;
   jenisKelamin?: string | null;
   statusKependudukan?: string | null;
+  penghasilanBulanan?: string | null;
+  tempatLahir?: string | null;
+  pendidikan?: string | null;
+  [key: string]: unknown;
 };
 
-type BagianId = "cari" | "umur" | "pekerjaan" | "verifikasi";
-const SEMUA_BAGIAN: BagianId[] = ["cari", "umur", "pekerjaan", "verifikasi"];
+type KkSlice = {
+  id: number;
+  rt: number;
+  nomorKk?: string | null;
+  alamat?: string | null;
+  labelRw?: string | null;
+  statusRumah?: string | null;
+  kondisiBangunan?: string | null;
+  sumberAir?: string | null;
+  sanitasiWc?: string | null;
+  listrik?: string | null;
+  penerimaBansos?: boolean | null;
+  penghasilanBulanan?: string | null;
+  layakBansos?: boolean | null;
+  kategoriEkonomi?: string | null;
+  linkGmaps?: string | null;
+};
+
+type BagianId = "cari" | "tag" | "metadata" | "umur" | "pekerjaan";
+const SEMUA_BAGIAN: BagianId[] = ["cari", "tag", "metadata", "umur", "pekerjaan"];
 
 /** Di laptop semua bagian terbuka seperti semula; di HP hanya pencarian agar halaman tidak memanjang. */
 function bagianAwal(): string[] {
@@ -66,22 +92,41 @@ export default function KependudukanRingkasan() {
     retry: 1,
   });
 
+  const {
+    data: kkList,
+    refetch: refetchKk,
+    isFetching: kkFetching,
+  } = useQuery({
+    queryKey: ["/api/kk"],
+    queryFn: () => fetchPublicJson<KkSlice[]>("/api/kk", undefined, 120_000),
+    staleTime: 60_000,
+    retry: 1,
+  });
+
   const wargaFiltered = useMemo(() => {
     if (!wargaList?.length) return [];
     return rtFilterNum === undefined ? wargaList : wargaList.filter((w) => w.rt === rtFilterNum);
   }, [wargaList, rtFilterNum]);
 
+  const kkFiltered = useMemo(() => {
+    if (!kkList?.length) return [];
+    return rtFilterNum === undefined ? kkList : kkList.filter((k) => k.rt === rtFilterNum);
+  }, [kkList, rtFilterNum]);
+
   const wargaAktif = useMemo(() => wargaFiltered.filter(isWargaTerhitung), [wargaFiltered]);
-  const jumlahPerluVerifikasi = useMemo(
-    () => buildWargaDataIssueReport(wargaFiltered).totalBermasalah,
-    [wargaFiltered],
+  const ringkasVerifikasi = useMemo(() => buildVerifikasiReport(wargaAktif), [wargaAktif]);
+  const jumlahPerluVerifikasi = ringkasVerifikasi.totalPerlu;
+  const jumlahKkBertag = useMemo(
+    () => kkFiltered.filter((k) => parseKkLabelRw(k.labelRw).length > 0).length,
+    [kkFiltered],
   );
 
   const refetchAll = () => {
     statistik.refetch();
     refetchWarga();
+    refetchKk();
   };
-  const isFetching = statistik.isFetching || wargaFetching;
+  const isFetching = statistik.isFetching || wargaFetching || kkFetching;
 
   if (wargaLoading) {
     return (
@@ -144,9 +189,51 @@ export default function KependudukanRingkasan() {
       />
       <GrafikWarga rt={rtFilterNum} onPilihRt={(rt) => setRtFilter(rt == null ? "semua" : String(rt))} />
 
+      <div
+        className={`rounded-2xl border px-4 py-4 sm:px-5 ${
+          jumlahPerluVerifikasi > 0
+            ? "border-amber-300/80 bg-amber-50/70"
+            : "border-border bg-card/60"
+        }`}
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold uppercase tracking-wide text-brand">Verifikasi data</p>
+            <p className={`mt-0.5 text-sm ${jumlahPerluVerifikasi > 0 ? "text-amber-800" : "text-muted-foreground"}`}>
+              {jumlahPerluVerifikasi > 0
+                ? `${formatNumber(jumlahPerluVerifikasi)} warga aktif perlu perbaikan · kelengkapan ${ringkasVerifikasi.rataPribadi}%`
+                : "Semua data warga aktif sudah lengkap untuk filter RT ini"}
+            </p>
+          </div>
+          <Button asChild className="w-full shrink-0 sm:w-auto">
+            <Link href="/admin/kependudukan/verifikasi">
+              Buka verifikasi
+              <ArrowRight className="ml-1.5 h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
+      </div>
+
       <Accordion type="multiple" value={terbuka} onValueChange={setTerbuka} className="space-y-3">
-        <BagianLipat value="cari" judul="Cari warga" ringkas="Nama, NIK, nomor KK, atau alamat">
-          <KependudukanCariWarga wargaList={wargaFiltered} polos />
+        <BagianLipat value="cari" judul="Cari warga" ringkas="Nama, NIK, KK, alamat, atau tag — tandai KK di hasil">
+          <KependudukanCariWarga wargaList={wargaFiltered} kkList={kkFiltered} polos />
+        </BagianLipat>
+
+        <BagianLipat
+          value="tag"
+          judul="Kondisi tag keluarga"
+          ringkas={`${formatNumber(jumlahKkBertag)} KK bertag · ${formatNumber(kkFiltered.length - jumlahKkBertag)} belum ditandai`}
+          sorot={jumlahKkBertag === 0 && kkFiltered.length > 0}
+        >
+          <KependudukanTagKk kkList={kkFiltered} polos />
+        </BagianLipat>
+
+        <BagianLipat
+          value="metadata"
+          judul="Metadata form warga & KK"
+          ringkas={`${formatNumber(wargaAktif.length)} warga · ${formatNumber(kkFiltered.length)} KK — semua field yang diinput`}
+        >
+          <MetadataWargaPanel warga={wargaAktif} kk={kkFiltered} polos />
         </BagianLipat>
 
         <BagianLipat value="umur" judul="Kategori umur" ringkas={`${formatNumber(wargaAktif.length)} warga aktif`}>
@@ -155,15 +242,6 @@ export default function KependudukanRingkasan() {
 
         <BagianLipat value="pekerjaan" judul="Pekerjaan" ringkas="Angkatan kerja, pelajar, pengangguran">
           <PekerjaanPanel warga={wargaAktif} polos />
-        </BagianLipat>
-
-        <BagianLipat
-          value="verifikasi"
-          judul="Verifikasi data"
-          ringkas={jumlahPerluVerifikasi > 0 ? `${formatNumber(jumlahPerluVerifikasi)} warga perlu dicek` : "Semua data selaras"}
-          sorot={jumlahPerluVerifikasi > 0}
-        >
-          <KependudukanDataIssues warga={wargaFiltered} polos />
         </BagianLipat>
       </Accordion>
     </div>

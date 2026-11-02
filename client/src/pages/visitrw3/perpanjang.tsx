@@ -9,7 +9,6 @@ import { apiRequest, getApiErrorMessage, readJsonSafely } from "@/lib/queryClien
 import { Loader2 } from "lucide-react";
 import { SuccessPanel } from "@/components/gov/success-panel";
 import { KontribusiTinggalInfo, Visitrw3SyaratPanel } from "@/components/gov/visitrw3-syarat-panel";
-import { PilihTermin } from "@/components/gov/pilih-termin";
 import { settingsRowsToMap } from "@/lib/visitrw3-kontribusi";
 
 export default function Visitrw3Perpanjang() {
@@ -17,11 +16,9 @@ export default function Visitrw3Perpanjang() {
   const [nomorLama, setNomorLama] = useState(
     () => (new URLSearchParams(window.location.search).get("nomor") ?? "").trim().toUpperCase(),
   );
-  const [terminBulan, setTerminBulan] = useState("3");
   const [setujuTataTertib, setSetujuTataTertib] = useState(false);
   const [keperluan, setKeperluan] = useState<"tinggal" | "bisnis" | "">("");
   const [jenisWarga, setJenisWarga] = useState("");
-  const [ukuranTinggal, setUkuranTinggal] = useState("");
   const [result, setResult] = useState<{ nomorVisitrw3: string; nomorLama: string } | null>(null);
 
   const { data: settingsRows = [], isLoading: settingsLoading } = useQuery({
@@ -40,7 +37,6 @@ export default function Visitrw3Perpanjang() {
     if (nomor.length < 8) {
       setKeperluan("");
       setJenisWarga("");
-      setUkuranTinggal("");
       return;
     }
     let cancelled = false;
@@ -50,7 +46,6 @@ export default function Visitrw3Perpanjang() {
         if (cancelled || !data?.pengajuan) return;
         setKeperluan(data.pengajuan.keperluanPengajuan);
         setJenisWarga(data.pengajuan.jenisWarga ?? "");
-        setUkuranTinggal(data.pengajuan.ukuranTinggal ?? "");
       })
       .catch(() => {});
     return () => {
@@ -62,7 +57,7 @@ export default function Visitrw3Perpanjang() {
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/public/visitrw3/perpanjang", {
         nomorVisitrw3: nomorLama.trim(),
-        terminBulan: parseInt(terminBulan, 10),
+        terminBulan: 1,
         setujuTataTertib: true as const,
       });
       return res.json();
@@ -78,7 +73,7 @@ export default function Visitrw3Perpanjang() {
 
   useEffect(() => {
     setSetujuTataTertib(false);
-  }, [terminBulan, jenisWarga]);
+  }, [jenisWarga]);
 
   if (result) {
     return (
@@ -89,8 +84,8 @@ export default function Visitrw3Perpanjang() {
           referenceValue={result.nomorVisitrw3}
           nextSteps={[
             `Nomor sebelumnya: ${result.nomorLama}`,
-            "Pengajuan masuk antrian survey admin.",
-            "Setelah disetujui, surat izin tinggal baru terbit dengan nomor ini — surat lama tidak berlaku lagi.",
+            "Pengajuan masuk antrian verifikasi admin.",
+            "Setelah disetujui + kontribusi Rp1.000, izin tinggal aktif 1 bulan lagi — surat lama tidak berlaku.",
           ]}
           primaryAction={{
             label: "Cek status",
@@ -105,8 +100,8 @@ export default function Visitrw3Perpanjang() {
   return (
     <Visitrw3Shell title="Perpanjang izin" backHref="/visitrw3">
       <p className="mb-4 text-base">
-        Untuk izin Visit RW3 yang <strong>sudah pernah disetujui</strong>. Belum punya nomor VRW3? Daftar baru dari
-        halaman Visit RW3.
+        Untuk izin Visit RW3 yang <strong>sudah pernah disetujui</strong>. Perpanjang 1 bulan dengan kontribusi{" "}
+        <strong>Rp1.000</strong>. Belum punya nomor VRW3? Daftar baru dari halaman Visit RW3.
       </p>
       <form
         className="space-y-4"
@@ -147,18 +142,16 @@ export default function Visitrw3Perpanjang() {
               className="h-12 font-mono"
             />
           </div>
-          <PilihTermin value={terminBulan} onChange={setTerminBulan} />
+          <div className="rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+            <span className="text-muted-foreground">Masa berlaku &amp; kontribusi: </span>
+            <strong>1 bulan · Rp1.000</strong>
+          </div>
           <Visitrw3SyaratPanel
             tataMasyarakat={settingsMap.tata_tertib_masyarakat ?? ""}
             tataKhusus={settingsMap.tata_tertib_penyewa ?? ""}
             kontribusi={
               jenisWarga === "kost" || jenisWarga === "kontrak" ? (
-                <KontribusiTinggalInfo
-                  jenis={jenisWarga}
-                  settingsRows={settingsRows}
-                  terminBulan={parseInt(terminBulan, 10)}
-                  ukuran={ukuranTinggal}
-                />
+                <KontribusiTinggalInfo jenis={jenisWarga} terminBulan={1} />
               ) : null
             }
             setuju={setujuTataTertib}

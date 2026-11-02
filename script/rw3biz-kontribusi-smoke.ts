@@ -3,9 +3,7 @@ import {
   CHARTER_BIZ,
   TARIF_DEFAULT,
   alokasiKePos,
-  dendaRazia,
   hitungCharter,
-  hitungDendaPelanggaran,
   hitungSurplusVoucher,
   batasAtasOmzet,
   cariFaktorTarget,
@@ -128,46 +126,15 @@ uji("charter setiap hari dibatasi setara unit milik sendiri per 7 kedatangan", (
   assert.equal(hitungCharter(0, c, tarif), 0);
 });
 
-uji("denda razia = tarif bulanan × pengali", () => {
-  assert.equal(dendaRazia("kendaraanTrukBesar", tarif), 100_000);
-  assert.equal(dendaRazia("kendaraanKolbak", { ...tarif, dendaRaziaKali: 2 }), 50_000);
-});
-
-uji("denda razia naik saat berulang (ke-2 tetap 1×, ke-3 2×, ke-5 3×)", () => {
-  assert.equal(dendaRazia("kendaraanTrukBesar", tarif, 2), 100_000);
-  assert.equal(dendaRazia("kendaraanTrukBesar", tarif, 3), 200_000);
-  assert.equal(dendaRazia("kendaraanTrukBesar", tarif, 5), 300_000);
-});
-
-uji("pelanggaran pertama ringan/sedang = teguran, berat langsung denda", () => {
-  const a = hitungDendaPelanggaran({ jenis: "sampah_tercecer", tingkat: "sedang", keBerapa: 1 }, tarif);
-  assert.equal(a.denda, 0);
-  assert.ok(a.teguran);
-  const b = hitungDendaPelanggaran({ jenis: "limbah_bau", tingkat: "berat", keBerapa: 1 }, tarif);
-  assert.equal(b.denda, 200_000);
-});
-
-uji("denda pelanggaran = dasar × tingkat × pengulangan, dibatasi maksimal", () => {
-  assert.equal(hitungDendaPelanggaran({ jenis: "sampah_tercecer", tingkat: "sedang", keBerapa: 2 }, tarif).denda, 50_000);
-  assert.equal(hitungDendaPelanggaran({ jenis: "ketertiban", tingkat: "ringan", keBerapa: 3 }, tarif).denda, 50_000);
-  assert.equal(hitungDendaPelanggaran({ jenis: "kerusakan_fasum", tingkat: "berat", keBerapa: 4 }, tarif).denda, 900_000);
-  assert.equal(hitungDendaPelanggaran({ jenis: "kerusakan_fasum", tingkat: "berat", keBerapa: 9 }, tarif).denda, 900_000);
-  assert.equal(
-    hitungDendaPelanggaran({ jenis: "kerusakan_fasum", tingkat: "berat", keBerapa: 4 }, { ...tarif, dendaMaks: 500_000 }).denda,
-    500_000,
-  );
-  assert.equal(hitungDendaPelanggaran({ jenis: "lainnya", tingkat: "sedang", keBerapa: 2, dasarManual: 75_000 }, tarif).denda, 75_000);
-});
-
 uji("surplus di atas target menjadi dana voucher warga", () => {
-  assert.deepEqual(hitungSurplusVoucher({ kontribusi: 5_200_000, denda: 300_000, target: 5_000_000 }), {
-    terkumpul: 5_500_000,
-    surplus: 500_000,
+  assert.deepEqual(hitungSurplusVoucher({ kontribusi: 5_200_000, denda: 0, target: 5_000_000 }), {
+    terkumpul: 5_200_000,
+    surplus: 200_000,
   });
   assert.equal(hitungSurplusVoucher({ kontribusi: 4_000_000, denda: 0, target: 5_000_000 }).surplus, 0);
 });
 
-uji("konfigurasi denda tersimpan diparse dengan batas aman", () => {
+uji("konfigurasi tarif lama (termasuk field denda) tetap diparse aman", () => {
   const t = parseTarifKontribusi(JSON.stringify({ dendaPengulangan: [1, 99], dendaTingkat: { berat: 3 }, dendaPelanggaran: { sampah_tercecer: 20_000 } }));
   assert.deepEqual(t.dendaPengulangan, [1, 10]);
   assert.equal(t.dendaTingkat.berat, 3);

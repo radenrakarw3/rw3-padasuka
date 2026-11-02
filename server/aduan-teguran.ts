@@ -10,7 +10,7 @@ import * as layanan from "./surat-sakti/layanan";
 import { buatPdf } from "./surat-sakti/pdf";
 import { PETA_JENIS, renderDokumen, TINGKAT_TEGURAN_CETAK, type DataDokumen, type JenisPihak } from "@shared/surat-sakti";
 import {
-  JENIS_TERADU, KATEGORI_ADUAN_INFO, KATEGORI_KE_PELANGGARAN_BIZ, STATUS_TEGURAN, TINGKAT_TEGURAN, TINGKAT_TEGURAN_INFO,
+  JENIS_TERADU, KATEGORI_ADUAN_INFO, STATUS_TEGURAN, TINGKAT_TEGURAN, TINGKAT_TEGURAN_INFO,
   CARA_SERAH_TEGURAN, kunciTeradu, type KategoriAduan, type TingkatTeguran,
 } from "@shared/aduan";
 import { ambilAduan, catatTimeline, petakanTeguran, riwayatTeguran, saranDariRiwayat } from "./aduan";
@@ -78,13 +78,11 @@ async function susunTeguran(v: InputTeguran) {
     sumberFakta: a ? `Aduan ${a.nomor}` : "Temuan pengurus",
   };
   const jenisPihak: JenisPihak = teradu.jenis === "usaha" ? "usaha" : teradu.jenis === "pihak_lain" ? "eksternal" : "warga";
-  const dataForm: DataDokumen = v.tingkat === "lisan"
-    ? { ...umum, pihakDitegur: teradu.nama, alamatDitegur: teradu.alamat ?? "" }
-    : {
-        ...umum,
-        penerima: [{ nama: teradu.nama, jenis: jenisPihak, rt, peran: teradu.alamat ?? undefined }],
-        tembusan: [...(rt ? [`Ketua RT ${String(rt).padStart(2, "0")} RW 03`] : []), ...(v.tingkat === "sp3" ? ["Lurah Padasuka"] : []), "Arsip"],
-      };
+  const dataForm: DataDokumen = {
+    ...umum,
+    penerima: [{ nama: teradu.nama, jenis: jenisPihak, rt, peran: teradu.alamat ?? undefined }],
+    tembusan: [...(rt ? [`Ketua RT ${String(rt).padStart(2, "0")} RW 03`] : []), ...(v.tingkat === "sp3" ? ["Lurah Padasuka"] : []), "Arsip"],
+  };
   return {
     aduan: a,
     teradu: { ...teradu, kunci },
@@ -252,27 +250,4 @@ export async function undangKlarifikasi(aktor: Aktor, aduanId: number, raw: unkn
     await catatTimeline(c, aduanId, "surat", nomorSurat ? `Undangan klarifikasi ${nomorSurat} terbit.` : `Draf undangan klarifikasi dibuat di Surat Sakti (#${draft.id}).`, false, aktor.label);
   });
   return { suratId: draft.id, nomorSurat };
-}
-
-// ---------------------------------------------------------------- Teruskan ke RW3BIZ (denda usaha)
-export async function teruskanKeRw3biz(aktor: Aktor, aduanId: number) {
-  const a = await ambilAduan(aduanId);
-  if (a.rw3biz_pelanggaran_id) throw new WilayahError(409, "Aduan ini sudah diteruskan ke RW3BIZ");
-  if (a.teradu_jenis !== "usaha") throw new WilayahError(400, "Hanya aduan terhadap usaha yang dapat diteruskan ke RW3BIZ");
-  const { rows: foto } = await pool.query(`SELECT mime, data FROM aduan_bukti WHERE aduan_id = $1 ORDER BY id LIMIT 1`, [aduanId]);
-  const fotoData = foto[0] ? `data:${foto[0].mime};base64,${(foto[0].data as Buffer).toString("base64")}` : null;
-  const tingkat = a.dampak === "membahayakan" ? "berat" : a.dampak === "merugikan" ? "sedang" : "ringan";
-  const id = await denganTransaksi(async (c) => {
-    const { rows } = await c.query(
-      `INSERT INTO rw3biz_pelanggaran (usaha_id, nama_usaha_lain, jenis, tingkat, sumber, tanggal_kejadian, lokasi, uraian, foto_data,
-                                       status, dicatat_oleh)
-       VALUES ($1, $2, $3, $4, 'aduan_warga', $5, $6, $7, $8, 'menunggu_verifikasi', $9) RETURNING id`,
-      [a.usaha_id, a.usaha_id ? null : a.teradu_nama, KATEGORI_KE_PELANGGARAN_BIZ[a.kategori as KategoriAduan] ?? "lainnya", tingkat,
-        a.tanggal_kejadian || hariIniWib(), a.lokasi, `[${a.nomor}] ${a.judul}\n\n${a.uraian}`, fotoData, aktor.label],
-    );
-    await c.query(`UPDATE aduan SET rw3biz_pelanggaran_id = $2, updated_at = now() WHERE id = $1`, [aduanId, rows[0].id]);
-    await catatTimeline(c, aduanId, "rw3biz", "Aduan diteruskan ke penanganan pelanggaran usaha RW3BIZ.", true, aktor.label);
-    return rows[0].id as number;
-  });
-  return { pelanggaranId: id };
 }

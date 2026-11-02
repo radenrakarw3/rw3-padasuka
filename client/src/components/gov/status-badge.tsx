@@ -14,7 +14,7 @@ const config: Record<
   { label: string; className: string; icon: typeof Clock }
 > = {
   menunggu_survey: {
-    label: "Menunggu survey",
+    label: "Menunggu verifikasi",
     className: "bg-warning/15 text-warning-foreground border-warning/30",
     icon: Clock,
   },

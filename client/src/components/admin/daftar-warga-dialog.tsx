@@ -6,11 +6,17 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fetchPublicJson, getApiErrorMessage } from "@/lib/queryClient";
-import { toWaMeUrl } from "@/lib/wa";
+import {
+  HubungiWargaButton,
+  HubungiWargaDialog,
+  type HubungiWargaTarget,
+} from "@/components/admin/hubungi-warga-dialog";
 import { jalurKelolaRt } from "@/pages/admin/kelola-warga/konteks";
+import { toWaMeUrl } from "@/lib/wa";
 import { ACTIVE_RT_NUMBERS } from "@shared/rt";
 import { judulDaftar, type DaftarKategori, type KategoriDaftar, type PilihanDaftar } from "@shared/statistik-warga";
 import { KATEGORI_DAFTAR_KE_REKAP } from "@shared/rekap-kategori";
+import { buildHubungiWargaPesanUmum } from "@shared/wa-template-kependudukan";
 
 const HIJAU = "hsl(163,55%,22%)";
 const EMAS = "hsl(40,45%,55%)";
@@ -43,6 +49,7 @@ function IsiDaftar({ kategori, nilai, rtAwal, onTutup }: { kategori: KategoriDaf
   const [rt, setRt] = useState<number | undefined>(rtAwal);
   const [cari, setCari] = useState("");
   const [batas, setBatas] = useState(PER_HALAMAN);
+  const [hubungiTarget, setHubungiTarget] = useState<HubungiWargaTarget | null>(null);
   const qs = new URLSearchParams({ kategori });
   if (rt != null) qs.set("rt", String(rt));
   if (nilai) qs.set("nilai", nilai);
@@ -150,9 +157,32 @@ function IsiDaftar({ kategori, nilai, rtAwal, onTutup }: { kategori: KategoriDaf
                 {o.waMilik && <p className="text-[11px] text-amber-700">{o.waMilik}</p>}
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-center">
-                {o.wa ? (
+                {o.wa && o.id > 0 && kategori !== "singgah" ? (
+                  <HubungiWargaButton
+                    className="h-8"
+                    onClick={() =>
+                      setHubungiTarget({
+                        wargaId: o.id,
+                        namaLengkap: o.nama,
+                        jenisAwal: ajakLengkapi ? "minta_bantuan" : "pengingat_lembut",
+                      })
+                    }
+                  />
+                ) : o.wa ? (
                   <Button asChild size="sm" className="h-8 bg-[#25D366] px-2.5 text-white hover:bg-[#1ebe5b]">
-                    <a href={toWaMeUrl(o.wa, `Assalamu'alaikum, ${o.nama}. Kami dari pengurus RW 03 Padasuka.`)} target="_blank" rel="noopener noreferrer" aria-label={`WhatsApp ${o.nama}`}>
+                    <a
+                      href={toWaMeUrl(
+                        o.wa,
+                        buildHubungiWargaPesanUmum({
+                          namaLengkap: o.nama,
+                          rt: o.rt,
+                          jenis: ajakLengkapi ? "minta_bantuan" : "pengingat_lembut",
+                        }),
+                      )}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`WhatsApp ${o.nama}`}
+                    >
                       <MessageCircle className="mr-1 h-4 w-4" />WA
                     </a>
                   </Button>
@@ -179,6 +209,13 @@ function IsiDaftar({ kategori, nilai, rtAwal, onTutup }: { kategori: KategoriDaf
           Tampilkan {Math.min(PER_HALAMAN, tersaring.length - batas)} lagi (sisa {tersaring.length - batas})
         </Button>
       )}
+      <HubungiWargaDialog
+        target={hubungiTarget}
+        open={hubungiTarget != null}
+        onOpenChange={(buka) => {
+          if (!buka) setHubungiTarget(null);
+        }}
+      />
     </>
   );
 }

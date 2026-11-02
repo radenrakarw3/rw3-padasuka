@@ -15,12 +15,12 @@ import {
   Search,
   Users,
   Printer,
-  Truck,
   UserPen,
   UserSearch,
   ListChecks,
   Receipt,
   ShieldAlert,
+  ShieldCheck,
   SlidersHorizontal,
   Wallet,
 } from "lucide-react";
@@ -135,11 +135,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     {
       judul: "Visit RW3",
       items: [
-        { path: VISITRW3_ROUTES.admin.antrianSurvey, icon: ClipboardList, label: "Survey hunian", badge: visit.surveyMenunggu },
-        { path: VISITRW3_ROUTES.admin.antrianSudahLolos, icon: ClipboardList, label: "Sudah disurvey" },
+        { path: VISITRW3_ROUTES.admin.antrianSurvey, icon: ClipboardList, label: "Antrian verifikasi", badge: visit.surveyMenunggu },
+        { path: VISITRW3_ROUTES.admin.antrianSudahLolos, icon: ClipboardList, label: "Sudah diputus" },
         { path: VISITRW3_ROUTES.admin.penghuni, icon: Users, label: "Warga singgah" },
         { path: VISITRW3_ROUTES.admin.kalender, icon: CalendarDays, label: "Kalender kontrak" },
         { path: VISITRW3_ROUTES.admin.dashboard, icon: PieChart, label: "Statistik hunian" },
+        { path: VISITRW3_ROUTES.formulir, icon: Printer, label: "Cetak formulir A4" },
       ],
     },
     {
@@ -148,10 +149,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         { path: RW3BIZ_ROUTES.admin.antrianSurvey, icon: ClipboardList, label: "Antrian persetujuan", badge: biz.surveyMenunggu },
         { path: RW3BIZ_ROUTES.admin.antrianSudah, icon: ClipboardList, label: "Usaha terdaftar" },
         { path: RW3BIZ_ROUTES.admin.tagihan, icon: Receipt, label: "Tagihan sumbangsih", badge: biz.keberatanMenunggu },
-        { path: RW3BIZ_ROUTES.admin.razia, icon: Truck, label: "Razia kendaraan" },
         { path: RW3BIZ_ROUTES.admin.pelanggaran, icon: ShieldAlert, label: "Pelanggaran & aduan", badge: biz.aduanMenunggu },
         { path: RW3BIZ_ROUTES.admin.dashboard, icon: PieChart, label: "RAB & statistik" },
-        { path: RW3BIZ_ROUTES.admin.tarif, icon: SlidersHorizontal, label: "Program & denda" },
+        { path: RW3BIZ_ROUTES.admin.tarif, icon: SlidersHorizontal, label: "Program sumbangsih" },
       ],
     },
     {
@@ -162,6 +162,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       judul: "Kependudukan",
       items: [
         { path: "/admin/kependudukan", icon: Users, label: "Ringkasan warga" },
+        { path: "/admin/kependudukan/verifikasi", icon: ShieldCheck, label: "Verifikasi data" },
         { path: "/admin/kelola-warga/warga", icon: UserPen, label: "Data warga & KK", badge: kotakMasuk?.total },
         { path: "/admin/kependudukan/rekap", icon: Printer, label: "Rekap & cetak" },
         { path: "/admin/standar-data", icon: ListChecks, label: "Standar data" },

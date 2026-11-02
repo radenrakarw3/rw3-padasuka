@@ -7,7 +7,7 @@ export const PROPERTI_STATUS_LABEL: Record<string, string> = {
 };
 
 export const PENGAJUAN_STATUS_LABEL: Record<string, string> = {
-  menunggu_survey: "Menunggu survey",
+  menunggu_survey: "Menunggu verifikasi",
   disetujui: "Disetujui",
   ditolak: "Ditolak",
 };

@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Search, MessageCircle, Home, User } from "lucide-react";
+import { Search, MessageCircle, Home, User, ExternalLink } from "lucide-react";
 import { toWhatsappLink } from "@/components/kependudukan/warga-form";
 import { StatusKependudukanBadge } from "@/components/kependudukan/status-kependudukan-badge";
 import { BagianStat } from "@/components/admin/kependudukan-stats-ui";
+import { KkTagEditor } from "@/components/admin/kk-tag-editor";
+import { parseKkLabelRw } from "@shared/kk-label-rw";
 import { cn } from "@/lib/utils";
 
 export type WargaCariRow = {
@@ -23,11 +26,17 @@ export type WargaCariRow = {
   alamat: string;
 };
 
+export type KkCariMeta = {
+  id: number;
+  labelRw?: string | null;
+};
+
 type KkGroup = {
   kkId: number;
   nomorKk: string;
   rt: number;
   alamat: string;
+  labelRw: string | null;
   anggota: WargaCariRow[];
   matchedIds: Set<number>;
 };
@@ -40,7 +49,11 @@ function sortAnggota(a: WargaCariRow, b: WargaCariRow) {
   return a.namaLengkap.localeCompare(b.namaLengkap, "id");
 }
 
-function buildKkGroups(matches: WargaCariRow[], allWarga: WargaCariRow[]): KkGroup[] {
+function buildKkGroups(
+  matches: WargaCariRow[],
+  allWarga: WargaCariRow[],
+  kkById: Map<number, KkCariMeta>,
+): KkGroup[] {
   const kkIds = [...new Set(matches.map((m) => m.kkId))].slice(0, MAX_KK);
 
   return kkIds
@@ -54,6 +67,7 @@ function buildKkGroups(matches: WargaCariRow[], allWarga: WargaCariRow[]): KkGro
         nomorKk: first.nomorKk,
         rt: first.rt,
         alamat: first.alamat,
+        labelRw: kkById.get(kkId)?.labelRw ?? null,
         anggota: [...anggota].sort(sortAnggota),
         matchedIds: new Set(matches.filter((m) => m.kkId === kkId).map((m) => m.id)),
       };
@@ -116,7 +130,15 @@ function AnggotaCard({
   );
 }
 
-export function KependudukanCariWarga({ wargaList, polos }: { wargaList: WargaCariRow[]; polos?: boolean }) {
+export function KependudukanCariWarga({
+  wargaList,
+  kkList = [],
+  polos,
+}: {
+  wargaList: WargaCariRow[];
+  kkList?: KkCariMeta[];
+  polos?: boolean;
+}) {
   const [q, setQ] = useState("");
   const [debounced, setDebounced] = useState("");
 
@@ -125,19 +147,24 @@ export function KependudukanCariWarga({ wargaList, polos }: { wargaList: WargaCa
     return () => clearTimeout(t);
   }, [q]);
 
+  const kkById = useMemo(() => new Map(kkList.map((k) => [k.id, k])), [kkList]);
+
   const groups = useMemo(() => {
     if (debounced.length < 2) return [];
 
-    const matches = wargaList.filter(
-      (w) =>
+    const matches = wargaList.filter((w) => {
+      const tags = parseKkLabelRw(kkById.get(w.kkId)?.labelRw).join(" ").toLowerCase();
+      return (
         w.namaLengkap.toLowerCase().includes(debounced) ||
         w.nik.includes(debounced) ||
         w.nomorKk.includes(debounced) ||
-        w.alamat.toLowerCase().includes(debounced),
-    );
+        w.alamat.toLowerCase().includes(debounced) ||
+        tags.includes(debounced)
+      );
+    });
 
-    return buildKkGroups(matches, wargaList);
-  }, [debounced, wargaList]);
+    return buildKkGroups(matches, wargaList, kkById);
+  }, [debounced, wargaList, kkById]);
 
   const truncated = debounced.length >= 2 && groups.length >= MAX_KK;
 
@@ -145,7 +172,7 @@ export function KependudukanCariWarga({ wargaList, polos }: { wargaList: WargaCa
     <BagianStat
       polos={polos}
       title="Cari Warga"
-      description="Nama, NIK, nomor KK, atau alamat — menampilkan kartu keluarga beserta anggota"
+      description="Nama, NIK, nomor KK, alamat, atau tag — di kartu KK Anda bisa menilai & menandai tindak lanjut"
     >
       <div className="relative max-w-xl">
         <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -177,19 +204,35 @@ export function KependudukanCariWarga({ wargaList, polos }: { wargaList: WargaCa
       <div className="space-y-4">
         {groups.map((kk) => (
           <Card key={kk.kkId} className="overflow-hidden">
-            <CardHeader className="pb-3 pt-4 px-3 bg-muted/30 sm:px-4">
+            <CardHeader className="pb-3 pt-4 px-3 bg-muted/30 sm:px-4 space-y-3">
               <div className="flex items-start gap-3">
                 <div className="rounded-lg bg-brand/10 p-2 shrink-0">
                   <Home className="w-4 h-4 text-brand" />
                 </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold break-all">KK {kk.nomorKk}</p>
-                  <p className="text-sm text-muted-foreground mt-0.5 break-words sm:text-xs">{kk.alamat}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    RT {String(kk.rt).padStart(2, "0")} · {kk.anggota.length} anggota
-                  </p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold break-all">KK {kk.nomorKk}</p>
+                      <p className="text-sm text-muted-foreground mt-0.5 break-words sm:text-xs">{kk.alamat}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        RT {String(kk.rt).padStart(2, "0")} · {kk.anggota.length} anggota
+                      </p>
+                    </div>
+                    <Button asChild size="sm" variant="outline" className="h-8 shrink-0 gap-1 text-xs">
+                      <Link href={`/admin/kelola-warga/keluarga/${kk.kkId}`}>
+                        Buka KK
+                        <ExternalLink className="h-3 w-3" />
+                      </Link>
+                    </Button>
+                  </div>
                 </div>
               </div>
+              <KkTagEditor
+                kkId={kk.kkId}
+                labelRw={kk.labelRw}
+                ringkas
+                invalidateKeys={[["/api/warga-with-kk"]]}
+              />
             </CardHeader>
             <CardContent className="p-3 sm:p-4">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

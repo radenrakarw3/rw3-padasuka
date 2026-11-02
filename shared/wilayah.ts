@@ -87,10 +87,6 @@ const AWAL: DefinisiFakta[] = [
     pilihan: p([["kurang_1", "Kurang dari 1 tahun"], ["1_5", "1–5 tahun"], ["lebih_5", "Lebih dari 5 tahun"]]),
   },
   {
-    kunci: "s_kontak_darurat", subjek: "kk", kelompok: "Tempat tinggal & kontak", label: "Kontak darurat", tipe: "teks",
-    pertanyaan: "Nomor HP kerabat yang bisa dihubungi saat darurat", bantuan: "Boleh kosong. Jangan isi NIK.",
-  },
-  {
     kunci: "s_status_rumah", subjek: "kk", kelompok: "Rumah & fasilitas", label: "Status rumah", tipe: "pilihan",
     pertanyaan: "Rumah yang ditempati milik siapa?",
     pilihan: p([["milik_sendiri", "Milik sendiri"], ["milik_keluarga", "Milik orang tua / keluarga"], ["sewa", "Sewa / kontrak"], ["lainnya", "Rumah dinas / lainnya"]]),

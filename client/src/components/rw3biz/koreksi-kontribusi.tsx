@@ -163,7 +163,7 @@ function PilihKecil({
 const opsi = <T extends string>(daftar: readonly T[], label: Record<T, string>) =>
   daftar.map((v) => ({ value: v, label: label[v] }));
 
-/** Editor verifikasi data usaha & kendaraan (untuk razia). Tidak menentukan sumbangsih. */
+/** Editor verifikasi data usaha & kendaraan. Tidak menentukan sumbangsih. */
 export function KoreksiKontribusiEditor({
   data,
   onData,

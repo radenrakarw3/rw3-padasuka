@@ -6,12 +6,10 @@ import {
   applyDerivedWargaFields,
   getWargaAge,
   hasKesulitanFungsional,
-  isKepalaKeluarga,
   KESULITAN_AKTIVITAS_OPTIONS,
   mapDisabilitasToKesulitan,
   mapKesulitanToDisabilitas,
   needsCrvsDocuments,
-  needsLiterasi,
   needsPekerjaanDetail,
   needsPendidikan,
   needsStatusAngkatanKerja,
@@ -20,7 +18,7 @@ import {
   showWhatsappField,
   validateWargaFormTier,
 } from "@shared/warga-form-tier";
-import { LITERASI_OPTIONS, WG_DOMAIN_LEVEL_OPTIONS } from "@shared/warga-international";
+import { WG_DOMAIN_LEVEL_OPTIONS } from "@shared/warga-international";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -40,7 +38,6 @@ import {
   kewarganegaraanOptions,
   golonganDarahOptions,
   statusTinggalIndividuOptions,
-  hubunganKontakDaruratOptions,
   statusPekerjaanOptions,
   penghasilanPribadiOptions,
   jenisSimOptions,
@@ -89,9 +86,6 @@ export type WargaFormValues = {
   lamaTinggalTahun: string;
   statusTinggalIndividu: string;
   hubunganDenganPemilikRumah: string;
-  namaKontakDarurat: string;
-  hubunganKontakDarurat: string;
-  nomorKontakDarurat: string;
   sedangSekolah: boolean;
   namaSekolah: string;
   jenjangSekolah: string;
@@ -181,9 +175,6 @@ export const defaultWargaForm: WargaFormValues = {
   lamaTinggalTahun: "",
   statusTinggalIndividu: "Tinggal dengan Keluarga",
   hubunganDenganPemilikRumah: "",
-  namaKontakDarurat: "",
-  hubunganKontakDarurat: "Orang Tua",
-  nomorKontakDarurat: "",
   sedangSekolah: false,
   namaSekolah: "",
   jenjangSekolah: "",
@@ -264,9 +255,6 @@ export function mapWargaToForm(warga: WargaWithKk | Warga): WargaFormValues {
     lamaTinggalTahun: warga.lamaTinggalTahun?.toString() || "",
     statusTinggalIndividu: warga.statusTinggalIndividu || "Tinggal dengan Keluarga",
     hubunganDenganPemilikRumah: warga.hubunganDenganPemilikRumah || "",
-    namaKontakDarurat: warga.namaKontakDarurat || "",
-    hubunganKontakDarurat: warga.hubunganKontakDarurat || "Orang Tua",
-    nomorKontakDarurat: warga.nomorKontakDarurat || "",
     sedangSekolah: warga.sedangSekolah || false,
     namaSekolah: warga.namaSekolah || "",
     jenjangSekolah: warga.jenjangSekolah || "",
@@ -340,9 +328,9 @@ export function toWargaPayload(form: WargaFormValues) {
     lamaTinggalTahun: form.lamaTinggalTahun ? parseInt(form.lamaTinggalTahun) : null,
     statusTinggalIndividu: form.statusTinggalIndividu || null,
     hubunganDenganPemilikRumah: form.hubunganDenganPemilikRumah || null,
-    namaKontakDarurat: form.namaKontakDarurat || null,
-    hubunganKontakDarurat: form.namaKontakDarurat ? form.hubunganKontakDarurat || null : null,
-    nomorKontakDarurat: form.nomorKontakDarurat || null,
+    namaKontakDarurat: null,
+    hubunganKontakDarurat: null,
+    nomorKontakDarurat: null,
     namaSekolah: form.sedangSekolah ? form.namaSekolah || null : null,
     jenjangSekolah: form.sedangSekolah ? form.jenjangSekolah || null : null,
     kelas: form.sedangSekolah ? form.kelas || null : null,
@@ -621,42 +609,6 @@ export function WargaFormFields({
               <Label>{waLabel}</Label>
               <Input type="tel" inputMode="tel" autoComplete="tel" value={formData.nomorWhatsapp} onChange={(e) => updateField("nomorWhatsapp", e.target.value)} data-testid={`input-wa-${testIdPrefix}`} />
               {renderError("nomorWhatsapp")}
-            </div>
-          )}
-          {isKepalaKeluarga(formData.kedudukanKeluarga) && (
-            <>
-              <div className="space-y-1.5">
-                <Label>Nama kontak darurat *</Label>
-                <Input value={formData.namaKontakDarurat} onChange={(e) => updateField("namaKontakDarurat", e.target.value)} />
-                {renderError("namaKontakDarurat")}
-              </div>
-              <div className="space-y-1.5">
-                <Label>Hubungan</Label>
-                <Select value={formData.hubunganKontakDarurat} onValueChange={(value) => updateField("hubunganKontakDarurat", value)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{hubunganKontakDaruratOptions.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Nomor kontak darurat *</Label>
-                <Input type="tel" inputMode="tel" value={formData.nomorKontakDarurat} onChange={(e) => updateField("nomorKontakDarurat", e.target.value)} />
-                {renderError("nomorKontakDarurat")}
-              </div>
-            </>
-          )}
-          {needsLiterasi(age) && (
-            <div className="space-y-1.5">
-              <Label>Literasi baca-tulis *</Label>
-              <p className="text-xs text-muted-foreground">UNESCO — huruf Latin/Indonesia.</p>
-              <Select value={formData.literasi} onValueChange={(value) => updateField("literasi", value)}>
-                <SelectTrigger><SelectValue placeholder="Pilih" /></SelectTrigger>
-                <SelectContent>
-                  {LITERASI_OPTIONS.map((o) => (
-                    <SelectItem key={o} value={o}>{o}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {renderError("literasi")}
             </div>
           )}
           {needsPendidikan(age) && (

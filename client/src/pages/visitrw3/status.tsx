@@ -182,8 +182,8 @@ export default function Visitrw3Status() {
             Nomor <strong>VRW3-…</strong> dari konfirmasi pengajuan baru atau perpanjang izin.
           </p>
           <p>
-            Status umum: <strong>menunggu survey</strong> → admin memverifikasi data →{" "}
-            <strong>disetujui</strong> (izin aktif) atau <strong>ditolak</strong> (ada alasan
+            Status umum: <strong>menunggu verifikasi</strong> → admin cek data + kontribusi Rp1.000 →{" "}
+            <strong>disetujui</strong> (izin aktif 1 bulan) atau <strong>ditolak</strong> (ada alasan
             penolakan).
           </p>
         </FeatureExplain>

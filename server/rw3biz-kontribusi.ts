@@ -14,7 +14,6 @@ import {
   type Rw3bizUsaha,
 } from "@shared/schema";
 import { RW3BIZ_RT_NUMBERS } from "@shared/rt";
-import { tandaiRaziaSelesai } from "./rw3biz-razia";
 import {
   notifyRw3bizKeberatanDiajukan,
   notifyRw3bizKeberatanDitanggapi,
@@ -123,7 +122,7 @@ export async function simpanTarif(raw: unknown): Promise<TarifKontribusi> {
 export async function kategoriKas(): Promise<{ pemasukan: string[]; pengeluaran: string[] }> {
   const tarif = await loadTarif();
   return {
-    pemasukan: [KATEGORI_KAS_KONTRIBUSI, KATEGORI_KAS_DENDA_RAZIA, KATEGORI_KAS_DENDA_PELANGGARAN, "Iuran Warga", "Donasi", "Sumbangan", "Lainnya"],
+    pemasukan: [KATEGORI_KAS_KONTRIBUSI, "Iuran Warga", "Donasi", "Sumbangan", "Lainnya"],
     pengeluaran: [...tarif.posAnggaran.map((p) => p.label), KATEGORI_KAS_VOUCHER, "Lainnya"],
   };
 }
@@ -691,7 +690,6 @@ export async function ubahKontribusiUsaha(usahaId: number, input: z.infer<typeof
       set.keringananAlasan = parsed.keringanan?.alasan ?? null;
     }
     const [updated] = await tx.update(rw3bizUsaha).set(set).where(eq(rw3bizUsaha.id, usahaId)).returning();
-    if (parsed.koreksi) await tandaiRaziaSelesai(tx, usahaId);
     const belumDibayar = await tx
       .select({ periode: rw3bizTagihan.periode })
       .from(rw3bizTagihan)

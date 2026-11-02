@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
 import { TombolIsiPetugas } from "@/components/cetak/isi-petugas";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -8,12 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Visitrw3SurveyChecklist } from "@/components/gov/visitrw3-survey-checklist";
-import {
-  getChecklistSurveyPengajuan,
-  initChecklistState,
-  validateSurveyChecklist,
-} from "@shared/visitrw3-survey-checklist";
 import { labelJenisWarga } from "@shared/visitrw3-jenis-warga";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -36,8 +30,8 @@ import { labelJenisTempatUsahaAdmin, labelKategoriUsahaAdmin } from "@/lib/visit
 import { VISITRW3_ROUTES } from "@/lib/visitrw3-routes";
 import { RW3BIZ_ROUTES } from "@/lib/rw3biz-routes";
 import type { PengajuanProduct } from "@/lib/visitrw3-produk-ui";
-import { KontribusiTinggalInfo, PilihUkuranTinggal } from "@/components/gov/visitrw3-syarat-panel";
-import { formatRupiah, isUkuranTinggal, labelUkuranTinggal } from "@/lib/visitrw3-kontribusi";
+import { KontribusiTinggalInfo } from "@/components/gov/visitrw3-syarat-panel";
+import { formatRupiah, KONTRIBUSI_TINGGAL_PER_BULAN } from "@/lib/visitrw3-kontribusi";
 import { hariIniWib } from "@shared/visitrw3-kontribusi";
 
 type LolosView = "belum" | "sudah";
@@ -89,7 +83,7 @@ function pesanWaPengajuan(row: Pick<PengajuanRow, "nomorVisitrw3" | "status" | "
     `Assalamu'alaikum, ${nama}.\n\n` +
     `Ini dari pengurus KPP RW 03 Padasuka terkait pengajuan Visit RW3 *${row.nomorVisitrw3}* ` +
     `(${row.keperluanPengajuan}, status: ${row.status.replace(/_/g, " ")}).\n\n` +
-    `Mohon konfirmasi ketersediaan untuk survey / tindak lanjut. Terima kasih.`
+    `Mohon konfirmasi terkait izin tinggal / tindak lanjut. Terima kasih.`
   );
 }
 
@@ -134,21 +128,9 @@ export default function AdminVisitrw3Antrian({
     getHasilPengajuanFromSearch(search),
   );
   const [detailId, setDetailId] = useState<number | null>(null);
-  const [checklist, setChecklist] = useState<Record<string, boolean>>({});
   const [catatanSurvey, setCatatanSurvey] = useState("");
   const [alasanTolak, setAlasanTolak] = useState("");
-  const [ukuranSurvey, setUkuranSurvey] = useState("");
   const [tanggalBayar, setTanggalBayar] = useState(hariIniWib);
-
-  const { data: settingsRows = [] } = useQuery<{ key: string; value: string }[]>({
-    queryKey: ["/api/public/visitrw3/settings"],
-    queryFn: async () => {
-      const res = await fetch("/api/public/visitrw3/settings");
-      if (!res.ok) throw new Error("Gagal memuat pengaturan");
-      return res.json();
-    },
-    enabled: product !== "rw3biz",
-  });
 
   const produkQuery = product === "rw3biz" ? "rw3biz" : "visit";
   const pengajuanStatus = lolosView === "belum" ? "menunggu_survey" : hasilPengajuan;
@@ -235,30 +217,14 @@ export default function AdminVisitrw3Antrian({
     enabled: detailId != null,
   });
 
-  const checklistPengajuanItems = useMemo(() => {
-    if (!detail?.pengajuan || detail.pengajuan.status !== "menunggu_survey") return [];
-    const keperluan = detail.pengajuan.keperluanPengajuan as "tinggal" | "bisnis";
-    return getChecklistSurveyPengajuan(keperluan, true);
-  }, [detail?.pengajuan]);
-
   useEffect(() => {
     if (!detail?.pengajuan || detail.pengajuan.status !== "menunggu_survey") return;
-    const keperluan = detail.pengajuan.keperluanPengajuan as "tinggal" | "bisnis";
-    const items = getChecklistSurveyPengajuan(keperluan, true);
-    setChecklist(initChecklistState(items));
     setCatatanSurvey("");
     setAlasanTolak("");
-    setUkuranSurvey(detail.pengajuan.ukuranTinggal ?? "");
     setTanggalBayar(hariIniWib());
-  }, [
-    detailId,
-    detail?.pengajuan?.status,
-    detail?.pengajuan?.keperluanPengajuan,
-    detail?.pengajuan?.ukuranTinggal,
-  ]);
+  }, [detailId, detail?.pengajuan?.status]);
 
   function openDetail(id: number) {
-    setChecklist({});
     setCatatanSurvey("");
     setAlasanTolak("");
     setDetailId(id);
@@ -266,26 +232,15 @@ export default function AdminVisitrw3Antrian({
 
   const approveMutation = useMutation({
     mutationFn: async (id: number) => {
-      const err = validateSurveyChecklist(checklistPengajuanItems, checklist);
-      if (err) throw new Error(err);
       if (!tanggalBayar) throw new Error("Isi tanggal uang kontribusi diterima");
-      const body: { catatanSurvey?: string; checklistSurvey: Record<string, boolean>; ukuranTinggal?: string; tanggalBayar: string } = {
-        checklistSurvey: checklist,
-        tanggalBayar,
-      };
+      const body: { catatanSurvey?: string; tanggalBayar: string } = { tanggalBayar };
       if (catatanSurvey.trim()) body.catatanSurvey = catatanSurvey.trim();
-      const jenis = detail?.pengajuan?.jenisWarga;
-      if (jenis === "kost" || jenis === "kontrak") {
-        if (!ukuranSurvey) throw new Error("Pilih ukuran tempat tinggal hasil survey");
-        body.ukuranTinggal = ukuranSurvey;
-      }
       const res = await apiRequest("PATCH", `/api/admin/visitrw3/pengajuan/${id}/approve`, body);
       return readJsonSafely(res);
     },
     onSuccess: () => {
-      toast({ title: "Disetujui", description: "Pengajuan telah disetujui setelah survey" });
+      toast({ title: "Disetujui", description: "Izin tinggal aktif — kontribusi Rp1.000 dicatat" });
       setDetailId(null);
-      setChecklist({});
       setCatatanSurvey("");
       invalidateVisitrw3Queries(queryClient);
     },
@@ -312,7 +267,7 @@ export default function AdminVisitrw3Antrian({
   const lolosViewOptions = [
     {
       value: "belum" as const,
-      label: "Menunggu survey",
+      label: product === "rw3biz" ? "Menunggu persetujuan" : "Menunggu verifikasi",
       count: menungguPengajuan.length,
     },
     {
@@ -339,7 +294,7 @@ export default function AdminVisitrw3Antrian({
           lolosView === "belum"
             ? product === "rw3biz"
               ? "Antrian persetujuan usaha"
-              : "Menunggu survey"
+              : "Menunggu verifikasi"
             : product === "rw3biz"
               ? "Sudah diputus (usaha)"
               : "Sudah diputus"
@@ -348,7 +303,7 @@ export default function AdminVisitrw3Antrian({
           lolosView === "belum"
             ? product === "rw3biz"
               ? "Antrian izin usaha yang menunggu persetujuan Ketua RW 03."
-              : "Antrian ngontrak / ngekost ber-KTP luar RW 03. Penyewa ber-KTP RW 03 didata di Kependudukan, bukan di sini."
+              : "Input dari formulir kertas yang dikumpulkan, lalu setujui setelah konfirmasi bayar Rp1.000."
             : "Riwayat pengajuan yang sudah disetujui atau ditolak."
         }
         actions={<TombolIsiPetugas product={product === "rw3biz" ? "rw3biz" : "visit"} />}
@@ -365,7 +320,9 @@ export default function AdminVisitrw3Antrian({
         )}
         <p className="text-xs text-muted-foreground">
           {lolosView === "belum"
-            ? "Pengajuan kontrak, kost, atau jualan — setujui setelah survey lapangan."
+            ? product === "rw3biz"
+              ? "Setujui setelah data usaha lengkap."
+              : "Utama: Input dari kertas → cek data → setujui + tanggal bayar Rp1.000."
             : "Pilih Disetujui atau Ditolak untuk melihat riwayat keputusan."}
         </p>
       </div>
@@ -377,15 +334,15 @@ export default function AdminVisitrw3Antrian({
           icon={ClipboardList}
           title={
             lolosView === "belum"
-              ? "Tidak ada yang menunggu survey"
+              ? "Tidak ada yang menunggu verifikasi"
               : hasilPengajuan === "ditolak"
                 ? "Belum ada pengajuan ditolak"
                 : "Belum ada pengajuan disetujui"
           }
           description={
             lolosView === "belum"
-              ? `Pengajuan baru muncul di sini setelah warga kirim lewat ${VISITRW3_ROUTES.hub}.`
-              : "Riwayat keputusan admin akan muncul di sini setelah survey selesai."
+              ? `Input dari formulir kertas (mode petugas) atau pengajuan online lewat ${VISITRW3_ROUTES.hub}.`
+              : "Riwayat keputusan muncul di sini setelah pengajuan disetujui atau ditolak."
           }
         />
       ) : (
@@ -495,7 +452,7 @@ export default function AdminVisitrw3Antrian({
                   <div className="min-w-0">
                     <p className="font-medium">Surat Izin Tinggal Sementara</p>
                     <p className="text-xs text-muted-foreground">
-                      Berlaku sampai {p.tanggalBerlakuSampai} · cetak F4, tanda tangan basah Ketua RW
+                      Berlaku sampai {p.tanggalBerlakuSampai} · cetak surat izin tinggal
                     </p>
                   </div>
                   <Button size="sm" className="w-full gap-1 sm:w-auto sm:shrink-0" asChild>
@@ -525,19 +482,20 @@ export default function AdminVisitrw3Antrian({
                 )}
                 {(p.jenisWarga === "kost" || p.jenisWarga === "kontrak") && (
                   <p>
-                    <span className="text-muted-foreground">Ukuran tempat: </span>
-                    {isUkuranTinggal(p.ukuranTinggal)
-                      ? labelUkuranTinggal(p.jenisWarga, p.ukuranTinggal)
-                      : "— (belum dipilih, tentukan saat survey)"}
-                    {p.estimasiKontribusi != null && (
-                      <span className="text-muted-foreground"> · kontribusi {formatRupiah(p.estimasiKontribusi)}</span>
-                    )}
+                    <span className="text-muted-foreground">Kontribusi: </span>
+                    {formatRupiah(p.estimasiKontribusi ?? KONTRIBUSI_TINGGAL_PER_BULAN)} / 1 bulan
+                  </p>
+                )}
+                {typeof p.catatanPemohon === "string" && p.catatanPemohon.trim() && (
+                  <p className="whitespace-pre-wrap">
+                    <span className="text-muted-foreground">Catatan / asal tinggal: </span>
+                    {p.catatanPemohon.trim()}
                   </p>
                 )}
                 {p.status === "menunggu_survey" ? (
                   <p>
-                    <span className="text-muted-foreground">Termin diminta: </span>
-                    {p.terminBulan ?? 1} bulan (mulai berlaku dari tanggal bayar saat disetujui)
+                    <span className="text-muted-foreground">Masa berlaku: </span>
+                    1 bulan (dihitung dari tanggal bayar saat disetujui)
                   </p>
                 ) : (
                   <p>
@@ -738,41 +696,11 @@ export default function AdminVisitrw3Antrian({
 
               {p.status === "menunggu_survey" && (
                 <>
-                  <Visitrw3SurveyChecklist
-                    title="Checklist survey pengajuan"
-                    subtitle="Tanyakan ke pemohon — centang setelah terkonfirmasi di lapangan"
-                    items={checklistPengajuanItems}
-                    checked={checklist}
-                    onChange={(id, value) =>
-                      setChecklist((s) => ({ ...s, [id]: value }))
-                    }
-                  />
                   {(p.jenisWarga === "kost" || p.jenisWarga === "kontrak") && (
-                    <div className="space-y-2">
-                      <Label>
-                        {p.jenisWarga === "kost" ? "Ukuran kamar hasil survey" : "Jumlah kamar tidur hasil survey"}
-                      </Label>
-                      <PilihUkuranTinggal
-                        jenis={p.jenisWarga}
-                        settingsRows={settingsRows}
-                        value={ukuranSurvey}
-                        onChange={setUkuranSurvey}
-                      />
-                      {p.ukuranTinggal && ukuranSurvey && ukuranSurvey !== p.ukuranTinggal && (
-                        <p className="text-xs text-amber-700">
-                          Berbeda dari pilihan penghuni — kontribusi akan dihitung ulang saat disetujui.
-                        </p>
-                      )}
-                      <KontribusiTinggalInfo
-                        jenis={p.jenisWarga}
-                        settingsRows={settingsRows}
-                        terminBulan={p.terminBulan ?? 1}
-                        ukuran={ukuranSurvey}
-                      />
-                    </div>
+                    <KontribusiTinggalInfo jenis={p.jenisWarga} terminBulan={1} />
                   )}
                   <div className="space-y-2">
-                    <Label htmlFor="visitrw3-tanggal-bayar">Tanggal uang kontribusi diterima</Label>
+                    <Label htmlFor="visitrw3-tanggal-bayar">Tanggal uang kontribusi Rp1.000 diterima</Label>
                     <Input
                       id="visitrw3-tanggal-bayar"
                       type="date"
@@ -780,15 +708,15 @@ export default function AdminVisitrw3Antrian({
                       onChange={(e) => setTanggalBayar(e.target.value)}
                     />
                     <p className="text-xs text-muted-foreground">
-                      Masa berlaku {p.terminBulan ?? 1} bulan dihitung dari tanggal ini.
+                      Masa berlaku 1 bulan dihitung dari tanggal ini. Izin tinggal aktif setelah disetujui.
                     </p>
                   </div>
                   <div className="space-y-2">
-                    <Label>Catatan survey (opsional)</Label>
+                    <Label>Catatan (opsional)</Label>
                     <Textarea
                       value={catatanSurvey}
                       onChange={(e) => setCatatanSurvey(e.target.value)}
-                      placeholder="Catatan dari hasil survey lapangan…"
+                      placeholder="Catatan verifikasi / dari formulir kertas…"
                     />
                   </div>
                   <div className="space-y-2">

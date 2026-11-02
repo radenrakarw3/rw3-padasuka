@@ -10,9 +10,19 @@ export function jalurKelolaRt(rt: number, sub: string): string {
   return `${KELOLA_WARGA_PATH}${sub}`;
 }
 
-export const RtKelolaContext = createContext<number | null>(null);
+export type RtKelolaValue = {
+  rt: number;
+  setRt: (n: number) => void;
+};
+
+export const RtKelolaContext = createContext<RtKelolaValue | null>(null);
 
 /** RT yang sedang dikelola admin RW di halaman Kelola warga. */
 export function useRtKelola(): number | null {
+  return useContext(RtKelolaContext)?.rt ?? null;
+}
+
+/** RT + setter (filter RT di daftar KK). */
+export function useRtKelolaCtx(): RtKelolaValue | null {
   return useContext(RtKelolaContext);
 }

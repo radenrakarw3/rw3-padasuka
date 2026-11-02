@@ -45,20 +45,6 @@ export const KEWAJIBAN_SARAN: Record<KategoriAduan, string[]> = {
   lainnya: [],
 };
 
-/** Kategori aduan → jenis pelanggaran RW3BIZ saat aduan usaha diteruskan ke sistem denda. */
-export const KATEGORI_KE_PELANGGARAN_BIZ: Record<KategoriAduan, string> = {
-  sampah: "sampah_tercecer",
-  kebisingan: "ketertiban",
-  keamanan: "ketertiban",
-  parkir: "parkir_menghalangi",
-  usaha: "lainnya",
-  kost: "lainnya",
-  bangunan: "kerusakan_fasum",
-  ketertiban: "ketertiban",
-  hewan: "lainnya",
-  lainnya: "lainnya",
-};
-
 // ---------------------------------------------------------------- Kerahasiaan pelapor
 export const MODE_IDENTITAS = ["rahasia", "anonim", "terbuka"] as const;
 export type ModeIdentitas = (typeof MODE_IDENTITAS)[number];
@@ -175,7 +161,7 @@ export type TingkatTeguran = (typeof TINGKAT_TEGURAN)[number];
 export const TINGKAT_TEGURAN_INFO: Record<TingkatTeguran, { label: string; judul: string; tenggatHari: number; konsekuensi: string }> = {
   lisan: {
     label: "Teguran Lisan",
-    judul: "BERITA ACARA TEGURAN LISAN",
+    judul: "SURAT TEGURAN LISAN",
     tenggatHari: 7,
     konsekuensi: "Apabila tidak diperbaiki, RW 03 akan menerbitkan Surat Peringatan Pertama (SP-1).",
   },

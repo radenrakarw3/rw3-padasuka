@@ -103,7 +103,7 @@ export default function AdminVisitrw3Dashboard() {
     if (!data?.ringkasan) return [];
     return [
       { label: "Total masuk", value: data.ringkasan.totalPengajuan, fill: PIE_COLORS[0] },
-      { label: "Menunggu survey", value: data.ringkasan.menungguSurvey, fill: PIE_COLORS[2] },
+      { label: "Menunggu verifikasi", value: data.ringkasan.menungguSurvey, fill: PIE_COLORS[2] },
       { label: "Disetujui", value: data.ringkasan.disetujui, fill: PIE_COLORS[1] },
       { label: "Ditolak", value: data.ringkasan.ditolak, fill: PIE_COLORS[3] },
     ];
@@ -255,7 +255,7 @@ export default function AdminVisitrw3Dashboard() {
           </div>
 
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 [&>*:first-child]:col-span-2 lg:[&>*:first-child]:col-span-1">
-            <Visitrw3StatCard title="Menunggu survey" value={formatNumber(data.ringkasan.menungguSurvey)} description="Belum diproses admin" icon={Clock} tone="warning" href="/admin/visitrw3/antrian?view=belum" />
+            <Visitrw3StatCard title="Menunggu verifikasi" value={formatNumber(data.ringkasan.menungguSurvey)} description="Input kertas / online — belum diputus" icon={Clock} tone="warning" href="/admin/visitrw3/antrian?view=belum" />
             <Visitrw3StatCard title="Disetujui" value={formatNumber(data.ringkasan.disetujui)} description={`Dari ${formatNumber(data.ringkasan.totalPengajuan)} pengajuan`} icon={CheckCircle2} tone="success" href="/admin/visitrw3/antrian?view=sudah" />
             <Visitrw3StatCard title="Warga singgah aktif" value={formatNumber(data.ringkasan.penghuniAktif)} description="Kontrak aktif di wilayah" icon={Users} href="/admin/visitrw3/penghuni" />
             <Visitrw3StatCard title="Baris form penghuni" value={formatNumber(data.penghuni.totalBaris)} description="Isian penghuni pada pengajuan" icon={ClipboardList} />
@@ -318,7 +318,7 @@ export default function AdminVisitrw3Dashboard() {
             <ChartCard title="Jenis tempat usaha" description="Peringkat — lapak · kiosk · lainnya (jualan)">
               <RankedBarBlock data={jenisUsahaRanked} empty="Belum ada pengajuan jualan" />
             </ChartCard>
-            <ChartCard title="Jumlah penghuni / pengajuan" description="Peringkat — ukuran rombongan">
+            <ChartCard title="Jumlah penghuni / pengajuan" description="Peringkat — jumlah orang per pengajuan">
               <RankedBarBlock data={jumlahPenghuniRanked} empty="Belum ada data" />
             </ChartCard>
           </div>

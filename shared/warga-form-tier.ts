@@ -5,7 +5,6 @@
 import { isUmurLansia, resolveKategoriUmur } from "@shared/kategori-umur";
 import {
   hasKesulitanFungsional,
-  needsLiterasi,
   needsCrvsDocuments,
   needsStatusAngkatanKerja,
   needsPekerjaanDetail,
@@ -54,9 +53,8 @@ export const WARGA_FORM_STEPS = [
   {
     key: "kontak",
     title: "Kontak & aktivitas",
-    description: "ILO, ISCED, UNESCO, Washington Group, CRVS.",
+    description: "ILO, ISCED, Washington Group, CRVS.",
     fields: [
-      "literasi",
       "pendidikan",
       "punyaAktaLahir",
       "punyaKia",
@@ -85,8 +83,6 @@ export type WargaTierFormSlice = {
   statusKependudukan?: TierStr;
   literasi?: TierStr;
   nomorWhatsapp?: TierStr;
-  namaKontakDarurat?: TierStr;
-  nomorKontakDarurat?: TierStr;
   pendidikan?: TierStr;
   statusPekerjaan?: TierStr;
   pekerjaan?: TierStr;
@@ -171,15 +167,11 @@ export function getRequiredFieldKeysForWarga(form: WargaTierFormSlice): string[]
     "statusKependudukan",
   ];
 
-  if (needsLiterasi(age)) keys.push("literasi");
   if (needsPendidikan(age)) keys.push("pendidikan");
   if (needsCrvsDocuments(age)) keys.push("punyaAktaLahir", "punyaKia");
   if (needsStatusAngkatanKerja(age)) keys.push("statusPekerjaan");
   if (needsStatusAngkatanKerja(age) && needsPekerjaanDetail(form.statusPekerjaan)) keys.push("pekerjaan");
   if (needsWhatsapp(age)) keys.push("nomorWhatsapp");
-  if (isKepalaKeluarga(form.kedudukanKeluarga)) {
-    keys.push("namaKontakDarurat", "nomorKontakDarurat");
-  }
   if (needsWgDomainDetail(kesulitan)) {
     keys.push("wgKesulitanMelihat", "wgKesulitanBerjalan");
   }
@@ -203,7 +195,6 @@ export function validateWargaFormTier(form: WargaTierFormSlice): Partial<Record<
     errors.tanggalLahir = "Tanggal lahir tidak boleh di masa depan";
   }
 
-  if (needsLiterasi(age) && !form.literasi) errors.literasi = "Literasi wajib diisi";
   if (needsPendidikan(age) && !form.pendidikan) errors.pendidikan = "Pendidikan wajib diisi";
   if (needsStatusAngkatanKerja(age) && !form.statusPekerjaan) {
     errors.statusPekerjaan = "Status angkatan kerja wajib diisi";
@@ -217,12 +208,6 @@ export function validateWargaFormTier(form: WargaTierFormSlice): Partial<Record<
     else if (!WA_REGEX.test(form.nomorWhatsapp)) errors.nomorWhatsapp = "No. WhatsApp tidak valid";
   } else if (form.nomorWhatsapp?.trim() && !WA_REGEX.test(form.nomorWhatsapp)) {
     errors.nomorWhatsapp = "No. WhatsApp tidak valid";
-  }
-
-  if (isKepalaKeluarga(form.kedudukanKeluarga)) {
-    if (!form.namaKontakDarurat?.trim()) errors.namaKontakDarurat = "Kontak darurat wajib untuk kepala keluarga";
-    if (!form.nomorKontakDarurat?.trim()) errors.nomorKontakDarurat = "Nomor kontak darurat wajib";
-    else if (!WA_REGEX.test(form.nomorKontakDarurat)) errors.nomorKontakDarurat = "Nomor kontak darurat tidak valid";
   }
 
   if (needsWgDomainDetail(kesulitan)) {
@@ -264,7 +249,6 @@ export function applyDerivedWargaFields<T extends WargaTierFormSlice & { lansia?
 }
 
 export {
-  needsLiterasi,
   needsCrvsDocuments,
   needsStatusAngkatanKerja,
   needsPekerjaanDetail,

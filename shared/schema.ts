@@ -5,6 +5,7 @@ import { z } from "zod";
 import { isActiveRt } from "./rt";
 import { RTJUARA_MAX_FOTO, RTJUARA_PERIODE, isRtjuaraRt } from "./rtjuara";
 import { parseKkKendaraanData, validateKkKendaraanList } from "./kk-kendaraan";
+import { validateKkLabelRwRaw } from "./kk-label-rw";
 
 export const kartuKeluarga = pgTable("kartu_keluarga", {
   id: serial("id").primaryKey(),
@@ -726,49 +727,6 @@ export const rw3bizKeberatan = pgTable("rw3biz_keberatan", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-/** Temuan razia kendaraan di wilayah RW 03 — dicocokkan dengan kendaraan/charter terdaftar. */
-export const rw3bizRazia = pgTable(
-  "rw3biz_razia",
-  {
-    id: serial("id").primaryKey(),
-    tanggal: text("tanggal").notNull(),
-    jam: text("jam"),
-    lokasi: text("lokasi").notNull(),
-    plat: text("plat").notNull(),
-    /** Plat huruf besar tanpa spasi/tanda baca — kunci pencocokan. */
-    platNormal: text("plat_normal").notNull(),
-    /** KodeKendaraanBiz */
-    jenis: text("jenis").notNull(),
-    /** milik | charter | tidak_tahu */
-    kepemilikan: text("kepemilikan").notNull().default("tidak_tahu"),
-    usahaId: integer("usaha_id").references(() => rw3bizUsaha.id, { onDelete: "set null" }),
-    /** Tujuan bila bukan usaha terdaftar RW3BIZ. */
-    tujuanLain: text("tujuan_lain"),
-    namaSopir: text("nama_sopir"),
-    /** HasilRazia */
-    hasil: text("hasil").notNull(),
-    keteranganHasil: text("keterangan_hasil"),
-    denda: integer("denda").notNull().default(0),
-    /** tidak_ada | belum | lunas | dibebaskan */
-    dendaStatus: text("denda_status").notNull().default("tidak_ada"),
-    tanggalBayar: text("tanggal_bayar"),
-    pembayarNama: text("pembayar_nama"),
-    kasRwId: integer("kas_rw_id").references(() => kasRw.id, { onDelete: "set null" }),
-    alasanBebas: text("alasan_bebas"),
-    /** Usaha sudah memperbarui data kendaraan setelah temuan ini. */
-    selesai: boolean("selesai").notNull().default(false),
-    catatan: text("catatan"),
-    dicatatOleh: text("dicatat_oleh").notNull(),
-    createdAt: timestamp("created_at").defaultNow(),
-  },
-  (t) => [
-    index("rw3biz_razia_tanggal_idx").on(t.tanggal),
-    index("rw3biz_razia_plat_idx").on(t.platNormal),
-    index("rw3biz_razia_usaha_idx").on(t.usahaId),
-  ],
-);
-export type Rw3bizRazia = typeof rw3bizRazia.$inferSelect;
-
 export const rw3bizPelanggaran = pgTable(
   "rw3biz_pelanggaran",
   {
@@ -1028,6 +986,13 @@ function refineKkRtPemukiman(data: { rt?: unknown }, ctx: z.RefinementCtx, requi
   }
 }
 
+function refineKkLabelRw(data: { labelRw?: string | null }, ctx: z.RefinementCtx) {
+  const err = validateKkLabelRwRaw(data.labelRw);
+  if (err) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["labelRw"], message: err });
+  }
+}
+
 function refineKkKendaraan(data: { kendaraanData?: string | null }, ctx: z.RefinementCtx) {
   if (data.kendaraanData == null || data.kendaraanData === "") return;
   const items = parseKkKendaraanData(data.kendaraanData);
@@ -1040,12 +1005,14 @@ function refineKkKendaraan(data: { kendaraanData?: string | null }, ctx: z.Refin
 export const insertKkSchema = insertKkBaseSchema.superRefine((data, ctx) => {
   refineKkRtPemukiman(data, ctx, true);
   refineKkKendaraan(data, ctx);
+  refineKkLabelRw(data, ctx);
 });
 
 /** PATCH KK — RT opsional; jika diisi harus 01–04. */
 export const patchKkSchema = insertKkBaseSchema.partial().superRefine((data, ctx) => {
   refineKkRtPemukiman(data, ctx, false);
   refineKkKendaraan(data, ctx);
+  refineKkLabelRw(data, ctx);
 });
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const DIGIT_ONLY_REGEX = /^\d+$/;
@@ -1130,9 +1097,6 @@ export const insertWargaSchema = createInsertSchema(warga).omit({ id: true, crea
   }
   if (data.statusBansosIndividu === "Penerima" && !data.jenisBansosIndividu) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["jenisBansosIndividu"], message: "Jenis bansos individu wajib diisi" });
-  }
-  if (data.namaKontakDarurat && !data.nomorKontakDarurat) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["nomorKontakDarurat"], message: "Nomor kontak darurat wajib diisi" });
   }
   if (isFutureDate(data.tanggalLahir)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["tanggalLahir"], message: "Tanggal lahir tidak boleh di masa depan" });

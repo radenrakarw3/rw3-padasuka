@@ -86,5 +86,4 @@ export function registerAduanRoutes(app: Express) {
   app.post("/api/admin/aduan/:id/catatan", RW, h((req) => aduan.tambahCatatan(req.aktor!, idParam(req), req.body)));
   app.post("/api/admin/aduan/:id/gabung", RW, h((req) => aduan.gabungkanAduan(req.aktor!, idParam(req), String(req.body?.nomor ?? ""))));
   app.post("/api/admin/aduan/:id/klarifikasi", RW, h((req) => teguran.undangKlarifikasi(req.aktor!, idParam(req), req.body)));
-  app.post("/api/admin/aduan/:id/rw3biz", RW, h((req) => teguran.teruskanKeRw3biz(req.aktor!, idParam(req))));
 }

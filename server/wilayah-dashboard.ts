@@ -238,7 +238,7 @@ const desimal = (n: number) => n.toLocaleString("id-ID", { maximumFractionDigits
 async function dataDasar(kkIds: number[]): Promise<DataDasar> {
   if (!kkIds.length) return { indeks: [], distribusi: [] };
   const hariIni = isoTanggal(new Date());
-  const [{ rows: warga }, { rows: kk }, { rows: rumah }] = await Promise.all([
+  const [{ rows: warga }, { rows: kk }] = await Promise.all([
     pool.query(
       `SELECT kk_id, nik, jenis_kelamin, tanggal_lahir, kedudukan_keluarga, status_perkawinan, status_kependudukan, nomor_whatsapp
          FROM warga WHERE kk_id = ANY($1)`,
@@ -246,13 +246,8 @@ async function dataDasar(kkIds: number[]): Promise<DataDasar> {
     ),
     pool.query(
       `SELECT k.id, k.nomor_kk,
-              EXISTS (SELECT 1 FROM wil_rumah_kk rk WHERE rk.kk_id = k.id AND rk.sampai IS NULL) AS punya_rumah,
               EXISTS (SELECT 1 FROM wil_kk_token t WHERE t.kk_id = k.id AND t.dicabut_at IS NULL AND t.expires_at > now()) AS punya_qr
          FROM kartu_keluarga k WHERE k.id = ANY($1)`,
-      [kkIds],
-    ),
-    pool.query(
-      `SELECT rk.rumah_id, COUNT(*)::int AS kk FROM wil_rumah_kk rk WHERE rk.sampai IS NULL AND rk.kk_id = ANY($1) GROUP BY rk.rumah_id`,
       [kkIds],
     ),
   ]);
@@ -264,7 +259,6 @@ async function dataDasar(kkIds: number[]): Promise<DataDasar> {
   const kelasUkuran = ["0", "1", "2", "3", "4", "5", "6+"];
   const hpStatus = (v: string | null) => (!v?.trim() ? "Belum diisi" : looksLikeNik(v) ? "Berisi NIK / salah" : isNomorHpValid(v) ? "Nomor valid" : "Format tidak valid");
   const nikStatus = (v: string | null) => (!v?.trim() ? "Belum diisi" : /^\d{16}$/.test(v.trim()) ? "16 digit" : "Tidak 16 digit");
-  const kkRumah = rumah.reduce((s, r) => s + r.kk, 0);
 
   const distribusi: DistribusiDasar[] = [
     { kunci: "jenis_kelamin", label: "Jenis kelamin", satuan: "orang", keterangan: "warga aktif", opsi: hitungUrut(aktif.map((w) => w.jenis_kelamin), ["Laki-laki", "Perempuan"]) },
@@ -292,13 +286,6 @@ async function dataDasar(kkIds: number[]): Promise<DataDasar> {
       opsi: ["16 digit", "Tidak 16 digit", "Belum diisi"].map((l) => ({ label: l, jumlah: kk.filter((k) => nikStatus(k.nomor_kk) === l).length, perhatian: l === "Tidak 16 digit", kosong: l === "Belum diisi" })).filter((o) => o.jumlah),
     },
     {
-      kunci: "rumah", label: "Terhubung ke rumah", satuan: "KK", keterangan: "semua KK",
-      opsi: [
-        { label: "Sudah terhubung", jumlah: kk.filter((k) => k.punya_rumah).length },
-        { label: "Belum terhubung", jumlah: kk.filter((k) => !k.punya_rumah).length, kosong: true },
-      ].filter((o) => o.jumlah),
-    },
-    {
       kunci: "qr", label: "QR pemberitahuan", satuan: "KK", keterangan: "semua KK",
       opsi: [
         { label: "QR aktif", jumlah: kk.filter((k) => k.punya_qr).length },
@@ -309,8 +296,6 @@ async function dataDasar(kkIds: number[]): Promise<DataDasar> {
 
   const indeks = [
     { label: "Rata-rata anggota per KK", nilai: kk.length ? desimal(aktif.length / kk.length) : "–", ket: `${aktif.length.toLocaleString("id-ID")} jiwa aktif / ${kk.length} KK` },
-    { label: "Rumah tercatat", nilai: rumah.length.toLocaleString("id-ID"), ket: `${kkRumah} KK sudah terhubung` },
-    { label: "Rata-rata KK per rumah", nilai: rumah.length ? desimal(kkRumah / rumah.length) : "–", ket: `${rumah.filter((r) => r.kk > 1).length} rumah dihuni lebih dari 1 KK` },
     { label: "Kontak WA dewasa", nilai: dewasa.length ? `${Math.round((dewasa.filter((w) => isNomorHpValid(w.nomor_whatsapp)).length / dewasa.length) * 100)}%` : "–", ket: "warga 17+ dengan nomor valid" },
   ];
   return { indeks, distribusi };

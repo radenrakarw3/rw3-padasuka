@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Baby, CheckCircle2, Clock, Home, MapPin, Pencil, QrCode, Search, UserPlus, Users } from "lucide-react";
+import { AlertTriangle, Baby, CheckCircle2, Clock, MapPin, Pencil, QrCode, Search, UserPlus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -127,7 +127,6 @@ function KartuKeluarga({ k, buka, ubah }: { k: KeluargaRingkas; buka: () => void
 
         <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
           <span className="flex items-center gap-1"><QrCode className="h-3 w-3" />{k.punyaQr ? "QR aktif" : "Belum ada QR"}</span>
-          {!k.punyaRumah && <span className="flex items-center gap-1"><Home className="h-3 w-3" />Rumah belum terhubung</span>}
           {k.diperbarui && <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{new Date(k.diperbarui).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span>}
           {k.usulanMenunggu > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-800">Isian QR menunggu</span>}
         </div>
@@ -189,7 +188,7 @@ function PanelDetail({ id, tutup, ubah }: { id: number; tutup: () => void; ubah:
               <div className="min-w-0 flex-1">
                 <p className="text-sm opacity-80">{rt2(d.kk.rt)} · No. KK {d.kk.nomorKk}</p>
                 <p className="truncate font-semibold">{d.kk.alamat}{d.kk.noUnit ? ` No. ${d.kk.noUnit}` : ""}</p>
-                <p className="mt-1 text-xs opacity-80">{d.ringkas.terjawab} dari {d.ringkas.pertanyaan} pertanyaan terjawab{d.rumah && d.rumah.jumlahKk > 1 ? ` · serumah dengan ${d.rumah.jumlahKk - 1} KK lain` : ""}</p>
+                <p className="mt-1 text-xs opacity-80">{d.ringkas.terjawab} dari {d.ringkas.pertanyaan} pertanyaan terjawab</p>
               </div>
               <div className="rounded-full bg-white p-1"><Cincin nilai={d.ringkas.kelengkapan} ukuran={60} /></div>
             </div>
@@ -201,7 +200,7 @@ function PanelDetail({ id, tutup, ubah }: { id: number; tutup: () => void; ubah:
             )}
 
             <section>
-              <h4 className="mb-2 text-sm font-semibold">Keluarga & rumah</h4>
+              <h4 className="mb-2 text-sm font-semibold">Kondisi keluarga</h4>
               <DaftarJawaban fakta={d.fakta} defs={standar.filter((x) => x.subjek === "kk")} />
             </section>
 

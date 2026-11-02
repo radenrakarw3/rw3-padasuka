@@ -28,6 +28,10 @@ import {
   needsPekerjaanDetail,
   needsStatusAngkatanKerja,
 } from "@shared/warga-international";
+import {
+  buildPekerjaanChartWaMessageEmpatik,
+  buildVerifikasiDataWaMessageFromIssues,
+} from "@shared/wa-template-kependudukan";
 
 export type WargaDataIssueId =
   | "tanpa_tanggal_lahir"
@@ -260,69 +264,20 @@ export function summarizeWargaIssues(issues: WargaDataIssueId[]): string {
 }
 
 export function buildPekerjaanChartWaMessage(
-  w: Pick<WargaIssueSlice, "namaLengkap" | "nik" | "kedudukanKeluarga" | "pekerjaan" | "statusPekerjaan">,
+  w: Pick<WargaIssueSlice, "namaLengkap" | "kedudukanKeluarga" | "rt" | "pekerjaan" | "statusPekerjaan">,
   chartLabel: string,
 ): string {
-  const pekerjaanTercatat = w.pekerjaan?.trim() || "belum diisi";
-  const statusTercatat = w.statusPekerjaan?.trim() || "belum diisi";
-  return [
-    `Assalamu'alaikum Bapak/Ibu ${w.namaLengkap},`,
-    "",
-    "Saya dari pengurus data kependudukan RW 03 Padasuka. Mohon konfirmasi data pekerjaan berikut:",
-    "",
-    `• Nama: ${w.namaLengkap}`,
-    `• NIK: ${w.nik}`,
-    `• Kedudukan: ${w.kedudukanKeluarga}`,
-    `• Status pekerjaan: ${statusTercatat}`,
-    `• Pekerjaan/jabatan: ${pekerjaanTercatat}`,
-    `• Kategori statistik: ${chartLabel}`,
-    "",
-    "Mohon kirim koreksi jika ada yang perlu diperbaiki.",
-    "",
-    "Terima kasih.",
-    "RW 03 Padasuka",
-  ].join("\n");
+  return buildPekerjaanChartWaMessageEmpatik(w, chartLabel);
 }
 
 export function buildVerifikasiDataWaMessage(
   w: Pick<
     WargaIssueSlice,
-    "namaLengkap" | "nik" | "kedudukanKeluarga" | "tanggalLahir" | "kategoriUmur" | "statusPekerjaan" | "pekerjaan"
+    "namaLengkap" | "kedudukanKeluarga" | "rt" | "tanggalLahir" | "kategoriUmur" | "statusPekerjaan" | "pekerjaan"
   >,
   issues: WargaDataIssueId[],
 ): string {
-  const masalah = issues
-    .map((id) => WARGA_DATA_ISSUE_DEFS.find((d) => d.id === id)?.label)
-    .filter(Boolean)
-    .join("; ");
-
-  const pekerjaanWajib = pekerjaanWajibUntukKategori(getEffectiveKategoriUmur(w));
-  const pekerjaanNote =
-    issues.includes("pekerjaan_salah_kategori") && pekerjaanWajib
-      ? `• Pekerjaan seharusnya: ${pekerjaanWajib}`
-      : null;
-
-  const statusNote = issues.includes("status_pekerjaan_tidak_selaras")
-    ? `• Status pekerjaan saat ini: ${w.statusPekerjaan?.trim() || "kosong"} · Pekerjaan: ${w.pekerjaan?.trim() || "kosong"}`
-    : null;
-
-  return [
-    `Assalamu'alaikum Bapak/Ibu ${w.namaLengkap},`,
-    "",
-    "Saya dari pengurus data kependudukan RW 03 Padasuka. Mohon bantu konfirmasi data warga berikut:",
-    "",
-    `• Nama: ${w.namaLengkap}`,
-    `• NIK: ${w.nik}`,
-    `• Kedudukan: ${w.kedudukanKeluarga}`,
-    `• Perlu dicek: ${masalah}`,
-    ...(pekerjaanNote ? ["", pekerjaanNote] : []),
-    ...(statusNote ? ["", statusNote] : []),
-    "",
-    "Mohon kirim data terbaru (tanggal lahir, status & pekerjaan, pendidikan) bila ada yang perlu diperbaiki.",
-    "",
-    "Terima kasih.",
-    "RW 03 Padasuka",
-  ].join("\n");
+  return buildVerifikasiDataWaMessageFromIssues(w, issues);
 }
 
 function normalizeWaDigits(phone: string | null | undefined): string | null {

@@ -31,6 +31,7 @@ const Visitrw3Perpanjang = lazy(() => import("@/pages/visitrw3/perpanjang"));
 const Visitrw3Status = lazy(() => import("@/pages/visitrw3/status"));
 const Visitrw3StatusProperti = lazy(() => import("@/pages/visitrw3/status-properti"));
 const Visitrw3Panduan = lazy(() => import("@/pages/visitrw3/panduan"));
+const Visitrw3Formulir = lazy(() => import("@/pages/visitrw3/formulir"));
 
 const Rw3bizHub = lazy(() => import("@/pages/rw3biz/hub"));
 const Rw3bizPengajuan = lazy(() => import("@/pages/rw3biz/pengajuan"));
@@ -42,6 +43,7 @@ const Rw3bizPerpanjang = lazy(() => import("@/pages/rw3biz/perpanjang"));
 const AdminLayout = lazy(() => import("@/components/admin-layout"));
 
 const AdminKependudukanRingkasan = lazy(() => import("@/pages/admin/kependudukan-ringkasan"));
+const AdminKependudukanVerifikasi = lazy(() => import("@/pages/admin/kependudukan-verifikasi"));
 const AdminKependudukanRekap = lazy(() => import("@/pages/admin/kependudukan-rekap"));
 const AdminKelolaWarga = lazy(() => import("@/pages/admin/kelola-warga"));
 
@@ -63,7 +65,6 @@ const AdminRw3bizAntrian = lazy(() => import("@/pages/admin/rw3biz-antrian"));
 const AdminRw3bizDashboard = lazy(() => import("@/pages/admin/rw3biz-dashboard"));
 const AdminRw3bizTagihan = lazy(() => import("@/pages/admin/rw3biz-tagihan"));
 const AdminRw3bizTarif = lazy(() => import("@/pages/admin/rw3biz-tarif"));
-const AdminRw3bizRazia = lazy(() => import("@/pages/admin/rw3biz-razia"));
 const AdminRw3bizPelanggaran = lazy(() => import("@/pages/admin/rw3biz-pelanggaran"));
 const AduanBeranda = lazy(() => import("@/pages/aduan/index"));
 const AduanBuat = lazy(() => import("@/pages/aduan/buat"));
@@ -311,6 +312,7 @@ function AdminRoutes() {
         <Suspense fallback={<AdminRouteFallback />}>
           <Switch>
 
+        <Route path="/admin/kependudukan/verifikasi" component={AdminKependudukanVerifikasi} />
         <Route path="/admin/kependudukan/rekap" component={AdminKependudukanRekap} />
         <Route path="/admin/kependudukan" component={AdminKependudukanRingkasan} />
         <Route path="/admin/kelola-warga/*" component={AdminKelolaWarga} />
@@ -329,7 +331,6 @@ function AdminRoutes() {
         <Route path="/admin/rw3biz/dashboard" component={AdminRw3bizDashboard} />
         <Route path="/admin/rw3biz/tagihan" component={AdminRw3bizTagihan} />
         <Route path="/admin/rw3biz/tarif" component={AdminRw3bizTarif} />
-        <Route path="/admin/rw3biz/razia" component={AdminRw3bizRazia} />
         <Route path="/admin/rw3biz/pelanggaran" component={AdminRw3bizPelanggaran} />
         <Route path="/admin/aduan-teguran" component={AdminAduanTeguran} />
         <Route path="/admin/aduan-teradu" component={AdminAduanTeradu} />
@@ -432,6 +433,7 @@ function PublicRoutes() {
       <Route path="/visitrw3/status-properti" component={Visitrw3StatusProperti} />
       <Route path="/visitrw3/status" component={Visitrw3Status} />
       <Route path="/visitrw3/panduan" component={Visitrw3Panduan} />
+      <Route path="/visitrw3/formulir" component={Visitrw3Formulir} />
       <Route path="/visitrw3/login">{() => <Redirect to="/visitrw3" />}</Route>
       <Route path="/visitrw3" component={Visitrw3Hub} />
 

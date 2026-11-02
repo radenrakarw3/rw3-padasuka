@@ -59,6 +59,7 @@ export type StatistikWargaSlice = WargaEfektif & {
   statusKependudukan?: string | null;
   jenisKelamin?: string | null;
   tanggalLahir?: string | null;
+  tempatLahir?: string | null;
   kategoriUmur?: string | null;
   pekerjaan?: string | null;
   statusPekerjaan?: string | null;
@@ -66,6 +67,10 @@ export type StatistikWargaSlice = WargaEfektif & {
   kedudukanKeluarga?: string | null;
   pendidikan?: string | null;
   nik?: string | null;
+  punyaAktaLahir?: boolean | null;
+  punyaKia?: boolean | null;
+  agama?: string | null;
+  statusPerkawinan?: string | null;
 };
 
 export type SinggahPerRt = { rt: number; orang: number; izin: number; segeraHabis: number };
@@ -197,17 +202,23 @@ export function pendidikanWarga(w: Pick<StatistikWargaSlice, "pendidikan">, umur
   return raw ? ALIAS_PENDIDIKAN[raw] ?? raw : "Belum diisi";
 }
 
-/** Kolom penting untuk indeks kelengkapan; `berlaku` false = tidak dihitung untuk warga ini. */
+/** Kolom penting untuk indeks kelengkapan; ambang selaras form tier (warga-form-tier). */
 export const KOLOM_KELENGKAPAN: {
   label: string;
   berlaku: (w: StatistikWargaSlice, umur: number | null) => boolean;
   terisi: (w: StatistikWargaSlice, umur: number | null) => boolean;
 }[] = [
   { label: "Tanggal lahir", berlaku: () => true, terisi: (_w, umur) => umur !== null },
+  { label: "Tempat lahir", berlaku: () => true, terisi: (w) => !!(w.tempatLahir ?? "").trim() },
   { label: "NIK 16 digit", berlaku: () => true, terisi: (w) => /^\d{16}$/.test((w.nik ?? "").trim()) },
-  { label: "Status pekerjaan", berlaku: () => true, terisi: (w) => kegiatanWarga(w) !== "Belum diisi" },
-  { label: "Pendidikan (19+)", berlaku: (_w, umur) => umur === null || umur >= 19, terisi: (w) => !!(w.pendidikan ?? "").trim() },
-  { label: "WhatsApp (17+)", berlaku: (_w, umur) => umur !== null && umur >= 17, terisi: (w) => isNomorHpValid(w.nomorWhatsapp) },
+  { label: "Jenis kelamin", berlaku: () => true, terisi: (w) => !!(w.jenisKelamin ?? "").trim() },
+  { label: "Agama", berlaku: () => true, terisi: (w) => !!(w.agama ?? "").trim() },
+  { label: "Status perkawinan", berlaku: () => true, terisi: (w) => !!(w.statusPerkawinan ?? "").trim() },
+  { label: "Status pekerjaan (15+)", berlaku: (_w, umur) => umur !== null && umur >= 15, terisi: (w) => kegiatanWarga(w) !== "Belum diisi" },
+  { label: "Pendidikan (5+)", berlaku: (_w, umur) => umur === null || umur >= 5, terisi: (w) => !!(w.pendidikan ?? "").trim() },
+  { label: "WhatsApp (16+)", berlaku: (_w, umur) => umur !== null && umur >= 16, terisi: (w) => isNomorHpValid(w.nomorWhatsapp) },
+  { label: "Akta lahir (<18)", berlaku: (_w, umur) => umur !== null && umur < 18, terisi: (w) => typeof w.punyaAktaLahir === "boolean" },
+  { label: "KIA (<18)", berlaku: (_w, umur) => umur !== null && umur < 18, terisi: (w) => typeof w.punyaKia === "boolean" },
 ];
 
 export function hitungRincianWarga(aktif: StatistikWargaSlice[]): RincianWarga {
@@ -471,7 +482,7 @@ export function isKategoriDaftar(v: unknown): v is KategoriDaftar {
 }
 
 export interface OrangDaftar {
-  /** id warga, atau id KK untuk kategori ber-satuan KK. */
+  /** id warga yang relevan untuk Hubungi WA (kontak/kepala); bukan id KK. */
   id: number;
   kkId: number | null;
   rt: number;
@@ -502,7 +513,13 @@ function kontakKeluarga(anggota: StatistikWargaSlice[], kecuali?: StatistikWarga
     return (pa < 0 ? 9 : pa) - (pb < 0 ? 9 : pb);
   });
   const ada = urut.find((a) => a !== kecuali && isNomorHpValid(a.nomorWhatsapp));
-  return ada ? { wa: normalizeNomorHp(ada.nomorWhatsapp), nama: ada.namaLengkap ?? "anggota keluarga" } : null;
+  return ada
+    ? {
+        id: ada.id ?? 0,
+        wa: normalizeNomorHp(ada.nomorWhatsapp),
+        nama: ada.namaLengkap ?? "anggota keluarga",
+      }
+    : null;
 }
 
 function keteranganOrang(w: StatistikWargaSlice, tambahan?: string | null): string {
@@ -545,10 +562,17 @@ export function daftarKategoriWarga(
     const kepala = anggota.find((a) => a.kedudukanKeluarga === "Kepala Keluarga") ?? anggota[0];
     const kontak = kontakKeluarga(anggota);
     const milikKepala = kontak && kepala && kontak.nama === kepala.namaLengkap;
+    /** id = warga yang dihubungi (kontak WA / kepala), bukan id KK — agar Hubungi StarSender tepat sasaran. */
+    const wargaHubungiId = kontak?.id || kepala?.id || 0;
     return {
-      id: k.id, kkId: k.id, rt: k.rt, nama: kepala?.namaLengkap ?? "KK tanpa anggota aktif",
+      id: wargaHubungiId || k.id,
+      kkId: k.id,
+      rt: k.rt,
+      nama: kepala?.namaLengkap ?? "KK tanpa anggota aktif",
       keterangan: [`${anggota.length} anggota aktif`, tambahan].filter(Boolean).join(" · "),
-      alamat: k.alamat ?? null, wa: kontak?.wa ?? null, waMilik: kontak && !milikKepala ? `WA: ${kontak.nama}` : null,
+      alamat: k.alamat ?? null,
+      wa: kontak?.wa ?? null,
+      waMilik: kontak && !milikKepala ? `WA: ${kontak.nama}` : null,
     };
   };
 

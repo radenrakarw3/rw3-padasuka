@@ -74,7 +74,6 @@ type StatusData = {
   } | null;
   tagihan: TagihanPublik[];
   surat: RingkasSurat | null;
-  razia?: RaziaPublik[];
   pelanggaran?: PelanggaranPublik[];
 };
 
@@ -85,24 +84,6 @@ type PelanggaranPublik = {
   tingkat: string;
   keBerapa: number;
   sumber: string;
-  denda: number;
-  dendaRincian: string | null;
-  dendaStatus: "tidak_ada" | "belum" | "lunas" | "dibebaskan";
-  nomorKwitansi: string | null;
-};
-
-type RaziaPublik = {
-  id: number;
-  tanggal: string;
-  plat: string;
-  jenis: string;
-  hasil: string;
-  hasilLabel: string;
-  keterangan: string | null;
-  denda: number;
-  dendaStatus: "tidak_ada" | "belum" | "lunas" | "dibebaskan";
-  selesai: boolean;
-  nomorKwitansi: string | null;
 };
 
 const STATUS_TAGIHAN: Record<string, string> = {
@@ -473,84 +454,21 @@ export default function Rw3bizStatus() {
           </div>
         )}
 
-        {(data?.razia ?? []).length > 0 && (
-          <div className="space-y-2 rounded-xl border bg-card p-4">
-            <p className="font-semibold text-sm">Temuan razia kendaraan</p>
-            {data!.razia!.some((r) => r.hasil === "tidak_terdaftar" && !r.selesai) && (
-              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
-                Ada kendaraan menuju usaha ini yang belum terdaftar. Perbarui data kendaraan milik / charter agar tidak terkena denda
-                lagi.
-                <Link href={`${RW3BIZ_ROUTES.perpanjang}?nomor=${encodeURIComponent(nomorUsaha)}`}>
-                  <Button size="sm" className="mt-2 w-full gap-1.5">
-                    <RefreshCw className="w-4 h-4" /> Perbarui data kendaraan
-                  </Button>
-                </Link>
-              </div>
-            )}
-            <ul className="divide-y text-xs">
-              {data!.razia!.map((r) => (
-                <li key={r.id} className="space-y-0.5 py-2">
-                  <div className="flex items-start justify-between gap-3">
-                    <p>
-                      <span className="font-mono font-semibold">{r.plat}</span> · {r.jenis} · {tglPanjang(r.tanggal)}
-                    </p>
-                    {r.denda > 0 && (
-                      <p className={r.dendaStatus === "belum" ? "text-destructive" : "text-muted-foreground"}>
-                        {formatRp(r.denda)}
-                        {r.dendaStatus === "lunas" ? " · lunas" : r.dendaStatus === "dibebaskan" ? " · dibebaskan" : " · belum dibayar"}
-                      </p>
-                    )}
-                  </div>
-                  <p className="text-muted-foreground">{r.hasilLabel}</p>
-                  {r.nomorKwitansi && (
-                    <a
-                      href={`/api/public/rw3biz/razia/${r.id}/kwitansi?nomor=${encodeURIComponent(nomorUsaha)}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-1.5 text-brand hover:underline"
-                    >
-                      <Receipt className="h-3.5 w-3.5" /> Kwitansi {r.nomorKwitansi}
-                    </a>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
         {(data?.pelanggaran ?? []).length > 0 && (
           <div className="space-y-2 rounded-xl border bg-card p-4">
             <p className="font-semibold text-sm">Catatan pelanggaran</p>
             <p className="text-xs text-muted-foreground">
-              Dari aduan warga yang terbukti atau temuan Ketua RW / Linmas. Pelanggaran berulang dalam 12 bulan dendanya makin besar.
+              Dari aduan warga yang terbukti atau temuan Ketua RW / Linmas. Ditangani lewat teguran resmi bertingkat, tanpa denda uang.
             </p>
             <ul className="divide-y text-xs">
               {data!.pelanggaran!.map((p) => (
                 <li key={p.id} className="space-y-0.5 py-2">
-                  <div className="flex items-start justify-between gap-3">
-                    <p>
-                      <span className="font-semibold">{p.jenis}</span> · {tglPanjang(p.tanggal)}
-                    </p>
-                    <p className={p.dendaStatus === "belum" ? "text-destructive" : "text-muted-foreground"}>
-                      {p.denda > 0
-                        ? `${formatRp(p.denda)}${p.dendaStatus === "lunas" ? " · lunas" : p.dendaStatus === "dibebaskan" ? " · dibebaskan" : " · belum dibayar"}`
-                        : "Teguran tertulis"}
-                    </p>
-                  </div>
+                  <p>
+                    <span className="font-semibold">{p.jenis}</span> · {tglPanjang(p.tanggal)}
+                  </p>
                   <p className="text-muted-foreground">
                     {p.sumber} · {p.tingkat.toLowerCase()} · pelanggaran ke-{p.keBerapa}
                   </p>
-                  {p.dendaRincian && <p className="text-[11px] text-muted-foreground">{p.dendaRincian}</p>}
-                  {p.nomorKwitansi && (
-                    <a
-                      href={`/api/public/rw3biz/pelanggaran/${p.id}/kwitansi?nomor=${encodeURIComponent(nomorUsaha)}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-1.5 text-brand hover:underline"
-                    >
-                      <Receipt className="h-3.5 w-3.5" /> Kwitansi {p.nomorKwitansi}
-                    </a>
-                  )}
                 </li>
               ))}
             </ul>

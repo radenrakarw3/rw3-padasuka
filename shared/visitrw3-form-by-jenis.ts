@@ -41,18 +41,41 @@ export type Visitrw3FormProfile = {
   orangLabel: string;
 };
 
-const KEPERLUAN_TINGGAL = ["Kerja", "Kuliah", "Usaha", "Lainnya"] as const;
-const KEPERLUAN_KOST = ["Kerja", "Kuliah", "Lainnya"] as const;
+const KEPERLUAN_TINGGAL = [
+  "Kerja",
+  "Kuliah",
+  "Sekolah",
+  "Usaha",
+  "Magang / PKL",
+  "Kursus / pelatihan",
+  "Dinas / penempatan",
+  "Mencari kerja",
+  "Menemani keluarga",
+  "Pengobatan",
+  "Lainnya",
+] as const;
+const KEPERLUAN_KOST = [
+  "Kerja",
+  "Kuliah",
+  "Sekolah",
+  "Magang / PKL",
+  "Kursus / pelatihan",
+  "Dinas / penempatan",
+  "Mencari kerja",
+  "Menemani keluarga",
+  "Pengobatan",
+  "Lainnya",
+] as const;
 
 export const VISITRW3_FORM_BY_JENIS: Record<JenisWarga, Visitrw3FormProfile> = {
   kontrak: {
     lokasiTitle: "Lokasi kontrakan",
-    lokasiHint: "Alamat unit/rumah yang Anda sewa di wilayah RW 03.",
-    alamatLabel: "Alamat kontrakan / rumah sewa *",
-    alamatPlaceholder: "Jl., gang, nomor rumah, patokan tetangga",
+    lokasiHint: "Cukup pilih RT. Alamat lengkap opsional.",
+    alamatLabel: "Alamat kontrakan (opsional)",
+    alamatPlaceholder: "Jl., gang, nomor rumah — boleh dikosongkan",
     nomorUnitMode: "optional",
     nomorUnitLabel: "Nomor rumah / unit (opsional)",
-    nomorUnitHint: "Bantu petugas survey menemukan unit Anda.",
+    nomorUnitHint: "Opsional — bantu pengurus menemukan unit.",
     nomorUnitPlaceholder: "Contoh: Unit 12, Rumah depan gang",
     showAnak: true,
     maxDewasa: 12,
@@ -70,20 +93,20 @@ export const VISITRW3_FORM_BY_JENIS: Record<JenisWarga, Visitrw3FormProfile> = {
     tempatKerjaPlaceholder: "Nama perusahaan, kampus, atau usaha",
     requireTempatKerja: true,
     requireJamOperasional: false,
-    defaultTerminBulan: "3",
-    bayarHint: "Masa berlaku izin tinggal di kontrakan RW 03.",
+    defaultTerminBulan: "1",
+    bayarHint: "Masa berlaku 1 bulan · kontribusi Rp1.000.",
     explainSebelum:
       "Anda mendaftar sebagai warga ngontrak. Siapkan data seluruh penghuni yang tinggal di unit yang sama.",
     orangLabel: "penghuni",
   },
   kost: {
     lokasiTitle: "Lokasi kost",
-    lokasiHint: "Alamat bangunan kost dan nomor kamar Anda.",
-    alamatLabel: "Alamat kost *",
-    alamatPlaceholder: "Nama/alamat kost, gang, patokan",
+    lokasiHint: "RT + nomor kamar wajib. Alamat lengkap opsional.",
+    alamatLabel: "Alamat kost (opsional)",
+    alamatPlaceholder: "Nama/alamat kost, gang — boleh dikosongkan",
     nomorUnitMode: "required",
     nomorUnitLabel: "Nomor kamar / unit *",
-    nomorUnitHint: "Wajib agar petugas mudah menemukan kamar saat survey.",
+    nomorUnitHint: "Wajib — nomor kamar yang ditempati.",
     nomorUnitPlaceholder: "Contoh: Kamar 3B, Lantai 2 depan",
     showAnak: false,
     maxDewasa: 2,
@@ -102,7 +125,7 @@ export const VISITRW3_FORM_BY_JENIS: Record<JenisWarga, Visitrw3FormProfile> = {
     requireTempatKerja: true,
     requireJamOperasional: false,
     defaultTerminBulan: "1",
-    bayarHint: "Masa berlaku izin tinggal di kost RW 03.",
+    bayarHint: "Masa berlaku 1 bulan · kontribusi Rp1.000.",
     explainSebelum:
       "Anda mendaftar sebagai warga ngekost. Fokus data diri + nomor kamar — biasanya satu penghuni per kamar.",
     orangLabel: "penghuni",

@@ -30,7 +30,6 @@ import {
   turunkanOperasionalMalam,
 } from "@shared/rw3biz-kontribusi";
 import { PERNYATAAN_VERSI } from "@shared/rw3biz-pernyataan";
-import { tandaiRaziaSelesai } from "./rw3biz-razia";
 import {
   buatTagihanTermin,
   catatSetoranAwalUsaha,
@@ -666,7 +665,6 @@ export async function approvePengajuan(id: number, adminUsername: string, input?
         })
         .where(eq(rw3bizUsaha.id, pengajuan.usahaId))
         .returning();
-      await tandaiRaziaSelesai(tx, pengajuan.usahaId);
     } else {
       [usahaRow] = await tx
         .insert(rw3bizUsaha)
@@ -844,7 +842,7 @@ export async function ensureRw3bizSchema() {
     CREATE INDEX IF NOT EXISTS rw3biz_pengajuan_pj_wa_idx ON rw3biz_pengajuan (pj_nomor_whatsapp);
     CREATE INDEX IF NOT EXISTS rw3biz_orang_pengajuan_idx ON rw3biz_orang (pengajuan_id);
   `);
-  for (const file of ["0027_rw3biz_kontribusi.sql", "0028_rw3biz_niu_kendaraan.sql", "0029_rw3biz_charter_razia.sql", "0030_rw3biz_pelanggaran.sql", "0033_rw3biz_sumbangsih.sql"]) {
+  for (const file of ["0027_rw3biz_kontribusi.sql", "0028_rw3biz_niu_kendaraan.sql", "0029_rw3biz_charter_razia.sql", "0030_rw3biz_pelanggaran.sql", "0033_rw3biz_sumbangsih.sql", "0035_drop_rw3biz_razia.sql"]) {
     const kandidat = [path.join(process.cwd(), "migrations", file)];
     if (typeof __dirname !== "undefined") kandidat.push(path.join(__dirname, "..", "migrations", file));
     const lokasi = kandidat.find((p) => fs.existsSync(p));

@@ -6,7 +6,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Baby, Briefcase, GraduationCap, HeartHandshake, MessageCircle, UserX, Users } from "lucide-react";
+import { Baby, Briefcase, GraduationCap, HeartHandshake, UserX, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -29,12 +29,10 @@ import {
   type PekerjaanRingkasanInput,
 } from "@shared/pekerjaan-labor";
 import {
-  buildPekerjaanChartWaMessage,
   resolveWaVerifikasi,
   type WargaIssueSlice,
 } from "@shared/warga-data-issues";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -42,7 +40,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { toWaMeUrl } from "@/lib/wa";
+import {
+  HubungiWargaButton,
+  HubungiWargaDialog,
+  type HubungiWargaTarget,
+} from "@/components/admin/hubungi-warga-dialog";
 
 const barConfig = { count: { label: "Jumlah", color: "#0f766e" } } satisfies ChartConfig;
 
@@ -222,21 +224,21 @@ function PekerjaanWargaListDialog({
   rows: WargaIssueSlice[];
   allWarga: WargaIssueSlice[];
 }) {
+  const [hubungiTarget, setHubungiTarget] = useState<HubungiWargaTarget | null>(null);
+
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg flex flex-col sm:max-h-[85vh]">
         <DialogHeader>
           <DialogTitle>{chartLabel ?? "Daftar warga"}</DialogTitle>
           <DialogDescription>
-            {formatNumber(rows.length)} warga · klik Hubungi WA untuk konfirmasi data pekerjaan
+            {formatNumber(rows.length)} warga · hubungi 1-per-1 untuk konfirmasi data pekerjaan
           </DialogDescription>
         </DialogHeader>
         <ul className="space-y-2 sm:flex-1 sm:overflow-y-auto sm:pr-1 sm:-mr-1">
           {rows.map((row) => {
             const wa = resolveWaVerifikasi(row, allWarga);
-            const waUrl = wa
-              ? toWaMeUrl(wa.phone, buildPekerjaanChartWaMessage(row, chartLabel ?? ""))
-              : null;
             return (
               <li
                 key={row.id}
@@ -257,13 +259,18 @@ function PekerjaanWargaListDialog({
                     <p className="text-xs text-muted-foreground">WA via kepala keluarga</p>
                   )}
                 </div>
-                {waUrl ? (
-                  <Button variant="outline" size="sm" className="w-full shrink-0 sm:w-auto" asChild>
-                    <a href={waUrl} target="_blank" rel="noopener noreferrer">
-                      <MessageCircle className="w-4 h-4 mr-1.5" />
-                      Hubungi WA
-                    </a>
-                  </Button>
+                {wa ? (
+                  <HubungiWargaButton
+                    className="w-full shrink-0 sm:w-auto"
+                    onClick={() =>
+                      setHubungiTarget({
+                        wargaId: row.id,
+                        namaLengkap: row.namaLengkap,
+                        chartLabel: chartLabel ?? undefined,
+                        jenisAwal: "minta_bantuan",
+                      })
+                    }
+                  />
                 ) : (
                   <Badge variant="secondary" className="justify-center self-start text-xs font-normal shrink-0 sm:self-auto">
                     Tanpa WA
@@ -275,6 +282,14 @@ function PekerjaanWargaListDialog({
         </ul>
       </DialogContent>
     </Dialog>
+    <HubungiWargaDialog
+      target={hubungiTarget}
+      open={hubungiTarget != null}
+      onOpenChange={(buka) => {
+        if (!buka) setHubungiTarget(null);
+      }}
+    />
+    </>
   );
 }
 

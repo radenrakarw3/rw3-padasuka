@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { ChevronRight } from "lucide-react";
 
 const STEPS = [
-  { href: "/admin/visitrw3/antrian?view=belum", label: "1 · Survey", match: "/admin/visitrw3/antrian" },
+  { href: "/admin/visitrw3/antrian?view=belum", label: "1 · Input & setujui", match: "/admin/visitrw3/antrian" },
   { href: "/admin/visitrw3/penghuni", label: "2 · Warga aktif", match: "/admin/visitrw3/penghuni" },
   { href: "/admin/visitrw3/kalender", label: "3 · Kalender", match: "/admin/visitrw3/kalender" },
 ] as const;
