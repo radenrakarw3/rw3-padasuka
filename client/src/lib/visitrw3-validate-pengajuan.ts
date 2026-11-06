@@ -179,6 +179,17 @@ export function validateSinglePenghuni(
   const tempatLabel = opts.tempatKerjaLabel ?? "tempat kerja";
 
   if (p.namaLengkap.trim().length < 2) return "Isi nama lengkap (minimal 2 huruf)";
+
+  // RW3BIZ (Formulir Sumbangsih): cukup nama + WhatsApp + peran/asal — tanpa KTP/NIK/tgl lahir.
+  if (opts.dataUsaha && !p.isAnak) {
+    if (!p.nomorWhatsapp.trim()) {
+      return "Isi nomor WhatsApp";
+    } else if (!isNomorHpValid(p.nomorWhatsapp)) {
+      return "Nomor WhatsApp tidak valid (contoh 081234567890)";
+    }
+    return null;
+  }
+
   if (!p.tanggalLahir) return "Pilih tanggal lahir";
   const usia = umur(p.tanggalLahir);
   if (Number.isNaN(usia) || usia < 0 || usia > 120) return "Tanggal lahir tidak valid";
@@ -205,10 +216,6 @@ export function validateSinglePenghuni(
     if (errKeperluan) return errKeperluan;
   } else if (requireTempat && !p.namaTempatKerja.trim()) {
     return `Isi ${tempatLabel.toLowerCase()}`;
-  }
-  if (opts.dataUsaha) {
-    if (!p.fotoKtpPath) return "Unggah foto KTP";
-    return null;
   }
 
   const u = umur(p.tanggalLahir);

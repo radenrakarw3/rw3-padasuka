@@ -24,8 +24,6 @@ import {
   turunkanOperasionalMalam,
   type PosAnggaran,
 } from "@shared/rw3biz-kontribusi";
-import { JANGKAR_SUMBANGSIH_DETAIL, teksBagianSayaRab } from "@shared/rw3biz-pernyataan";
-
 export const JENIS_TEMPAT_BIZ_OPTIONS = JENIS_TEMPAT_BIZ.map((v) => ({ value: v, label: JENIS_TEMPAT_BIZ_LABEL[v] }));
 
 /** Peran yang boleh diisi pemohon: data pegawai tidak dicatat. */
@@ -501,8 +499,9 @@ export function totalIsianSumbangsih(isian: IsianSumbangsih, program: PosAnggara
   return program.reduce((s, p) => s + Math.max(0, isian[p.id] ?? 0), 0);
 }
 
-export function validateSumbangsih(isian: IsianSumbangsih, program: PosAnggaran[]): string | null {
-  return totalIsianSumbangsih(isian, program) > 0 ? null : "Isi sumbangsih untuk minimal satu program RW 03";
+/** Sumbangsih seikhlasnya: Rp0 diperbolehkan (izin tetap berlaku). */
+export function validateSumbangsih(_isian: IsianSumbangsih, _program: PosAnggaran[]): string | null {
+  return null;
 }
 
 function InputRupiah({ value, onChange, label }: { value: number; onChange: (n: number) => void; label: string }) {
@@ -537,10 +536,8 @@ export function SumbangsihFields({
   tanpaPengantar?: boolean;
 }) {
   const { program, isLoading } = useProgramRw3();
-  const { data: tarif } = useTarifPublik();
   const total = totalIsianSumbangsih(value, program);
   const ubah = (id: string, n: number) => onChange({ ...value, [id]: n });
-  const target = tarif?.targetBulanan ?? 0;
 
   if (isLoading) return <Skeleton className="h-64 w-full rounded-xl" />;
   return (
@@ -551,42 +548,12 @@ export function SumbangsihFields({
             <HeartHandshake className="h-4 w-4 text-brand" /> Sumbangsih untuk program RW 03
           </p>
           <p className="text-muted-foreground">
-            Tidak ada tarif. Tulis sebesar kemampuan Anda <b>setiap bulan</b>. Setor lewat transfer{" "}
-            <b>BCA 1390997490 a.n. Raden Raka</b>, atau tunai dalam amplop — petugas RW mengambil sambil memberi kwitansi. Oknum di
-            luar saluran resmi berhak ditolak.
+            Sumbangsih seikhlasnya — boleh berapa pun, termasuk Rp0. Tidak ada tarif. Izin usaha tetap berlaku. Setor tunai kepada{" "}
+            <b>Bendahara RW 03, Ibu Tini</b> dan langsung terima kwitansi bernomor. Petugas lain yang memungut wajib ditolak.
           </p>
         </div>
       )}
       <KebutuhanRw3 ringkas />
-      {target > 0 && (
-        <div className="space-y-2 rounded-xl border border-brand/30 bg-card p-3 text-xs leading-snug">
-          <p className="font-medium text-sm">Level sanggupan (bukan tarif)</p>
-          <p className="text-muted-foreground">{teksBagianSayaRab(target)}</p>
-          <p className="text-muted-foreground">Ketuk level — total dimasukkan ke program pertama; Anda bisa bagi ke 1–3 program.</p>
-          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-            {JANGKAR_SUMBANGSIH_DETAIL.map((j) => {
-              const aktif = total === j.nominal;
-              return (
-                <button
-                  key={j.nominal}
-                  type="button"
-                  onClick={() => {
-                    const pertama = program[0]?.id;
-                    if (!pertama) return;
-                    onChange({ [pertama]: j.nominal });
-                  }}
-                  className={`rounded-lg border px-3 py-2 text-left transition-colors ${
-                    aktif ? "border-brand bg-brand text-white" : "bg-background hover:bg-muted"
-                  }`}
-                >
-                  <span className="block text-sm font-semibold tabular-nums">{j.labelPendek}/bulan</span>
-                  <span className={`block text-[11px] ${aktif ? "text-white/90" : "text-muted-foreground"}`}>{j.setara}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
       <p className="pt-1 text-sm font-semibold">Rincian per program (utamakan 1–3):</p>
       {program.map((p) => {
         const n = value[p.id] ?? 0;
@@ -616,7 +583,9 @@ export function SumbangsihFields({
           <span className="text-lg font-bold tabular-nums text-brand">{formatRp(total)}/bulan</span>
         </div>
         <p className="text-xs text-muted-foreground">
-          Ini komitmen Anda setiap bulan paling lambat tanggal 1 — bukan sekali bayar.
+          {total > 0
+            ? "Nominal yang Anda sanggupi per bulan. Boleh diubah kapan saja lewat WhatsApp sekretariat."
+            : "Rp0 — izin usaha tetap berlaku. Anda boleh menyumbang barang/jasa atau menambah nominal nanti."}
         </p>
       </div>
     </div>
@@ -642,7 +611,9 @@ export function RingkasanSumbangsih({ items, catatan }: { items: { label: string
         <span className="text-xl font-bold tabular-nums text-brand">{formatRp(total)}</span>
       </div>
       <p className="text-xs text-muted-foreground">
-        Komitmen setiap bulan paling lambat tanggal 1 — bukan sekali bayar.
+        {total > 0
+          ? "Sumbangsih seikhlasnya per bulan — setor tunai ke Bendahara RW 03, Ibu Tini + kwitansi."
+          : "Belum menyumbang uang (Rp0). Izin usaha tetap berlaku."}
       </p>
       {catatan && <p className="text-xs text-muted-foreground">{catatan}</p>}
     </div>

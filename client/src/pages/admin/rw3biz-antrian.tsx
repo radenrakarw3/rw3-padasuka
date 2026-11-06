@@ -194,7 +194,7 @@ export default function AdminRw3bizAntrian() {
         title: "Disetujui",
         description: kw
           ? `Usaha aktif, tagihan dibuat, setoran pertama dicatat · kwitansi ${kw}`
-          : "Usaha aktif, sumbangsih bulanan ditetapkan dan tagihan dibuat",
+          : "Usaha aktif; sumbangsih seikhlasnya dicatat dan tagihan dibuat (boleh Rp0)",
       });
       setDetailId(null);
       queryClient.invalidateQueries({ queryKey: ["/api/admin/rw3biz/pengajuan"] });

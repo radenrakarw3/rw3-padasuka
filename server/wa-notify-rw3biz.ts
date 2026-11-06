@@ -195,7 +195,7 @@ export function notifyRw3bizKeberatanDiajukan(
     await sendWaIfConfigured(
       kontak.nomorWa,
       `${salam(kontak.nama)}\n\n` +
-        `*Peninjauan kontribusi RW3BIZ diterima*\n\n` +
+        `*Permintaan ubah sumbangsih RW3BIZ diterima*\n\n` +
         `Usaha: *${usaha.namaUsaha}*\n` +
         `Status: *menunggu tanggapan pengurus RW*\n\n` +
         `Pantau hasilnya di:\n${statusUrl}\n\n` +
@@ -222,7 +222,7 @@ export function notifyRw3bizKeberatanDitanggapi(
     await sendWaIfConfigured(
       kontak.nomorWa,
       `${salam(kontak.nama)}\n\n` +
-        `*Hasil peninjauan kontribusi RW3BIZ*\n\n` +
+        `*Hasil perubahan sumbangsih RW3BIZ*\n\n` +
         `Usaha: *${usaha.namaUsaha}*\n` +
         `Keputusan: *${hasil}*\n` +
         `Tanggapan: ${opsi.tanggapan.trim()}\n\n` +

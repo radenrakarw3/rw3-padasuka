@@ -16,14 +16,29 @@ export const JENIS_TEMPAT_BIZ = [
 export type JenisTempatBiz = (typeof JENIS_TEMPAT_BIZ)[number];
 
 export const JENIS_TEMPAT_BIZ_LABEL: Record<JenisTempatBiz, string> = {
-  keliling: "Pedagang keliling",
-  lapak: "Lapak / gerobak tetap",
+  keliling: "Keliling",
+  lapak: "Lapak/gerobak",
   kiosk: "Kios",
-  usaha_rumahan: "Usaha rumahan (warung, jasa di rumah)",
-  toko: "Toko / ruko",
-  gudang: "Gudang / kantor / bengkel",
+  usaha_rumahan: "Usaha rumahan",
+  toko: "Toko/ruko",
+  gudang: "Bengkel/gudang/kantor",
   lainnya: "Lainnya",
 };
+
+/** Jenis dagangan/jasa — Formulir Sumbangsih Pengusaha RW3BIZ (Nov 2026). */
+export const KATEGORI_DAGANGAN_BIZ = [
+  "Warung/kelontong",
+  "Makanan/minuman",
+  "Pulsa/token",
+  "Laundry",
+  "Salon/barbershop",
+  "Bengkel motor",
+  "Industri rumahan",
+  "Lainnya",
+] as const;
+
+/** URL PDF resmi formulir cetak (client/public). Naikkan ?v= setelah regenerasi PDF. */
+export const FORMULIR_SUMBANGSIH_PDF_URL = "/rw3biz/Formulir-Sumbangsih-RW3BIZ.pdf?v=20261107";
 
 export const RENTANG_OMZET = ["lt3", "3_10", "10_30", "30_100", "gt100"] as const;
 export type RentangOmzet = (typeof RENTANG_OMZET)[number];
@@ -288,22 +303,26 @@ export type TarifKontribusi = {
   rabVersi: number;
 };
 
-/** RAB RW 03 (Anggaran Penerimaan dan Pengeluaran RW, Perwal Cimahi 53/2021 Pasal 114 ayat 4). */
+/**
+ * Usulan anggaran program RW 03 (Formulir Sumbangsih Pengusaha RW3BIZ, Nov 2026).
+ * Baru berlaku setelah ditetapkan musyawarah RW 03 — bukan tarif per usaha.
+ */
 export const POS_ANGGARAN_DEFAULT: PosAnggaran[] = [
-  { id: "insentif_pelayanan", label: "Insentif kinerja pelayanan", nominal: 1_500_000, keterangan: "Pelayanan surat, izin, dan pendataan oleh Ketua RW 03" },
-  { id: "linmas_keamanan", label: "Linmas & keamanan", nominal: 3_000_000, keterangan: "Ronda malam, insentif Linmas, pos ronda, portal, CCTV" },
-  { id: "kebersihan", label: "Kebersihan lingkungan (petugas sapu RW)", nominal: 2_000_000, keterangan: "Petugas sapu, angkut sampah, alat kebersihan" },
-  { id: "operasional_rt", label: "Operasional 7 RT", nominal: 1_400_000, keterangan: "Rp200.000 per RT per bulan" },
-  { id: "infrastruktur", label: "Infrastruktur & maintenance kecil", nominal: 2_500_000, keterangan: "Lampu jalan, selokan, tambal jalan, perbaikan fasilitas umum" },
-  { id: "sosial_darurat", label: "Sosial & respons darurat", nominal: 1_500_000, keterangan: "Santunan duka, warga sakit, banjir, kebakaran" },
-  { id: "administrasi_digital", label: "Administrasi, data & digital", nominal: 600_000, keterangan: "ATK, cetak surat, WA, sistem rw3padasukacimahi.org" },
-  { id: "kegiatan_warga", label: "Kegiatan warga/kader/pemuda", nominal: 1_000_000, keterangan: "17-an, posyandu, kader, karang taruna" },
-  { id: "dana_pembangunan", label: "Dana pembangunan", nominal: 2_500_000, keterangan: "Tabungan pembangunan sarana & prasarana lingkungan" },
-  { id: "dana_cadangan", label: "Dana cadangan", nominal: 2_000_000, keterangan: "Kebutuhan mendesak di luar rencana" },
+  { id: "keamanan_cctv", label: "Keamanan & CCTV", nominal: 2_500_000, keterangan: "Insentif Linmas ronda, internet dan perawatan 8 CCTV" },
+  { id: "kebersihan_sampah", label: "Kebersihan & sampah", nominal: 2_500_000, keterangan: "2 petugas sapu, angkut sampah rumah dan usaha" },
+  { id: "solokan", label: "Solokan & anti-banjir", nominal: 2_000_000, keterangan: "Perawatan rutin saluran dan dinding solokan" },
+  { id: "voucher_warga", label: "Voucher belanja warga", nominal: 2_000_000, keterangan: "40 KK prasejahtera × Rp50.000, dibelanjakan di usaha kontributor" },
+  { id: "pelatihan_umkm", label: "Pelatihan kerja & UMKM", nominal: 1_500_000, keterangan: "1 kelas per bulan: keterampilan, jualan online, QRIS, izin PIRT/halal" },
+  { id: "santunan_darurat", label: "Santunan & darurat", nominal: 1_500_000, keterangan: "Warga sakit, duka, korban banjir atau kebakaran" },
+  { id: "beasiswa", label: "Beasiswa anak warga", nominal: 1_000_000, keterangan: "10 anak × Rp100.000 untuk seragam, buku, biaya sekolah" },
+  { id: "posyandu", label: "Posyandu, gizi & lansia", nominal: 1_000_000, keterangan: "Makanan tambahan balita, cek kesehatan lansia" },
+  { id: "pemuda_bazar", label: "Pemuda & bazar UMKM", nominal: 1_000_000, keterangan: "Disisihkan untuk 17-an dan bazar, lapak gratis kontributor" },
+  { id: "penerangan", label: "Penerangan jalan", nominal: 500_000, keterangan: "Ganti lampu gang dan jalan yang mati" },
+  { id: "promosi_umkm", label: "Promosi UMKM", nominal: 500_000, keterangan: "Konten usaha bergiliran di TikTok/Instagram RW 03, Peta Usaha online" },
 ];
 
 /** Naikkan bila POS_ANGGARAN_DEFAULT diganti: konfigurasi tersimpan versi lama ikut diperbarui sekali. */
-export const RAB_VERSI = 3;
+export const RAB_VERSI = 6;
 
 // ---------------------------------------------------------------- Sumbangsih program RW 03
 
@@ -374,7 +393,7 @@ export function bulanIni(): string {
 }
 
 export const TARIF_DEFAULT: TarifKontribusi = {
-  targetBulanan: 18_000_000,
+  targetBulanan: 16_000_000,
   tarifDasar: {
     keliling: 10_000,
     lapak: 20_000,

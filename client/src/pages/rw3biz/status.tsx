@@ -159,7 +159,7 @@ function KartuSurat({
           <p className="text-[9px] uppercase tracking-widest text-[hsl(40,45%,72%)]">Kwitansi setiap setoran</p>
           {semuaKwitansi.length === 0 ? (
             <p className="mt-1 text-xs text-white/75">
-              Belum ada setoran. Setelah transfer / amplop dicatat, kwitansi muncul di sini.
+              Belum ada setoran. Setelah setoran tunai ke Bendahara RW 03 dicatat, kwitansi muncul di sini.
             </p>
           ) : (
             <ul className="mt-2 max-h-40 space-y-1.5 overflow-y-auto text-xs">
@@ -350,7 +350,7 @@ export default function Rw3bizStatus() {
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <a href={`/api/public/rw3biz/formulir/${encodeURIComponent(pengajuan.nomorBiz)}`} target="_blank" rel="noreferrer">
                 <Button variant="outline" size="sm" className="w-full gap-1.5">
-                  <FileText className="w-4 h-4" /> Formulir komitmen
+                  <FileText className="w-4 h-4" /> Formulir sumbangsih
                 </Button>
               </a>
               <a href={`/api/public/rw3biz/pernyataan/${encodeURIComponent(pengajuan.nomorBiz)}`} target="_blank" rel="noreferrer">
@@ -366,7 +366,7 @@ export default function Rw3bizStatus() {
           <div className="space-y-2">
             <RingkasanSumbangsih
               items={kontribusi.sumbangsih}
-              catatan={kontribusi.final ? "Komitmen bulanan. Transfer BCA 1390997490 a.n. Raden Raka tiap tgl 1, atau amplop tunai + kwitansi." : "Diajukan — menunggu persetujuan Ketua RW 03."}
+              catatan={kontribusi.final ? "Sumbangsih seikhlasnya. Setor tunai ke Bendahara RW 03, Ibu Tini + kwitansi bernomor." : "Diajukan — menunggu persetujuan Ketua RW 03."}
             />
             {kontribusi.keringanan && (
               <p className="text-xs text-success">

@@ -136,7 +136,8 @@ export async function generateNomorBiz(): Promise<string> {
 
 const orangInputSchema = z.object({
   namaLengkap: z.string().min(2),
-  tanggalLahir: z.string().regex(DATE_REGEX),
+  /** Opsional di Formulir Sumbangsih — cukup data kontak. */
+  tanggalLahir: z.union([z.string().regex(DATE_REGEX), z.literal("")]).optional().nullable(),
   isAnak: z.boolean().default(false),
   isPenanggungJawab: z.boolean().default(false),
   nik: z.string().optional().nullable(),
@@ -231,7 +232,7 @@ function nilaiOrangBaru(
   return {
     pengajuanId,
     namaLengkap: o.namaLengkap,
-    tanggalLahir: o.tanggalLahir,
+    tanggalLahir: o.tanggalLahir?.trim() || "",
     isAnak: o.isAnak,
     isPenanggungJawab,
     nik: o.isAnak ? null : o.nik?.trim() || null,
@@ -601,10 +602,13 @@ async function terapkanKoreksiSurvey(
     if (v !== undefined) (data as Record<string, unknown>)[k] = v;
   }
   const tarif = await loadTarif();
-  const sumbangsih = sumbangsihBaru?.length ? sumbangsihFinal(sumbangsihBaru, tarif) : parseSumbangsih(pengajuan.sumbangsih);
-  const kontribusi = sumbangsih?.length
-    ? kolomSumbangsih(sumbangsih)
-    : kolomKontribusi(hitungRincian(data, await orangUntukPengajuan(pengajuan.id, tx), tarif));
+  // Sumbangsih seikhlasnya: array kosong = Rp0 (bukan jatuh ke rumus lama).
+  const sumbangsih =
+    sumbangsihBaru !== undefined ? sumbangsihFinal(sumbangsihBaru, tarif) : parseSumbangsih(pengajuan.sumbangsih);
+  const kontribusi =
+    sumbangsih !== null
+      ? kolomSumbangsih(sumbangsih)
+      : kolomKontribusi(hitungRincian(data, await orangUntukPengajuan(pengajuan.id, tx), tarif));
   const belumSurvey = !pengajuan.statusTempat && !koreksi?.statusTempat;
   const kolom = {
     jenisTempatUsaha: data.jenisTempatUsaha,
@@ -624,7 +628,7 @@ export async function approvePengajuan(id: number, adminUsername: string, input?
     const [awal] = await tx.select().from(rw3bizPengajuan).where(eq(rw3bizPengajuan.id, id)).for("update");
     if (!awal) throw new Error("Pengajuan tidak ditemukan");
     if (awal.status !== "menunggu_survey") throw new Error("Pengajuan sudah diproses");
-    const sukarela = Boolean(sumbangsih?.length) || parseSumbangsih(awal.sumbangsih) != null;
+    const sukarela = sumbangsih !== undefined || parseSumbangsih(awal.sumbangsih) != null;
     if (!sukarela && !awal.statusTempat && !koreksi?.statusTempat) {
       throw new Error("Pengajuan lama: isi sumbangsih atau lengkapi data usaha sebelum menyetujui");
     }

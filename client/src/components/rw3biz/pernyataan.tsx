@@ -112,7 +112,7 @@ export function KebutuhanRw3({ ringkas = false }: { ringkas?: boolean }) {
         })}
       </ul>
       <div className="space-y-1 rounded-lg bg-muted/40 p-3">
-        <p className="text-sm font-semibold">Manfaat bagi usaha Anda bila berkontribusi</p>
+        <p className="text-sm font-semibold">Manfaat untuk pengusaha</p>
         <ul className="list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
           {ALASAN_SUMBANGSIH.map((a) => (
             <li key={a}>{a}</li>
@@ -133,10 +133,10 @@ export function KebutuhanRw3({ ringkas = false }: { ringkas?: boolean }) {
           <Landmark className="h-5 w-5" />
         </div>
         <div className="min-w-0">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Kebutuhan RW 03 setiap bulan</p>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">Usulan anggaran program RW 03 / bulan</p>
           <p className="text-2xl font-extrabold tabular-nums text-brand">{formatRp(total)}</p>
           <p className="text-xs text-muted-foreground">
-            {formatRp(total * 12)} per tahun · untuk {t.posAnggaran.length} program yang dirasakan langsung oleh usaha Anda
+            {formatRp(total * 12)} per tahun · {t.posAnggaran.length} program (baru berlaku setelah musyawarah RW 03)
           </p>
         </div>
       </div>

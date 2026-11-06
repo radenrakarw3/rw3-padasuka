@@ -93,6 +93,7 @@ import {
   type IsianSumbangsih,
 } from "@/components/rw3biz/kontribusi-form";
 import { PilihTermin } from "@/components/gov/pilih-termin";
+import { KATEGORI_DAGANGAN_BIZ } from "@shared/rw3biz-kontribusi";
 
 import {
   ASAL_ORANG_BIZ_LABEL,
@@ -785,6 +786,10 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
   const [jamBuka, setJamBuka] = useState("");
   const [jamTutup, setJamTutup] = useState("");
   const [sumbangsih, setSumbangsih] = useState<IsianSumbangsih>({});
+  /** Formulir Sumbangsih: masuk Peta Usaha RW 03 (online, gratis). */
+  const [masukPetaUsaha, setMasukPetaUsaha] = useState<"" | "ya" | "tidak">("");
+  /** Formulir Sumbangsih: sumbangsih barang/jasa (opsional). */
+  const [sumbangsihBarangJasa, setSumbangsihBarangJasa] = useState("");
   const [jumlahDewasa, setJumlahDewasa] = useState(1);
   const [jumlahAnak, setJumlahAnak] = useState(0);
   const jumlah = jumlahDewasa + jumlahAnak;
@@ -813,6 +818,11 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
         .filter(Boolean)
         .join(", ");
       if (asal) bagian.push(`Asal tinggal: ${asal}`);
+    }
+    if (product === "rw3biz") {
+      if (masukPetaUsaha === "ya") bagian.push("Masuk Peta Usaha RW 03: Ya");
+      if (masukPetaUsaha === "tidak") bagian.push("Masuk Peta Usaha RW 03: Tidak");
+      if (sumbangsihBarangJasa.trim()) bagian.push(`Sumbangsih barang/jasa: ${sumbangsihBarangJasa.trim()}`);
     }
     if (petugas) bagian.unshift("[Diisi petugas dari formulir kertas]");
     if (catatan.trim()) bagian.push(catatan.trim());
@@ -1116,12 +1126,12 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
           const isPj = idx === idxPj;
           return {
             namaLengkap: p.namaLengkap,
-            tanggalLahir: p.tanggalLahir,
+            tanggalLahir: p.tanggalLahir || "",
             isAnak: p.isAnak,
             isPenanggungJawab: Boolean(isPj),
-            nik: p.nik,
+            nik: p.nik || null,
             nomorWhatsapp: p.nomorWhatsapp,
-            jenisKelamin: p.jenisKelamin,
+            jenisKelamin: p.jenisKelamin || null,
             pekerjaan: null,
             namaTempatKerja: p.namaTempatKerja?.trim() || namaUsaha.trim() || null,
             namaSekolah: p.namaSekolah,
@@ -1313,7 +1323,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
               ? [
                   "Pengajuan menunggu persetujuan Ketua RW 03.",
                   "Anda akan dihubungi lewat WhatsApp jika diperlukan klarifikasi.",
-                  "Sumbangsih yang Anda sanggupkan adalah komitmen bulanan (paling lambat tanggal 1) dan tampil di halaman cek status.",
+                  "Sumbangsih seikhlasnya (boleh Rp0) tampil di cek status. Bila menyumbang uang, setor tunai kepada Bendahara RW 03, Ibu Tini — langsung terima kwitansi bernomor.",
                 ]
               : [
                   "Pengurus RW akan memverifikasi data (biasanya dari formulir kertas yang dikumpulkan).",
@@ -1409,7 +1419,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
           <p>
             <strong>Siapkan:</strong>{" "}
             {product === "rw3biz"
-              ? "KTP pemilik atau penanggung jawab usaha."
+              ? "Cukup data kontak (nama + WhatsApp). Tidak perlu fotokopi KTP. Sumbangsih seikhlasnya — boleh Rp0."
               : "KTP setiap orang dewasa yang tinggal" + (jenisWarga === "kontrak" ? " (dan KK bila ada anak)." : ".")}{" "}
             Isian tersimpan otomatis di HP ini.
           </p>
@@ -1633,7 +1643,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
             </div>
           )}
           <div className="space-y-2">
-            <Label>Kategori usaha *</Label>
+            <Label>{product === "rw3biz" ? "Jenis dagangan/jasa *" : "Kategori usaha *"}</Label>
             <p className="text-xs text-muted-foreground">
               Bisa pilih lebih dari satu
               {kategoriUsaha.length > 0 && (
@@ -1641,7 +1651,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
               )}
             </p>
             <div className="rounded-xl border bg-card p-3 max-h-64 overflow-y-auto space-y-2">
-              {visitrw3KategoriUsahaOptions.map((kategori) => (
+              {(product === "rw3biz" ? [...KATEGORI_DAGANGAN_BIZ] : visitrw3KategoriUsahaOptions).map((kategori) => (
                 <div key={kategori} className="flex items-start gap-2">
                   <Checkbox
                     id={`kategori-${kategori}`}
@@ -1658,7 +1668,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
               <Input
                 value={kategoriUsahaLain}
                 onChange={(e) => setKategoriUsahaLain(e.target.value)}
-                placeholder="Contoh: rental PS, jual es batu"
+                placeholder={product === "rw3biz" ? "Contoh: jual es batu" : "Contoh: rental PS, jual es batu"}
               />
             )}
           </div>
@@ -1700,6 +1710,28 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
               ? " Data tempat dan kendaraan dapat diverifikasi Ketua RW 03 saat menyetujui."
               : ""}
           </p>
+          {product === "rw3biz" && (
+            <div className="space-y-2">
+              <Label>Masuk Peta Usaha RW 03 (online, gratis)?</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  ["ya", "Ya"],
+                  ["tidak", "Tidak"],
+                ] as const).map(([v, label]) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setMasukPetaUsaha(v)}
+                    className={`h-12 rounded-xl border text-sm font-medium transition-colors ${
+                      masukPetaUsaha === v ? "border-brand bg-brand text-white" : "bg-card hover:bg-muted"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <PesanGalat pesan={errMsg} />
           <div className="flex gap-2">
             <Button variant="outline" className="touch-target" onClick={() => goStep(-1)}>
@@ -1719,6 +1751,9 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                   requireJamOperasional: true,
                 });
                 if (err) return showErr(err);
+                if (product === "rw3biz" && !masukPetaUsaha) {
+                  return showErr("Pilih apakah usaha masuk Peta Usaha RW 03");
+                }
                 goStep(1);
               }}
             >
@@ -1817,11 +1852,13 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                 hint={
                   p.isAnak
                     ? "Anak cukup nama, tanggal lahir, dan jenjang sekolah."
-                    : jenisWarga === "jualan"
-                      ? "Cukup satu orang: pemilik atau penanggung jawab usaha. Data pegawai tidak perlu diisi."
-                      : jenisWarga === "kost"
-                        ? "Data diri penghuni kamar (KTP & WhatsApp wajib)."
-                        : "Data diri penghuni kontrakan — isi satu per satu."
+                    : product === "rw3biz"
+                      ? "Cukup data kontak: nama, WhatsApp, peran, dan tempat tinggal. Tidak perlu KTP."
+                      : jenisWarga === "jualan"
+                        ? "Cukup satu orang: pemilik atau penanggung jawab usaha. Data pegawai tidak perlu diisi."
+                        : jenisWarga === "kost"
+                          ? "Data diri penghuni kamar (KTP & WhatsApp wajib)."
+                          : "Data diri penghuni kontrakan — isi satu per satu."
                 }
               />
               <div
@@ -1833,24 +1870,26 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                   <Label>Nama lengkap</Label>
                   <Input
                     className="h-12"
-                    placeholder={p.isAnak ? "Nama lengkap anak" : "Sesuai KTP"}
+                    placeholder={p.isAnak ? "Nama lengkap anak" : product === "rw3biz" ? "Nama lengkap" : "Sesuai KTP"}
                     autoCapitalize="words"
                     autoComplete="off"
                     value={p.namaLengkap}
                     onChange={(e) => updatePenghuni(i, { namaLengkap: e.target.value })}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Tanggal lahir</Label>
-                  <Input
-                    className="h-12"
-                    type="date"
-                    max={hariIniLokal()}
-                    min="1900-01-01"
-                    value={p.tanggalLahir}
-                    onChange={(e) => updatePenghuni(i, { tanggalLahir: e.target.value })}
-                  />
-                </div>
+                {product !== "rw3biz" && (
+                  <div className="space-y-2">
+                    <Label>Tanggal lahir</Label>
+                    <Input
+                      className="h-12"
+                      type="date"
+                      max={hariIniLokal()}
+                      min="1900-01-01"
+                      value={p.tanggalLahir}
+                      onChange={(e) => updatePenghuni(i, { tanggalLahir: e.target.value })}
+                    />
+                  </div>
+                )}
                 {p.isAnak ? (
                   <div className="space-y-2">
                     <Label>Jenjang pendidikan</Label>
@@ -1880,27 +1919,29 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                         onChange={(patch) => updatePenghuni(i, patch)}
                       />
                     )}
-                    <div className="space-y-2">
-                      <div className="flex items-baseline justify-between">
-                        <Label>NIK (16 digit)</Label>
-                        <span
-                          className={`text-xs tabular-nums ${p.nik.length === 16 ? "text-success" : "text-muted-foreground"}`}
-                        >
-                          {p.nik.length}/16
-                        </span>
+                    {product !== "rw3biz" && (
+                      <div className="space-y-2">
+                        <div className="flex items-baseline justify-between">
+                          <Label>NIK (16 digit)</Label>
+                          <span
+                            className={`text-xs tabular-nums ${p.nik.length === 16 ? "text-success" : "text-muted-foreground"}`}
+                          >
+                            {p.nik.length}/16
+                          </span>
+                        </div>
+                        <Input
+                          className="h-12 tracking-wider"
+                          inputMode="numeric"
+                          autoComplete="off"
+                          placeholder="Lihat di KTP, 16 angka"
+                          maxLength={16}
+                          value={p.nik}
+                          onChange={(e) =>
+                            updatePenghuni(i, { nik: e.target.value.replace(/\D/g, "").slice(0, 16) })
+                          }
+                        />
                       </div>
-                      <Input
-                        className="h-12 tracking-wider"
-                        inputMode="numeric"
-                        autoComplete="off"
-                        placeholder="Lihat di KTP, 16 angka"
-                        maxLength={16}
-                        value={p.nik}
-                        onChange={(e) =>
-                          updatePenghuni(i, { nik: e.target.value.replace(/\D/g, "").slice(0, 16) })
-                        }
-                      />
-                    </div>
+                    )}
                     <div className="space-y-2">
                       <Label>Nomor WhatsApp aktif</Label>
                       <Input
@@ -1920,24 +1961,26 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                           : "Pengurus mengabari hasil verifikasi lewat nomor ini."}
                       </p>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Jenis kelamin</Label>
-                      <div className="grid grid-cols-2 gap-2">
-                        {["Laki-laki", "Perempuan"].map((jk) => (
-                          <Button
-                            key={jk}
-                            type="button"
-                            variant={p.jenisKelamin === jk ? "default" : "outline"}
-                            className="h-12 text-base"
-                            aria-pressed={p.jenisKelamin === jk}
-                            onClick={() => updatePenghuni(i, { jenisKelamin: jk })}
-                          >
-                            {jk}
-                          </Button>
-                        ))}
+                    {product !== "rw3biz" && (
+                      <div className="space-y-2">
+                        <Label>Jenis kelamin</Label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {["Laki-laki", "Perempuan"].map((jk) => (
+                            <Button
+                              key={jk}
+                              type="button"
+                              variant={p.jenisKelamin === jk ? "default" : "outline"}
+                              className="h-12 text-base"
+                              aria-pressed={p.jenisKelamin === jk}
+                              onClick={() => updatePenghuni(i, { jenisKelamin: jk })}
+                            >
+                              {jk}
+                            </Button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                    {formProfile?.requirePekerjaan !== false && (
+                    )}
+                    {product !== "rw3biz" && formProfile?.requirePekerjaan !== false && (
                       <div className="space-y-2">
                         <Label>Pekerjaan</Label>
                         <SearchableSelect
@@ -2022,18 +2065,24 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                         onHapus={(ki) => removeKendaraan(i, ki)}
                       />
                     )}
-                    <FotoDokumenPicker
-                      jenis="ktp"
-                      foto={p.fotoKtpPath}
-                      diproses={fotoDiproses === i}
-                      onPilih={(f) =>
-                        void pasangFotoKtp(f, i).catch((err: unknown) => {
-                          const pesan = err instanceof Error ? err.message : "Coba lagi";
-                          setErrMsg(pesan);
-                          toast({ title: "Foto KTP gagal", description: pesan, variant: "destructive" });
-                        })
-                      }
-                    />
+                    {product === "rw3biz" ? (
+                      <p className="rounded-lg border border-dashed bg-muted/30 p-3 text-xs text-muted-foreground">
+                        Foto KTP tidak wajib. Cukup nama dan WhatsApp aktif — sesuai Formulir Sumbangsih RW3BIZ.
+                      </p>
+                    ) : (
+                      <FotoDokumenPicker
+                        jenis="ktp"
+                        foto={p.fotoKtpPath}
+                        diproses={fotoDiproses === i}
+                        onPilih={(f) =>
+                          void pasangFotoKtp(f, i).catch((err: unknown) => {
+                            const pesan = err instanceof Error ? err.message : "Coba lagi";
+                            setErrMsg(pesan);
+                            toast({ title: "Foto KTP gagal", description: pesan, variant: "destructive" });
+                          })
+                        }
+                      />
+                    )}
                   </>
                 )}
               </div>
@@ -2062,10 +2111,12 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
                       const errPj = validatePjAda();
                       if (errPj) return showErr(errPj);
                     }
-                    if (fotoDiproses !== null) return showErr("Tunggu foto KTP selesai diproses");
-                    if (!p.isAnak) {
+                    if (product !== "rw3biz" && fotoDiproses !== null) {
+                      return showErr("Tunggu foto KTP selesai diproses");
+                    }
+                    if (product !== "rw3biz" && !p.isAnak && p.nik) {
                       const kembar = penghuni.findIndex(
-                        (x, xi) => xi !== i && !x.isAnak && x.nik === p.nik,
+                        (x, xi) => xi !== i && !x.isAnak && x.nik && x.nik === p.nik,
                       );
                       if (kembar >= 0) {
                         return showErr(
@@ -2101,10 +2152,22 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
           <MicroStepHeader
             current={1}
             total={1}
-            title="Sumbangsih untuk program RW 03"
-            hint="Tidak ada tarif. Tulis sendiri berapa yang ingin Anda sumbangkan setiap bulan untuk program yang ingin Anda dukung — boleh satu atau beberapa. Disetor ke Kas RW 03 dengan kwitansi."
+            title="Sumbangsih seikhlasnya untuk program RW 03"
+            hint="Tidak ada tarif. Boleh berapa pun termasuk Rp0 — izin tetap berlaku. Isi hanya program yang Anda setujui. Setor tunai ke Bendahara RW 03, Ibu Tini + kwitansi bernomor."
           />
           <SumbangsihFields value={sumbangsih} onChange={setSumbangsih} tanpaPengantar />
+          <div className="space-y-2 rounded-xl border bg-card p-3">
+            <Label>Sumbangsih dalam bentuk barang/jasa (opsional)</Label>
+            <Input
+              className="h-12"
+              value={sumbangsihBarangJasa}
+              onChange={(e) => setSumbangsihBarangJasa(e.target.value)}
+              placeholder="Contoh: servis motor Linmas, konsumsi kerja bakti, tenaga, alat"
+            />
+            <p className="text-xs text-muted-foreground">
+              Centang mental: bila belum bisa menyumbang uang, isi Rp0 di atas — izin usaha tetap berlaku.
+            </p>
+          </div>
           <PesanGalat pesan={errMsg} />
           <div className="flex gap-2">
             <Button variant="outline" className="touch-target" onClick={() => goStep(-1)}>
@@ -2250,7 +2313,7 @@ export function PengajuanForm({ product }: { product: PengajuanProduct }) {
             <>
               <RingkasanSumbangsih
                 items={ringkasSumbangsih}
-                catatan="Komitmen setiap bulan paling lambat tanggal 1 ke Kas RW 03 dengan kwitansi; boleh dicicil. Bisa diubah saat memperbarui izin."
+                catatan="Sumbangsih seikhlasnya — setor tunai ke Bendahara RW 03, Ibu Tini + kwitansi bernomor. Boleh diubah kapan saja lewat WhatsApp sekretariat."
               />
               <div className="space-y-1">
                 <p className="text-sm font-semibold">Surat Pernyataan Sumbangsih</p>

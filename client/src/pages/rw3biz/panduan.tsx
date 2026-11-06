@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { BookOpen, Store, Clock, Camera, MessageCircle, ChevronRight, Wallet, HeartHandshake, BarChart3, Printer } from "lucide-react";
+import { BookOpen, Store, Clock, MessageCircle, ChevronRight, Wallet, HeartHandshake, BarChart3, Printer } from "lucide-react";
 import { AturanRw3biz, TransparansiKontribusi } from "@/components/rw3biz/transparansi";
 import { KebutuhanRw3 } from "@/components/rw3biz/pernyataan";
 import { Rw3bizShell } from "@/components/rw3biz-shell";
@@ -11,6 +11,12 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { RW3BIZ_ROUTES } from "@/lib/rw3biz-routes";
+import {
+  ANJURAN_RP0,
+  LABEL_SETOR_SUMBANGSIH,
+  PENGANTAR_SUMBANGSIH,
+  SETOR_SUMBANGSIH,
+} from "@shared/rw3biz-pernyataan";
 
 function FlowStep({ n, children }: { n: number; children: React.ReactNode }) {
   return (
@@ -40,6 +46,7 @@ export default function Rw3bizPanduan() {
             </Link>
             .
           </p>
+          <p className="text-sm text-muted-foreground leading-relaxed">{PENGANTAR_SUMBANGSIH}</p>
         </div>
 
         <section className="rounded-xl border bg-card p-4 space-y-3">
@@ -49,32 +56,32 @@ export default function Rw3bizPanduan() {
           </h2>
           <ol className="space-y-2">
             <FlowStep n={1}>
-              Daftar <strong>online</strong> dari HP, atau <strong>cetak formulir komitmen</strong> lalu serahkan ke Ketua RW 03. Isi
-              data usaha: nama, jenis tempat, jenis dagangan, alamat, dan jam buka–tutup.
+              Daftar <strong>online</strong> dari HP, atau <strong>cetak Formulir Sumbangsih</strong> lalu serahkan ke
+              sekretariat RW 03. Isi data usaha: nama, jenis tempat, jenis dagangan, alamat, dan jam buka–tutup.
             </FlowStep>
             <FlowStep n={2}>
-              Data <strong>satu orang</strong> saja: pemilik atau penanggung jawab usaha (nama, NIK, WhatsApp, foto KTP). Data pegawai
-              tidak perlu diisi.
+              Data <strong>satu orang</strong> saja: pemilik atau penanggung jawab (nama, WhatsApp aktif, tempat tinggal).{" "}
+              <strong>Tidak perlu fotokopi KTP dan tidak perlu meterai.</strong>
             </FlowStep>
             <FlowStep n={3}>
-              Tentukan sendiri <strong>sumbangsih bulanan sebesar kemampuan Anda</strong> untuk program RW 03, pilih masa berlaku (1, 3,
-              6, atau 12 bulan), lalu setujui Surat Pernyataan. Angka total = <strong>komitmen setiap bulan paling lambat tanggal 1</strong>.
+              Tentukan sendiri <strong>sumbangsih seikhlasnya</strong> untuk program yang Anda setujui — boleh Rp0, boleh
+              juga barang/jasa. Pilih masa berlaku, lalu setujui Surat Pernyataan.
             </FlowStep>
             <FlowStep n={4}>
               Pengajuan menunggu <strong>persetujuan Ketua RW 03</strong>. Setelah disetujui, usaha mendapat{" "}
               <strong>Nomor Induk Usaha (NIU-RW3-…)</strong> dan Surat Izin Usaha yang bisa dicetak dari cek status.
             </FlowStep>
             <FlowStep n={5}>
-              Setor tiap tanggal 1: transfer <strong>BCA 1390997490 a.n. Raden Raka</strong>, atau tunai dalam amplop — petugas RW
-              mengambil sambil memberi kwitansi. Perbarui surat (kendaraan &amp; sumbangsih) sebelum masa berlaku habis.
+              Bila menyumbang uang: setor <strong>{LABEL_SETOR_SUMBANGSIH}</strong>. Sumbangsih boleh diubah, dikurangi,
+              atau dihentikan kapan saja lewat WhatsApp sekretariat.
             </FlowStep>
             <FlowStep n={6}>
-              Jaga lingkungan. Aduan warga yang terbukti (sampah tercecer, bising, parkir menutup jalan, limbah/bau, dll) atau temuan
-              Ketua RW / Linmas ditangani lewat teguran resmi bertingkat (teguran lisan, SP-1, SP-2, SP-3) tanpa denda uang.
+              Jaga lingkungan. Aduan warga yang terbukti ditangani lewat teguran resmi bertingkat (teguran lisan, SP-1,
+              SP-2, SP-3) tanpa denda uang — tidak berkaitan dengan besar kecilnya sumbangsih.
             </FlowStep>
             <FlowStep n={7}>
-              Bila sumbangsih sebulan melebihi kebutuhan RW, kelebihannya jadi <strong>voucher belanja warga</strong> yang hanya
-              bisa dipakai di usaha RW3BIZ yang tertib. Voucher yang Anda terima ditukar ke Kas RW 03 senilai penuh.
+              Sumbangsih untuk program voucher + kelebihan dana jadi <strong>voucher belanja warga</strong> yang dibelanjakan
+              di usaha kontributor. Pengusaha menukar voucher ke kas RW dan dibayar penuh paling lambat 7 hari.
             </FlowStep>
           </ol>
           <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -86,7 +93,7 @@ export default function Rw3bizPanduan() {
             </Link>
             <Link href={RW3BIZ_ROUTES.formulir}>
               <Button variant="outline" className="w-full touch-target gap-1.5">
-                <Printer className="w-4 h-4" /> Cetak formulir komitmen
+                <Printer className="w-4 h-4" /> Cetak formulir sumbangsih
               </Button>
             </Link>
           </div>
@@ -96,47 +103,37 @@ export default function Rw3bizPanduan() {
           <h2 className="font-semibold text-sm">Siapkan sebelum mengisi</h2>
           <ul className="text-sm text-muted-foreground space-y-2">
             <li className="flex gap-2">
-              <Camera className="w-4 h-4 shrink-0 mt-0.5" />
-              KTP pemilik / penanggung jawab (foto KTP untuk online, fotokopi KTP untuk formulir kertas)
+              <MessageCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              Nomor WhatsApp aktif — cukup data kontak; tidak perlu fotokopi KTP
             </li>
             <li className="flex gap-2">
               <Clock className="w-4 h-4 shrink-0 mt-0.5" />
               Jam operasional usaha (wajib)
             </li>
             <li className="flex gap-2">
-              <MessageCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              Nomor WhatsApp aktif untuk dihubungi Ketua RW 03
-            </li>
-            <li className="flex gap-2">
               <Wallet className="w-4 h-4 shrink-0 mt-0.5" />
-              Besar sumbangsih bulanan (sebesar kemampuan) yang siap Anda setorkan tiap tanggal 1
+              Nominal sumbangsih seikhlasnya (boleh Rp0) — atau rencana sumbangsih barang/jasa
             </li>
           </ul>
+          <p className="text-xs text-muted-foreground">{ANJURAN_RP0}</p>
         </section>
 
         <section className="rounded-xl border bg-card p-4 space-y-3">
           <h2 className="font-semibold text-sm flex items-center gap-2">
             <HeartHandshake className="w-4 h-4 text-brand" />
-            Manfaat berkontribusi bagi usaha Anda
+            Manfaat untuk pengusaha
           </h2>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Dengan sumbangsih, usaha Anda mendapat lingkungan yang{" "}
-            <strong className="text-foreground">aman (Linmas)</strong> dan{" "}
-            <strong className="text-foreground">bersih</strong>, jalan &amp; lampu yang dipakai pembeli/kurir,{" "}
-            <strong className="text-foreground">Surat Izin Usaha resmi</strong> yang bisa dicek online, serta setoran berkwitansi
-            dengan laporan terbuka. Kelebihan dana di atas kebutuhan RW kembali sebagai{" "}
-            <strong className="text-foreground">voucher belanja warga</strong> yang hanya berlaku di usaha RW3BIZ yang tertib —
-            uang berputar lagi ke tempat Anda.{" "}
-            <strong className="text-foreground">Garansi anti-oknum:</strong> setor hanya lewat transfer{" "}
-            <strong className="text-foreground">BCA 1390997490 a.n. Raden Raka</strong> atau amplop tunai diambil petugas RW
-            berkwitansi; permintaan dari pihak di luar itu boleh ditolak.{" "}
-            <strong className="text-foreground">Tidak ada tarif</strong>: Anda tentukan sendiri besarannya, lalu setujui Surat
-            Pernyataan Sumbangsih.
+            Izin usaha RW3BIZ dan nomor usaha yang bisa dicek online berlaku untuk{" "}
+            <strong className="text-foreground">semua usaha, berapa pun sumbangsihnya</strong>. Ditambah keamanan Linmas
+            &amp; CCTV, surat pengantar tanpa biaya, Peta Usaha online, dan pelatihan UMKM. Usaha kontributor mendapat
+            promo bergiliran, voucher belanja warga, dan lapak bazar gratis. Setor hanya{" "}
+            <strong className="text-foreground">{LABEL_SETOR_SUMBANGSIH}</strong>.
           </p>
           <KebutuhanRw3 />
           <Accordion type="single" collapsible>
             <AccordionItem value="aturan" className="border-b-0">
-              <AccordionTrigger className="text-sm py-2">Aturan denda, kemudahan, & voucher</AccordionTrigger>
+              <AccordionTrigger className="text-sm py-2">Aturan, transparansi & voucher</AccordionTrigger>
               <AccordionContent>
                 <AturanRw3biz />
               </AccordionContent>
@@ -149,7 +146,9 @@ export default function Rw3bizPanduan() {
             <BarChart3 className="w-4 h-4 text-brand" />
             Laporan pemakaian sumbangsih
           </h2>
-          <p className="text-xs text-muted-foreground">Uang sumbangsih masuk Kas RW dan dipakai per program berikut. Diperbarui otomatis.</p>
+          <p className="text-xs text-muted-foreground">
+            Penerimaan dan pemakaian dana per program diumumkan setiap bulan. Diperbarui otomatis.
+          </p>
           <TransparansiKontribusi />
         </section>
 
@@ -162,22 +161,27 @@ export default function Rw3bizPanduan() {
             </AccordionContent>
           </AccordionItem>
           <AccordionItem value="biaya">
-            <AccordionTrigger className="text-sm">Apa ada biaya?</AccordionTrigger>
+            <AccordionTrigger className="text-sm">Apa ada biaya / tarif?</AccordionTrigger>
             <AccordionContent className="text-sm text-muted-foreground">
-              Tidak ada tarif. Sumbangsih bulanan Anda tentukan sendiri — komitmen tiap tanggal 1. Setor lewat transfer{" "}
-              <strong className="text-foreground">BCA 1390997490 a.n. Raden Raka</strong>, atau tunai dalam amplop diambil
-              petugas RW sambil diberi kwitansi.
+              Tidak ada tarif dan tidak ada nominal minimal. Sumbangsih seikhlasnya — boleh Rp0. Bila menyumbang uang,
+              setor {LABEL_SETOR_SUMBANGSIH}.
             </AccordionContent>
           </AccordionItem>
           <AccordionItem value="keberatan">
             <AccordionTrigger className="text-sm">Bagaimana jika ingin mengubah sumbangsih?</AccordionTrigger>
             <AccordionContent className="text-sm text-muted-foreground">
-              Ubah saat memperbarui izin, atau buka halaman{" "}
+              Sumbangsih boleh diubah, dikurangi, atau dihentikan kapan saja lewat WhatsApp sekretariat. Atau buka halaman{" "}
               <Link href={RW3BIZ_ROUTES.status} className="text-brand font-medium underline">
                 cek status
-              </Link>{" "}
-              dan ajukan perubahan dengan alasan Anda. Ketua RW 03 juga bisa memberi keringanan sementara bila usaha sedang sepi,
-              pengusaha lansia/disabilitas, atau keluarga penerima bansos.
+              </Link>
+              . {ANJURAN_RP0}
+            </AccordionContent>
+          </AccordionItem>
+          <AccordionItem value="oknum">
+            <AccordionTrigger className="text-sm">Bagaimana jika ada yang memungut atas nama RW?</AccordionTrigger>
+            <AccordionContent className="text-sm text-muted-foreground">
+              Tolak. Setor resmi hanya kepada {SETOR_SUMBANGSIH.penerima} dengan {SETOR_SUMBANGSIH.bukti}. Laporkan ke
+              Ketua RW 03 atau Lurah Padasuka.
             </AccordionContent>
           </AccordionItem>
         </Accordion>

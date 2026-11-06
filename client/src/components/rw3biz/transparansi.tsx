@@ -4,6 +4,12 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { readJsonSafely } from "@/lib/queryClient";
 import { bulanIni, formatRp, type TarifKontribusi } from "@shared/rw3biz-kontribusi";
+import {
+  ALASAN_VOUCHER,
+  CARA_KERJA_VOUCHER,
+  LABEL_SETOR_SUMBANGSIH,
+  TRANSPARANSI_SUMBANGSIH,
+} from "@shared/rw3biz-pernyataan";
 
 type TarifPublik = Omit<TarifKontribusi, "programMulai">;
 
@@ -44,14 +50,20 @@ export function AturanRw3biz() {
         </p>
       </div>
       <div className="space-y-1">
-        <p className="font-medium">Kemudahan</p>
+        <p className="font-medium">Sumbangsih & setor</p>
         <ul className="list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
-          <li>
-            Komitmen bulanan disetor paling lambat tanggal {1 + t.tenggangHari}: transfer BCA 1390997490 a.n. Raden Raka, atau
-            tunai dalam amplop diambil petugas RW + kwitansi. Tanpa denda keterlambatan; boleh dicicil atau dibayar di muka.
-          </li>
-          <li>Sumbangsih boleh diubah saat memperbarui izin, atau ajukan lewat halaman cek status.</li>
-          <li>Keringanan sementara bagi lansia, disabilitas, penerima bansos, atau usaha yang sedang sepi — ajukan ke Ketua RW 03.</li>
+          <li>Seikhlasnya — boleh Rp0; izin usaha tetap berlaku. Tidak ada tarif atau nominal minimal.</li>
+          <li>Setor {LABEL_SETOR_SUMBANGSIH}.</li>
+          <li>Sumbangsih boleh diubah, dikurangi, atau dihentikan kapan saja lewat WhatsApp sekretariat.</li>
+          <li>Usaha sepi, lansia, disabilitas, atau penerima bansos dianjurkan mengisi Rp0.</li>
+        </ul>
+      </div>
+      <div className="space-y-1">
+        <p className="font-medium">Transparansi & anti-oknum</p>
+        <ul className="list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
+          {TRANSPARANSI_SUMBANGSIH.map((x) => (
+            <li key={x}>{x}</li>
+          ))}
         </ul>
       </div>
       <PenjelasanVoucher target={t.targetBulanan} />
@@ -62,16 +74,18 @@ export function AturanRw3biz() {
 export function PenjelasanVoucher({ target }: { target: number }) {
   return (
     <div className="space-y-1 rounded-lg border border-[hsl(40,45%,55%)]/50 bg-[hsl(40,45%,55%)]/10 p-3">
-      <p className="font-medium">Kelebihan dana kembali ke warga & usaha</p>
+      <p className="font-medium">Cara kerja voucher belanja warga</p>
       <p className="text-xs">
-        Kebutuhan anggaran RW {formatRp(target)} per bulan. Bila sumbangsih yang terkumpul dalam sebulan{" "}
-        <strong>melebihi</strong> kebutuhan itu, kelebihannya dijadikan <strong>voucher belanja warga RW 03</strong>.
+        Usulan anggaran program voucher + kelebihan dana (di atas {formatRp(target)}/bulan bila terkumpul lebih) masuk ke kas
+        RW dan disalurkan sebagai <strong>voucher belanja warga</strong> ke keluarga prasejahtera — dibelanjakan di usaha
+        kontributor.
       </p>
-      <ul className="list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
-        <li>Voucher hanya bisa dibelanjakan di usaha RW3BIZ yang tertib menyetor sumbangsih (tidak menunggak).</li>
-        <li>Usaha yang menerima voucher menukarkannya ke Ketua RW 03 / bendahara dan dibayar penuh dari Kas RW 03.</li>
-        <li>Jadi uang sumbangsih berputar lagi ke usaha di lingkungan sendiri, dan pencairannya tercatat di Kas RW.</li>
-      </ul>
+      <ol className="list-decimal space-y-0.5 pl-4 text-xs text-muted-foreground">
+        {CARA_KERJA_VOUCHER.map((x) => (
+          <li key={x}>{x}</li>
+        ))}
+      </ol>
+      <p className="text-xs text-muted-foreground">{ALASAN_VOUCHER}</p>
     </div>
   );
 }

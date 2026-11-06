@@ -103,8 +103,8 @@ async function simpanTarifMentah(tarif: TarifKontribusi) {
     .values({
       key: KEY_CONFIG,
       value: JSON.stringify(tarif),
-      label: "Tarif kontribusi & pos anggaran RW3BIZ",
-      keterangan: "Dipakai rumus shared/rw3biz-kontribusi.ts",
+      label: "Program sumbangsih RW3BIZ (Formulir Sumbangsih)",
+      keterangan: "Usulan anggaran program — sumbangsih seikhlasnya, bukan tarif rumus",
     })
     .onConflictDoUpdate({
       target: rw3bizSettings.key,
@@ -326,11 +326,9 @@ export const sumbangsihSchema = z
   .array(z.object({ posId: z.string().trim().min(1).max(80), nominal: z.number().int().min(0).max(SUMBANGSIH_MAKS_PER_PROGRAM) }))
   .max(50);
 
-/** Rapikan isian sumbangsih terhadap program yang berlaku; wajib minimal satu program bernominal. */
+/** Rapikan isian sumbangsih terhadap program yang berlaku. Boleh kosong/Rp0 — izin tetap berlaku. */
 export function sumbangsihFinal(isian: z.infer<typeof sumbangsihSchema>, tarif: TarifKontribusi): SumbangsihProgram[] {
-  const list = rapikanSumbangsih(isian, tarif.posAnggaran);
-  if (!list.length) throw new Error("Isi sumbangsih bulanan untuk minimal satu program RW 03");
-  return list;
+  return rapikanSumbangsih(isian, tarif.posAnggaran);
 }
 
 export function kolomSumbangsih(list: SumbangsihProgram[]) {
@@ -665,10 +663,11 @@ export async function ubahKontribusiUsaha(usahaId: number, input: z.infer<typeof
     const [usaha] = await tx.select().from(rw3bizUsaha).where(eq(rw3bizUsaha.id, usahaId));
     if (!usaha) throw new Error("Usaha tidak ditemukan");
     const data = { ...dataUsahaDariBaris(usaha), ...stripUndefined(parsed.koreksi ?? {}) } as DataUsaha;
-    const sumbangsih = parsed.sumbangsih?.length ? sumbangsihFinal(parsed.sumbangsih, tarif) : parseSumbangsih(usaha.sumbangsih);
     let kontribusi: Partial<typeof rw3bizUsaha.$inferInsert>;
     let rincian: RincianTersimpan | null = null;
-    if (sumbangsih?.length) {
+    let sumbangsih = parsed.sumbangsih !== undefined ? sumbangsihFinal(parsed.sumbangsih, tarif) : parseSumbangsih(usaha.sumbangsih);
+    // Sumbangsih seikhlasnya: array (termasuk kosong/Rp0) dipakai; null = usaha lama masih rumus.
+    if (sumbangsih !== null) {
       kontribusi = kolomSumbangsih(sumbangsih);
     } else {
       const lama = parseRincianTersimpan(usaha.rincianKontribusi);

@@ -245,10 +245,12 @@ uji("potongan termin 12 bulan 10%", () => {
 uji("alokasi pos anggaran proporsional dan jumlahnya tepat", () => {
   const a = alokasiKePos(45_000, tarif.posAnggaran);
   assert.equal(a.reduce((s, x) => s + x.nominal, 0), 45_000);
-  const linmas = a.find((x) => x.id === "linmas_keamanan")!;
-  assert.equal(linmas.nominal, 7_500);
-  assert.equal(tarif.posAnggaran.reduce((s, x) => s + x.nominal, 0), 18_000_000);
-  assert.equal(tarif.targetBulanan, 18_000_000);
+  const keamanan = a.find((x) => x.id === "keamanan_cctv");
+  assert.ok(keamanan, "program keamanan_cctv ada");
+  assert.ok(keamanan!.nominal > 0);
+  assert.equal(tarif.posAnggaran.reduce((s, x) => s + x.nominal, 0), 16_000_000);
+  assert.equal(tarif.targetBulanan, 16_000_000);
+  assert.equal(tarif.posAnggaran.length, 11);
 });
 
 uji("parse konfigurasi rusak kembali ke default", () => {
@@ -262,8 +264,8 @@ uji("RAB tersimpan versi lama diganti RAB baru sekali; versi baru tidak ditimpa"
   const lama = parseTarifKontribusi(
     JSON.stringify({ targetBulanan: 5_000_000, tenggangHari: 10, posAnggaran: [{ id: "x", label: "Lama", nominal: 1 }] }),
   );
-  assert.equal(lama.targetBulanan, 18_000_000);
-  assert.equal(lama.posAnggaran.length, 10);
+  assert.equal(lama.targetBulanan, 16_000_000);
+  assert.equal(lama.posAnggaran.length, 11);
   assert.equal(lama.tenggangHari, 0, "migrasi RAB: jatuh tempo default tanggal 1");
   const baru = parseTarifKontribusi(JSON.stringify({ ...lama, targetBulanan: 20_000_000, posAnggaran: [{ id: "x", label: "Admin", nominal: 1 }] }));
   assert.equal(baru.targetBulanan, 20_000_000);
@@ -290,15 +292,15 @@ uji("faktor penyesuaian dicari agar mencapai target", () => {
 uji("sumbangsih: hanya program berlaku & nominal > 0, label disalin, total dijumlah", () => {
   const list = rapikanSumbangsih(
     [
-      { posId: "kebersihan", nominal: 10_000 },
-      { posId: "linmas_keamanan", nominal: 7_500 },
+      { posId: "kebersihan_sampah", nominal: 10_000 },
+      { posId: "keamanan_cctv", nominal: 7_500 },
       { posId: "tidak_ada", nominal: 50_000 },
-      { posId: "dana_cadangan", nominal: 0 },
+      { posId: "promosi_umkm", nominal: 0 },
     ],
     tarif.posAnggaran,
   );
-  assert.deepEqual(list.map((s) => s.posId), ["linmas_keamanan", "kebersihan"]);
-  assert.equal(list[1].label, "Kebersihan lingkungan (petugas sapu RW)");
+  assert.deepEqual(list.map((s) => s.posId), ["keamanan_cctv", "kebersihan_sampah"]);
+  assert.equal(list[1].label, "Kebersihan & sampah");
   assert.equal(totalSumbangsih(list), 17_500);
   assert.deepEqual(parseSumbangsih(JSON.stringify(list)), list);
   assert.equal(parseSumbangsih(null), null);

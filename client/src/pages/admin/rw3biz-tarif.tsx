@@ -133,7 +133,7 @@ export default function AdminRw3bizTarif() {
       <Visitrw3AdminNav
         product="rw3biz"
         title="Program sumbangsih"
-        description="Daftar program RW 03 yang bisa didukung lewat sumbangsih pengusaha."
+        description="Usulan anggaran program Formulir Sumbangsih RW3BIZ — pengusaha isi seikhlasnya (boleh Rp0)."
         actions={
           <div className="hidden gap-2 sm:flex">
             <Button className="h-9 gap-1" disabled={!berubah || simpanMutation.isPending} onClick={() => simpanMutation.mutate()}>
@@ -149,7 +149,7 @@ export default function AdminRw3bizTarif() {
         <Bagian
           defaultOpen
           judul="Target & jatuh tempo"
-          keterangan="Sumbangsih tidak dihitung rumus: pengusaha menentukan sendiri nominal per program. Target hanya pembanding di laporan RAB. Jatuh tempo = tanggal 1 + tenggang (0 = setiap tanggal 1)."
+          keterangan="Sumbangsih seikhlasnya (boleh Rp0) — tidak ada tarif. Target = total usulan anggaran program (Formulir Sumbangsih). Setor tunai ke Bendahara RW 03, Ibu Tini + kwitansi bernomor."
         >
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             <Angka label="Kebutuhan RAB / bulan" value={t.targetBulanan} onChange={(n) => ubah({ targetBulanan: n })} />
@@ -160,7 +160,7 @@ export default function AdminRw3bizTarif() {
         <Bagian
           defaultOpen
           judul="Program RW 03 (pilihan sumbangsih)"
-          keterangan="Daftar ini tampil di form online & formulir kertas sebagai program yang bisa didukung pengusaha. Nominal = kebutuhan per bulan. Nama program juga dipakai sebagai kategori pengeluaran Kas RW."
+          keterangan="Daftar program Formulir Sumbangsih (tampil di form online & PDF cetak). Nominal = usulan anggaran per bulan; baru berlaku setelah musyawarah RW. Nama program juga jadi kategori pengeluaran Kas RW."
         >
           <div className="space-y-2">
             {t.posAnggaran.map((p, i) => (

@@ -248,7 +248,7 @@ export default function AdminRw3bizDashboard() {
       <Visitrw3AdminNav
         product="rw3biz"
         title="RAB & statistik RW3BIZ"
-        description="Sumbangsih usaha untuk program RW 03 — Linmas, kebersihan, dana sosial, dan pemeliharaan."
+        description="Usulan anggaran program RW 03 (Formulir Sumbangsih) — keamanan & CCTV, kebersihan, voucher, pelatihan, santunan, beasiswa, dan lainnya."
         actions={
           <Input
             type="month"
@@ -282,7 +282,7 @@ export default function AdminRw3bizDashboard() {
             />
             <div className="col-span-2 sm:col-span-1">
               <Visitrw3StatCard
-                title="Keberatan tarif"
+                title="Peninjauan sumbangsih"
                 value={String(keberatanMenunggu ?? 0)}
                 description="Menunggu tanggapan"
                 icon={Receipt}

@@ -258,7 +258,7 @@ export default function AdminRw3bizTagihan() {
       <Visitrw3AdminNav
         product="rw3biz"
         title="Tagihan sumbangsih"
-        description="Catat setoran sumbangsih bulanan usaha — otomatis masuk Kas RW. Tenggang tanpa denda, cicilan boleh."
+        description="Catat setoran sumbangsih (tunai ke Bendahara Ibu Tini + kwitansi) — otomatis masuk Kas RW. Tanpa denda."
         actions={
           <Input
             type="month"
@@ -274,7 +274,7 @@ export default function AdminRw3bizTagihan() {
         <TabsList>
           <TabsTrigger value="tagihan">Tagihan {bulan}</TabsTrigger>
           <TabsTrigger value="keberatan">
-            Keberatan{keberatanStatus === "menunggu" && keberatan.length ? ` (${keberatan.length})` : ""}
+            Ubah sumbangsih{keberatanStatus === "menunggu" && keberatan.length ? ` (${keberatan.length})` : ""}
           </TabsTrigger>
         </TabsList>
 
@@ -355,7 +355,7 @@ export default function AdminRw3bizTagihan() {
                             <a
                               href={toWaMeUrl(
                                 t.usaha.pjNomorWhatsapp,
-                                `Assalamu'alaikum, ${t.usaha.pjNama}.\n\nPengingat sumbangsih RW3BIZ *${t.usaha.nomorBiz}* (${t.usaha.namaUsaha}) periode ${t.periode}: ${formatRp(sisa)}. Batas ${t.jatuhTempo}, tanpa denda dan boleh dicicil.\n\nSumbangsih dipakai untuk program RW 03: Linmas, kebersihan, dana sosial, dan pemeliharaan lingkungan. Terima kasih.`,
+                                `Assalamu'alaikum, ${t.usaha.pjNama}.\n\nPengingat sumbangsih RW3BIZ *${t.usaha.nomorBiz}* (${t.usaha.namaUsaha}) periode ${t.periode}: ${formatRp(sisa)}. Tanpa denda; sumbangsih seikhlasnya boleh diubah kapan saja.\n\nSetor tunai kepada Bendahara RW 03, Ibu Tini — langsung terima kwitansi bernomor. Dipakai untuk program RW 03: keamanan & CCTV, kebersihan, voucher belanja warga, pelatihan UMKM, santunan, beasiswa, dan lainnya. Terima kasih.`,
                               )}
                               target="_blank"
                               rel="noopener noreferrer"
@@ -495,7 +495,7 @@ export default function AdminRw3bizTagihan() {
             <Visitrw3EmptyState
               icon={Receipt}
               title="Tidak ada keberatan"
-              description="Pengusaha bisa mengajukan peninjauan tarif dari halaman cek status RW3BIZ."
+              description="Pengusaha bisa mengajukan perubahan sumbangsih dari halaman cek status RW3BIZ."
             />
           ) : (
             <div className="space-y-2">
