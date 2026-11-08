@@ -13,7 +13,18 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Railway CLI
-        run: npm install -g @railway/cli
+        run: |
+          set -e
+          for i in 1 2 3 4 5; do
+            if npm install -g @railway/cli; then
+              railway --version
+              exit 0
+            fi
+            echo "Instalasi Railway CLI gagal (percobaan $i/5). Menunggu lalu coba lagi..."
+            sleep $((i * 8))
+          done
+          echo "Gagal menginstal Railway CLI setelah 5 percobaan"
+          exit 1
 
       - name: Deploy
         run: railway up --service 7000ba19-cc93-4287-a41a-84cb68feda27 --detach
