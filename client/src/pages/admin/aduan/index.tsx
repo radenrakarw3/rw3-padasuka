@@ -139,7 +139,7 @@ export default function AdminAduan() {
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="semua">Semua RT</SelectItem>
-              {[1, 2, 3, 4].map((n) => <SelectItem key={n} value={String(n)}>RT 0{n}</SelectItem>)}
+              {[1, 2, 3, 4, 5, 6, 7].map((n) => <SelectItem key={n} value={String(n)}>RT {String(n).padStart(2, "0")}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>

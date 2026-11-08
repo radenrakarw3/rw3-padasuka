@@ -11,7 +11,7 @@ import {
   PanduanPrinter,
 } from "@/components/cetak/lembar-f4";
 import { BlokTtdDuaKolom, kolomKetuaRw } from "@/components/cetak/ttd-ketua";
-import { ACTIVE_RT_NUMBERS } from "@shared/rt";
+import { WILAYAH_RT_NUMBERS } from "@shared/wilayah";
 import { VISITRW3_ROUTES } from "@/lib/visitrw3-routes";
 import { A4, SITUS_PENDEK } from "@shared/kertas";
 import { KONTRIBUSI_TINGGAL_PER_BULAN } from "@shared/visitrw3-kontribusi";
@@ -97,7 +97,7 @@ function HalamanFormulir() {
             <Cek teks="Ngontrak" />
             <Cek teks="Ngekost" />
             <span style={h(7.5)}>RT: </span>
-            {ACTIVE_RT_NUMBERS.map((n) => (
+            {WILAYAH_RT_NUMBERS.map((n) => (
               <Cek key={n} teks={String(n).padStart(2, "0")} />
             ))}
           </div>

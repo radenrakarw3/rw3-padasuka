@@ -4,7 +4,7 @@
 CREATE TABLE IF NOT EXISTS rating_masukan (
   id serial PRIMARY KEY,
   sasaran text NOT NULL CHECK (sasaran IN ('rt', 'rw')),
-  nomor_rt integer CHECK (nomor_rt IS NULL OR (nomor_rt >= 1 AND nomor_rt <= 4)),
+  nomor_rt integer CHECK (nomor_rt IS NULL OR (nomor_rt >= 1 AND nomor_rt <= 7)),
   bintang integer NOT NULL CHECK (bintang >= 1 AND bintang <= 5),
   isi text NOT NULL,
   nomor_wa text NOT NULL,

@@ -5,6 +5,9 @@ export const KEPERLUAN_KONTAK = [
   "rt_2",
   "rt_3",
   "rt_4",
+  "rt_5",
+  "rt_6",
+  "rt_7",
   "pelayanan_rw",
   "danru_linmas",
   "darurat",
@@ -34,6 +37,21 @@ export const KEPERLUAN_KONTAK_INFO: Record<
   rt_4: {
     label: "Ketua RT 04",
     deskripsi: "Urusan warga RT 04 — koordinasi lingkungan atau pelayanan tingkat RT.",
+    mode: "wa",
+  },
+  rt_5: {
+    label: "Ketua RT 05",
+    deskripsi: "Urusan warga RT 05 — koordinasi lingkungan atau pelayanan tingkat RT.",
+    mode: "wa",
+  },
+  rt_6: {
+    label: "Ketua RT 06",
+    deskripsi: "Urusan warga RT 06 — koordinasi lingkungan atau pelayanan tingkat RT.",
+    mode: "wa",
+  },
+  rt_7: {
+    label: "Ketua RT 07",
+    deskripsi: "Urusan warga RT 07 — koordinasi lingkungan atau pelayanan tingkat RT.",
     mode: "wa",
   },
   pelayanan_rw: {

@@ -314,7 +314,7 @@ export default function AdminVisitrw3Kalender() {
 
       {isLoading ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
+          {[1, 2, 3, 4, 5, 6, 7].map((i) => (
             <Skeleton key={i} className="h-24 rounded-2xl" />
           ))}
         </div>

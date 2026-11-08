@@ -18,21 +18,24 @@ import {
   type BintangRating,
   type SasaranRating,
 } from "@shared/rating";
+import { WILAYAH_RT_NUMBERS, isWilayahRt } from "@shared/wilayah";
 import { sendWaWithResult } from "./wa-notify";
+import { notifyKetuaRwRatingBaru } from "./wa-notify-ketua";
 import { WilayahError } from "./wilayah-auth";
 
 const MAKS_PER_WA_HARI = 5;
 
 export async function ensureRatingSchema() {
-  const file = "0037_rating_masukan.sql";
-  const kandidat = [path.join(process.cwd(), "migrations", file)];
-  if (typeof __dirname !== "undefined") kandidat.push(path.join(__dirname, "..", "migrations", file));
-  const lokasi = kandidat.find((p) => fs.existsSync(p));
-  if (!lokasi) {
-    console.error(`[Rating] migrations/${file} tidak ditemukan`);
-    return;
+  for (const file of ["0037_rating_masukan.sql", "0038_rating_rt_1_7.sql"]) {
+    const kandidat = [path.join(process.cwd(), "migrations", file)];
+    if (typeof __dirname !== "undefined") kandidat.push(path.join(__dirname, "..", "migrations", file));
+    const lokasi = kandidat.find((p) => fs.existsSync(p));
+    if (!lokasi) {
+      console.error(`[Rating] migrations/${file} tidak ditemukan`);
+      continue;
+    }
+    await pool.query(fs.readFileSync(lokasi, "utf8"));
   }
-  await pool.query(fs.readFileSync(lokasi, "utf8"));
 }
 
 function hashWa(wa: string): string {
@@ -64,7 +67,7 @@ function bangunKonfirmasi(bintang: BintangRating, sasaran: SasaranRating, nomorR
 const skemaKirim = z
   .object({
     sasaran: z.enum(SASARAN_RATING),
-    nomorRt: z.number().int().min(1).max(4).optional().nullable(),
+    nomorRt: z.number().int().min(1).max(7).optional().nullable(),
     bintang: z.number().int(),
     isi: z.string().trim().min(MIN_ISI_RATING, `Masukan minimal ${MIN_ISI_RATING} karakter`).max(MAKS_ISI_RATING),
     nomorWa: z.string().min(9, "Nomor WhatsApp tidak valid"),
@@ -75,8 +78,8 @@ const skemaKirim = z
     if (!BINTANG_RATING.includes(v.bintang as BintangRating)) {
       ctx.addIssue({ code: "custom", path: ["bintang"], message: "Pilih rating 1–5 bintang" });
     }
-    if (v.sasaran === "rt" && (v.nomorRt == null || v.nomorRt < 1 || v.nomorRt > 4)) {
-      ctx.addIssue({ code: "custom", path: ["nomorRt"], message: "Pilih RT 01–04" });
+    if (v.sasaran === "rt" && !isWilayahRt(v.nomorRt)) {
+      ctx.addIssue({ code: "custom", path: ["nomorRt"], message: "Pilih RT 01–07" });
     }
     if (v.sasaran === "rw" && v.nomorRt != null) {
       ctx.addIssue({ code: "custom", path: ["nomorRt"], message: "Rating RW tidak memakai nomor RT" });
@@ -117,6 +120,12 @@ export async function kirimRating(raw: unknown): Promise<{ ok: true; konfirmasi:
     [v.sasaran, nomorRt, bintang, v.isi, wa, waHash],
   );
 
+  notifyKetuaRwRatingBaru({
+    sasaranLabel: labelSasaran(v.sasaran, nomorRt),
+    bintang,
+    cuplikan: v.isi,
+  });
+
   const pesan = bangunKonfirmasi(bintang, v.sasaran, nomorRt);
   let konfirmasi = false;
   try {
@@ -152,6 +161,54 @@ export async function ringkasanRating() {
     FROM rating_masukan
   `);
   const r = rows[0];
+
+  const { rows: perRtRows } = await pool.query<{
+    nomor_rt: number;
+    jumlah: number;
+    rata: string;
+    bintang_1: number;
+    bintang_2: number;
+    bintang_3: number;
+    bintang_4: number;
+    bintang_5: number;
+  }>(`
+    SELECT
+      nomor_rt,
+      count(*)::int AS jumlah,
+      round(avg(bintang), 2)::text AS rata,
+      count(*) FILTER (WHERE bintang = 1)::int AS bintang_1,
+      count(*) FILTER (WHERE bintang = 2)::int AS bintang_2,
+      count(*) FILTER (WHERE bintang = 3)::int AS bintang_3,
+      count(*) FILTER (WHERE bintang = 4)::int AS bintang_4,
+      count(*) FILTER (WHERE bintang = 5)::int AS bintang_5
+    FROM rating_masukan
+    WHERE sasaran = 'rt' AND nomor_rt IS NOT NULL
+    GROUP BY nomor_rt
+  `);
+
+  const byRt = new Map(perRtRows.map((row) => [row.nomor_rt, row]));
+  const perRt = WILAYAH_RT_NUMBERS.map((nomorRt) => {
+    const row = byRt.get(nomorRt);
+    return {
+      nomorRt,
+      label: `RT ${String(nomorRt).padStart(2, "0")}`,
+      jumlah: row?.jumlah ?? 0,
+      rata: row ? Number(row.rata) : null,
+      sebaran: {
+        1: row?.bintang_1 ?? 0,
+        2: row?.bintang_2 ?? 0,
+        3: row?.bintang_3 ?? 0,
+        4: row?.bintang_4 ?? 0,
+        5: row?.bintang_5 ?? 0,
+      },
+    };
+  });
+
+  const berating = perRt.filter((x) => x.jumlah > 0 && x.rata != null);
+  const terurut = [...berating].sort((a, b) => (b.rata ?? 0) - (a.rata ?? 0) || b.jumlah - a.jumlah);
+  const terbaik = terurut[0] ?? null;
+  const terburuk = terurut.length ? terurut[terurut.length - 1] : null;
+
   return {
     total: r?.total ?? 0,
     belumDibaca: r?.belum_dibaca ?? 0,
@@ -159,6 +216,13 @@ export async function ringkasanRating() {
     rw: r?.rw ?? 0,
     rataRt: r?.rata_rt ? Number(r.rata_rt) : null,
     rataRw: r?.rata_rw ? Number(r.rata_rw) : null,
+    perRt,
+    terbaik: terbaik
+      ? { nomorRt: terbaik.nomorRt, label: terbaik.label, rata: terbaik.rata!, jumlah: terbaik.jumlah }
+      : null,
+    terburuk: terburuk
+      ? { nomorRt: terburuk.nomorRt, label: terburuk.label, rata: terburuk.rata!, jumlah: terburuk.jumlah }
+      : null,
   };
 }
 
@@ -225,6 +289,6 @@ export function opsiPublik() {
   return {
     sasaran: SASARAN_RATING.map((id) => ({ id, ...SASARAN_RATING_INFO[id] })),
     bintang: BINTANG_RATING.map((n) => ({ nilai: n, label: BINTANG_RATING_LABEL[n] })),
-    rt: [1, 2, 3, 4],
+    rt: [...WILAYAH_RT_NUMBERS],
   };
 }

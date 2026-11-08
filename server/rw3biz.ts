@@ -21,6 +21,7 @@ import {
   notifyRw3bizDisetujui,
   notifyRw3bizDitolak,
 } from "./wa-notify-rw3biz";
+import { notifyKetuaRwRw3bizBaru } from "./wa-notify-ketua";
 import {
   JENIS_TEMPAT_BIZ,
   KATEGORI_KAS_KONTRIBUSI,
@@ -371,6 +372,13 @@ export async function createPengajuanBaru(input: z.infer<typeof pengajuanBaruSch
     .where(eq(rw3bizOrang.pengajuanId, pengajuan.id))
     .orderBy(rw3bizOrang.urutan);
   notifyRw3bizPengajuanBaru(pengajuan, orang);
+  notifyKetuaRwRw3bizBaru({
+    id: pengajuan.id,
+    nomor: pengajuan.nomorBiz,
+    namaUsaha: pengajuan.namaUsaha,
+    rt: pengajuan.rt,
+    tipe: pengajuan.tipe,
+  });
   return pengajuan;
 }
 
@@ -481,6 +489,13 @@ export async function createPerpanjang(input: z.infer<typeof perpanjangSchema>) 
   });
 
   notifyRw3bizPerpanjang(pengajuan, nomor);
+  notifyKetuaRwRw3bizBaru({
+    id: pengajuan.id,
+    nomor: pengajuan.nomorBiz,
+    namaUsaha: pengajuan.namaUsaha,
+    rt: pengajuan.rt,
+    tipe: "perpanjang",
+  });
   return { pengajuan, nomorLama: nomor, nomorBaru, nomorInduk: usaha.nomorInduk };
 }
 

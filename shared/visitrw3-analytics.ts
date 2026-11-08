@@ -1,4 +1,4 @@
-import { ACTIVE_RT_NUMBERS } from "@shared/rt";
+import { WILAYAH_RT_NUMBERS } from "@shared/wilayah";
 
 /** Properti seed lokal (PROP-DEV-*) — tidak dihitung statistik & tidak tampil publik. */
 export function isVisitrw3DemoProperti(row: { nomorPendaftaran?: string | null }): boolean {
@@ -216,7 +216,7 @@ export function emptyVisitrw3DashboardStats(): Visitrw3DashboardStats {
     },
     trenBulan: [],
     pengajuanTerbaru: [],
-    rtList: [...ACTIVE_RT_NUMBERS],
+    rtList: [...WILAYAH_RT_NUMBERS],
   };
 }
 

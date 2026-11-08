@@ -90,7 +90,8 @@ export const listrikOptions = [
   "Tidak Ada",
 ];
 
-export const rtOptions = [1, 2, 3, 4];
+/** RT wilayah RW 03 untuk form publik (Visit RW3, dll). */
+export const rtOptions = [1, 2, 3, 4, 5, 6, 7];
 
 export const jenisBansosOptions = [
   "PKH",

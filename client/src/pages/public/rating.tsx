@@ -19,6 +19,7 @@ import {
   type BintangRating,
   type SasaranRating,
 } from "@shared/rating";
+import { WILAYAH_RT_NUMBERS } from "@shared/wilayah";
 
 type Langkah = "pilih" | "isi" | "terkirim";
 
@@ -141,8 +142,8 @@ export default function PublicRating() {
           {sasaran === "rt" && (
             <div className="space-y-2">
               <Label>Pilih RT</Label>
-              <div className="grid grid-cols-4 gap-2">
-                {[1, 2, 3, 4].map((n) => (
+              <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
+                {WILAYAH_RT_NUMBERS.map((n) => (
                   <button
                     key={n}
                     type="button"

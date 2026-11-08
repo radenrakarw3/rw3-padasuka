@@ -14,7 +14,8 @@ import {
   type Visitrw3Penghuni,
 } from "@shared/schema";
 import { storage } from "./storage";
-import { ACTIVE_RT_NUMBERS } from "@shared/rt";
+import { WILAYAH_RT_NUMBERS } from "@shared/wilayah";
+import { notifyKetuaRwVisitrw3Baru } from "./wa-notify-ketua";
 import {
   hariIniWib,
   hitungKontribusiTinggal,
@@ -171,7 +172,7 @@ export const pengajuanBaruSchema = z.object({
   rt: z
     .number({ invalid_type_error: "Pilih RT" })
     .int()
-    .refine((n) => (ACTIVE_RT_NUMBERS as readonly number[]).includes(n), "RT tidak valid"),
+    .refine((n) => (WILAYAH_RT_NUMBERS as readonly number[]).includes(n), "RT tidak valid"),
   /** Alamat opsional — cukup RT (+ nomor kamar untuk kost). */
   alamat: z.string().trim().optional().nullable().default(""),
   namaUsaha: z.string().optional().nullable(),
@@ -560,6 +561,12 @@ export async function createPengajuanBaru(input: z.infer<typeof pengajuanBaruSch
       .where(eq(visitrw3Penghuni.pengajuanId, pengajuan.id))
       .orderBy(visitrw3Penghuni.urutan);
     notifyVisitrw3PengajuanBaru(pengajuan, penghuni);
+    notifyKetuaRwVisitrw3Baru({
+      id: pengajuan.id,
+      nomor: pengajuan.nomorVisitrw3,
+      rt: pengajuan.rt,
+      tipe: pengajuan.tipe,
+    });
     return pengajuan;
   });
 }
@@ -646,6 +653,13 @@ export async function createPerpanjang(input: z.infer<typeof perpanjangSchema>) 
       notifyVisitrw3Perpanjang(pengajuan, nomor, denganWa.nomorWhatsapp, denganWa.namaLengkap);
     }
   }
+
+  notifyKetuaRwVisitrw3Baru({
+    id: pengajuan.id,
+    nomor: pengajuan.nomorVisitrw3,
+    rt: pengajuan.rt,
+    tipe: "perpanjang",
+  });
 
   return { pengajuan, nomorLama: nomor, nomorBaru };
 }
@@ -1212,7 +1226,7 @@ export async function getVisitrw3DashboardStats(rtFilter?: number): Promise<Visi
     }
   }
 
-  const rtSet = new Set<number>([...ACTIVE_RT_NUMBERS]);
+  const rtSet = new Set<number>([...WILAYAH_RT_NUMBERS]);
   for (const p of pengajuanList) rtSet.add(p.rt);
 
   const emptyProperti = emptyVisitrw3DashboardStats().properti;

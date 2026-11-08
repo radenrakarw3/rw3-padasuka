@@ -19,6 +19,7 @@ import {
   KATEGORI_ADUAN_INFO, MODE_IDENTITAS, MODE_IDENTITAS_INFO,
   type DampakAduan, type FrekuensiAduan, type JenisTeradu, type KategoriAduan, type ModeIdentitas,
 } from "@shared/aduan";
+import { WILAYAH_RT_NUMBERS } from "@shared/wilayah";
 
 type UsahaPublik = { nomor: string; namaUsaha: string; rt: number };
 type Hasil = { nomor: string; kodeLacak: string; pin: string; prioritas: string };
@@ -234,7 +235,10 @@ export default function AduanBuat() {
             <h2 className="text-xl font-bold">Di mana dan siapa?</h2>
             <Bidang label="Di RT berapa kejadiannya?">
               <Pilihan kolom={5} nilai={d.rtLokasi ?? 0} onPilih={(v) => ubah({ rtLokasi: v === 0 ? null : v })}
-                pilihan={[{ nilai: 1, label: "01" }, { nilai: 2, label: "02" }, { nilai: 3, label: "03" }, { nilai: 4, label: "04" }, { nilai: 0, label: "?" }]} />
+                pilihan={[
+                  ...WILAYAH_RT_NUMBERS.map((n) => ({ nilai: n, label: String(n).padStart(2, "0") })),
+                  { nilai: 0, label: "?" },
+                ]} />
             </Bidang>
             <Bidang label="Lokasi persisnya" bantuan="Nama jalan/gang, patokan. Boleh dikosongkan.">
               <Input className="h-12 text-base" value={d.lokasi} maxLength={300} onChange={(e) => ubah({ lokasi: e.target.value })} placeholder="Contoh: Gg. Melati depan masjid" />
@@ -311,7 +315,10 @@ export default function AduanBuat() {
                 </Bidang>
                 <Bidang label="Anda warga RT berapa? (opsional)">
                   <Pilihan kolom={5} nilai={d.pelaporRt ?? 0} onPilih={(v) => ubah({ pelaporRt: v === 0 ? null : v })}
-                    pilihan={[{ nilai: 1, label: "01" }, { nilai: 2, label: "02" }, { nilai: 3, label: "03" }, { nilai: 4, label: "04" }, { nilai: 0, label: "Lain" }]} />
+                    pilihan={[
+                      ...WILAYAH_RT_NUMBERS.map((n) => ({ nilai: n, label: String(n).padStart(2, "0") })),
+                      { nilai: 0, label: "Lain" },
+                    ]} />
                 </Bidang>
               </div>
             )}

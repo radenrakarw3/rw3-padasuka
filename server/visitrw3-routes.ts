@@ -22,7 +22,7 @@ import {
 import { loadVisitrw3SettingsRows } from "./visitrw3-settings";
 import { visitrw3ApiErrorMessage } from "./visitrw3-api-error";
 import { invalidateVisitrw3Dashboard } from "./cache";
-import { ACTIVE_RT_NUMBERS } from "@shared/rt";
+import { WILAYAH_RT_NUMBERS } from "@shared/wilayah";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 import { visitrw3Pengajuan, visitrw3Penghuni } from "@shared/schema";
@@ -280,7 +280,7 @@ export function registerVisitrw3Routes(app: Express) {
       let rtFilter: number | undefined;
       if (rtRaw != null && String(rtRaw).trim() !== "" && String(rtRaw) !== "semua") {
         const rt = parseInt(String(rtRaw), 10);
-        if (!Number.isFinite(rt) || !(ACTIVE_RT_NUMBERS as readonly number[]).includes(rt)) {
+        if (!Number.isFinite(rt) || !(WILAYAH_RT_NUMBERS as readonly number[]).includes(rt)) {
           return res.status(400).json({ message: "RT tidak valid" });
         }
         rtFilter = rt;
@@ -326,7 +326,7 @@ export function registerVisitrw3Routes(app: Express) {
       let rtFilter: number | undefined;
       if (rtRaw != null && String(rtRaw).trim() !== "" && String(rtRaw) !== "semua") {
         const rt = parseInt(String(rtRaw), 10);
-        if (!Number.isFinite(rt) || !(ACTIVE_RT_NUMBERS as readonly number[]).includes(rt)) {
+        if (!Number.isFinite(rt) || !(WILAYAH_RT_NUMBERS as readonly number[]).includes(rt)) {
           return res.status(400).json({ message: "RT tidak valid" });
         }
         rtFilter = rt;

@@ -395,7 +395,7 @@ export function Wizard({ awal, tutup }: { awal: StateEditor; tutup: (id: number 
             </div>
             {s.akses === "rt_terkait" && (
               <div className="flex flex-wrap gap-1">
-                {[1, 2, 3, 4].map((n) => (
+                {[1, 2, 3, 4, 5, 6, 7].map((n) => (
                   <Button key={n} type="button" size="sm" variant={s.rtTerkait.includes(n) ? "default" : "outline"}
                     onClick={() => ubah({ rtTerkait: s.rtTerkait.includes(n) ? s.rtTerkait.filter((x) => x !== n) : [...s.rtTerkait, n].sort() })}>
                     {rt2(n)}

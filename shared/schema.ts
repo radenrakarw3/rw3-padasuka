@@ -1185,7 +1185,7 @@ export const insertRw3lawDokumenSchema = createInsertSchema(rw3lawDokumen)
     judul: z.string().min(3, "Judul minimal 3 karakter"),
     isi: z.string().min(20, "Isi peraturan minimal 20 karakter"),
     kategori: z.enum(RW3LAW_KATEGORI),
-    rtAsal: z.number().int().min(1).max(4).nullable().optional(),
+    rtAsal: z.number().int().min(1).max(7).nullable().optional(),
     versi: z.string().optional().nullable(),
     tanggalBerlaku: z.string().optional().nullable(),
     revisiDariId: z.number().int().positive().optional().nullable(),

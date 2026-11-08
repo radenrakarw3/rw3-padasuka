@@ -26,6 +26,7 @@ import {
   notifyAduanPesanPublik,
   notifyAduanStatus,
 } from "./wa-notify-aduan";
+import { notifyKetuaRwAduanBaru } from "./wa-notify-ketua";
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const MAKS_ADUAN_PER_WA_HARI = 3;
@@ -80,7 +81,7 @@ const kirimSchema = z
     judul: z.string().trim().min(5, "Judul minimal 5 huruf").max(120),
     uraian: z.string().trim().min(15, "Ceritakan kejadiannya minimal 15 huruf").max(3000),
     lokasi: z.string().trim().max(300).optional().nullable(),
-    rtLokasi: z.number().int().min(1).max(4).optional().nullable(),
+    rtLokasi: z.number().int().min(1).max(7).optional().nullable(),
     tanggalKejadian: z.string().regex(DATE_REGEX).optional().nullable(),
     frekuensi: z.enum(FREKUENSI_ADUAN).default("sekali"),
     dampak: z.enum(DAMPAK_ADUAN).default("mengganggu"),
@@ -91,7 +92,7 @@ const kirimSchema = z
     mode: z.enum(MODE_IDENTITAS),
     pelaporNama: z.string().trim().max(120).optional().nullable(),
     pelaporWa: z.string().trim().max(30).optional().nullable(),
-    pelaporRt: z.number().int().min(1).max(4).optional().nullable(),
+    pelaporRt: z.number().int().min(1).max(7).optional().nullable(),
     foto: fotoSchema(),
     setuju: z.literal(true, { errorMap: () => ({ message: "Centang pernyataan bahwa aduan ini benar" }) }),
     /** Honeypot: diisi bot, dibiarkan kosong oleh manusia. */
@@ -158,6 +159,14 @@ export async function kirimAduan(raw: unknown) {
       nama: v.pelaporNama,
     });
   }
+  notifyKetuaRwAduanBaru({
+    id,
+    nomor,
+    kategori: KATEGORI_ADUAN_INFO[v.kategori].label,
+    judul: v.judul,
+    rtLokasi: v.rtLokasi ?? null,
+    mode: v.mode,
+  });
   return { nomor, kodeLacak, pin, prioritas };
 }
 

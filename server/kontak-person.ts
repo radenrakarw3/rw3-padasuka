@@ -21,6 +21,9 @@ const KONTAK_PENGURUS: Record<Exclude<KeperluanKontak, "darurat">, KontakPenguru
   rt_2: [{ jabatan: "Ketua RT 02", nama: "Jajang", wa: "081910038787" }],
   rt_3: [{ jabatan: "Ketua RT 03", nama: "Iyep", wa: "085860605992" }],
   rt_4: [{ jabatan: "Ketua RT 04", nama: "EEM", wa: "083854136870" }],
+  rt_5: [{ jabatan: "Ketua RT 05", nama: "Iwan", wa: "081322651963" }],
+  rt_6: [{ jabatan: "Ketua RT 06", nama: "Ustarma", wa: "082263078201" }],
+  rt_7: [{ jabatan: "Ketua RT 07", nama: "Dicky", wa: "081312271989" }],
   pelayanan_rw: [
     { jabatan: "Sekretaris RW 03", nama: "Pak Iwan", wa: "082129674194" },
     { jabatan: "Bendahara RW 03", nama: "Bu Tini", wa: "089635339625" },
