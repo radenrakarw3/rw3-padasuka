@@ -906,6 +906,29 @@ export const aduanAkses = pgTable(
   (t) => [index("aduan_akses_aduan_idx").on(t.aduanId)],
 );
 
+/** Rating & kritik saran warga — rahasia, hanya admin yang melihat. */
+export const ratingMasukan = pgTable(
+  "rating_masukan",
+  {
+    id: serial("id").primaryKey(),
+    /** rt | rw */
+    sasaran: text("sasaran").notNull(),
+    nomorRt: integer("nomor_rt"),
+    bintang: integer("bintang").notNull(),
+    isi: text("isi").notNull(),
+    nomorWa: text("nomor_wa").notNull(),
+    nomorWaHash: text("nomor_wa_hash").notNull(),
+    dibacaAt: timestamp("dibaca_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("rating_masukan_sasaran_idx").on(t.sasaran, t.createdAt),
+    index("rating_masukan_rt_idx").on(t.nomorRt, t.createdAt),
+    index("rating_masukan_wa_hash_idx").on(t.nomorWaHash, t.createdAt),
+  ],
+);
+export type RatingMasukan = typeof ratingMasukan.$inferSelect;
+
 export type Rw3bizTagihan = typeof rw3bizTagihan.$inferSelect;
 export type Rw3bizPembayaran = typeof rw3bizPembayaran.$inferSelect;
 export type Rw3bizKeberatan = typeof rw3bizKeberatan.$inferSelect;

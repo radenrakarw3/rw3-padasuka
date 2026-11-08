@@ -20,6 +20,7 @@ import { AuthProvider, useAuth } from "@/lib/auth";
 const PublicLanding = lazy(() => import("@/pages/public/landing"));
 
 const PublicPelayanan = lazy(() => import("@/pages/public/pelayanan"));
+const PublicRating = lazy(() => import("@/pages/public/rating"));
 const PublicKasRw = lazy(() => import("@/pages/public/kas-rw"));
 
 const Visitrw3Hub = lazy(() => import("@/pages/visitrw3/hub"));
@@ -73,6 +74,7 @@ const AdminAduan = lazy(() => import("@/pages/admin/aduan/index"));
 const AdminAduanDetail = lazy(() => import("@/pages/admin/aduan/detail"));
 const AdminAduanTeguran = lazy(() => import("@/pages/admin/aduan/teguran"));
 const AdminAduanTeradu = lazy(() => import("@/pages/admin/aduan/teradu"));
+const AdminRating = lazy(() => import("@/pages/admin/rating"));
 const AdminKeuangan = lazy(() => import("@/pages/admin/keuangan"));
 
 import goldLogo from "@assets/RW3-Cimahi-Logo-Gold.webp";
@@ -351,6 +353,7 @@ function AdminRoutes() {
         <Route path="/admin/aduan-teradu" component={AdminAduanTeradu} />
         <Route path="/admin/aduan/:id">{(p) => <AdminAduanDetail id={Number(p.id)} />}</Route>
         <Route path="/admin/aduan" component={AdminAduan} />
+        <Route path="/admin/rating" component={AdminRating} />
         <Route path="/admin/keuangan" component={AdminKeuangan} />
         <Route path="/admin/rw3biz" component={AdminRw3bizLanding} />
         <Route path="/admin/visitrw3/properti" component={AdminVisitrw3Properti} />
@@ -408,6 +411,8 @@ function PublicRoutes() {
       <Route path="/program">{() => <Redirect to="/" />}</Route>
       <Route path="/kampung-umkm">{() => <Redirect to="/" />}</Route>
       <Route path="/pelayanan" component={PublicPelayanan} />
+      <Route path="/rating" component={PublicRating} />
+      <Route path="/masukan">{() => <Redirect to="/rating" />}</Route>
       <Route path="/kas-rw" component={PublicKasRw} />
       <Route path="/kas">{() => <Redirect to="/kas-rw" />}</Route>
 

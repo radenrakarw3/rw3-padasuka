@@ -181,6 +181,13 @@ export async function registerRoutes(
   const { registerAduanRoutes } = await import("./aduan-routes");
   registerAduanRoutes(app);
 
+  const { ensureRatingSchema } = await import("./rating");
+  await ensureRatingSchema().catch((error) => {
+    console.error("Rating schema init error:", error);
+  });
+  const { registerRatingRoutes } = await import("./rating-routes");
+  registerRatingRoutes(app);
+
   const pdfTempPublicDir = path.join(uploadsDir, "pdf-temp");
   fs.mkdirSync(pdfTempPublicDir, { recursive: true });
   const pdfTempTokens = new Map<string, { filePath: string; expires: number }>();
@@ -658,21 +665,26 @@ export async function registerRoutes(
   });
 
 
-  app.get("/api/public/rt-pelayanan", async (_req, res) => {
-    try {
-      const list = await storage.getAllRt();
-      return res.json(
-        list.map((rt) => ({
-          nomorRt: rt.nomorRt,
-          namaKetua: rt.namaKetua,
-          nomorWhatsapp: rt.nomorWhatsapp,
-          tersedia: Boolean(rt.nomorWhatsapp && rt.nomorWhatsapp.replace(/\D/g, "").length >= 9),
-        })),
-      );
-    } catch (error: any) {
-      return res.status(500).json({ message: error.message || "Gagal memuat data RT" });
-    }
-  });
+  // Kontak person: nomor pengurus hanya dikirim lewat StarSender (bukan diekspos di API publik).
+  {
+    const { kenaBatas } = await import("./wilayah-qr");
+    const { mintaKontakPerson } = await import("./kontak-person");
+    const { kirimError } = await import("./wilayah-auth");
+
+    app.post("/api/public/kontak-person", async (req, res) => {
+      if (kenaBatas(`kontak-person:${req.ip}`, 8, 60 * 60_000)) {
+        return res.status(429).json({
+          message: "Terlalu banyak permintaan. Tunggu beberapa menit lalu coba lagi.",
+        });
+      }
+      try {
+        const out = await mintaKontakPerson(req.body);
+        return res.json(out);
+      } catch (error) {
+        return kirimError(res, error, "Gagal mengirim kontak pengurus");
+      }
+    });
+  }
 
   registerVisitrw3Routes(app);
 

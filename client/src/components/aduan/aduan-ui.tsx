@@ -1,7 +1,7 @@
 import { useRef, useState, type ReactNode } from "react";
 import { Link } from "wouter";
 import {
-  BedDouble, Building2, Camera, Car, ChevronRight, EyeOff, HelpCircle, ImageIcon, Loader2, Lock, Megaphone, PawPrint, Scale, ShieldAlert,
+  Banknote, BedDouble, Building2, Camera, Car, ChevronRight, EyeOff, HelpCircle, ImageIcon, Loader2, Lock, Megaphone, PawPrint, Scale, ShieldAlert,
   Store, Trash2, UserCheck, Volume2, X, type LucideIcon,
 } from "lucide-react";
 import { compressImageToDataUrl } from "@/lib/image-compress";
@@ -15,6 +15,7 @@ export const IKON_KATEGORI: Record<KategoriAduan, LucideIcon> = {
   sampah: Trash2,
   kebisingan: Volume2,
   keamanan: ShieldAlert,
+  pungli: Banknote,
   parkir: Car,
   usaha: Store,
   kost: BedDouble,

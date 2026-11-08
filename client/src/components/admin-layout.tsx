@@ -11,6 +11,7 @@ import {
   LayoutGrid,
   LogOut,
   Megaphone,
+  MessageSquareHeart,
   PieChart,
   Search,
   Users,
@@ -130,6 +131,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       items: [
         { path: "/admin/aduan", icon: Megaphone, label: "Pusat aduan", badge: aduan?.belumDibaca },
         { path: "/admin/aduan-teguran", icon: Gavel, label: "Teguran & SP", badge: aduan?.tenggatLewat },
+        { path: "/admin/rating", icon: MessageSquareHeart, label: "Rating & masukan" },
       ],
     },
     {

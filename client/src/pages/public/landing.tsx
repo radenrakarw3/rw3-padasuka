@@ -1,4 +1,4 @@
-import { Shield, Wallet } from "lucide-react";
+import { Phone, Shield, Star, Wallet } from "lucide-react";
 import fotoKetua from "@assets/foto_raden_raka_mewah.png";
 import { PublicKioskLayout } from "@/components/public-kiosk-layout";
 import { ServiceCard } from "@/components/gov/service-card";
@@ -157,6 +157,22 @@ export default function PublicLanding() {
       <Visitrw3VisaCard />
       <Rw3bizCard />
       <KartuAduanBeranda />
+      <ServiceCard
+        href="/pelayanan"
+        icon={Phone}
+        eyebrow="Hubungi pengurus"
+        title="Kontak person"
+        description="Minta nomor RT, sekretaris, bendahara, atau darurat lewat WhatsApp"
+        variant="glass"
+      />
+      <ServiceCard
+        href="/rating"
+        icon={Star}
+        eyebrow="Rahasia"
+        title="Rating & masukan"
+        description="Nilai RT atau RW, tulis kritik/saran — tidak ditampilkan publik"
+        variant="glass"
+      />
       <ServiceCard
         href="/kas-rw"
         icon={Wallet}
