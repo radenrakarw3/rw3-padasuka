@@ -96,9 +96,9 @@ export default function PublicRating() {
     <PublicKioskLayout title={judul} backHref="/" onBack={langkah === "pilih" ? undefined : kembali}>
       {langkah === "pilih" && (
         <div className="space-y-4">
-          <FeatureExplain title="Rahasia dan tidak dipublikasikan">
-            Rating serta kritik/saran Anda hanya dibaca pengurus RW 03 untuk perbaikan pelayanan.
-            Tidak ditampilkan di situs publik.
+          <FeatureExplain title="Rahasia · dihitung per bulan">
+            Rating serta kritik/saran Anda hanya dibaca pengurus RW 03. Tidak ditampilkan publik.
+            Nilai dihitung per bulan untuk penilaian kinerja, lalu ranking dimulai ulang tiap bulan baru.
           </FeatureExplain>
 
           <p className="text-caption text-muted-foreground">Nilai siapa?</p>

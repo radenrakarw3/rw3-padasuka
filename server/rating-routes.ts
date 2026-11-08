@@ -41,7 +41,12 @@ export function registerRatingRoutes(app: Express) {
   );
 
   const RW = requireRwWilayah;
-  app.get("/api/admin/rating/ringkasan", RW, h(() => rating.ringkasanRating()));
+  app.get(
+    "/api/admin/rating/ringkasan",
+    RW,
+    h((req) => rating.ringkasanRating(String(req.query.bulan ?? ""))),
+  );
+  app.get("/api/admin/rating/bulan", RW, h(() => rating.daftarBulanRating()));
   app.get(
     "/api/admin/rating",
     RW,
@@ -50,6 +55,7 @@ export function registerRatingRoutes(app: Express) {
         sasaran: String(req.query.sasaran ?? ""),
         rt: String(req.query.rt ?? ""),
         belumDibaca: String(req.query.belumDibaca ?? "") === "1",
+        bulan: String(req.query.bulan ?? ""),
       }),
     ),
   );

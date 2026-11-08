@@ -1,5 +1,6 @@
 /**
  * Rating & kritik saran warga (RT / RW).
+ * Kompetisi per bulan (WIB): ranking reset tiap bulan, histori tetap untuk laporan reward.
  * Isi rahasia: hanya admin yang bisa melihat. Publik hanya boleh mengirim.
  */
 import fs from "fs";
@@ -15,6 +16,11 @@ import {
   MIN_ISI_RATING,
   SASARAN_RATING,
   SASARAN_RATING_INFO,
+  bulanRatingSekarang,
+  bulanRatingSelesai,
+  isBulanRating,
+  labelBulanRating,
+  rentangBulanRating,
   type BintangRating,
   type SasaranRating,
 } from "@shared/rating";
@@ -24,6 +30,11 @@ import { notifyKetuaRwRatingBaru } from "./wa-notify-ketua";
 import { WilayahError } from "./wilayah-auth";
 
 const MAKS_PER_WA_HARI = 5;
+
+/** Filter created_at ke periode bulan WIB (timestamp disimpan UTC / server). */
+const SYARAT_BULAN =
+  `(created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Jakarta')::date >= $BULAN::date` +
+  ` AND (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Jakarta')::date < $SELESAI::date`;
 
 export async function ensureRatingSchema() {
   for (const file of ["0037_rating_masukan.sql", "0038_rating_rt_1_7.sql"]) {
@@ -48,17 +59,32 @@ function labelSasaran(sasaran: SasaranRating, nomorRt: number | null): string {
   return "Pengurus RW 03";
 }
 
-function bangunKonfirmasi(bintang: BintangRating, sasaran: SasaranRating, nomorRt: number | null): string {
+function normalisasiBulan(raw?: string | null): string {
+  if (raw && isBulanRating(raw)) return raw;
+  return bulanRatingSekarang();
+}
+
+function syaratBulanSql(mulaiIdx: number, selesaiIdx: number): string {
+  return SYARAT_BULAN.replace("$BULAN", `$${mulaiIdx}`).replace("$SELESAI", `$${selesaiIdx}`);
+}
+
+function bangunKonfirmasi(
+  bintang: BintangRating,
+  sasaran: SasaranRating,
+  nomorRt: number | null,
+  labelBulan: string,
+): string {
   const sasaranTeks = labelSasaran(sasaran, nomorRt);
   return [
     "Assalamu'alaikum.",
     "",
     "Terima kasih. Rating dan masukan Anda sudah kami terima.",
     "",
+    `Periode: *${labelBulan}*`,
     `Sasaran: ${sasaranTeks}`,
     `Nilai: ${"★".repeat(bintang)}${"☆".repeat(5 - bintang)} (${BINTANG_RATING_LABEL[bintang]})`,
     "",
-    "Masukan ini bersifat rahasia dan tidak ditampilkan ke publik. Hanya pengurus RW 03 yang membacanya untuk perbaikan pelayanan.",
+    "Rating dihitung per bulan untuk penilaian kinerja. Masukan bersifat rahasia dan tidak ditampilkan ke publik.",
     "",
     "— KPP RW 03 Padasuka",
   ].join("\n");
@@ -86,7 +112,7 @@ const skemaKirim = z
     }
   });
 
-export async function kirimRating(raw: unknown): Promise<{ ok: true; konfirmasi: boolean }> {
+export async function kirimRating(raw: unknown): Promise<{ ok: true; konfirmasi: boolean; bulan: string }> {
   const parsed = skemaKirim.safeParse(raw);
   if (!parsed.success) {
     throw new WilayahError(400, parsed.error.issues[0]?.message || "Data tidak valid");
@@ -104,6 +130,8 @@ export async function kirimRating(raw: unknown): Promise<{ ok: true; konfirmasi:
   const bintang = v.bintang as BintangRating;
   const nomorRt = v.sasaran === "rt" ? v.nomorRt! : null;
   const waHash = hashWa(wa);
+  const bulan = bulanRatingSekarang();
+  const { label } = rentangBulanRating(bulan);
 
   const { rows: batas } = await pool.query<{ n: number }>(
     `SELECT count(*)::int AS n FROM rating_masukan
@@ -121,12 +149,12 @@ export async function kirimRating(raw: unknown): Promise<{ ok: true; konfirmasi:
   );
 
   notifyKetuaRwRatingBaru({
-    sasaranLabel: labelSasaran(v.sasaran, nomorRt),
+    sasaranLabel: `${labelSasaran(v.sasaran, nomorRt)} · ${label}`,
     bintang,
     cuplikan: v.isi,
   });
 
-  const pesan = bangunKonfirmasi(bintang, v.sasaran, nomorRt);
+  const pesan = bangunKonfirmasi(bintang, v.sasaran, nomorRt, label);
   let konfirmasi = false;
   try {
     const hasil = await sendWaWithResult(wa, pesan, {
@@ -139,29 +167,10 @@ export async function kirimRating(raw: unknown): Promise<{ ok: true; konfirmasi:
     console.error("[rating] gagal kirim konfirmasi WA:", err);
   }
 
-  return { ok: true, konfirmasi };
+  return { ok: true, konfirmasi, bulan };
 }
 
-export async function ringkasanRating() {
-  const { rows } = await pool.query<{
-    total: number;
-    belum_dibaca: number;
-    rt: number;
-    rw: number;
-    rata_rt: string | null;
-    rata_rw: string | null;
-  }>(`
-    SELECT
-      count(*)::int AS total,
-      count(*) FILTER (WHERE dibaca_at IS NULL)::int AS belum_dibaca,
-      count(*) FILTER (WHERE sasaran = 'rt')::int AS rt,
-      count(*) FILTER (WHERE sasaran = 'rw')::int AS rw,
-      round(avg(bintang) FILTER (WHERE sasaran = 'rt'), 2)::text AS rata_rt,
-      round(avg(bintang) FILTER (WHERE sasaran = 'rw'), 2)::text AS rata_rw
-    FROM rating_masukan
-  `);
-  const r = rows[0];
-
+async function hitungPerRt(mulai: string, selesai: string) {
   const { rows: perRtRows } = await pool.query<{
     nomor_rt: number;
     jumlah: number;
@@ -171,8 +180,8 @@ export async function ringkasanRating() {
     bintang_3: number;
     bintang_4: number;
     bintang_5: number;
-  }>(`
-    SELECT
+  }>(
+    `SELECT
       nomor_rt,
       count(*)::int AS jumlah,
       round(avg(bintang), 2)::text AS rata,
@@ -183,8 +192,10 @@ export async function ringkasanRating() {
       count(*) FILTER (WHERE bintang = 5)::int AS bintang_5
     FROM rating_masukan
     WHERE sasaran = 'rt' AND nomor_rt IS NOT NULL
-    GROUP BY nomor_rt
-  `);
+      AND ${syaratBulanSql(1, 2)}
+    GROUP BY nomor_rt`,
+    [mulai, selesai],
+  );
 
   const byRt = new Map(perRtRows.map((row) => [row.nomor_rt, row]));
   const perRt = WILAYAH_RT_NUMBERS.map((nomorRt) => {
@@ -210,13 +221,14 @@ export async function ringkasanRating() {
   const terburuk = terurut.length ? terurut[terurut.length - 1] : null;
 
   return {
-    total: r?.total ?? 0,
-    belumDibaca: r?.belum_dibaca ?? 0,
-    rt: r?.rt ?? 0,
-    rw: r?.rw ?? 0,
-    rataRt: r?.rata_rt ? Number(r.rata_rt) : null,
-    rataRw: r?.rata_rw ? Number(r.rata_rw) : null,
     perRt,
+    peringkat: terurut.map((x, i) => ({
+      peringkat: i + 1,
+      nomorRt: x.nomorRt,
+      label: x.label,
+      rata: x.rata!,
+      jumlah: x.jumlah,
+    })),
     terbaik: terbaik
       ? { nomorRt: terbaik.nomorRt, label: terbaik.label, rata: terbaik.rata!, jumlah: terbaik.jumlah }
       : null,
@@ -226,10 +238,160 @@ export async function ringkasanRating() {
   };
 }
 
-export async function daftarRating(opsi: { sasaran?: string; rt?: string; belumDibaca?: boolean }) {
-  const syarat: string[] = [];
-  const args: unknown[] = [];
-  let i = 1;
+export async function daftarBulanRating() {
+  const sekarang = bulanRatingSekarang();
+  const { rows } = await pool.query<{ bulan: string }>(`
+    SELECT DISTINCT to_char(created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM') AS bulan
+    FROM rating_masukan
+    ORDER BY bulan DESC
+  `);
+  const set = new Set(rows.map((r) => r.bulan).filter(isBulanRating));
+  set.add(sekarang);
+  return [...set]
+    .sort((a, b) => b.localeCompare(a))
+    .map((bulan) => ({
+      bulan,
+      label: labelBulanRating(bulan),
+      berjalan: bulan === sekarang,
+      selesai: bulanRatingSelesai(bulan),
+    }));
+}
+
+export async function ringkasanRating(bulanRaw?: string | null) {
+  const bulan = normalisasiBulan(bulanRaw);
+  const { mulai, selesai, label } = rentangBulanRating(bulan);
+  const berjalan = bulan === bulanRatingSekarang();
+  const selesaiPeriode = bulanRatingSelesai(bulan);
+
+  const { rows } = await pool.query<{
+    total: number;
+    belum_dibaca: number;
+    rt: number;
+    rw: number;
+    rata_rt: string | null;
+    rata_rw: string | null;
+  }>(
+    `SELECT
+      count(*)::int AS total,
+      count(*) FILTER (WHERE dibaca_at IS NULL)::int AS belum_dibaca,
+      count(*) FILTER (WHERE sasaran = 'rt')::int AS rt,
+      count(*) FILTER (WHERE sasaran = 'rw')::int AS rw,
+      round(avg(bintang) FILTER (WHERE sasaran = 'rt'), 2)::text AS rata_rt,
+      round(avg(bintang) FILTER (WHERE sasaran = 'rw'), 2)::text AS rata_rw
+    FROM rating_masukan
+    WHERE ${syaratBulanSql(1, 2)}`,
+    [mulai, selesai],
+  );
+  const r = rows[0];
+  const skor = await hitungPerRt(mulai, selesai);
+  const daftarBulan = await daftarBulanRating();
+
+  return {
+    bulan,
+    labelBulan: label,
+    berjalan,
+    selesai: selesaiPeriode,
+    total: r?.total ?? 0,
+    belumDibaca: r?.belum_dibaca ?? 0,
+    rt: r?.rt ?? 0,
+    rw: r?.rw ?? 0,
+    rataRt: r?.rata_rt ? Number(r.rata_rt) : null,
+    rataRw: r?.rata_rw ? Number(r.rata_rw) : null,
+    ...skor,
+    daftarBulan,
+    laporan: bangunLaporanReward({
+      bulan,
+      label,
+      selesai: selesaiPeriode,
+      berjalan,
+      total: r?.total ?? 0,
+      rataRt: r?.rata_rt ? Number(r.rata_rt) : null,
+      rataRw: r?.rata_rw ? Number(r.rata_rw) : null,
+      terbaik: skor.terbaik,
+      terburuk: skor.terburuk,
+      peringkat: skor.peringkat,
+    }),
+  };
+}
+
+function bangunLaporanReward(input: {
+  bulan: string;
+  label: string;
+  selesai: boolean;
+  berjalan: boolean;
+  total: number;
+  rataRt: number | null;
+  rataRw: number | null;
+  terbaik: { nomorRt: number; label: string; rata: number; jumlah: number } | null;
+  terburuk: { nomorRt: number; label: string; rata: number; jumlah: number } | null;
+  peringkat: { peringkat: number; nomorRt: number; label: string; rata: number; jumlah: number }[] ;
+}) {
+  const siapReward = input.selesai && !!input.terbaik && input.terbaik.jumlah > 0;
+  const catatan: string[] = [];
+
+  if (input.berjalan) {
+    catatan.push(
+      `Periode ${input.label} masih berjalan. Ranking akan dikunci setelah akhir bulan untuk penentuan reward.`,
+    );
+  } else if (siapReward) {
+    catatan.push(
+      `Laporan ${input.label} siap. Pertimbangkan reward untuk ${input.terbaik!.label} (rata-rata ${input.terbaik!.rata}).`,
+    );
+    if (input.terburuk && input.terburuk.nomorRt !== input.terbaik!.nomorRt) {
+      catatan.push(
+        `${input.terburuk.label} perlu perhatian/pembinaan (rata-rata ${input.terburuk.rata}).`,
+      );
+    }
+  } else {
+    catatan.push(`Belum ada cukup data rating RT pada ${input.label} untuk menentukan reward.`);
+  }
+
+  return {
+    siapReward,
+    judul: `Laporan rating ${input.label}`,
+    ringkas: siapReward
+      ? `Juara bulan ini: ${input.terbaik!.label} · rata-rata ${input.terbaik!.rata} (${input.terbaik!.jumlah} rating)`
+      : input.berjalan
+        ? `Kompetisi ${input.label} masih dibuka.`
+        : `Belum ada juara untuk ${input.label}.`,
+    rekomendasiReward: siapReward
+      ? {
+          nomorRt: input.terbaik!.nomorRt,
+          label: input.terbaik!.label,
+          rata: input.terbaik!.rata,
+          jumlah: input.terbaik!.jumlah,
+          saran: `Berikan apresiasi/reward kepada pengurus ${input.terbaik!.label} atas kinerja terbaik ${input.label}.`,
+        }
+      : null,
+    perluPembinaan:
+      siapReward && input.terburuk && input.terburuk.nomorRt !== input.terbaik!.nomorRt
+        ? {
+            nomorRt: input.terburuk.nomorRt,
+            label: input.terburuk.label,
+            rata: input.terburuk.rata,
+            jumlah: input.terburuk.jumlah,
+            saran: `Dampingi ${input.terburuk.label} untuk perbaikan pelayanan pada bulan berikutnya.`,
+          }
+        : null,
+    peringkat: input.peringkat,
+    totalMasukan: input.total,
+    rataRt: input.rataRt,
+    rataRw: input.rataRw,
+    catatan,
+  };
+}
+
+export async function daftarRating(opsi: {
+  sasaran?: string;
+  rt?: string;
+  belumDibaca?: boolean;
+  bulan?: string | null;
+}) {
+  const bulan = normalisasiBulan(opsi.bulan);
+  const { mulai, selesai } = rentangBulanRating(bulan);
+  const syarat: string[] = [syaratBulanSql(1, 2)];
+  const args: unknown[] = [mulai, selesai];
+  let i = 3;
 
   if (opsi.sasaran === "rt" || opsi.sasaran === "rw") {
     syarat.push(`sasaran = $${i++}`);
@@ -243,7 +405,7 @@ export async function daftarRating(opsi: { sasaran?: string; rt?: string; belumD
     syarat.push(`dibaca_at IS NULL`);
   }
 
-  const where = syarat.length ? `WHERE ${syarat.join(" AND ")}` : "";
+  const where = `WHERE ${syarat.join(" AND ")}`;
   const { rows } = await pool.query<{
     id: number;
     sasaran: SasaranRating;
@@ -272,6 +434,7 @@ export async function daftarRating(opsi: { sasaran?: string; rt?: string; belumD
     nomorWa: r.nomor_wa,
     dibaca: Boolean(r.dibaca_at),
     dibuat: r.created_at,
+    bulan,
   }));
 }
 
@@ -286,9 +449,12 @@ export async function tandaiDibaca(id: number) {
 }
 
 export function opsiPublik() {
+  const bulan = bulanRatingSekarang();
   return {
     sasaran: SASARAN_RATING.map((id) => ({ id, ...SASARAN_RATING_INFO[id] })),
     bintang: BINTANG_RATING.map((n) => ({ nilai: n, label: BINTANG_RATING_LABEL[n] })),
     rt: [...WILAYAH_RT_NUMBERS],
+    bulan,
+    labelBulan: labelBulanRating(bulan),
   };
 }

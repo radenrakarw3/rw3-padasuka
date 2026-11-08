@@ -1,13 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, Eye, MessageSquareHeart, Star, Trophy, TrendingDown } from "lucide-react";
+import { ExternalLink, Eye, Gift, MessageSquareHeart, Star, Trophy, TrendingDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, getApiErrorMessage, readJsonSafely } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
-import { SASARAN_RATING_INFO, type SasaranRating } from "@shared/rating";
+import { SASARAN_RATING_INFO, bulanRatingSekarang, type SasaranRating } from "@shared/rating";
 import { WILAYAH_RT_NUMBERS } from "@shared/wilayah";
 
 type PerRt = {
@@ -18,7 +18,38 @@ type PerRt = {
   sebaran: Record<1 | 2 | 3 | 4 | 5, number>;
 };
 
+type Laporan = {
+  siapReward: boolean;
+  judul: string;
+  ringkas: string;
+  rekomendasiReward: {
+    nomorRt: number;
+    label: string;
+    rata: number;
+    jumlah: number;
+    saran: string;
+  } | null;
+  perluPembinaan: {
+    nomorRt: number;
+    label: string;
+    rata: number;
+    jumlah: number;
+    saran: string;
+  } | null;
+  peringkat: { peringkat: number; nomorRt: number; label: string; rata: number; jumlah: number }[];
+  totalMasukan: number;
+  rataRt: number | null;
+  rataRw: number | null;
+  catatan: string[];
+};
+
+type OpsiBulan = { bulan: string; label: string; berjalan: boolean; selesai: boolean };
+
 type Ringkasan = {
+  bulan: string;
+  labelBulan: string;
+  berjalan: boolean;
+  selesai: boolean;
   total: number;
   belumDibaca: number;
   rt: number;
@@ -28,6 +59,8 @@ type Ringkasan = {
   perRt: PerRt[];
   terbaik: { nomorRt: number; label: string; rata: number; jumlah: number } | null;
   terburuk: { nomorRt: number; label: string; rata: number; jumlah: number } | null;
+  daftarBulan: OpsiBulan[];
+  laporan: Laporan;
 };
 
 type Baris = {
@@ -43,14 +76,13 @@ type Baris = {
   dibuat: string;
 };
 
-function Bintang({ n, size = "sm" }: { n: number; size?: "sm" | "md" }) {
-  const cls = size === "md" ? "h-4 w-4" : "h-3.5 w-3.5";
+function Bintang({ n }: { n: number }) {
   return (
     <span className="inline-flex items-center gap-0.5 text-[hsl(40,70%,45%)]" aria-label={`${n} bintang`}>
       {Array.from({ length: 5 }, (_, i) => (
         <Star
           key={i}
-          className={cn(cls, i < n ? "fill-current" : "text-muted-foreground/30")}
+          className={cn("h-3.5 w-3.5", i < n ? "fill-current" : "text-muted-foreground/30")}
           aria-hidden
         />
       ))}
@@ -77,20 +109,27 @@ function formatRata(n: number | null | undefined) {
 export default function AdminRating() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [bulan, setBulan] = useState(bulanRatingSekarang());
   const [sasaran, setSasaran] = useState("semua");
   const [rt, setRt] = useState("semua");
   const [belumDibaca, setBelumDibaca] = useState(false);
 
   const qs = new URLSearchParams({
+    bulan,
     ...(sasaran !== "semua" ? { sasaran } : {}),
     ...(rt !== "semua" ? { rt } : {}),
     ...(belumDibaca ? { belumDibaca: "1" } : {}),
   });
 
   const { data: ringkasan } = useQuery<Ringkasan>({
-    queryKey: ["/api/admin/rating/ringkasan"],
-    queryFn: async () => readJsonSafely(await apiRequest("GET", "/api/admin/rating/ringkasan")),
+    queryKey: ["/api/admin/rating/ringkasan", bulan],
+    queryFn: async () =>
+      readJsonSafely(await apiRequest("GET", `/api/admin/rating/ringkasan?bulan=${encodeURIComponent(bulan)}`)),
   });
+
+  useEffect(() => {
+    if (ringkasan?.bulan && ringkasan.bulan !== bulan) setBulan(ringkasan.bulan);
+  }, [ringkasan?.bulan, bulan]);
 
   const { data: list = [], isLoading, error } = useQuery<Baris[]>({
     queryKey: ["/api/admin/rating", qs.toString()],
@@ -126,11 +165,16 @@ export default function AdminRating() {
   const peringkat = [...perRt]
     .filter((x) => x.jumlah > 0)
     .sort((a, b) => (b.rata ?? 0) - (a.rata ?? 0) || b.jumlah - a.jumlah);
+  const opsiBulan = ringkasan?.daftarBulan?.length
+    ? ringkasan.daftarBulan
+    : [{ bulan, label: ringkasan?.labelBulan ?? bulan, berjalan: true, selesai: false }];
 
   const pilihRt = (nomor: number) => {
     setSasaran("rt");
     setRt(String(nomor));
   };
+
+  const laporan = ringkasan?.laporan;
 
   return (
     <div className="max-w-5xl space-y-5">
@@ -140,26 +184,80 @@ export default function AdminRating() {
       >
         <MessageSquareHeart className="absolute right-4 top-4 h-10 w-10 text-[hsl(40,58%,68%)]/40" />
         <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[hsl(40,45%,72%)]">
-          Rahasia · bukan publik
+          Kompetisi bulanan · rahasia
         </p>
         <h1 className="text-2xl font-extrabold">Rating & masukan warga</h1>
         <p className="mt-1 max-w-xl text-sm text-white/75">
-          Hasil rating RT dan RW hanya terlihat di sini. Bandingkan kinerja per RT dari rata-rata
-          bintang warga.
+          Ranking dihitung per bulan dan otomatis mulai ulang tiap bulan baru. Data lama tetap
+          tersimpan untuk laporan reward akhir bulan.
         </p>
-        <a
-          href="/rating"
-          target="_blank"
-          rel="noreferrer"
-          className="mt-3 inline-flex items-center gap-1 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-semibold hover:bg-white/20"
-        >
-          <ExternalLink className="h-3.5 w-3.5" /> Halaman warga
-        </a>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Select value={bulan} onValueChange={setBulan}>
+            <SelectTrigger className="h-9 w-[220px] border-white/25 bg-white/10 text-white">
+              <SelectValue placeholder="Pilih bulan" />
+            </SelectTrigger>
+            <SelectContent>
+              {opsiBulan.map((b) => (
+                <SelectItem key={b.bulan} value={b.bulan}>
+                  {b.label}{b.berjalan ? " · berjalan" : b.selesai ? " · selesai" : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <a
+            href="/rating"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-semibold hover:bg-white/20"
+          >
+            <ExternalLink className="h-3.5 w-3.5" /> Halaman warga
+          </a>
+        </div>
       </div>
+
+      {laporan && (
+        <section
+          className={cn(
+            "rounded-2xl border p-4 shadow-sm",
+            laporan.siapReward ? "border-[hsl(40,55%,58%)]/50 bg-[hsl(40,55%,96%)]" : "bg-card",
+          )}
+        >
+          <div className="flex items-start gap-3">
+            <div className={cn(
+              "flex h-10 w-10 items-center justify-center rounded-xl",
+              laporan.siapReward ? "bg-[hsl(40,55%,58%)] text-[hsl(163,55%,12%)]" : "bg-brand/10 text-brand",
+            )}>
+              <Gift className="h-5 w-5" aria-hidden />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Laporan akhir bulan
+              </p>
+              <h2 className="text-lg font-bold text-brand">{laporan.judul}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">{laporan.ringkas}</p>
+              {laporan.rekomendasiReward && (
+                <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950">
+                  <p className="font-semibold">Rekomendasi reward</p>
+                  <p className="mt-0.5">{laporan.rekomendasiReward.saran}</p>
+                </div>
+              )}
+              {laporan.perluPembinaan && (
+                <div className="mt-2 rounded-xl border border-orange-200 bg-orange-50 p-3 text-sm text-orange-950">
+                  <p className="font-semibold">Perlu pembinaan</p>
+                  <p className="mt-0.5">{laporan.perluPembinaan.saran}</p>
+                </div>
+              )}
+              {laporan.catatan.map((c) => (
+                <p key={c} className="mt-2 text-xs text-muted-foreground">{c}</p>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         {[
-          { label: "Total masukan", n: ringkasan?.total },
+          { label: "Total bulan ini", n: ringkasan?.total },
           { label: "Belum dibaca", n: ringkasan?.belumDibaca, highlight: !!ringkasan?.belumDibaca },
           { label: "Untuk RT", n: ringkasan?.rt },
           { label: "Untuk RW", n: ringkasan?.rw },
@@ -185,20 +283,18 @@ export default function AdminRating() {
       </div>
 
       <section className="space-y-3">
-        <div className="flex items-end justify-between gap-2">
-          <div>
-            <h2 className="text-lg font-bold text-brand">Kinerja per RT</h2>
-            <p className="text-sm text-muted-foreground">
-              Berdasarkan rata-rata bintang dari rating warga (bukan rating RW).
-            </p>
-          </div>
+        <div>
+          <h2 className="text-lg font-bold text-brand">Kinerja per RT · {ringkasan?.labelBulan ?? "…"}</h2>
+          <p className="text-sm text-muted-foreground">
+            Ranking bulan ini saja. Bulan berikutnya mulai dari nol lagi.
+          </p>
         </div>
 
         <div className="grid gap-2 sm:grid-cols-2">
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
             <div className="flex items-center gap-2 text-emerald-800">
               <Trophy className="h-4 w-4" aria-hidden />
-              <p className="text-xs font-semibold uppercase tracking-wide">Terbaik</p>
+              <p className="text-xs font-semibold uppercase tracking-wide">Terbaik bulan ini</p>
             </div>
             {ringkasan?.terbaik ? (
               <button type="button" className="mt-1 w-full text-left" onClick={() => pilihRt(ringkasan.terbaik!.nomorRt)}>
@@ -208,7 +304,7 @@ export default function AdminRating() {
                 </p>
               </button>
             ) : (
-              <p className="mt-2 text-sm text-emerald-900/70">Belum ada rating RT.</p>
+              <p className="mt-2 text-sm text-emerald-900/70">Belum ada rating RT bulan ini.</p>
             )}
           </div>
           <div className="rounded-xl border border-orange-200 bg-orange-50 p-4">
@@ -224,9 +320,9 @@ export default function AdminRating() {
                 </p>
               </button>
             ) : ringkasan?.terburuk ? (
-              <p className="mt-2 text-sm text-orange-900/70">Baru satu RT yang punya rating.</p>
+              <p className="mt-2 text-sm text-orange-900/70">Baru satu RT yang punya rating bulan ini.</p>
             ) : (
-              <p className="mt-2 text-sm text-orange-900/70">Belum ada rating RT.</p>
+              <p className="mt-2 text-sm text-orange-900/70">Belum ada rating RT bulan ini.</p>
             )}
           </div>
         </div>
@@ -350,7 +446,7 @@ export default function AdminRating() {
         </div>
       ) : list.length === 0 ? (
         <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-          Belum ada rating atau masukan.
+          Belum ada rating pada {ringkasan?.labelBulan ?? "bulan ini"}.
         </div>
       ) : (
         <div className="space-y-2">
