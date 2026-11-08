@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { CheckCircle2, ChevronLeft, Loader2, Shield, Star } from "lucide-react";
+import { CheckCircle2, ChevronLeft, Loader2, MessageCircle, Shield, Star } from "lucide-react";
 import { PublicKioskLayout } from "@/components/public-kiosk-layout";
 import { FeatureExplain } from "@/components/gov/feature-explain";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, getApiErrorMessage } from "@/lib/queryClient";
+import { toWaMeUrl } from "@/lib/wa";
 import { cn } from "@/lib/utils";
 import {
   BINTANG_RATING,
@@ -23,6 +24,35 @@ import { WILAYAH_RT_NUMBERS } from "@shared/wilayah";
 
 type Langkah = "pilih" | "isi" | "terkirim";
 
+const ADMIN_WA_DEFAULT = "081321133823";
+
+function parseErrorPayload(error: unknown): {
+  message: string;
+  code?: string;
+  adminWa?: string;
+  pesanAdmin?: string;
+} {
+  const message = getApiErrorMessage(error, "Coba lagi beberapa saat.");
+  const raw = error instanceof Error ? error.message : "";
+  const jsonPart = raw.includes(":") ? raw.split(":").slice(1).join(":").trim() : "";
+  try {
+    const parsed = JSON.parse(jsonPart) as {
+      message?: string;
+      code?: string;
+      adminWa?: string;
+      pesanAdmin?: string;
+    };
+    return {
+      message: parsed.message || message,
+      code: parsed.code,
+      adminWa: parsed.adminWa,
+      pesanAdmin: parsed.pesanAdmin,
+    };
+  } catch {
+    return { message };
+  }
+}
+
 export default function PublicRating() {
   const { toast } = useToast();
   const [langkah, setLangkah] = useState<Langkah>("pilih");
@@ -33,10 +63,15 @@ export default function PublicRating() {
   const [isi, setIsi] = useState("");
   const [nomorWa, setNomorWa] = useState("");
   const [konfirmasiWa, setKonfirmasiWa] = useState(true);
+  const [waBelumTerdaftar, setWaBelumTerdaftar] = useState<{
+    adminWa: string;
+    pesanAdmin: string;
+  } | null>(null);
 
   const kirim = useMutation({
     mutationFn: async () => {
       if (!sasaran || !bintang) throw new Error("Lengkapi rating");
+      setWaBelumTerdaftar(null);
       const res = await apiRequest("POST", "/api/public/rating", {
         sasaran,
         nomorRt: sasaran === "rt" ? nomorRt : null,
@@ -49,12 +84,23 @@ export default function PublicRating() {
     },
     onSuccess: (data) => {
       setKonfirmasiWa(data.konfirmasi !== false);
+      setWaBelumTerdaftar(null);
       setLangkah("terkirim");
     },
     onError: (err) => {
+      const payload = parseErrorPayload(err);
+      if (payload.code === "wa_belum_terdaftar") {
+        setWaBelumTerdaftar({
+          adminWa: payload.adminWa || ADMIN_WA_DEFAULT,
+          pesanAdmin:
+            payload.pesanAdmin ||
+            `Assalamu'alaikum, nomor WhatsApp saya (${nomorWa.trim()}) belum terdaftar. Mohon bantu perbarui data.`,
+        });
+        return;
+      }
       toast({
         title: "Gagal mengirim",
-        description: getApiErrorMessage(err, "Coba lagi beberapa saat."),
+        description: payload.message,
         variant: "destructive",
       });
     },
@@ -74,6 +120,7 @@ export default function PublicRating() {
     setNomorRt(null);
     setBintang(null);
     setIsi("");
+    setWaBelumTerdaftar(null);
     kirim.reset();
   };
 
@@ -99,6 +146,7 @@ export default function PublicRating() {
           <FeatureExplain title="Rahasia · dihitung per bulan">
             Rating serta kritik/saran Anda hanya dibaca pengurus RW 03. Tidak ditampilkan publik.
             Nilai dihitung per bulan untuk penilaian kinerja, lalu ranking dimulai ulang tiap bulan baru.
+            Nomor WhatsApp harus sudah terdaftar sebagai warga, Visit RW3, atau RW3BIZ.
           </FeatureExplain>
 
           <p className="text-caption text-muted-foreground">Nilai siapa?</p>
@@ -220,14 +268,40 @@ export default function PublicRating() {
               id="wa-rating"
               inputMode="tel"
               value={nomorWa}
-              onChange={(e) => setNomorWa(e.target.value)}
+              onChange={(e) => {
+                setNomorWa(e.target.value);
+                setWaBelumTerdaftar(null);
+              }}
               placeholder="08xxxxxxxxxx"
               autoComplete="tel"
             />
             <p className="text-xs text-muted-foreground">
-              Dipakai untuk mengirim konfirmasi bahwa masukan sudah diterima.
+              Harus terdaftar sebagai warga RW 03, Visit RW3, atau RW3BIZ. Dipakai juga untuk
+              konfirmasi WA.
             </p>
           </div>
+
+          {waBelumTerdaftar && (
+            <div className="space-y-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
+              <div>
+                <p className="font-semibold">Nomor belum terdaftar di sistem</p>
+                <p className="mt-1 text-sm text-amber-900/90">
+                  Rating hanya bisa dikirim jika nomor WhatsApp sudah tercatat sebagai warga,
+                  penghuni Visit RW3, atau pelaku usaha RW3BIZ. Hubungi admin agar data nomor Anda
+                  diperbarui, lalu coba kirim lagi.
+                </p>
+              </div>
+              <a
+                href={toWaMeUrl(waBelumTerdaftar.adminWa, waBelumTerdaftar.pesanAdmin)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#25D366] text-base font-bold text-white hover:brightness-105"
+              >
+                <MessageCircle className="h-5 w-5" aria-hidden />
+                Hubungi admin via WhatsApp
+              </a>
+            </div>
+          )}
 
           {/* honeypot */}
           <input type="text" name="website" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden />

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, Eye, Gift, MessageSquareHeart, Star, Trophy, TrendingDown } from "lucide-react";
+import { Building2, ExternalLink, Eye, Gift, MessageSquareHeart, Star, Trophy, TrendingDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,6 +15,17 @@ type PerRt = {
   label: string;
   jumlah: number;
   rata: number | null;
+  sebaran: Record<1 | 2 | 3 | 4 | 5, number>;
+};
+
+type RekapRw = {
+  label: string;
+  jumlah: number;
+  rata: number | null;
+  penilaian: {
+    kode: "sangat_baik" | "baik" | "cukup" | "kurang" | "sangat_kurang" | "belum_ada";
+    label: string;
+  };
   sebaran: Record<1 | 2 | 3 | 4 | 5, number>;
 };
 
@@ -36,6 +47,7 @@ type Laporan = {
     jumlah: number;
     saran: string;
   } | null;
+  rekapRw: RekapRw;
   peringkat: { peringkat: number; nomorRt: number; label: string; rata: number; jumlah: number }[];
   totalMasukan: number;
   rataRt: number | null;
@@ -59,9 +71,27 @@ type Ringkasan = {
   perRt: PerRt[];
   terbaik: { nomorRt: number; label: string; rata: number; jumlah: number } | null;
   terburuk: { nomorRt: number; label: string; rata: number; jumlah: number } | null;
+  rekapRw: RekapRw;
   daftarBulan: OpsiBulan[];
   laporan: Laporan;
 };
+
+function warnaPenilaian(kode: RekapRw["penilaian"]["kode"]) {
+  switch (kode) {
+    case "sangat_baik":
+      return "border-emerald-200 bg-emerald-50 text-emerald-950";
+    case "baik":
+      return "border-green-200 bg-green-50 text-green-950";
+    case "cukup":
+      return "border-amber-200 bg-amber-50 text-amber-950";
+    case "kurang":
+      return "border-orange-200 bg-orange-50 text-orange-950";
+    case "sangat_kurang":
+      return "border-red-200 bg-red-50 text-red-950";
+    default:
+      return "border-border bg-muted/40 text-muted-foreground";
+  }
+}
 
 type Baris = {
   id: number;
@@ -243,8 +273,17 @@ export default function AdminRating() {
               )}
               {laporan.perluPembinaan && (
                 <div className="mt-2 rounded-xl border border-orange-200 bg-orange-50 p-3 text-sm text-orange-950">
-                  <p className="font-semibold">Perlu pembinaan</p>
+                  <p className="font-semibold">Perlu pembinaan RT</p>
                   <p className="mt-0.5">{laporan.perluPembinaan.saran}</p>
+                </div>
+              )}
+              {laporan.rekapRw?.jumlah > 0 && (
+                <div className="mt-2 rounded-xl border border-brand/20 bg-brand/5 p-3 text-sm">
+                  <p className="font-semibold text-brand">Rekap rating RW</p>
+                  <p className="mt-0.5 text-muted-foreground">
+                    Rata-rata <strong>{formatRata(laporan.rekapRw.rata)}</strong> ({laporan.rekapRw.penilaian.label})
+                    dari {laporan.rekapRw.jumlah} masukan warga.
+                  </p>
                 </div>
               )}
               {laporan.catatan.map((c) => (
@@ -281,6 +320,72 @@ export default function AdminRating() {
           </div>
         ))}
       </div>
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-lg font-bold text-brand">Rekap rating RW · {ringkasan?.labelBulan ?? "…"}</h2>
+          <p className="text-sm text-muted-foreground">
+            Penilaian warga terhadap pengurus RW 03 pada periode bulan ini.
+          </p>
+        </div>
+        {(() => {
+          const rw = ringkasan?.rekapRw;
+          const maksSebaran = Math.max(1, ...(rw ? Object.values(rw.sebaran) : [0]));
+          return (
+            <div className={cn("rounded-2xl border p-4 shadow-sm", warnaPenilaian(rw?.penilaian.kode ?? "belum_ada"))}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/70 text-brand">
+                    <Building2 className="h-5 w-5" aria-hidden />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide opacity-70">Pengurus RW 03</p>
+                    <p className="text-3xl font-extrabold tabular-nums">{formatRata(rw?.rata)}</p>
+                    <p className="text-sm font-semibold">{rw?.penilaian.label ?? "Belum ada data"}</p>
+                    <p className="mt-1 text-xs opacity-80">
+                      {rw?.jumlah ? `${rw.jumlah} rating warga bulan ini` : "Belum ada rating RW bulan ini"}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="bg-white/70"
+                  onClick={() => { setSasaran("rw"); setRt("semua"); }}
+                >
+                  Lihat masukan RW
+                </Button>
+              </div>
+              <div className="mt-4 space-y-1.5">
+                {([5, 4, 3, 2, 1] as const).map((b) => {
+                  const n = rw?.sebaran[b] ?? 0;
+                  return (
+                    <div key={b} className="grid grid-cols-[4.5rem_1fr_2rem] items-center gap-2 text-xs">
+                      <span className="font-medium">{b} bintang</span>
+                      <div className="h-2 overflow-hidden rounded-full bg-black/10">
+                        <div
+                          className="h-full rounded-full bg-brand"
+                          style={{ width: `${(n / maksSebaran) * 100}%` }}
+                        />
+                      </div>
+                      <span className="text-right tabular-nums font-semibold">{n}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              {ringkasan?.rataRt != null && rw?.rata != null && (
+                <p className="mt-3 text-xs opacity-80">
+                  Bandingkan dengan rata-rata RT bulan ini: <strong>{formatRata(ringkasan.rataRt)}</strong>
+                  {rw.rata >= ringkasan.rataRt
+                    ? " — rating RW setara/lebih tinggi dari rata-rata RT."
+                    : " — rating RW masih di bawah rata-rata RT."}
+                </p>
+              )}
+            </div>
+          );
+        })()}
+      </section>
 
       <section className="space-y-3">
         <div>

@@ -26,10 +26,79 @@ import {
 } from "@shared/rating";
 import { WILAYAH_RT_NUMBERS, isWilayahRt } from "@shared/wilayah";
 import { sendWaWithResult } from "./wa-notify";
-import { notifyKetuaRwRatingBaru } from "./wa-notify-ketua";
+import { KETUA_RW_WA, notifyKetuaRwRatingBaru } from "./wa-notify-ketua";
 import { WilayahError } from "./wilayah-auth";
 
 const MAKS_PER_WA_HARI = 5;
+
+export class RatingError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+    public payload: Record<string, unknown> = {},
+  ) {
+    super(message);
+    this.name = "RatingError";
+  }
+}
+
+/** Varian digit untuk mencocokkan nomor tersimpan (08… / 62… / 8…). */
+function varianDigitWa(wa08: string): string[] {
+  let d = wa08.replace(/\D/g, "");
+  if (d.startsWith("62")) d = `0${d.slice(2)}`;
+  else if (d.startsWith("8")) d = `0${d}`;
+  const intl = d.startsWith("0") ? `62${d.slice(1)}` : d;
+  const bare = d.startsWith("0") ? d.slice(1) : d;
+  return [...new Set([d, intl, bare].filter((x) => x.length >= 9))];
+}
+
+/** Cek nomor terdaftar sebagai warga RW, Visit RW3, atau RW3BIZ. */
+export async function waTerdaftarDiSistem(wa08: string): Promise<{
+  ok: boolean;
+  sumber: ("warga" | "visitrw3" | "rw3biz")[];
+}> {
+  const varian = varianDigitWa(wa08);
+  if (!varian.length) return { ok: false, sumber: [] };
+
+  const digitExpr = (col: string) => `regexp_replace(coalesce(${col}, ''), '\\D', '', 'g')`;
+  const cocok = (col: string) => `${digitExpr(col)} = ANY($1::text[])`;
+
+  const [warga, visit, biz] = await Promise.all([
+    pool.query<{ n: number }>(
+      `SELECT 1::int AS n FROM warga
+       WHERE ${cocok("nomor_whatsapp")} OR ${cocok("nomor_whatsapp_alternatif")}
+       LIMIT 1`,
+      [varian],
+    ),
+    pool.query<{ n: number }>(
+      `SELECT 1::int AS n WHERE EXISTS (
+         SELECT 1 FROM warga_singgah WHERE ${cocok("nomor_whatsapp")}
+       ) OR EXISTS (
+         SELECT 1 FROM visitrw3_penghuni WHERE ${cocok("nomor_whatsapp")}
+       ) OR EXISTS (
+         SELECT 1 FROM pemilik_kost
+         WHERE ${cocok("nomor_wa_pemilik")} OR ${cocok("nomor_wa_penanggung_jawab")}
+       )`,
+      [varian],
+    ),
+    pool.query<{ n: number }>(
+      `SELECT 1::int AS n WHERE EXISTS (
+         SELECT 1 FROM rw3biz_usaha WHERE ${cocok("pj_nomor_whatsapp")}
+       ) OR EXISTS (
+         SELECT 1 FROM rw3biz_orang WHERE ${cocok("nomor_whatsapp")}
+       ) OR EXISTS (
+         SELECT 1 FROM rw3biz_pengajuan WHERE ${cocok("pj_nomor_whatsapp")}
+       )`,
+      [varian],
+    ),
+  ]);
+
+  const sumber: ("warga" | "visitrw3" | "rw3biz")[] = [];
+  if (warga.rows[0]) sumber.push("warga");
+  if (visit.rows[0]) sumber.push("visitrw3");
+  if (biz.rows[0]) sumber.push("rw3biz");
+  return { ok: sumber.length > 0, sumber };
+}
 
 /** Filter created_at ke periode bulan WIB (timestamp disimpan UTC / server). */
 const SYARAT_BULAN =
@@ -127,6 +196,20 @@ export async function kirimRating(raw: unknown): Promise<{ ok: true; konfirmasi:
     throw new WilayahError(400, "Nomor WhatsApp tidak valid");
   }
 
+  const daftar = await waTerdaftarDiSistem(wa);
+  if (!daftar.ok) {
+    throw new RatingError(
+      403,
+      "Nomor WhatsApp belum terdaftar sebagai warga RW 03, Visit RW3, atau RW3BIZ. Hubungi admin untuk bantu memperbarui data nomor Anda.",
+      {
+        code: "wa_belum_terdaftar",
+        adminWa: KETUA_RW_WA,
+        pesanAdmin:
+          `Assalamu'alaikum Ketua RW 03,\n\nSaya ingin mengisi rating/masukan, tetapi nomor WhatsApp saya (${wa}) belum terdaftar di sistem.\nMohon bantu perbarui data nomor saya.\n\nTerima kasih.`,
+      },
+    );
+  }
+
   const bintang = v.bintang as BintangRating;
   const nomorRt = v.sasaran === "rt" ? v.nomorRt! : null;
   const waHash = hashWa(wa);
@@ -168,6 +251,60 @@ export async function kirimRating(raw: unknown): Promise<{ ok: true; konfirmasi:
   }
 
   return { ok: true, konfirmasi, bulan };
+}
+
+function penilaianDariRata(rata: number | null): {
+  kode: "sangat_baik" | "baik" | "cukup" | "kurang" | "sangat_kurang" | "belum_ada";
+  label: string;
+} {
+  if (rata == null) return { kode: "belum_ada", label: "Belum ada data" };
+  if (rata >= 4.5) return { kode: "sangat_baik", label: "Sangat baik" };
+  if (rata >= 3.5) return { kode: "baik", label: "Baik" };
+  if (rata >= 2.5) return { kode: "cukup", label: "Cukup" };
+  if (rata >= 1.5) return { kode: "kurang", label: "Kurang" };
+  return { kode: "sangat_kurang", label: "Sangat kurang" };
+}
+
+async function hitungRw(mulai: string, selesai: string) {
+  const { rows } = await pool.query<{
+    jumlah: number;
+    rata: string | null;
+    bintang_1: number;
+    bintang_2: number;
+    bintang_3: number;
+    bintang_4: number;
+    bintang_5: number;
+  }>(
+    `SELECT
+      count(*)::int AS jumlah,
+      round(avg(bintang), 2)::text AS rata,
+      count(*) FILTER (WHERE bintang = 1)::int AS bintang_1,
+      count(*) FILTER (WHERE bintang = 2)::int AS bintang_2,
+      count(*) FILTER (WHERE bintang = 3)::int AS bintang_3,
+      count(*) FILTER (WHERE bintang = 4)::int AS bintang_4,
+      count(*) FILTER (WHERE bintang = 5)::int AS bintang_5
+    FROM rating_masukan
+    WHERE sasaran = 'rw'
+      AND ${syaratBulanSql(1, 2)}`,
+    [mulai, selesai],
+  );
+  const row = rows[0];
+  const jumlah = row?.jumlah ?? 0;
+  const rata = jumlah > 0 && row?.rata ? Number(row.rata) : null;
+  const penilaian = penilaianDariRata(rata);
+  return {
+    label: "Pengurus RW 03",
+    jumlah,
+    rata,
+    penilaian,
+    sebaran: {
+      1: row?.bintang_1 ?? 0,
+      2: row?.bintang_2 ?? 0,
+      3: row?.bintang_3 ?? 0,
+      4: row?.bintang_4 ?? 0,
+      5: row?.bintang_5 ?? 0,
+    },
+  };
 }
 
 async function hitungPerRt(mulai: string, selesai: string) {
@@ -283,8 +420,10 @@ export async function ringkasanRating(bulanRaw?: string | null) {
     [mulai, selesai],
   );
   const r = rows[0];
-  const skor = await hitungPerRt(mulai, selesai);
+  const [skor, rekapRw] = await Promise.all([hitungPerRt(mulai, selesai), hitungRw(mulai, selesai)]);
   const daftarBulan = await daftarBulanRating();
+  const rataRt = r?.rata_rt ? Number(r.rata_rt) : null;
+  const rataRw = r?.rata_rw ? Number(r.rata_rw) : null;
 
   return {
     bulan,
@@ -295,9 +434,10 @@ export async function ringkasanRating(bulanRaw?: string | null) {
     belumDibaca: r?.belum_dibaca ?? 0,
     rt: r?.rt ?? 0,
     rw: r?.rw ?? 0,
-    rataRt: r?.rata_rt ? Number(r.rata_rt) : null,
-    rataRw: r?.rata_rw ? Number(r.rata_rw) : null,
+    rataRt,
+    rataRw,
     ...skor,
+    rekapRw,
     daftarBulan,
     laporan: bangunLaporanReward({
       bulan,
@@ -305,8 +445,9 @@ export async function ringkasanRating(bulanRaw?: string | null) {
       selesai: selesaiPeriode,
       berjalan,
       total: r?.total ?? 0,
-      rataRt: r?.rata_rt ? Number(r.rata_rt) : null,
-      rataRw: r?.rata_rw ? Number(r.rata_rw) : null,
+      rataRt,
+      rataRw,
+      rekapRw,
       terbaik: skor.terbaik,
       terburuk: skor.terburuk,
       peringkat: skor.peringkat,
@@ -322,9 +463,10 @@ function bangunLaporanReward(input: {
   total: number;
   rataRt: number | null;
   rataRw: number | null;
+  rekapRw: Awaited<ReturnType<typeof hitungRw>>;
   terbaik: { nomorRt: number; label: string; rata: number; jumlah: number } | null;
   terburuk: { nomorRt: number; label: string; rata: number; jumlah: number } | null;
-  peringkat: { peringkat: number; nomorRt: number; label: string; rata: number; jumlah: number }[] ;
+  peringkat: { peringkat: number; nomorRt: number; label: string; rata: number; jumlah: number }[];
 }) {
   const siapReward = input.selesai && !!input.terbaik && input.terbaik.jumlah > 0;
   const catatan: string[] = [];
@@ -346,14 +488,22 @@ function bangunLaporanReward(input: {
     catatan.push(`Belum ada cukup data rating RT pada ${input.label} untuk menentukan reward.`);
   }
 
+  if (input.rekapRw.jumlah > 0 && input.rekapRw.rata != null) {
+    catatan.push(
+      `Rating RW ${input.label}: rata-rata ${input.rekapRw.rata} (${input.rekapRw.penilaian.label}) dari ${input.rekapRw.jumlah} masukan.`,
+    );
+  } else {
+    catatan.push(`Belum ada rating RW pada ${input.label}.`);
+  }
+
   return {
     siapReward,
     judul: `Laporan rating ${input.label}`,
     ringkas: siapReward
-      ? `Juara bulan ini: ${input.terbaik!.label} · rata-rata ${input.terbaik!.rata} (${input.terbaik!.jumlah} rating)`
+      ? `Juara RT: ${input.terbaik!.label} · rata-rata ${input.terbaik!.rata} · RW: ${input.rekapRw.rata != null ? formatAngka(input.rekapRw.rata) : "–"} (${input.rekapRw.penilaian.label})`
       : input.berjalan
-        ? `Kompetisi ${input.label} masih dibuka.`
-        : `Belum ada juara untuk ${input.label}.`,
+        ? `Kompetisi ${input.label} masih dibuka. Rating RW sementara: ${input.rekapRw.rata != null ? formatAngka(input.rekapRw.rata) : "belum ada"}.`
+        : `Belum ada juara RT untuk ${input.label}. Rating RW: ${input.rekapRw.rata != null ? formatAngka(input.rekapRw.rata) : "belum ada"}.`,
     rekomendasiReward: siapReward
       ? {
           nomorRt: input.terbaik!.nomorRt,
@@ -373,12 +523,17 @@ function bangunLaporanReward(input: {
             saran: `Dampingi ${input.terburuk.label} untuk perbaikan pelayanan pada bulan berikutnya.`,
           }
         : null,
+    rekapRw: input.rekapRw,
     peringkat: input.peringkat,
     totalMasukan: input.total,
     rataRt: input.rataRt,
     rataRw: input.rataRw,
     catatan,
   };
+}
+
+function formatAngka(n: number): string {
+  return n.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
 }
 
 export async function daftarRating(opsi: {
@@ -456,5 +611,6 @@ export function opsiPublik() {
     rt: [...WILAYAH_RT_NUMBERS],
     bulan,
     labelBulan: labelBulanRating(bulan),
+    adminWa: KETUA_RW_WA,
   };
 }

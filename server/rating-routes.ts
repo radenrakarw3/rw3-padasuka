@@ -11,6 +11,9 @@ function h(fn: Handler, gagal = "Permintaan gagal diproses") {
       const out = await fn(req, res);
       if (!res.headersSent) res.json(out ?? { ok: true });
     } catch (e) {
+      if (e instanceof rating.RatingError) {
+        return res.status(e.status).json({ message: e.message, ...e.payload });
+      }
       kirimError(res, e, gagal);
     }
   };
